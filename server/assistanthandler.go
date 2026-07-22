@@ -460,7 +460,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, response)
 }
 
-// @Summary      Get Assistant Sessions
+// @Summary      Get Your Assistant Sessions
 // @Description  Retrieve a list of all previous chat session metadata for the authenticated user.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
@@ -502,7 +502,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, topLevel)
 }
 
-// @Summary      Get Session Details
+// @Summary      Get Session Details For Your Session
 // @Description  Retrieve the complete chat history and usage for a specific session. Can lookup deleted sessions.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
@@ -758,7 +758,7 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 	return nil
 }
 
-// @Summary      Delete Session
+// @Summary      Delete Your Assistant Session
 // @Description  Delete a specific chat session and all its associated messages.
 // @Tags         Assistant
 // @Security     bearer[assistant/delete_authored]
@@ -853,7 +853,7 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 	web.Respond(w, r, http.StatusOK, usage)
 }
 
-// @Summary      Get Assistant Sessions
+// @Summary      Get Assistant Sessions Across Users
 // @Description  Get a list of all previous chat session metadata across all users.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_all]
@@ -867,7 +867,7 @@ func (h *AssistantHandler) getAllSessions(w http.ResponseWriter, r *http.Request
 	h.GetSessionsAdmin(w, r)
 }
 
-// @Summary      Get Assistant Sessions
+// @Summary      Get Assistant Sessions For a Specific User
 // @Description  Get chat session metadata from a specific user.
 // @Tags         Assistant
 // @Security     bearer[assistant/read_all]
