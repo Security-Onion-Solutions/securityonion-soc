@@ -84,9 +84,9 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Orchestrator":       "Classic",
-				"Investigator":       "Classic",
-				"Detection Engineer": "Classic",
+				"Orchestrator":      "Classic",
+				"Investigator":      "Classic",
+				"DetectionEngineer": "Classic",
 			},
 		})
 		assert.NoError(t, err)
@@ -100,34 +100,34 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		assert.Len(t, ac.agents, 3)
 		assert.Equal(t, "Classic", ac.agentMapping["Orchestrator"])
 		assert.Equal(t, "Classic", ac.agentMapping["Investigator"])
-		assert.Equal(t, "Classic", ac.agentMapping["Detection Engineer"])
+		assert.Equal(t, "Classic", ac.agentMapping["DetectionEngineer"])
 
 		// The agentic flag, agent list, and mapping are exposed to clients.
 		assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
 		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
 		assert.Equal(t, map[string]string{
-			"Orchestrator":       "Classic",
-			"Investigator":       "Classic",
-			"Detection Engineer": "Classic",
+			"Orchestrator":      "Classic",
+			"Investigator":      "Classic",
+			"DetectionEngineer": "Classic",
 		}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
 		// Delegation topology: hub-and-spoke plus the Investigator -> Engineer
 		// handoff edge; the Engineer is terminal.
-		assert.ElementsMatch(t, []string{"Investigator", "Detection Engineer"}, ac.agents["Orchestrator"].CanDelegateTo)
-		assert.Equal(t, []string{"Detection Engineer"}, ac.agents["Investigator"].CanDelegateTo)
-		assert.Empty(t, ac.agents["Detection Engineer"].CanDelegateTo)
+		assert.ElementsMatch(t, []string{"Investigator", "DetectionEngineer"}, ac.agents["Orchestrator"].CanDelegateTo)
+		assert.Equal(t, []string{"DetectionEngineer"}, ac.agents["Investigator"].CanDelegateTo)
+		assert.Empty(t, ac.agents["DetectionEngineer"].CanDelegateTo)
 
 		// Skill wiring is a permission boundary: Tuning (the write skill) is
 		// Engineer-only, and the Orchestrator holds no skills.
 		assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
-		assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["Detection Engineer"].AllowedSkills)
+		assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
 		assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
 		// Delegate tools are registered under both the agent name and the
 		// sanitized tool name.
 		for _, key := range []string{
 			"Investigator", "delegate_to_Investigator",
-			"Detection Engineer", "delegate_to_Detection_Engineer",
+			"DetectionEngineer", "delegate_to_DetectionEngineer",
 		} {
 			_, ok := ac.DelegationLibrary[key]
 			assert.True(t, ok, "missing delegate registration for %s", key)
@@ -157,12 +157,12 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		// The exposed mapping only includes the surviving agent.
 		assert.Equal(t, map[string]string{"Investigator": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
-		// No delegate tool is registered for the dropped Detection Engineer, so
+		// No delegate tool is registered for the dropped DetectionEngineer, so
 		// the Investigator's CanDelegateTo edge degrades to no tool rather than
 		// a delegate targeting an agent that cannot run.
-		_, ok := ac.DelegationLibrary["Detection Engineer"]
+		_, ok := ac.DelegationLibrary["DetectionEngineer"]
 		assert.False(t, ok)
-		_, ok = ac.DelegationLibrary["delegate_to_Detection_Engineer"]
+		_, ok = ac.DelegationLibrary["delegate_to_DetectionEngineer"]
 		assert.False(t, ok)
 		_, ok = ac.DelegationLibrary["Investigator"]
 		assert.True(t, ok)
