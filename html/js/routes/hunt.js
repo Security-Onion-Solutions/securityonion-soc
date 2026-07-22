@@ -1258,6 +1258,14 @@ const huntComponent = {
         queryObj.gridId = this.gridId;
       }
 
+      if (Array.isArray(this.filterToggles)) {
+        this.filterToggles.forEach(toggle => {
+          if (toggle.name) {
+            queryObj[toggle.name] = toggle.enabled;
+          }
+        });
+      }
+
       return { path: this.category, query: queryObj };
     },
     buildFilterRoute(filterField, filterValue, filterMode, scalar) {
