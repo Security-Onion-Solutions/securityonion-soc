@@ -85,8 +85,8 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Orchestrator":       "classic-model@SOAI",
-				"Investigator":       "classic-model",
+				"Orchestrator":      "classic-model@SOAI",
+				"Investigator":      "classic-model",
 				"DetectionEngineer": "classic-model@SOAI",
 			},
 		})
@@ -107,8 +107,8 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
 		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
 		assert.Equal(t, map[string]string{
-			"Orchestrator":       "classic-model@SOAI",
-			"Investigator":       "classic-model",
+			"Orchestrator":      "classic-model@SOAI",
+			"Investigator":      "classic-model",
 			"DetectionEngineer": "classic-model@SOAI",
 		}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
