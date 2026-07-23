@@ -19,11 +19,13 @@ import (
 )
 
 func TestDelegateTool_Name(t *testing.T) {
-	// Legacy id@adapter selectors must keep producing byte-identical tool names.
+	// id@adapter-derived tool names from releases that registered delegates by
+	// model selector must keep producing byte-identical tool names, so stored
+	// sessions holding those tool_use names still resolve.
 	tool := NewDelegateTool("sonnet@SOAI", "Hunter", "desc")
 	assert.Equal(t, "delegate_to_sonnet_at_SOAI", tool.GetName())
 
-	// Canonical DisplayName selectors are sanitized to provider-valid tool names.
+	// Agent names are sanitized to provider-valid tool names.
 	tool = NewDelegateTool("Agent Gemini", "Agent Gemini", "desc")
 	assert.Equal(t, "delegate_to_Agent_Gemini", tool.GetName())
 
@@ -41,12 +43,12 @@ func TestDelegateTool_Name(t *testing.T) {
 	assert.Equal(t, "delegate_to_"+strings.Repeat("y", 52), tool.GetName())
 
 	// An empty selector yields just the prefix (documents current behavior;
-	// registration never produces this since Selector() is never empty).
+	// registration never produces this since agent names are never empty).
 	tool = NewDelegateTool("", "Empty", "desc")
 	assert.Equal(t, "delegate_to_", tool.GetName())
 }
 
-func TestDelegateTool_KickoffCarriesDisplayNameSelector(t *testing.T) {
+func TestDelegateTool_KickoffCarriesAgentName(t *testing.T) {
 	tool := NewDelegateTool("Hunter", "Hunter", "an event hunting agent")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")

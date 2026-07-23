@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('./assistant.utils.js');
 require('./agentstudio.js');
 
 let comp;
@@ -16,8 +17,8 @@ const agenticParams = () => ({
   enabled: true,
   agentic: true,
   availableModels: [
-    { displayName: 'Model A', adapter: 'SOAI', contextLimitLarge: 200000, contextLimitSmall: 8000 },
-    { displayName: 'Model B', adapter: 'Anthropic', contextLimitSmall: 8000 },
+    { id: 'model-a', displayName: 'Model A', adapter: 'soai', enabled: true, contextLimitLarge: 200000, contextLimitSmall: 8000 },
+    { id: 'model-b', displayName: 'Model B', adapter: 'anthropic', enabled: true, contextLimitSmall: 8000 },
   ],
   availableSkills: [
     // additionalPrompt is intentionally never sent by the backend; include it here
@@ -29,7 +30,7 @@ const agenticParams = () => ({
     { name: 'Coordinator', isOrchestrator: true, allowedSkills: ['hunt'], canDelegateTo: ['Hunter'], agentDescription: 'Routes work' },
     { name: 'Hunter', isOrchestrator: false, allowedSkills: ['hunt', 'cases'], canDelegateTo: [], agentDescription: 'Hunts' },
   ],
-  agentMapping: { Coordinator: 'Model A', Hunter: 'Model B' },
+  agentMapping: { Coordinator: 'model-a@soai', Hunter: 'model-b' },
 });
 
 beforeEach(() => {
@@ -98,6 +99,7 @@ test('initAssistant enables the page and loads data when enabled, licensed, and 
   expect(comp.$root.stopLoading).toHaveBeenCalled();
 
   expect(comp.models.map(m => m.displayName)).toEqual(['Model A', 'Model B']);
+  expect(comp.models.map(m => m.selector)).toEqual(['model-a@soai', 'model-b@anthropic']);
   // contextWindow prefers the large limit, falling back to the small one.
   expect(comp.models[0].contextWindow).toBe(200000);
   expect(comp.models[1].contextWindow).toBe(8000);
@@ -164,23 +166,41 @@ test('skill mapping keeps name and tools but drops the hidden prompt guidance', 
   expect(comp.skillTabs['hunt']).toBe('tools');
 });
 
-test('agentsFromParams maps agent fields and resolves the model from the mapping', () => {
-  const rows = comp.agentsFromParams(agenticParams());
+test('agentsFromParams maps agent fields and resolves the mapped selector to a display name', () => {
+  comp.initAssistant(agenticParams());
+  const rows = comp.agents;
 
   expect(rows).toHaveLength(2);
   const coordinator = rows[0];
   expect(coordinator.id).toBe('Coordinator');
   expect(coordinator.name).toBe('Coordinator');
   expect(coordinator.isOrchestrator).toBe(true);
+  // id@adapter selector resolves to the model's display name; the raw selector
+  // is kept alongside it.
   expect(coordinator.model).toBe('Model A');
-  expect(coordinator.provider).toBe('SOAI');
+  expect(coordinator.provider).toBe('soai');
+  expect(coordinator.modelSelector).toBe('model-a@soai');
   expect(coordinator.description).toBe('Routes work');
   expect(coordinator.allowedSkills).toEqual(['hunt']);
   expect(coordinator.canDelegateTo).toEqual(['Hunter']);
 
-  // Provider resolves from the mapped model's adapter.
+  // A bare-id selector resolves too.
   expect(rows[1].model).toBe('Model B');
-  expect(rows[1].provider).toBe('Anthropic');
+  expect(rows[1].modelSelector).toBe('model-b');
+  expect(rows[1].provider).toBe('anthropic');
+});
+
+test('agentsFromParams shows the raw selector when it does not resolve or the model has no display name', () => {
+  const params = agenticParams();
+  params.availableModels = [
+    { id: 'model-a', adapter: 'soai', enabled: true },
+  ];
+  comp.initAssistant(params);
+
+  // model-a has no displayName: display falls back to its id@adapter selector.
+  expect(comp.agents[0].model).toBe('model-a@soai');
+  // model-b is not configured at all: the raw mapping value is shown as-is.
+  expect(comp.agents[1].model).toBe('model-b');
 });
 
 test('agentsFromParams defaults missing fields and handles no agents', () => {

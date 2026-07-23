@@ -425,30 +425,31 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   await comp.initAssistant(mockParams);
   
-  // Check that the modelsMap was created correctly, keyed by displayName
+  // Check that the modelsMap was created correctly, keyed by the canonical
+  // id@adapter selector
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('Model 1')).toBe(true);
-  expect(comp.modelsMap.has('Model 2')).toBe(true);
-  expect(comp.modelsMap.has('Model 3')).toBe(true);
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
   expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
 
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('Model 1');
+  const model1 = comp.modelsMap.get('model-1@SOAI');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
 
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('Model 2');
+  const model2 = comp.modelsMap.get('model-2@SOAI');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
 
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('Model 3');
+  const model3 = comp.modelsMap.get('model-3@SOAI');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
 
-test('initAssistant migrates a legacy id@adapter currentModel to the displayName key', async () => {
+test('initAssistant keeps a stored id@adapter currentModel as-is', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -466,15 +467,14 @@ test('initAssistant migrates a legacy id@adapter currentModel to the displayName
   comp.updateModelParams = jest.fn();
   comp.$root.disclaimer = false;
 
-  // As restored from localStorage by a browser that saved the old format.
   comp.currentModel = 'model-2@SOAI';
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 2');
+  expect(comp.currentModel).toBe('model-2@SOAI');
 });
 
-test('initAssistant does not migrate a legacy selector for a disabled model', async () => {
+test('initAssistant defaults a stored selector for a disabled model to the first model', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -492,16 +492,16 @@ test('initAssistant does not migrate a legacy selector for a disabled model', as
   comp.updateModelParams = jest.fn();
   comp.$root.disclaimer = false;
 
-  // Legacy saved selector pointing at a model that is now disabled: disabled
-  // models are not migrated, so selection falls back to the first model.
+  // Saved selector pointing at a model that is now disabled: disabled models
+  // are not selectable, so selection falls back to the first model.
   comp.currentModel = 'model-2@SOAI';
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 1');
+  expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
-test('initAssistant falls back to id@adapter key when displayName is absent', async () => {
+test('initAssistant always keys models by id@adapter and backfills a missing displayName', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -522,6 +522,8 @@ test('initAssistant falls back to id@adapter key when displayName is absent', as
 
   expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
   expect(comp.currentModel).toBe('model-1@SOAI');
+  // displayName is optional; the selector fills in for display.
+  expect(comp.modelsMap.get('model-1@SOAI').displayName).toBe('model-1@SOAI');
 });
 
 test('initAssistant defaults an unknown currentModel to the first model', async () => {
@@ -545,7 +547,7 @@ test('initAssistant defaults an unknown currentModel to the first model', async 
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 1');
+  expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {
@@ -581,7 +583,7 @@ const agenticParams = () => ({
     { name: 'Hunter', agentDescription: 'hunts events' },
     { name: 'Orchestrator', isOrchestrator: true, agentDescription: 'coordinates' },
   ],
-  agentMapping: { Orchestrator: 'Claude Sonnet', Hunter: 'Claude Haiku' },
+  agentMapping: { Orchestrator: 'sonnet@SOAI', Hunter: 'haiku' },
   availableModels: [
     { id: 'sonnet', displayName: 'Claude Sonnet', contextLimitSmall: 200000, contextLimitLarge: 1000000, charsPerTokenEstimate: 4, lowBalanceColorAlert: 500, enabled: true, adapter: 'SOAI' },
     { id: 'haiku', displayName: 'Claude Haiku', contextLimitSmall: 100000, contextLimitLarge: 100000, charsPerTokenEstimate: 3, lowBalanceColorAlert: 100, enabled: true, adapter: 'SOAI' },
@@ -666,6 +668,20 @@ test('currentModelLabel is the plain model displayName in non-agentic mode', asy
 
   expect(comp.agentic).toBe(false);
   expect(comp.currentModelLabel()).toBe('Test Model');
+});
+
+test('currentModelLabel falls back to the id@adapter selector without a displayName', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.currentModelLabel()).toBe('test-model@SOAI');
 });
 
 test('isCreditBasedModel resolves through the mapped model adapter in agentic mode', async () => {

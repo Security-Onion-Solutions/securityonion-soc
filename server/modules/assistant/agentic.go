@@ -112,10 +112,10 @@ func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string
 	return prompts
 }
 
-// loadAgentMapping reads the admin-supplied agentName->model-DisplayName map
-// from module config (the "agentMapping" key). Entries with non-string values
-// are skipped with a warning. Returns an empty (non-nil) map when the key is
-// absent or malformed.
+// loadAgentMapping reads the admin-supplied agentName->model-selector map
+// ("id@adapter" or bare id values) from module config (the "agentMapping"
+// key). Entries with non-string values are skipped with a warning. Returns an
+// empty (non-nil) map when the key is absent or malformed.
 func (ac *AssistantCoordinator) loadAgentMapping(config module.ModuleConfig) map[string]string {
 	logger := log.FromContext(ac.srv.Context)
 	mapping := map[string]string{}
@@ -129,12 +129,13 @@ func (ac *AssistantCoordinator) loadAgentMapping(config module.ModuleConfig) map
 	}
 
 	for agentName, v := range raw {
-		displayName, ok := v.(string)
+		modelSelector, ok := v.(string)
 		if !ok {
 			logger.WithField("agent", agentName).Warn("agentMapping entry is not a string; skipping")
 			continue
 		}
-		mapping[agentName] = displayName
+
+		mapping[agentName] = modelSelector
 	}
 
 	return mapping
@@ -149,18 +150,18 @@ func (ac *AssistantCoordinator) validateAgentMappings() {
 	logger := log.FromContext(ac.srv.Context)
 
 	for name := range ac.agents {
-		displayName, mapped := ac.agentMapping[name]
-		if !mapped || displayName == "" {
+		modelSelector, mapped := ac.agentMapping[name]
+		if !mapped || modelSelector == "" {
 			logger.WithField("agent", name).Error("agent has no configured model mapping; disabling agent")
 			delete(ac.agents, name)
 			continue
 		}
 
-		params := ac.resolveModel(displayName)
+		params := ac.resolveModel(modelSelector)
 		if params == nil || !params.Enabled {
 			logger.WithFields(log.Fields{
 				"agent": name,
-				"model": displayName,
+				"model": modelSelector,
 			}).Error("agent maps to a model that is not configured or not enabled; disabling agent")
 			delete(ac.agents, name)
 		}

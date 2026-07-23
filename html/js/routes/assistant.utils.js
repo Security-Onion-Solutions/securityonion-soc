@@ -297,7 +297,7 @@ globalThis.AssistantUtils = (function() {
       if (this.agentic && entry.mappedModelName) {
         return `${entry.displayName} - ${entry.mappedModelName}`;
       }
-      return entry.displayName;
+      return entry.displayName || entry.key;
     },
 
     // Whether the selection runs on a credit-based cloud model ('securityonion_ai_cloud',
@@ -335,11 +335,25 @@ globalThis.AssistantUtils = (function() {
       this.lowBalanceColorAlert = m.lowBalanceColorAlert || 0;
     },
 
-    // Legacy id@adapter selector: the model key only when a model has no
-    // displayName, and to migrate selectors saved before displayName was canonical.
+    // Canonical id@adapter model selector: used as the model key and sent to
+    // the backend to identify the model.
     buildModelIdentifier(model) {
       if (!model) return '';
       return `${model?.id||''}@${model?.adapter||''}`;
+    },
+
+    // resolveMappedModel resolves a model selector (id@adapter or bare id,
+    // mirroring the backend's resolveModel: prefer an enabled model, else
+    // first match) against a model list; null when nothing matches.
+    resolveMappedModel(models, selector) {
+      if (!selector) return null;
+      let fallback = null;
+      for (const m of models || []) {
+        if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
+        if (m.enabled) return m;
+        if (!fallback) fallback = m;
+      }
+      return fallback;
     },
 
     buildGroupedModels() {

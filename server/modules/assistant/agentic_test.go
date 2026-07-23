@@ -80,13 +80,14 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 	t.Run("agentic enabled maps agents onto configured models", func(t *testing.T) {
 		ac, srv := newCoordinator()
 
-		// Map all hardcoded agents onto the deployment's configured model.
+		// Map all hardcoded agents onto the deployment's configured model, one
+		// of them by bare id to cover both selector forms through Init.
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Orchestrator":      "Classic",
-				"Investigator":      "Classic",
-				"DetectionEngineer": "Classic",
+				"Orchestrator":      "classic-model@SOAI",
+				"Investigator":      "classic-model",
+				"DetectionEngineer": "classic-model@SOAI",
 			},
 		})
 		assert.NoError(t, err)
@@ -98,17 +99,17 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 
 		// The hardcoded agents are defined and their mapping loaded.
 		assert.Len(t, ac.agents, 3)
-		assert.Equal(t, "Classic", ac.agentMapping["Orchestrator"])
-		assert.Equal(t, "Classic", ac.agentMapping["Investigator"])
-		assert.Equal(t, "Classic", ac.agentMapping["DetectionEngineer"])
+		assert.Equal(t, "classic-model@SOAI", ac.agentMapping["Orchestrator"])
+		assert.Equal(t, "classic-model", ac.agentMapping["Investigator"])
+		assert.Equal(t, "classic-model@SOAI", ac.agentMapping["DetectionEngineer"])
 
 		// The agentic flag, agent list, and mapping are exposed to clients.
 		assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
 		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
 		assert.Equal(t, map[string]string{
-			"Orchestrator":      "Classic",
-			"Investigator":      "Classic",
-			"DetectionEngineer": "Classic",
+			"Orchestrator":      "classic-model@SOAI",
+			"Investigator":      "classic-model",
+			"DetectionEngineer": "classic-model@SOAI",
 		}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
 		// Delegation topology: hub-and-spoke plus the Investigator -> Engineer
@@ -141,7 +142,7 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		err := ac.Init(module.ModuleConfig{
 			"agentic": true,
 			"agentMapping": map[string]any{
-				"Investigator": "Classic",
+				"Investigator": "classic-model@SOAI",
 			},
 		})
 		assert.NoError(t, err)
@@ -155,7 +156,7 @@ func TestAssistantCoordinator_InitAgenticToggle(t *testing.T) {
 		assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 1)
 
 		// The exposed mapping only includes the surviving agent.
-		assert.Equal(t, map[string]string{"Investigator": "Classic"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
+		assert.Equal(t, map[string]string{"Investigator": "classic-model@SOAI"}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
 		// No delegate tool is registered for the dropped DetectionEngineer, so
 		// the Investigator's CanDelegateTo edge degrades to no tool rather than

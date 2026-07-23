@@ -44,8 +44,9 @@ var invalidToolNameChars = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
 // sanitizeDelegateToolName builds a provider-valid tool name
 // (^[a-zA-Z0-9_-]{1,64}$) from an agent selector. The "@" -> "_at_" mapping
-// runs first so a legacy id@adapter selector produces the same tool name as
-// previous releases.
+// runs first so an id@adapter selector produces the same tool name as the
+// releases that registered delegates by model selector; stored sessions
+// contain tool_use blocks with those names.
 func sanitizeDelegateToolName(selector string) string {
 	name := strings.ReplaceAll(selector, "@", "_at_")
 	name = invalidToolNameChars.ReplaceAllString(name, "_")

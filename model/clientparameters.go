@@ -204,6 +204,8 @@ type SkillParameters struct {
 	Tools []string `json:"tools"`
 }
 
+// ModelParameters describes a configured model. DisplayName is optional,
+// display-only metadata; resolution uses Selector().
 type ModelParameters struct {
 	ID                    string  `json:"id"`
 	DisplayName           string  `json:"displayName"`
@@ -216,18 +218,9 @@ type ModelParameters struct {
 	Enabled               bool    `json:"enabled"`
 }
 
-// Selector returns the canonical client-facing selector for this model: its
-// DisplayName, which is required configuration. There is deliberately no
-// fallback — a model without a DisplayName is misconfigured and gets disabled
-// at startup (see validateModelSelectors).
+// Selector returns the canonical client-facing selector for this model: the
+// "id@adapter" pair.
 func (m *ModelParameters) Selector() string {
-	return m.DisplayName
-}
-
-// LegacySelector returns the historical "id@adapter" selector form. It exists
-// only so old stored sessions and browser-side settings still resolve
-// (resolveModel pass 2); it is never a model's canonical selector.
-func (m *ModelParameters) LegacySelector() string {
 	return m.ID + "@" + m.Adapter
 }
 

@@ -411,7 +411,7 @@ func writeResolvedMarker(w http.ResponseWriter, parentSessionId, parentToolUseId
 // @Tags         Assistant
 // @Security     bearer[assistant/read_authored]
 // @Security     bearer[assistant/read_all]
-// @Param        modelAndAdapter  path  string  true  "Model selector to get balance for: the model's display name, or the legacy id@adapter form (including slashes)" example(Agent Gemini)
+// @Param        modelAndAdapter  path  string  true  "Model selector to get balance for: the id@adapter pair (bare id allowed, slashes in ids supported), or an agent name in agentic mode" example(sonnet-4.5@SOAI)
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
 // @Failure      401           "Request was not properly authenticated"

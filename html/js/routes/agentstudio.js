@@ -87,8 +87,11 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.paramsLoaded = true;
       if (this.assistantEnabled && this.agentic) {
         this.models = (params.availableModels || []).map(m => ({
-          displayName: m.displayName,
+          id: m.id,
           adapter: m.adapter,
+          selector: AssistantUtils.buildModelIdentifier(m),
+          displayName: m.displayName || AssistantUtils.buildModelIdentifier(m),
+          enabled: !!m.enabled,
           contextWindow: m.contextLimitLarge || m.contextLimitSmall || 0,
         }));
         this.skills = (params.availableSkills || []).map(s => ({
@@ -131,17 +134,17 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     // (AgentParameters.Prompt is server-side only), so they are not shown here.
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};
-      // Map each model's displayName to its serving adapter (provider) so the
-      // model subtab can show where the agent's model runs.
-      const modelProviders = new Map((params.availableModels || []).map(m => [m.displayName, m.adapter]));
       return (params.availableAgents || []).map(a => {
-        const model = mapping[a.name] || '';
+        const selector = mapping[a.name] || '';
+        const m = AssistantUtils.resolveMappedModel(this.models, selector);
         return {
           id: a.name,
           name: a.name,
           isOrchestrator: !!a.isOrchestrator,
-          model: model,
-          provider: modelProviders.get(model) || '',
+          // Display name of the resolved model; an unresolvable selector is shown as-is.
+          model: m ? m.displayName : selector,
+          modelSelector: selector,
+          provider: m ? m.adapter : '',
           description: a.agentDescription || '',
           allowedSkills: a.allowedSkills || [],
           canDelegateTo: a.canDelegateTo || [],
