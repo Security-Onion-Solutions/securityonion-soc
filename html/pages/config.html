@@ -370,7 +370,7 @@
 									</div>
 									<div v-if="isToggle(selected)">
 										<div v-if="form.key != item[0] || isReadOnly(selected)">
-											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : 'secondary'" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
+											<v-chip :id="'node-value-output-' + item[0]" :color="$root.isTrue(item[1]) ? 'primary' : ''" append-icon="fa-pencil" @click="edit(selected, item[0])" data-aid="config_item_customize_node_slider_display" :aria-labelledby="'node-value-label-' + item[0]">{{$root.isTrue(item[1]) ? i18n.enabled : i18n.disabled }}</v-chip>
 											<span :id="'node-value-label-' + item[0]" class="setting_label mx-4">{{ item[0] }}</span>
 										</div>
 										<v-switch v-else :id="'node-value-input-' + item[0]" :label="item[0]" true-value="true" v-model="form.value" class="editing config-editor no-details" data-aid="config_item_customize_node_slider_input"></v-switch>
