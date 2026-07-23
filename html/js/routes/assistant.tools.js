@@ -8,10 +8,8 @@
 
 globalThis.AssistantTools = (function() {
   return {
-    // postToolRequest POSTs a tool result and streams the assistant's continuation.
-    // On a 409 (another tool turn is already running for this session; the backend
-    // fails fast instead of blocking) it waits and retries, up to a bounded number of
-    // attempts, then re-throws so the caller surfaces the error.
+    // POSTs a tool result and streams the continuation. A 409 (another tool turn is already
+    // running for this session) is retried a bounded number of times, then re-thrown.
     async postToolRequest(toolUse, toolRequest) {
       for (let attempt = 0; ; attempt++) {
         try {
@@ -29,11 +27,8 @@ globalThis.AssistantTools = (function() {
         }
       }
     },
-    // isToolAlreadyResolvedError reports whether an executeTool failure is the
-    // backend's ERROR_TOOL_ALREADY_RESOLVED rejection (400): the targeted tool_use
-    // already has a persisted result, so a duplicate/retried request changed
-    // nothing and must not be surfaced as a tool failure. The response body is a
-    // ReadableStream under the fetch adapter, so it may need an async read.
+    // True when an executeTool failure is ERROR_TOOL_ALREADY_RESOLVED (400): the tool_use
+    // already has a persisted result, so a retry isn't a failure. Body may be an async-read stream.
     async isToolAlreadyResolvedError(error) {
       if (!error || !error.response || error.response.status !== 400) return false;
 
@@ -51,15 +46,13 @@ globalThis.AssistantTools = (function() {
       return typeof body === 'string' && body.includes('ERROR_TOOL_ALREADY_RESOLVED');
     },
     async executeTool(toolUse) {
-      // Use the tool's session ID if available, otherwise use current session
       let toolStreamingSessionId = toolUse.sessionId || this.currentChatId;
 
       let childMsg = null;
       let reader = null;
 
       try {
-        // Create ToolRequest object with history and params. A rejected tool is not
-        // executed: the backend records an error tool_result so the turn resolves.
+        // A rejected tool is not executed: the backend records an error tool_result so the turn resolves.
         const rejected = toolUse.approved === false;
         const toolRequest = {
           sessionId: toolStreamingSessionId,
@@ -71,19 +64,15 @@ globalThis.AssistantTools = (function() {
 
         if (!rejected) this.applyToolSpecificChanges(toolUse, toolRequest);
 
-        // Use streaming for tool results. A 409 means another tool turn is already
-        // running for this session (the backend fails fast instead of blocking, so a
-        // long tool response can't hold this request open or leave a saved result
-        // orphaned by a cancelled request). Wait briefly and retry rather than erroring.
+        // 409 (another tool turn already running for this session) is retried, not errored:
+        // the backend fails fast so a long tool response can't orphan a saved result.
         const response = await this.postToolRequest(toolUse, toolRequest);
 
-        // Update tool status to executing only if visible in the current session. A
-        // rejected tool was never executing; keep its 'rejected' status.
+        // Only mark executing if visible in the current session; a rejected tool keeps its status.
         if (!rejected && this.currentChatId === toolStreamingSessionId) {
           toolUse.status = 'executing';
         }
 
-        // Stream the AI's response to the tool result
         const stream = response.data;
         reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 
@@ -94,12 +83,12 @@ globalThis.AssistantTools = (function() {
         let chunks = [];
         let partial = false;
         let messageUsage = null;
+        let childUsage = null; // usage for the in-flight delegated sub-agent turn
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          // Process streaming chunks using helper method
           const chunkResult = this.processStreamingChunks(value, chunks, partial);
           chunks = chunkResult.chunks;
           partial = chunkResult.partial;
@@ -110,11 +99,9 @@ globalThis.AssistantTools = (function() {
               continue;
             }
 
-            // Parse JSON chunk using helper method
             const parseResult = this.parseJsonChunk(chunks[i]);
 
             if (!parseResult.success) {
-              // Handle partial JSON
               if (parseResult.isPartial) {
                 partial = true;
                 chunks = [parseResult.isPartial];
@@ -126,7 +113,7 @@ globalThis.AssistantTools = (function() {
             // Handle multiple JSON objects in one chunk
             if (Array.isArray(parseResult.data)) {
               chunks.splice(i, 1, ...parseResult.data);
-              i--; // Reprocess from current position
+              i--;
 
               // If there's remaining partial content, save it for next read
               if (parseResult.isPartial) {
@@ -139,10 +126,8 @@ globalThis.AssistantTools = (function() {
             const c = parseResult.data;
             const isCurrentSession = this.currentChatId === toolStreamingSessionId;
 
-            // The executed tool's result arrives inline as a synthetic tool_result
-            // event; attach it to the tool card here rather than re-fetching the
-            // session. Only direct execution emits it (delegations resolve via the
-            // markers below), and it always targets this stream's tool.
+            // The tool result arrives inline as a synthetic tool_result event; attach it here
+            // rather than re-fetching. Only direct execution emits it and it targets this tool.
             if (c.type === 'tool_result') {
               if (c.toolResult && c.toolResult.toolUseId === toolUse.id) {
                 this.applyStreamedToolResult(toolUse, c.toolResult);
@@ -168,9 +153,8 @@ globalThis.AssistantTools = (function() {
               continue;
             }
             if (c.type === 'delegation_resolved') {
-              // Close the boundary: mark the delegate tool done and forget the child
-              // session so nothing that streams afterward (the resumed parent turn)
-              // can be misattributed back under this delegate.
+              // Close the boundary: mark the delegate done and forget the child session so the
+              // resumed parent turn that streams afterward isn't misattributed under this delegate.
               const resolvedChild = this.delegationChildren.get(toolStreamingSessionId);
               const owner = resolvedChild && resolvedChild.parentToolUse;
               if (owner) {
@@ -187,10 +171,8 @@ globalThis.AssistantTools = (function() {
               continue;
             }
 
-            // Decide nesting purely from the delegationChildren map. A chunk renders
-            // nested under the delegate tool only while its session id is still a live
-            // child entry. delegation_resolved (above) deletes that entry, so the
-            // parent's resumed turn falls through to top-level rendering automatically.
+            // Nesting is decided purely from the delegationChildren map: a chunk renders under
+            // the delegate only while its session is a live child entry (delegation_resolved deletes it).
             const activeChild = this.delegationChildren.get(toolStreamingSessionId);
             if (activeChild) {
               const owner = activeChild.parentToolUse;
@@ -200,6 +182,7 @@ globalThis.AssistantTools = (function() {
                   break;
                 case 'message_start':
                   childMsg = this.handleDelegationMessageStart(owner);
+                  childUsage = null;
                   break;
                 case 'content_block_start':
                   this.handleDelegationContentBlockStart(c, toolStreamingSessionId, childMsg);
@@ -210,7 +193,19 @@ globalThis.AssistantTools = (function() {
                 case 'content_block_stop':
                   this.handleDelegationContentBlockStop(c, toolStreamingSessionId);
                   break;
+                case 'message_delta':
+                  if (c.usage) childUsage = c.usage;
+                  break;
+                case 'message_stop':
+                  // Attribute the turn to its agent; usage feeds the card's credit chip.
+                  if (childUsage) {
+                    if (childMsg) childMsg.usage = childUsage;
+                    this.accrueCredits(childUsage, activeChild.agentName);
+                  }
+                  childUsage = null;
+                  break;
                 default:
+                  if (c.usage) childUsage = c.usage;
                   break;
               }
               continue;
@@ -277,12 +272,8 @@ globalThis.AssistantTools = (function() {
           await this.loadCredits();
         }
       } catch (error) {
-        // A duplicate/retried request for a tool_use whose result is already
-        // persisted is not a failure: the tool ran (or was rejected) and its result
-        // is in the session. The local view is known to be out of sync with the
-        // backend, so re-fetch the session and render persisted truth rather than
-        // guessing at the card's state. A session not in view (and not a delegation
-        // child rendered in it) reloads from the backend on the next switch instead.
+        // An already-resolved tool_use isn't a failure: the result is persisted, so re-fetch
+        // the session and render truth. Sessions not in view reload on the next switch instead.
         if (await this.isToolAlreadyResolvedError(error)) {
           const toolSessionId = toolUse.sessionId || this.currentChatId;
           const visible = this.currentChatId === toolSessionId || this.delegationChildren.has(toolSessionId);
@@ -296,16 +287,12 @@ globalThis.AssistantTools = (function() {
           return;
         }
 
-        // Always update tool status with error, but only update UI if current session
         toolUse.status = 'error';
         toolUse.error = error.message;
         this.isStreaming = false;
 
-        // If a delegation was still in flight (its session has a live child entry),
-        // the delegate card and child session are still open. Close them here so a
-        // dropped/aborted stream can't leave the delegate tool spinning forever (the
-        // backend may not have emitted a delegation_resolved marker). Derived from
-        // the map before the cleanup below deletes the entry.
+        // If a delegation was still in flight, close the delegate here so a dropped/aborted
+        // stream can't leave it spinning forever (no delegation_resolved may have been emitted).
         const activeDelegate = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse;
         if (activeDelegate) {
           activeDelegate.status = 'error';
@@ -320,7 +307,6 @@ globalThis.AssistantTools = (function() {
         const isCurrentSession = this.currentChatId === (toolUse.sessionId || this.currentChatId);
 
         if (isCurrentSession && !activeDelegate) {
-          // Add error message to chat
           const errorMessage = {
             role: 'assistant',
             content: `Error executing tool "${toolUse.name}": ${error.message}`,
@@ -345,11 +331,8 @@ globalThis.AssistantTools = (function() {
         }
       }
     },
-    // displayStatus is the status to render for a tool, which can differ from its raw
-    // status. A delegate stays 'executing' while its sub-agent is parked on a tool
-    // awaiting the user's approval (it must remain non-approvable so re-prompting can't
-    // spawn a duplicate sub-session), but it isn't actually working -- surface
-    // 'action_needed' so the card shows a "needs you" indicator, not a busy spinner.
+    // Render status can differ from raw status: a delegate stays 'executing' while its sub-agent
+    // awaits approval, but surface 'action_needed' so the card shows "needs you", not a spinner.
     displayStatus(toolUse) {
       if (toolUse.status === 'executing' && this.hasPendingDescendantApproval(toolUse)) {
         return 'action_needed';
@@ -436,9 +419,8 @@ globalThis.AssistantTools = (function() {
       toolUse.error = this.i18n.assistantToolUseReject;
       this.clearFloatingTool(toolUse.sessionId || this.currentChatId);
 
-      // Submit the rejection as a tool_result (the backend records an error result and
-      // resumes the turn). Routing it through the same queue as approvals keeps a
-      // parallel turn's tools serialized, so its coalescing resolves correctly.
+      // Submit the rejection as a tool_result via the same queue as approvals, so a parallel
+      // turn's tools stay serialized and its coalescing resolves correctly.
       this.queueTool(toolUse.sessionId || this.currentChatId, toolUse.id);
       if (this.isTopLevelTool(toolUse)) this.scrollToBottom();
     },
@@ -451,10 +433,8 @@ globalThis.AssistantTools = (function() {
         }
       }
     },
-    // sessionTools returns the per-session tool-execution state, creating it on first
-    // use. One record consolidates the tools-by-id map, the stream block-index ->
-    // tool-id map, the approval queue, the runner-busy flag, and the floating
-    // (pending-approval) tool shown above a collapsed delegate.
+    // sessionTools returns the per-session tool-execution state, creating it on first use:
+    // tools-by-id, block-index->id map, approval queue, busy flag, and floating pending tool.
     sessionTools(sessionId) {
       let s = this.sessionToolState.get(sessionId);
       if (!s) {
@@ -484,17 +464,15 @@ globalThis.AssistantTools = (function() {
       if (s.busy) return;
       s.busy = true;
       try {
-        // Re-read the record each iteration: a session's state can be torn down
-        // mid-run (e.g. a resolved delegation), which ends the loop just as the old
-        // per-session map deletes did.
+        // Re-read the record each iteration: a session's state can be torn down mid-run
+        // (e.g. a resolved delegation), which ends the loop.
         while (true) {
           const cur = this.sessionToolState.get(sessionId);
           if (!cur || cur.queue.length === 0) break;
           const toolUseId = cur.queue[0];
           const toolUse = cur.toolsById.get(toolUseId);
-          // A rejected tool (approved === false) still needs its declination submitted
-          // to the backend, so it bypasses the resolved skip-list; everything else that
-          // is already terminal is dropped.
+          // A rejected tool still needs its declination submitted, so it bypasses the terminal
+          // skip-list; everything else already terminal is dropped.
           const isReject = toolUse && toolUse.approved === false;
           if (!toolUse || (!isReject && ['completed','error','rejected'].includes(toolUse.status))) {
             cur.queue.shift();
@@ -512,10 +490,8 @@ globalThis.AssistantTools = (function() {
     },
     checkForActivity() {
       if (this.isStreaming || this.isTyping) return true;
-      // Tool queues are per session: a delegation runs its sub-agent's tools under the
-      // child session, not the current one. Count queued work in the current session or
-      // any live delegation child (tracked in delegationChildren) as activity, so the
-      // send/export controls stay disabled while a sub-agent's tools are still running.
+      // Tool queues are per session: a delegation runs its tools under the child session.
+      // Count queued work in the current session or any live delegation child as activity.
       const queued = (sessionId) => {
         const s = this.sessionToolState.get(sessionId);
         return !!(s && s.queue.length > 0);

@@ -20,9 +20,7 @@ globalThis.AssistantStreaming = (function() {
       }
 
       const isCompressing = tags && tags.includes(MSGTAG_CONTEXTCOMPRESSION);
-      // Check if message + context exceeds estimated token limit
       if (!isCompressing && this.isMessageTooLong) return;
-      // Check if context length has reached the limit
       if (!isCompressing && this.checkContextLimitReached()) return;
       
       // Bail out if the model wasn't reachable when credits were last fetched
@@ -31,23 +29,19 @@ globalThis.AssistantStreaming = (function() {
         return;
       }
 
-      // Check if user has credits
       if (this.creditsRemaining <= 0) {
         this.$root.showError(this.i18n.assistantOutOfCredits);
         return;
       }
       
-      // Generate session ID and update URL BEFORE starting the API call
-      // This prevents the URL update from interrupting ongoing tool execution
+      // Generate the session ID before the API call so a later URL update can't interrupt tool execution.
       if (!this.currentChatId) {
         this.currentChatId = this.generateChatId();
         this.saveCurrentChatId();
       }
       
-      // Update URL with session ID if not already set - do this BEFORE the API call
       if (this.currentChatId && !this.$route.params.sessionId) {
         await this.updateUrlWithSessionId(this.currentChatId);
-        // Wait for the route change to complete before proceeding
         await this.$nextTick();
       }
       
@@ -67,23 +61,19 @@ globalThis.AssistantStreaming = (function() {
         floatingState.floatingTool = null;
       }
 
-      // Add user message to chat
       this.messages.push(userMessage);
       const messageText = this.newMessage.trim();
       this.newMessage = '';
       this.scrollToBottom();
       
-      // Show typing indicator
       this.isTyping = true;
       
-      // Call the actual AI API - session ID is already set
       await this.callAIAPI(messageText, tags);
 
-      // Refresh chat history to show the latest session
       await this.loadStoredChats(false);
     },
     
-    // Helper method to parse JSON chunks and handle concatenated/partial JSON
+    // Parse a JSON chunk, splitting concatenated objects and flagging any trailing partial.
     parseJsonChunk(chunk) {
       try {
         return { success: true, data: JSON.parse(chunk), isPartial: null };
@@ -120,7 +110,6 @@ globalThis.AssistantStreaming = (function() {
             } else if (char === '}') {
               braceCount--;
               if (braceCount === 0) {
-                // Complete JSON object found
                 splitChunks.push(currentChunk);
                 currentChunk = '';
               }
@@ -128,7 +117,6 @@ globalThis.AssistantStreaming = (function() {
           }
         }
         
-        // If we found complete JSON objects, return them for processing
         if (splitChunks.length > 0) {
           return {
             success: true,
@@ -136,16 +124,13 @@ globalThis.AssistantStreaming = (function() {
             isPartial: currentChunk.trim() ? currentChunk : null
           };
         } else if (currentChunk.trim()) {
-          // No complete JSON found, treat entire chunk as partial
           return { success: false, data: null, isPartial: currentChunk };
         } else {
-          // Fallback: treat as partial
           return { success: false, data: null, isPartial: chunk };
         }
       }
     },
     
-    // Helper method to process streaming chunks and handle partial data
     processStreamingChunks(value, chunks, partial) {
       // Cleanup the data, split messages apart, remove SSE label, filter out empty lines
       const newChunks = value.split('\n\n').filter(d => d.trim()).map(d => (d.startsWith("data: ") ? d.slice(6) : d));
@@ -159,7 +144,6 @@ globalThis.AssistantStreaming = (function() {
       return { chunks: newChunks, partial };
     },
     
-    // Helper method to handle message_start event
     handleMessageStart(c, assistantMessage) {
       this.isTyping = false;
 
@@ -188,15 +172,10 @@ globalThis.AssistantStreaming = (function() {
     },
     
     // --- Unified content-block stream handlers ---
-    // A streamed content block (a tool_use, or a text/thought/input delta) is applied
-    // the same way in all three streaming contexts -- the orchestrator's own turn, a
-    // chained tool-result turn, and a delegated sub-agent's turn. The only differences
-    // are captured in `target`:
-    //   message   - the message to append content/thoughts/toolUses to (null = don't render)
-    //   sessionId - the session whose tool maps own this block
-    //   visible   - whether that session is on screen (drives scroll-if-pinned)
-    // The handle*ContentBlock* methods are thin adapters that build `target` for their
-    // context; these apply* methods hold the one real implementation.
+    // One implementation for all three streaming contexts (orchestrator turn, chained
+    // tool-result turn, delegated sub-agent); differences ride in `target`: message
+    // (null = don't render), sessionId (owns the tool maps), visible (scroll-if-pinned).
+    // handle*ContentBlock* are thin adapters that build `target`; apply* do the work.
     applyBlockStart(c, target) {
       if (!(c.content_block && c.content_block.type === 'tool_use')) return;
       const toolUse = {
@@ -252,7 +231,6 @@ globalThis.AssistantStreaming = (function() {
       const toolUse = this.getSessionToolMap(target.sessionId).get(toolId);
       if (toolUse && toolUse.status === 'preparing') {
         try {
-          // Parse the accumulated JSON input
           if (toolUse.inputJson) {
             toolUse.input = JSON.parse(toolUse.inputJson);
           }
@@ -293,14 +271,12 @@ globalThis.AssistantStreaming = (function() {
       return this.applyBlockStop(c, { sessionId: sid, visible: sid === this.currentChatId });
     },
     
-    // Helper method to handle message_stop event
     handleMessageStop(assistantMessage, messageUsage) {
-      // Store usage information with the message if available
       if (assistantMessage && messageUsage) {
         assistantMessage.usage = messageUsage;
-        // Update context length
         this.updateContextLength(messageUsage);
-        this.updateCreditsUsed(messageUsage);
+        // This only runs for the current session, so currentModel is its producing agent.
+        this.accrueCredits(messageUsage, this.currentModel);
         this.$forceUpdate();
       }
       
@@ -308,13 +284,11 @@ globalThis.AssistantStreaming = (function() {
     },
     
     async callAIAPI(userMessage, tags = null) {
-      // Capture the session ID at the start of the API call
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
       let reader = null;
 
       try {
-        // Build the URL with entityType and entityId query parameters if present
         let url = '/assistant/chat';
         const socId = this.$route.query.socId;
         if (socId) {
@@ -358,30 +332,25 @@ globalThis.AssistantStreaming = (function() {
         let messageUsage = null;
 
         while (true) {
-          // read in more messages
           const { done, value } = await reader.read();
           if (done) break;
           
           // Check if we're still in the same session for UI updates
           const isCurrentSession = this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId;
           
-          // Process streaming chunks using helper method
           const chunkResult = this.processStreamingChunks(value, chunks, partial);
           chunks = chunkResult.chunks;
           partial = chunkResult.partial;
           
-          // process each chunk
           for (let i = 0; i < chunks.length; i++) {
             if (chunks[i] === '[DONE]') {
               assistantMessage = null;
               continue;
             }
 
-            // Parse JSON chunk using helper method
             const parseResult = this.parseJsonChunk(chunks[i]);
             
             if (!parseResult.success) {
-              // Handle partial JSON
               if (parseResult.isPartial) {
                 partial = true;
                 chunks = [parseResult.isPartial];
@@ -390,12 +359,10 @@ globalThis.AssistantStreaming = (function() {
               continue;
             }
             
-            // Handle multiple JSON objects in one chunk
             if (Array.isArray(parseResult.data)) {
               chunks.splice(i, 1, ...parseResult.data);
               i--; // Reprocess from current position
               
-              // If there's remaining partial content, save it for next read
               if (parseResult.isPartial) {
                 partial = true;
                 chunks.push(parseResult.isPartial);
@@ -441,14 +408,13 @@ globalThis.AssistantStreaming = (function() {
                 break;
                 
               case 'message_delta':
-                // Handle usage information if present
                 if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
                 break;
                 
               default:
-                // Log any unhandled event types that might contain usage
+                // Unhandled event types may still carry usage.
                 if (c.usage && isCurrentSession) {
                   messageUsage = c.usage;
                 }
@@ -456,32 +422,27 @@ globalThis.AssistantStreaming = (function() {
             }
           }
 
-          // done processing received chunks, update UI only if still current session
           if (isCurrentSession) {
             await this.$nextTick();
           }
           output++;
         }
         
-        // Only update UI state if we're still in the same session
         if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
           this.isStreaming = false;
           // Update credits from API after successful response
           await this.loadCredits();
         }
         
-        // Clear the active streaming session if this was the active one
         if (this.activeStreamingSessionId === streamingSessionId) {
           this.activeStreamingSessionId = null;
         }
         
       } catch (error) {
-        // Only update UI state if we're still in the same session
         if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
           this.isTyping = false;
           this.isStreaming = false;
           
-          // Show user-friendly error message
           const errorMessage = {
             role: 'assistant',
             content: this.i18n.assistantErrorMessage,
@@ -490,7 +451,6 @@ globalThis.AssistantStreaming = (function() {
           this.messages.push(errorMessage);
           this.scrollIfPinned();
 
-          // Read streamed error
           if (error && error.response && error.response.data) {
             const stream = error.response.data;
             const errorReader = stream.pipeThrough(new TextDecoderStream()).getReader();
@@ -498,11 +458,9 @@ globalThis.AssistantStreaming = (function() {
             error = value;
           }
 
-          // Show error to user
           this.$root.showError(error);
         }
         
-        // Clear the active streaming session if this was the active one
         if (this.activeStreamingSessionId === streamingSessionId) {
           this.activeStreamingSessionId = null;
         }
@@ -519,7 +477,6 @@ globalThis.AssistantStreaming = (function() {
       }
     },
 
-    // Helper method to handle message_start event for tool execution
     handleToolExecutionMessageStart(c, assistantMessage, toolUse) {
       const msg = {
         role: 'assistant',
@@ -562,14 +519,12 @@ globalThis.AssistantStreaming = (function() {
     },
 
     // --- Delegation (sub-agent) streaming helpers ---
-    // A delegated sub-agent runs as its own session, but its turns are rendered
-    // nested under the parent's delegate tool block (toolUse.childSession). Its
-    // tool requests are surfaced for approval just like top-level tools (always
-    // prompting), routed by the child session id.
+    // A sub-agent runs as its own session but renders nested under the parent's delegate
+    // tool block (toolUse.childSession); its tool requests prompt like top-level tools,
+    // routed by the child session id.
 
-    // Lazily create the nested render container on a delegate tool block. The
-    // delegateToolUse must be the reactive instance from this.messages so that
-    // attaching childSession (and everything under it) notifies the template.
+    // Lazily create the nested render container on a delegate tool block. delegateToolUse
+    // must be the reactive instance from this.messages so attaching childSession notifies the template.
     ensureChildSession(delegateToolUse, agentName) {
       if (!delegateToolUse.childSession) {
         delegateToolUse.childSession = {
@@ -582,9 +537,8 @@ globalThis.AssistantStreaming = (function() {
       return delegateToolUse.childSession;
     },
 
-    // Child tools currently awaiting the user's approval. These are surfaced OUTSIDE
-    // the collapsed sub-agent region so they stay visible/actionable; once the user
-    // responds they leave this list and fold into the collapsed transcript.
+    // Child tools awaiting approval, surfaced OUTSIDE the collapsed sub-agent region so they
+    // stay actionable; once answered they fold back into the collapsed transcript.
     pendingChildTools(delegateToolUse) {
       const cs = delegateToolUse && delegateToolUse.childSession;
       if (!cs || !Array.isArray(cs.messages)) return [];
@@ -599,9 +553,16 @@ globalThis.AssistantStreaming = (function() {
       return pending;
     },
 
-    // Whether the collapsed sub-agent region has anything worth showing (a thought or
-    // an already-resolved tool) — avoids rendering an empty expandable when the only
-    // activity so far is a still-pending tool shown outside.
+    // Credits this delegate's own turns cost. Grandchild delegations live in their own
+    // nested cards, so summing only this session's messages excludes them (leaf cost).
+    delegateOwnCredits(delegateToolUse) {
+      const cs = delegateToolUse && delegateToolUse.childSession;
+      if (!cs || !Array.isArray(cs.messages)) return 0;
+      return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.credits) || 0), 0);
+    },
+
+    // Whether the collapsed sub-agent region has anything worth showing — avoids an empty
+    // expandable when the only activity so far is a still-pending tool shown outside.
     delegationHasCollapsedContent(delegateToolUse) {
       const cs = delegateToolUse && delegateToolUse.childSession;
       if (!cs || !Array.isArray(cs.messages)) return false;
@@ -630,9 +591,8 @@ globalThis.AssistantStreaming = (function() {
       return delegateToolUse.childSession.messages[delegateToolUse.childSession.messages.length - 1];
     },
 
-    // Adapter: a delegated sub-agent's turn renders into its nested childMsg. Its
-    // transcript is always on screen (collapsed under the parent's agent panel), so
-    // visible is always true; tool approvals route back to the child session id.
+    // Adapter: a delegated sub-agent's turn renders into its nested childMsg, always on
+    // screen, so visible is always true; tool approvals route back to the child session id.
     handleDelegationContentBlockStart(c, childSessionId, childMsg) {
       this.applyBlockStart(c, { message: childMsg, sessionId: childSessionId, visible: true });
     },
@@ -643,15 +603,9 @@ globalThis.AssistantStreaming = (function() {
       this.applyBlockStop(c, { sessionId: childSessionId, visible: true });
     },
 
-    // Capture the raw tool result the backend persists shortly after a tool runs,
-    // by re-reading the session's history. By default the newest tool_result in
-    // the currently viewed session is assumed to be ours; for tools inside a
-    // delegated sub-agent, pass the child sessionId and matchById so the result
-    // is matched explicitly on the tool's use id.
-    // applyStreamedToolResult attaches a tool's result to its card and advances its
-    // status to completed/error. The result is delivered inline by the backend's
-    // synthetic tool_result SSE event (see executeTool), so no session re-fetch is
-    // needed. Empty content still advances status, otherwise the card spins forever.
+    // Attach a tool's result to its card and advance status to completed/error. The result
+    // arrives inline via the backend's synthetic tool_result SSE event (see executeTool), so
+    // no session re-fetch is needed. Empty content still advances status, else the card spins forever.
     applyStreamedToolResult(toolUse, toolResult) {
       toolUse.completedAt = new Date().toISOString();
       // A declined tool reports a 'rejected' result; keep the rejected card (not error).

@@ -16,8 +16,8 @@ const agenticParams = () => ({
   enabled: true,
   agentic: true,
   availableModels: [
-    { displayName: 'Model A', adapter: 'soai', contextLimitLarge: 200000, contextLimitSmall: 8000 },
-    { displayName: 'Model B', adapter: 'anthropic', contextLimitSmall: 8000 },
+    { displayName: 'Model A', adapter: 'SOAI', contextLimitLarge: 200000, contextLimitSmall: 8000 },
+    { displayName: 'Model B', adapter: 'Anthropic', contextLimitSmall: 8000 },
   ],
   availableSkills: [
     // additionalPrompt is intentionally never sent by the backend; include it here
@@ -173,9 +173,14 @@ test('agentsFromParams maps agent fields and resolves the model from the mapping
   expect(coordinator.name).toBe('Coordinator');
   expect(coordinator.isOrchestrator).toBe(true);
   expect(coordinator.model).toBe('Model A');
+  expect(coordinator.provider).toBe('SOAI');
   expect(coordinator.description).toBe('Routes work');
   expect(coordinator.allowedSkills).toEqual(['hunt']);
   expect(coordinator.canDelegateTo).toEqual(['Hunter']);
+
+  // Provider resolves from the mapped model's adapter.
+  expect(rows[1].model).toBe('Model B');
+  expect(rows[1].provider).toBe('Anthropic');
 });
 
 test('agentsFromParams defaults missing fields and handles no agents', () => {
@@ -185,6 +190,7 @@ test('agentsFromParams defaults missing fields and handles no agents', () => {
     availableAgents: [{ name: 'Solo' }],
   });
   expect(rows[0].model).toBe('');
+  expect(rows[0].provider).toBe('');
   expect(rows[0].description).toBe('');
   expect(rows[0].allowedSkills).toEqual([]);
   expect(rows[0].canDelegateTo).toEqual([]);

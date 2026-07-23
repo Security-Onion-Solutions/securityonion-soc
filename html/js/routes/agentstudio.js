@@ -131,15 +131,22 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     // (AgentParameters.Prompt is server-side only), so they are not shown here.
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};
-      return (params.availableAgents || []).map(a => ({
-        id: a.name,
-        name: a.name,
-        isOrchestrator: !!a.isOrchestrator,
-        model: mapping[a.name] || '',
-        description: a.agentDescription || '',
-        allowedSkills: a.allowedSkills || [],
-        canDelegateTo: a.canDelegateTo || [],
-      }));
+      // Map each model's displayName to its serving adapter (provider) so the
+      // model subtab can show where the agent's model runs.
+      const modelProviders = new Map((params.availableModels || []).map(m => [m.displayName, m.adapter]));
+      return (params.availableAgents || []).map(a => {
+        const model = mapping[a.name] || '';
+        return {
+          id: a.name,
+          name: a.name,
+          isOrchestrator: !!a.isOrchestrator,
+          model: model,
+          provider: modelProviders.get(model) || '',
+          description: a.agentDescription || '',
+          allowedSkills: a.allowedSkills || [],
+          canDelegateTo: a.canDelegateTo || [],
+        };
+      });
     },
     setAgents(agents) {
       this.agents = agents;

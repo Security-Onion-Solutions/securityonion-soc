@@ -4,6 +4,10 @@
       <v-expansion-panel-title data-aid="assistant_delegation_header">
         <v-icon size="small" class="mr-2">fa-user-secret</v-icon>
         <span class="font-weight-medium text-body-2">{{ toolUse.childSession.agentName || ctx.i18n.assistantDelegateAgent }}</span>
+        <template v-if="ctx.delegateOwnCredits(toolUse) > 0">
+          <span class="text-medium-emphasis mx-2">·</span>
+          <span class="text-body-2 text-primary delegation-child-credits" data-aid="assistant_delegation_credits">{{ ctx.formatCount(ctx.delegateOwnCredits(toolUse)) }} {{ ctx.i18n.creditsLowercase }}</span>
+        </template>
       </v-expansion-panel-title>
       <v-expansion-panel-text>
         <div v-for="(childM, ci) in toolUse.childSession.messages" :key="ci" class="delegation-child-message mb-2">

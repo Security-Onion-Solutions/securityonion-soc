@@ -36,7 +36,6 @@ globalThis.AssistantUtils = (function() {
         : null;
       if (!container) return;
 
-      // Always do an initial snap
       this.forceScrollBottom(container);
 
       let resolved = false;
@@ -66,7 +65,6 @@ globalThis.AssistantUtils = (function() {
 
       const onMutateOrResize = () => {
         if (resolved) return;
-        // When DOM mutates or sizes change, snap and restart settle timer
         this.forceScrollBottom(container);
         lastHeight = container.scrollHeight;
         scheduleSettle();
@@ -117,7 +115,6 @@ globalThis.AssistantUtils = (function() {
         if (settleTimer) clearTimeout(settleTimer);
       };
 
-      // kick off the initial settle wait
       scheduleSettle();
     },
 
@@ -162,7 +159,6 @@ globalThis.AssistantUtils = (function() {
     calculateContextOfMessage(allMessages, msgIndex) {
       // non-user messages tell us their context in output_tokens
       if (msgIndex >= 0 && msgIndex < allMessages.length && allMessages[msgIndex].role !== 'user') {
-        // asking about an assistant message, return its output tokens
         return allMessages[msgIndex].usage ? allMessages[msgIndex].usage.output_tokens : 0;
       }
 
@@ -184,7 +180,6 @@ globalThis.AssistantUtils = (function() {
     },
     generateInvestigationPrompt(fields) {
 
-      // Prepare the alert data for investigation
       const alertData = {
         socId: fields.socId,
         ruleUuid: fields.ruleUuid,
@@ -230,7 +225,6 @@ globalThis.AssistantUtils = (function() {
     },
     
 
-    // Generic setting save method
     saveSetting(name, value, defaultValue = null) {
       var item = 'settings.assistant.' + name;
       if (defaultValue == null || value != defaultValue) {
@@ -240,7 +234,6 @@ globalThis.AssistantUtils = (function() {
       }
     },
 
-    // Save all local settings
     saveLocalSettings() {
       this.saveSetting('increaseContextLimit', this.increaseContextLimit, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
@@ -250,7 +243,6 @@ globalThis.AssistantUtils = (function() {
       this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
-    // Load all local settings
     loadLocalSettings() {
       var prefix = 'settings.assistant';
       if (localStorage[prefix + '.increaseContextLimit']) this.increaseContextLimit = localStorage[prefix + '.increaseContextLimit'] == 'true';
@@ -264,7 +256,6 @@ globalThis.AssistantUtils = (function() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
-    // Check if a tool should be auto-approved based on localStorage settings
     shouldAutoApproveTool(toolName) {
       return (
         this.alwaysApproveReadRequests &&
@@ -298,9 +289,8 @@ globalThis.AssistantUtils = (function() {
       }
     },
 
-    // Label for the "Current Model" info block. In agentic mode the picker
-    // value is an agent name, so append the model it runs on (e.g.
-    // "Orchestrator - Claude Sonnet"); otherwise it's just the model name.
+    // Label for the "Current Model" block. In agentic mode the picker value is
+    // an agent name, so append its model (e.g. "Orchestrator - Claude Sonnet").
     currentModelLabel() {
       const entry = this.modelsMap.get(this.currentModel);
       if (!entry) return '';
@@ -308,6 +298,29 @@ globalThis.AssistantUtils = (function() {
         return `${entry.displayName} - ${entry.mappedModelName}`;
       }
       return entry.displayName;
+    },
+
+    // Whether the selection runs on a credit-based cloud model ('securityonion_ai_cloud',
+    // gates the credits pill); in agentic mode resolve via the mapped model's adapter,
+    // since the agent's synthetic 'Agents' adapter isn't a real backend adapter.
+    isCreditBasedModel() {
+      const entry = this.modelsMap.get(this.currentModel);
+      if (!entry) return false;
+      const adapterName = this.agentic ? entry.mappedAdapter : entry.adapter;
+      return this.adaptersMap.get(adapterName)?.protocol === 'securityonion_ai_cloud';
+    },
+
+    canSwitchModel() {
+      return !this.$root.loading && !this.checkForActivity();
+    },
+
+    selectModel(key) {
+      if (!key || key === this.currentModel) return;
+      // Don't switch mid-turn.
+      if (this.checkForActivity()) return;
+      this.currentModel = key;
+      this.updateModelParams();
+      this.reloadCredits();
     },
 
     updateModelParams() {
@@ -322,9 +335,8 @@ globalThis.AssistantUtils = (function() {
       this.lowBalanceColorAlert = m.lowBalanceColorAlert || 0;
     },
 
-    // Legacy id@adapter selector, used as the model key only when a model has
-    // no displayName and to migrate selectors saved before displayName became
-    // the canonical identifier.
+    // Legacy id@adapter selector: the model key only when a model has no
+    // displayName, and to migrate selectors saved before displayName was canonical.
     buildModelIdentifier(model) {
       if (!model) return '';
       return `${model?.id||''}@${model?.adapter||''}`;

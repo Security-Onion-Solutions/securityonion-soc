@@ -37,6 +37,7 @@ globalThis.AssistantSessions = (function() {
             displayName: a.name,
             adapter: 'Agents',
             mappedModelName: mapped?.displayName || '',
+            mappedAdapter: mapped?.adapter || '',
             contextLimitSmall: mapped?.contextLimitSmall || 0,
             contextLimitLarge: mapped?.contextLimitLarge || 0,
             charsPerTokenEstimate: mapped?.charsPerTokenEstimate || 0,
@@ -95,8 +96,7 @@ globalThis.AssistantSessions = (function() {
       }
     },
     
-    // Calculate context length from usage data (input_tokens + output_tokens),
-    // ignore input tokens if on a context compression message
+    // Ignore input tokens when on a context compression message.
     calculateContextFromUsage(usage, ignoreInputTokens) {
       if (!usage) return 0;
       const inputTokens = usage.input_tokens || 0;
@@ -105,7 +105,6 @@ globalThis.AssistantSessions = (function() {
       return ignoreInputTokens ? outputTokens : inputTokens + outputTokens;
     },
     
-    // Update the total context length
     updateContextLength(usage, ignoreInputTokens = false) {
       if (usage) {
         const messageContext = this.calculateContextFromUsage(usage, ignoreInputTokens);
@@ -113,10 +112,33 @@ globalThis.AssistantSessions = (function() {
       }
     },
 
-    updateCreditsUsed(usage) {
-      if (usage) {
-        const messageCredits = usage.credits || 0;
-        this.creditsUsed += messageCredits;
+    // agentName is the producing agent: msg.model on reload, or the live selection /
+    // delegate name while streaming (they match, since we send model: currentModel).
+    accrueCredits(usage, agentName) {
+      const credits = (usage && usage.credits) || 0;
+      if (!credits) return;
+      this.creditsUsed += credits;
+      const key = agentName || this.i18n.assistantDelegateAgent;
+      this.creditsByAgent[key] = (this.creditsByAgent[key] || 0) + credits;
+    },
+
+    // Rebuild credit totals from stored history (msg.model per turn) so attribution
+    // can't drift with the model picker. `data` is the /assistant/sessions/{id} payload.
+    recomputeCreditsFromHistory(data) {
+      this.creditsUsed = 0;
+      this.creditsByAgent = {};
+      const addHistory = (history, fallbackAgent) => {
+        for (const sm of (history || [])) {
+          const usage = sm && sm.message && sm.message.usage;
+          if (!usage || !usage.credits) continue;
+          this.accrueCredits(usage, sm.model || fallbackAgent);
+        }
+      };
+      // Fallbacks cover legacy messages saved before per-message model existed.
+      addHistory(data && data.history, (data && data.session && data.session.model) || '');
+      for (const sub of ((data && data.subSessions) || [])) {
+        const subAgent = (sub && sub.session && (sub.session.delegateAgent || sub.session.model)) || '';
+        addHistory(sub && sub.history, subAgent);
       }
     },
 
@@ -132,7 +154,6 @@ globalThis.AssistantSessions = (function() {
 
     async loadNewChatScreen() {
       try {
-        // Initialize with a welcome message from the AI Assistant
         this.messages = [
           {
             role: 'assistant',
@@ -140,9 +161,9 @@ globalThis.AssistantSessions = (function() {
             timestamp: new Date().toISOString()
           }
         ];
-        // Reset context length for new chat
         this.contextLength = 0;
         this.creditsUsed = 0;
+        this.creditsByAgent = {};
       } catch (error) {
         this.$root.showError(error);
       }
@@ -152,7 +173,6 @@ globalThis.AssistantSessions = (function() {
       try {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
-          // Convert backend format to frontend format
           this.chatHistoryById = {};
           this.chatHistory = response.data.map(session => {
             let s = {
@@ -174,7 +194,6 @@ globalThis.AssistantSessions = (function() {
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToLoadHistory + ': ' + error.message);
 
-        // Fallback to empty array if backend is unavailable
         this.chatHistory = [];
       } finally {
         if (showLoading) this.$root.stopLoading();
@@ -193,7 +212,6 @@ globalThis.AssistantSessions = (function() {
     async handleRouteSessionId() {
       const urlSessionId = this.$route.params.sessionId;
       
-      // Clear active streaming session and UI state when route changes to different session
       if (this.currentChatId !== urlSessionId) {
         this.clearStreamingStates();
       }
@@ -203,12 +221,10 @@ globalThis.AssistantSessions = (function() {
       }
       
       if (urlSessionId) {
-        // Try to load chat from backend first
         this.$root.startLoading();
         try {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
-          // Check if this is an investigation session
           const isInvestigation = this.$route.query.investigation === 'true';
 
           if (isInvestigation) {
@@ -217,7 +233,6 @@ globalThis.AssistantSessions = (function() {
             this.saveCurrentChatId();
             try {
               const investigationPrompt = this.generateInvestigationPrompt(this.$route.query);
-              // This is a new investigation session, start with investigation prompt
               this.$nextTick(() => {
                 this.startInvestigationSession(investigationPrompt);
               });
@@ -233,7 +248,6 @@ globalThis.AssistantSessions = (function() {
           this.$root.stopLoading();
         }
       } else {
-        // No session ID in URL, restore last active chat
         await this.restoreLastActiveChat();
       }
       await this.$nextTick();
@@ -248,7 +262,6 @@ globalThis.AssistantSessions = (function() {
       if (lastChatId && this.chatHistory.some(c => c.sessionId === lastChatId)) {
         this.$root.startLoading();
         try {
-          // Update URL to reflect the current session
           await this.updateUrlWithSessionId(lastChatId);
           return;
         } catch (error) {
@@ -282,14 +295,12 @@ globalThis.AssistantSessions = (function() {
     async saveCurrentChat() {
       if (this.messages.length <= 1) return; // Don't save if only welcome message
       
-      // Backend automatically saves chats through the API calls
-      // Just update the current chat ID
+      // Backend auto-saves chats through the API calls; just track the current chat ID.
       if (!this.currentChatId) {
         this.currentChatId = this.generateChatId();
       }
       this.saveCurrentChatId();
       
-      // Refresh the chat history to reflect any changes
       await this.loadStoredChats();
     },
     generateChatId() {
@@ -315,18 +326,14 @@ globalThis.AssistantSessions = (function() {
 
     async deleteChat(chatId) {
       try {
-        // Call the backend DELETE endpoint to remove the session
         await this.$root.papi.delete(`/assistant/sessions/${chatId}`);
         
-        // Remove from local history after successful backend deletion
         this.chatHistory = this.chatHistory.filter(chat => chat.sessionId !== chatId);
         
-        // If we deleted the current chat, start a new one
         if (this.currentChatId === chatId) {
           this.currentChatId = null;
-          this.saveCurrentChatId(); // Clear the saved current chat ID
-          this.loadNewChatScreen(); // Reset to welcome message
-          // Navigate to chat without session ID
+          this.saveCurrentChatId();
+          this.loadNewChatScreen();
           this.$router.push({ name: 'assistant' });
         }
         
@@ -335,21 +342,18 @@ globalThis.AssistantSessions = (function() {
       }
     },
     async startNewChat() {
-      await this.saveCurrentChat(); // Save current chat before starting new one
+      await this.saveCurrentChat();
       
-      // Clear active streaming session and UI state when starting new chat
       this.clearStreamingStates();
       
       this.currentChatId = null;
-      this.saveCurrentChatId(); // Clear the saved current chat ID
-      this.loadNewChatScreen(); // Reset to welcome message (also resets context length)
+      this.saveCurrentChatId();
+      this.loadNewChatScreen(); // also resets context length
       this.focusChatInput();
       this.canChat = true;
-      // Navigate to chat without session ID
       this.$router.push({ name: 'assistant' });
     },
     async updateUrlWithSessionId(sessionId) {
-      // Only update URL if it's different from current
       if (this.$route.params.sessionId !== sessionId) {
         await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }
@@ -367,13 +371,12 @@ globalThis.AssistantSessions = (function() {
         return;
       }
 
-      // Clear the welcome message for investigations (similar to normal chats)
+      // Clear the welcome message for investigations.
       this.messages = [];
 
-      // Set the investigation prompt directly (no decoding needed)
+      // Set directly; no decoding needed.
       this.newMessage = investigationPrompt;
 
-      // Wait for the UI to update again
       await this.$nextTick();
 
       // Send the message after a delay to ensure everything is ready
@@ -387,10 +390,8 @@ globalThis.AssistantSessions = (function() {
         }
       }, 2000);
     },
-    // Helper method to generate title from a session/message
     generateTitleFromMessage(session) {
       if (session && session.title) {
-        // Handle different message formats
         let content = session.title;
         if (content) {
           let title = content.substring(0, 50);
@@ -403,7 +404,6 @@ globalThis.AssistantSessions = (function() {
       return 'New Chat - ' + new Date().toLocaleDateString();
     },
 
-    // Helper method to load a specific chat from backend
     async loadChatFromBackend(sessionId) {
       try {
         const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
@@ -417,6 +417,8 @@ globalThis.AssistantSessions = (function() {
           } finally {
             this._loadSubSessions = null;
           }
+          // Derive credits from stored history, independent of the render tree.
+          this.recomputeCreditsFromHistory(response.data);
           this.saveCurrentChatId();
 
           await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
@@ -441,9 +443,8 @@ globalThis.AssistantSessions = (function() {
       }
     },
     
-    // Helper method to process tool result messages (new format with tags)
+    // New-format (tagged) tool result messages.
     processToolResultMessage(msg, processedMessages) {
-      // This is a tool result message - extract the result data
       let rawResult = null;
       let toolUseId = null;
       let toolError = null;
@@ -482,9 +483,7 @@ globalThis.AssistantSessions = (function() {
         }
       }
       
-      // Find the assistant message with the matching tool use and add the raw result
       if (toolUseId && rawResult && toolError) {
-        // Look backwards through processed messages to find the tool use
         for (let j = processedMessages.length - 1; j >= 0; j--) {
           const processedMsg = processedMessages[j];
           if (processedMsg.role === 'assistant' && processedMsg.toolUses) {
@@ -504,12 +503,9 @@ globalThis.AssistantSessions = (function() {
       }
     },
     
-    // Helper method to process old format tool result messages
     processOldFormatToolResult(msg, processedMessages) {
-      // This is a tool result - find the previous assistant message with tool uses
       const prevMessage = processedMessages[processedMessages.length - 1];
       if (prevMessage && prevMessage.role === 'assistant' && prevMessage.toolUses) {
-        // Add the raw result to the last tool use in the previous message
         const toolUses = prevMessage.toolUses;
         if (toolUses.length > 0) {
           const lastToolUse = toolUses[toolUses.length - 1];
@@ -518,12 +514,10 @@ globalThis.AssistantSessions = (function() {
       }
     },
     
-    // Helper method to extract content from message blocks
     extractMessageContent(msg, frontendMsg) {
       if (msg.message.contentStr) {
         frontendMsg.content = msg.message.contentStr;
       } else if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
-        // Extract text from content blocks
         const textBlocks = msg.message.contentBlocks.filter(block => block.type === 'text');
         if (textBlocks.length > 0) {
           frontendMsg.content = textBlocks.map(block => this.nbspRegexOp(block.text)).join('\n');
@@ -535,31 +529,23 @@ globalThis.AssistantSessions = (function() {
       }
     },
     
-    // Helper method to process tool use blocks
     processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
       const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
       if (toolBlocks.length === 0) return;
 
-      // Status is decided PER TOOL, mirroring the sub-agent reload (reconstructChildSession):
-      // a single assistant turn can request several tools in parallel whose results are
-      // persisted as separate tool_result messages, so one turn may hold a mix of
-      // resolved, pending, and skipped tools. A declined tool is just a resolved
-      // tool_result (status 'rejected'): it lands in the resolved branch below and is
-      // refined to 'rejected' by processToolResultMessage.
+      // Status is decided per tool: one turn can request parallel tools saved as separate
+      // tool_results, so it may mix resolved/pending/skipped (a declined tool is a rejected result).
       const resolvedIds = this.collectResolvedToolUseIds(backendMessages);
 
-      // An unresolved tool is still awaiting approval only while this turn is the
-      // conversation's active tail (everything after it is a tool_result answering it --
-      // the model has not continued and the user has not moved on). Once a non-tool_result
-      // message follows, an unanswered tool was abandoned (skipped). This is the top-level
-      // analogue of the sub-agent path's "turn holding the backend-flagged pending tool".
+      // An unresolved tool awaits approval only while this turn is the active tail (only
+      // tool_results follow it); once another message follows, it was abandoned (skipped).
       const active = this.isActiveToolTurn(backendMessages, i);
 
       frontendMsg.toolUses = toolBlocks.map(block => {
         const base = {
           id: block.id || 'unknown',
           name: block.name || 'unknown',
-          input: block.input || {}, // Ensure input is always an object, never null/undefined
+          input: block.input || {},
           result: null,
           error: null,
           rawResult: null, // Populated by the matching tool_result message, if any
@@ -618,10 +604,8 @@ globalThis.AssistantSessions = (function() {
       return ids;
     },
 
-    // Whether the assistant turn at index i is still the conversation's active tool turn:
-    // every message after it is a tool_result (answering this turn's tools), so the model
-    // has not continued and the user has not moved on. Once a non-tool_result message
-    // follows, any unanswered tool from the turn was abandoned, not pending.
+    // True while every message after turn i is a tool_result answering it; once another
+    // message follows, any unanswered tool from the turn was abandoned, not pending.
     isActiveToolTurn(backendMessages, i) {
       for (let j = i + 1; j < backendMessages.length; j++) {
         const m = backendMessages[j];
@@ -706,10 +690,9 @@ globalThis.AssistantSessions = (function() {
 
         const childMsg = { role: 'assistant', thoughts: '', content: '', toolUses: [], timestamp: sm.createTime };
 
-        // Split the sub-agent's turn the same way the live stream and the top-level
-        // reload do: response prose renders as content, reasoning as thoughts. Folding
-        // prose into thoughts here would hide the sub-agent's answer after a reload
-        // (thoughts only show when "show thinking" is on), unlike the live view.
+        // Split the turn like the live stream: prose -> content, reasoning -> thoughts.
+        // Folding prose into thoughts would hide the sub-agent's answer after reload
+        // (thoughts only show when "show thinking" is on).
         let contentText = '';
         const thoughtText = m.thoughts || '';
         for (const b of (m.contentBlocks || [])) {
@@ -720,12 +703,9 @@ globalThis.AssistantSessions = (function() {
               id: b.id || 'unknown',
               name: b.name || 'unknown',
               input: b.input || {},
-              // Default for a tool_use with no result: it was requested but never
-              // produced a result (the sub-agent stopped/errored). Finalized below to
-              // completed/error when a result exists, or executing/pending_approval
-              // when it's a live delegation or the backend-flagged pending tool. Must
-              // NOT default to 'completed' -- that would show a false checkmark for a
-              // tool that never ran (mirrors the top-level reload guard).
+              // Default 'skipped' for a tool_use with no result; finalized below to
+              // completed/error/executing/pending_approval. Must NOT default to
+              // 'completed' -- that would show a false checkmark for a tool that never ran.
               status: 'skipped',
               result: null,
               error: null,
@@ -746,13 +726,14 @@ globalThis.AssistantSessions = (function() {
         }
         childMsg.thoughts = thoughtText;
         childMsg.content = contentText;
+        // Usage drives the delegate card's per-invocation credit chip.
+        if (m.usage) childMsg.usage = m.usage;
         childMessages.push(childMsg);
       }
 
-      // The backend flags a single pending tool_use, but that tool's turn may have
-      // requested several in parallel -- all of its unresolved siblings are equally
-      // awaiting approval, not skipped. Treat the whole turn holding the flagged tool
-      // as active; unresolved tools in earlier turns were genuinely abandoned.
+      // The backend flags one pending tool_use, but its turn may hold parallel siblings
+      // equally awaiting approval. Treat the whole flagged turn as active; unresolved
+      // tools in earlier turns were genuinely abandoned.
       let activeTurnToolIds = null;
       if (pendingToolUseId) {
         const activeMsg = childMessages.find(m => m.toolUses.some(t => t.id === pendingToolUseId));
@@ -793,15 +774,10 @@ globalThis.AssistantSessions = (function() {
       }
     },
 
-    // A delegation that has settled -- its delegate tool carries a result, errored, was
-    // rejected, or was skipped -- must not present its sub-agent as live.
-    // reconstructChildSession runs while the delegate tool_use message is processed --
-    // BEFORE the delegate's own tool_result is processed -- so it can't know the outcome
-    // and may leave child tools executing/pending. This post-pass, run once the whole
-    // conversation is rebuilt, makes a settled delegation inert: any leftover
-    // executing/pending sub-agent tool is marked skipped and unregistered (from the
-    // session tool map and the live delegation linkage), so it is never actionable.
-    // Settlement propagates downward -- a settled ancestor settles every descendant.
+    // Post-pass after the whole conversation is rebuilt: reconstructChildSession runs
+    // before a delegate's own tool_result, so it can't know the outcome. Here a settled
+    // delegation's leftover executing/pending sub-agent tools are marked skipped and
+    // unregistered so they're not actionable. Settlement propagates to all descendants.
     finalizeResolvedDelegations(messages) {
       const visit = (toolUses, ancestorSettled) => {
         if (!Array.isArray(toolUses)) return;
@@ -834,11 +810,9 @@ globalThis.AssistantSessions = (function() {
       visit(messages.flatMap(m => (Array.isArray(m.toolUses) ? m.toolUses : [])), false);
     },
 
-    // Helper method to convert backend message format to frontend format
     convertBackendMessagesToFrontend(backendMessages) {
       const processedMessages = [];
-      // Reset context length when loading from backend
-      this.creditsUsed = 0;
+      // Reset context length when loading from backend (credits handled separately).
       this.contextLength = 0;
       this.contextStartMessageIndex = -1;
       let justResetContext = false;
@@ -846,17 +820,14 @@ globalThis.AssistantSessions = (function() {
       for (let i = 0; i < backendMessages.length; i++) {
         const msg = backendMessages[i];
         
-        // Check if this is a tool result message (new format with tags)
         if (msg.tags && msg.tags.includes('tool_result')) {
           this.processToolResultMessage(msg, processedMessages);
-          // Skip adding this message to the processed messages (filter it out)
           continue;
         }
         
-        // Check if this is a tool result message (old format - user role with contentStr)
+        // old-format tool result (user role with contentStr, no blocks)
         if (msg.message.role === 'user' && msg.message.contentStr && !msg.message.contentBlocks) {
           this.processOldFormatToolResult(msg, processedMessages);
-          // Skip adding this message to the processed messages (filter it out)
           continue;
         }
         
@@ -866,32 +837,25 @@ globalThis.AssistantSessions = (function() {
           tags: msg.tags || [],
         };
 
-        // Extract thoughts if present
         if (msg.message.thoughts) {
           frontendMsg.thoughts = msg.message.thoughts;
         }
 
-        // Extract message content using helper method
         this.extractMessageContent(msg, frontendMsg);
         
-        // Process tool use blocks if present
         if (msg.message.contentBlocks && msg.message.contentBlocks.length > 0) {
           this.processToolUseBlocks(msg, frontendMsg, backendMessages, i);
         }
 
-        // Handle usage information if present
         if (msg.message.usage) {
           frontendMsg.usage = msg.message.usage;
-          // Update context length for loaded messages
           this.updateContextLength(msg.message.usage, justResetContext);
-          this.updateCreditsUsed(msg.message.usage);
         }
 
         processedMessages.push(frontendMsg);
 
         if (msg.tags && msg.tags.includes(MSGTAG_CONTEXTCOMPRESSION)) {
-          // reset context, messages prior to this message are no longer
-          // sent to the AI
+          // reset context; messages before this are no longer sent to the AI
           if (i >= 0 && i < backendMessages.length - 1) {
             this.contextLength = this.calculateContextOfMessage(backendMessages.map(m => m.message), i);
           } else {
