@@ -1234,8 +1234,8 @@ dfn {
   overflow-y: auto;
 }
 
-/* Per-invocation credit cost shown beside a delegate's agent name. */
-.delegation-child-credits {
+/* Per-invocation stats (credits, output tokens) beside a delegate's agent name. */
+.delegation-child-stat {
   font-variant-numeric: tabular-nums;
 }
 

@@ -6,7 +6,11 @@
         <span class="font-weight-medium text-body-2">{{ toolUse.childSession.agentName || ctx.i18n.assistantDelegateAgent }}</span>
         <template v-if="ctx.delegateOwnCredits(toolUse) > 0">
           <span class="text-medium-emphasis mx-2">·</span>
-          <span class="text-body-2 text-primary delegation-child-credits" data-aid="assistant_delegation_credits">{{ ctx.formatCount(ctx.delegateOwnCredits(toolUse)) }} {{ ctx.i18n.creditsLowercase }}</span>
+          <span class="text-body-2 text-primary delegation-child-stat" data-aid="assistant_delegation_credits">{{ ctx.formatCount(ctx.delegateOwnCredits(toolUse)) }} {{ ctx.i18n.creditsLowercase }}</span>
+        </template>
+        <template v-if="ctx.delegateOwnOutputTokens(toolUse) > 0">
+          <span class="text-medium-emphasis mx-2">·</span>
+          <span class="text-body-2 text-green delegation-child-stat" data-aid="assistant_delegation_tokens">{{ ctx.formatCount(ctx.delegateOwnOutputTokens(toolUse)) }} {{ ctx.i18n.tokensLowercase }}</span>
         </template>
       </v-expansion-panel-title>
       <v-expansion-panel-text>

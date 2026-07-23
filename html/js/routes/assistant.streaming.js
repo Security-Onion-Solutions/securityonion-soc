@@ -561,6 +561,14 @@ globalThis.AssistantStreaming = (function() {
       return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.credits) || 0), 0);
     },
 
+    // Output tokens this delegate's own turns generated — the number its per-sub-session
+    // output-token budget constrains. Leaf-scoped like delegateOwnCredits.
+    delegateOwnOutputTokens(delegateToolUse) {
+      const cs = delegateToolUse && delegateToolUse.childSession;
+      if (!cs || !Array.isArray(cs.messages)) return 0;
+      return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.output_tokens) || 0), 0);
+    },
+
     // Whether the collapsed sub-agent region has anything worth showing — avoids an empty
     // expandable when the only activity so far is a still-pending tool shown outside.
     delegationHasCollapsedContent(delegateToolUse) {

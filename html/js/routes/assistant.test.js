@@ -6290,6 +6290,31 @@ test('delegateOwnCredits returns 0 when there is no child session', () => {
   expect(comp.delegateOwnCredits({ childSession: {} })).toBe(0);
 });
 
+test('delegateOwnOutputTokens sums only the delegate\'s own direct child messages', () => {
+  const delegate = { childSession: { messages: [
+    { usage: { output_tokens: 300, input_tokens: 9000, credits: 5 } },
+    { usage: { output_tokens: 120 } },
+    { /* no usage */ },
+    { usage: { credits: 2 } }, // no output_tokens field
+  ] } };
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(420);
+});
+
+test('delegateOwnOutputTokens excludes grandchild delegations', () => {
+  const delegate = { childSession: { messages: [
+    { usage: { output_tokens: 100 }, toolUses: [
+      { name: 'delegate_to_reviewer', childSession: { messages: [{ usage: { output_tokens: 999 } }] } },
+    ] },
+  ] } };
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(100);
+});
+
+test('delegateOwnOutputTokens returns 0 when there is no child session', () => {
+  expect(comp.delegateOwnOutputTokens(null)).toBe(0);
+  expect(comp.delegateOwnOutputTokens({})).toBe(0);
+  expect(comp.delegateOwnOutputTokens({ childSession: {} })).toBe(0);
+});
+
 // Floating tool tests
 test('sendMessage marks floating tool as skipped when sending new message', async () => {
   const floatingTool = {
