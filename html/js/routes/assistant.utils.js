@@ -342,6 +342,20 @@ globalThis.AssistantUtils = (function() {
       return `${model?.id||''}@${model?.adapter||''}`;
     },
 
+    // resolveMappedModel resolves a model selector (id@adapter or bare id,
+    // mirroring the backend's resolveModel: prefer an enabled model, else
+    // first match) against a model list; null when nothing matches.
+    resolveMappedModel(models, selector) {
+      if (!selector) return null;
+      let fallback = null;
+      for (const m of models || []) {
+        if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
+        if (m.enabled) return m;
+        if (!fallback) fallback = m;
+      }
+      return fallback;
+    },
+
     buildGroupedModels() {
       const groupedByAdapter = {};
       for (const model of this.modelsMap.values()) {

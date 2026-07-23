@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('./assistant.utils.js');
 require('./agentstudio.js');
 
 let comp;

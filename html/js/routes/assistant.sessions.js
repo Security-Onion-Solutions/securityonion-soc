@@ -29,20 +29,8 @@ globalThis.AssistantSessions = (function() {
         this.availableAgents = params["availableAgents"] || [];
         this.agentMapping = params["agentMapping"] || {};
         const allModels = params["availableModels"] || [];
-        // Mirrors the backend's resolveModel: an agent's mapped model selector
-        // is id@adapter or a bare id; prefer an enabled model, else first match.
-        const resolveMappedModel = (selector) => {
-          if (!selector) return null;
-          let fallback = null;
-          for (const m of allModels) {
-            if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
-            if (m.enabled) return m;
-            if (!fallback) fallback = m;
-          }
-          return fallback;
-        };
         this.availableModels = this.availableAgents.map(a => {
-          const mapped = resolveMappedModel(this.agentMapping[a.name]);
+          const mapped = this.resolveMappedModel(allModels, this.agentMapping[a.name]);
           return {
             ...a,
             key: a.name,

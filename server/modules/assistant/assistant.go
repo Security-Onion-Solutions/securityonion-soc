@@ -440,7 +440,7 @@ func (ac *AssistantCoordinator) validateModelSelectors() {
 	logger := log.FromContext(ac.srv.Context)
 	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
 
-	seen := map[string]string{}
+	seen := map[string]struct{}{}
 	seenID := map[string]string{}
 	for i := range models {
 		m := &models[i]
@@ -451,14 +451,11 @@ func (ac *AssistantCoordinator) validateModelSelectors() {
 		// Two enabled models with the same id@adapter pair are indistinguishable;
 		// checked before the bare-id warning so an exact duplicate logs only this.
 		selector := m.Selector()
-		if owner, dup := seen[selector]; dup {
-			logger.WithFields(log.Fields{
-				"selector":   selector,
-				"firstModel": owner,
-			}).Error("duplicate model selector; the first configured model will be used")
+		if _, dup := seen[selector]; dup {
+			logger.WithField("selector", selector).Error("duplicate model selector; the first configured model will be used")
 			continue
 		}
-		seen[selector] = selector
+		seen[selector] = struct{}{}
 
 		// Two enabled models sharing an id make bare-id resolution ambiguous.
 		if owner, dup := seenID[m.ID]; dup {

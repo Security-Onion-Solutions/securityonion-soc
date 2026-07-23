@@ -89,8 +89,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.models = (params.availableModels || []).map(m => ({
           id: m.id,
           adapter: m.adapter,
-          selector: `${m.id || ''}@${m.adapter || ''}`,
-          displayName: m.displayName || `${m.id || ''}@${m.adapter || ''}`,
+          selector: AssistantUtils.buildModelIdentifier(m),
+          displayName: m.displayName || AssistantUtils.buildModelIdentifier(m),
           enabled: !!m.enabled,
           contextWindow: m.contextLimitLarge || m.contextLimitSmall || 0,
         }));
@@ -129,19 +129,6 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
 
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
     },
-    // mappedModel resolves an agent's mapped model selector (id@adapter or
-    // bare id, mirroring the backend's resolveModel: prefer an enabled model,
-    // else first match) to its configured model; null when nothing matches.
-    mappedModel(selector) {
-      if (!selector) return null;
-      let fallback = null;
-      for (const m of this.models) {
-        if (m.selector !== selector && m.id !== selector) continue;
-        if (m.enabled) return m;
-        if (!fallback) fallback = m;
-      }
-      return fallback;
-    },
     // agentsFromParams builds the read-only rows from the server's current agent
     // set (availableAgents + agentMapping). Personas are not exposed via params
     // (AgentParameters.Prompt is server-side only), so they are not shown here.
@@ -149,7 +136,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       const mapping = params.agentMapping || {};
       return (params.availableAgents || []).map(a => {
         const selector = mapping[a.name] || '';
-        const m = this.mappedModel(selector);
+        const m = AssistantUtils.resolveMappedModel(this.models, selector);
         return {
           id: a.name,
           name: a.name,
