@@ -145,6 +145,14 @@ window.socGraphing = {
     return parseFloat((value / 86400).toFixed(1)) + this.getTranslation('dDays', 'd');
   },
 
+  formatMilliseconds(value) {
+    const absVal = Math.abs(value);
+    if (absVal < 1000) {
+      return parseFloat(value.toFixed(1)) + ' ms';
+    }
+    return this.formatSeconds(value / 1000);
+  },
+
   formatDefaultNumber(value) {
     const absVal = Math.abs(value);
     if (absVal >= 1e12) {
@@ -177,6 +185,9 @@ window.socGraphing = {
     }
     if (units === 'second' || units === 'seconds') {
       return self.formatSeconds(value);
+    }
+    if (units === 'ms' || units === 'millisecond' || units === 'milliseconds') {
+      return self.formatMilliseconds(value);
     }
 
     return self.formatDefaultNumber(value);

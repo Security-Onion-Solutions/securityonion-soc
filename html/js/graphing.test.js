@@ -127,6 +127,13 @@ describe('graphing.js', () => {
       expect(graphing.formatAxisValue(120, 'seconds')).toBe('2m');
     });
 
+    it('should delegate to formatMilliseconds for ms/millisecond/milliseconds unit', () => {
+      expect(graphing.formatAxisValue(454.4, 'ms')).toBe('454.4 ms');
+      expect(graphing.formatAxisValue(454.4, 'millisecond')).toBe('454.4 ms');
+      expect(graphing.formatAxisValue(454.4, 'milliseconds')).toBe('454.4 ms');
+      expect(graphing.formatAxisValue(2500, 'ms')).toBe('2.5s');
+    });
+
     it('should delegate to formatDefaultNumber for unknown units or undefined units', () => {
       expect(graphing.formatAxisValue(1500, 'unknown')).toBe('1.5k');
       expect(graphing.formatAxisValue(1500)).toBe('1.5k');

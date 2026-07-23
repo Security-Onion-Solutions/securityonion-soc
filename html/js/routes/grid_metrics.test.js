@@ -24,7 +24,7 @@ const DEFAULT_MOCK_DASHBOARD = {
 		{ id: "eps", titleKey: "eps", type: "line_chart", metric: "eps", keys: ["consumption_eps", "production_eps"], labelKeys: ["metricsConsumptionEps", "metricsProductionEps"], colors: ["#4dc9f6", "#f67019"], width: 6, height: 250 },
 		{ id: "elasticsearch_size", titleKey: "metricsElasticsearchSize", type: "line_chart", metric: "elasticsearch_size", keys: ["elasticsearch_size"], labelKeys: ["metricsStorageSize"], colors: ["#4dc9f6"], width: 6, height: 250 },
 		{ id: "elasticsearch_docs", titleKey: "metricsElasticsearchDocs", type: "line_chart", metric: "elasticsearch_docs", keys: ["elasticsearch_docs"], labelKeys: ["metricsDocsCount"], colors: ["#4dc9f6"], width: 6, height: 250 },
-		{ id: "elastic_ingest_time", titleKey: "metricsElasticIngestTime", type: "line_chart", metric: "elastic_ingest_time", keys: ["elastic_ingest_time"], labelKeys: ["metricsTimeMs"], colors: ["#4dc9f6"], width: 6, height: 250 },
+		{ id: "elastic_ingest_time", titleKey: "metricsElasticIngestTime", type: "line_chart", metric: "elastic_ingest_time", keys: ["elastic_ingest_time"], labelKeys: ["metricsTimeMs"], colors: ["#4dc9f6"], width: 6, height: 250, units: "ms" },
 		{ id: "loss", titleKey: "metricsLoss", type: "line_chart", metric: "loss", keys: ["suricata_loss", "zeek_loss"], labelKeys: ["suricataLoss", "zeekLoss"], colors: ["#4dc9f6", "#f67019"], width: 6, height: 250 },
 		{ id: "capture_loss", titleKey: "metricsCaptureLoss", type: "line_chart", metric: "capture_loss", keys: ["zeek_capture_loss"], labelKeys: ["metricsLoss"], colors: ["#4dc9f6"], width: 6, height: 250 },
 		{ id: "kafka_eps", titleKey: "metricsKafkaEps", type: "line_chart", metric: "kafka_eps", keys: ["kafka_eps"], labelKeys: ["metricsKafkaEps"], colors: ["#4dc9f6"], width: 6, height: 250 },
@@ -478,13 +478,13 @@ test('activeTab watcher reloads metrics if already initialized but params have c
 	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
 });
 
-test('logstash_eps panel resolves title to Events Received and labelKeys to metricsEventsReceived', () => {
+test('logstash_eps panel resolves title to Logstash Events Received and labelKeys to metricsEventsReceived', () => {
 	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
 	comp.initMetricsCharts();
 	const logstashPanel = comp.metricPanels.find(p => p.id === 'logstash_eps');
 	expect(logstashPanel).toBeDefined();
 	expect(logstashPanel.titleKey).toBe('metricsLogstashEps');
-	expect(comp.$root.i18n.metricsLogstashEps).toBe('Events Received');
+	expect(comp.$root.i18n.metricsLogstashEps).toBe('Logstash Events Received');
 	expect(logstashPanel.labelKeys).toEqual(['metricsEventsReceived']);
 });
 
