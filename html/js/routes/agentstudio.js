@@ -129,36 +129,35 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
 
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
     },
-    // mappedModelLabel resolves an agent's mapped model selector (id@adapter or
+    // mappedModel resolves an agent's mapped model selector (id@adapter or
     // bare id, mirroring the backend's resolveModel: prefer an enabled model,
-    // else first match) to its display name; an unresolvable selector is shown
-    // as-is.
-    mappedModelLabel(selector) {
-      if (!selector) return '';
+    // else first match) to its configured model; null when nothing matches.
+    mappedModel(selector) {
+      if (!selector) return null;
       let fallback = null;
       for (const m of this.models) {
         if (m.selector !== selector && m.id !== selector) continue;
-        if (m.enabled) return m.displayName;
+        if (m.enabled) return m;
         if (!fallback) fallback = m;
       }
-      return fallback ? fallback.displayName : selector;
+      return fallback;
     },
     // agentsFromParams builds the read-only rows from the server's current agent
     // set (availableAgents + agentMapping). Personas are not exposed via params
     // (AgentParameters.Prompt is server-side only), so they are not shown here.
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};
-      // Map each model's displayName to its serving adapter (provider) so the
-      // model subtab can show where the agent's model runs.
-      const modelProviders = new Map((params.availableModels || []).map(m => [m.displayName, m.adapter]));
       return (params.availableAgents || []).map(a => {
-        const model = mapping[a.name] || '';
+        const selector = mapping[a.name] || '';
+        const m = this.mappedModel(selector);
         return {
           id: a.name,
           name: a.name,
           isOrchestrator: !!a.isOrchestrator,
-          model: model,
-          provider: modelProviders.get(model) || '',
+          // Display name of the resolved model; an unresolvable selector is shown as-is.
+          model: m ? m.displayName : selector,
+          modelSelector: selector,
+          provider: m ? m.adapter : '',
           description: a.agentDescription || '',
           allowedSkills: a.allowedSkills || [],
           canDelegateTo: a.canDelegateTo || [],

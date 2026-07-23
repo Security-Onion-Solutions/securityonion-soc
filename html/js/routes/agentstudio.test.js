@@ -177,7 +177,7 @@ test('agentsFromParams maps agent fields and resolves the mapped selector to a d
   // id@adapter selector resolves to the model's display name; the raw selector
   // is kept alongside it.
   expect(coordinator.model).toBe('Model A');
-  expect(coordinator.provider).toBe('SOAI');
+  expect(coordinator.provider).toBe('soai');
   expect(coordinator.modelSelector).toBe('model-a@soai');
   expect(coordinator.description).toBe('Routes work');
   expect(coordinator.allowedSkills).toEqual(['hunt']);
@@ -186,7 +186,7 @@ test('agentsFromParams maps agent fields and resolves the mapped selector to a d
   // A bare-id selector resolves too.
   expect(rows[1].model).toBe('Model B');
   expect(rows[1].modelSelector).toBe('model-b');
-  expect(rows[1].provider).toBe('Anthropic');
+  expect(rows[1].provider).toBe('anthropic');
 });
 
 test('agentsFromParams shows the raw selector when it does not resolve or the model has no display name', () => {
