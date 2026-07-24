@@ -906,7 +906,6 @@ func (e *SuricataEngine) applyUserState(ctx context.Context, dets []*model.Detec
 // detection store: a cross-cluster search with an unavailable remote returns
 // zero hits and no error. If the state file shows a prior import but the store
 // is empty, fail the sync rather than redeploy every rule at vendor defaults.
-// Mirrors the guards in the ElastAlert and Strelka engines.
 func (e *SuricataEngine) checkExistingDetectionsPlausible(existing map[string]*model.Detection, parsed []*model.Detection) error {
 	if len(existing) != 0 || len(parsed) == 0 {
 		return nil
