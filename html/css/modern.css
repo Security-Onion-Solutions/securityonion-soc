@@ -643,10 +643,13 @@ html, body, * {
   padding: 4px 8px 16px;
 }
 
-/* Simple table (instant insights) */
 .simple-table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  table-layout: auto;
   border-radius: var(--so-radius-nested);
-  overflow: hidden;
   border: 1px solid rgba(var(--v-theme-text), 0.08);
   border-collapse: separate;
   border-spacing: 0;
