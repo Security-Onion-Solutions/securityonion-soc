@@ -877,15 +877,19 @@ func (e *SuricataEngine) logDuplicates(duplicates map[string]DuplicateInfo) {
 }
 
 // applyUserState applies user preferences from Elasticsearch to detections
-func (e *SuricataEngine) applyUserState(ctx context.Context, detections []*model.Detection) error {
+func (e *SuricataEngine) applyUserState(ctx context.Context, dets []*model.Detection) error {
 	existingDetections, err := e.getAllSuricataDetections(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get existing detections: %w", err)
 	}
 
+	if err := e.checkExistingDetectionsPlausible(existingDetections, dets); err != nil {
+		return err
+	}
+
 	stats := &StateStats{}
 
-	for _, det := range detections {
+	for _, det := range dets {
 		if existing, exists := existingDetections[det.PublicID]; exists {
 			e.applyExistingRuleState(det, existing, stats)
 		} else {
@@ -894,8 +898,38 @@ func (e *SuricataEngine) applyUserState(ctx context.Context, detections []*model
 		e.ApplyFilters(det)
 	}
 
-	e.logStateApplication(stats, len(detections))
+	e.logStateApplication(stats, len(dets))
 	return nil
+}
+
+// checkExistingDetectionsPlausible guards against a silently empty read of the
+// detection store: a cross-cluster search with an unavailable remote returns
+// zero hits and no error. If the state file shows a prior import but the store
+// is empty, fail the sync rather than redeploy every rule at vendor defaults.
+// Mirrors the guards in the ElastAlert and Strelka engines.
+func (e *SuricataEngine) checkExistingDetectionsPlausible(existing map[string]*model.Detection, parsed []*model.Detection) error {
+	if len(existing) != 0 || len(parsed) == 0 {
+		return nil
+	}
+
+	state, err := detections.ReadStateFile(e.IOManager, e.StateFilePath)
+	if err != nil {
+		e.logger().WithError(err).Error("unable to read state file while validating detection store read")
+		return detections.ErrStateFileNoCommunity
+	}
+
+	if state == nil || *state == 0 {
+		// first import, empty store expected
+		return nil
+	}
+
+	e.logger().WithFields(log.Fields{
+		"parsedRules":   len(parsed),
+		"existingRules": 0,
+		"stateFilePath": e.StateFilePath,
+	}).Error("state file present but detection store returned 0 detections, aborting sync to avoid redeploying rules at vendor defaults")
+
+	return detections.ErrStateFileNoCommunity
 }
 
 // applyExistingRuleState applies state from existing ES detection
