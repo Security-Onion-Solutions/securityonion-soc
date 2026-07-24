@@ -1358,7 +1358,7 @@ const i18n = {
       settingsChangesReady: 'New changes are ready to be applied to the {module} module. Some changes may still require a full grid synchronization.',
       settingsMultipleChangesReady: 'Changes are ready to be applied.',
       settingsSynchronizeModule: 'Synchronize {module}',
-      settingsSynchronizing: 'Changes will be applied automatically in the background. You can also use the Synchronize buttons to apply changes manually.',
+      settingsSynchronizing: 'Changes will be automatically detected and applied shortly. Note that it may take several minutes for some services to restart, or longer for services that must restart on remote nodes.',
 
       setting_fake_setting_foo: 'Fake Setting Translated',
       settingHelp_fake_setting_foo: 'This is a transalated fake setting description.',
