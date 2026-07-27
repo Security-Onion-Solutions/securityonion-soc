@@ -378,6 +378,10 @@ html, body, * {
   border: 1px solid rgba(var(--v-theme-text), 0.06);
 }
 
+.hunt-table .v-table__wrapper {
+  container-type: inline-size;
+}
+
 /* Softer row striping */
 .v-data-table tbody tr,
 .v-data-table th,
@@ -461,15 +465,29 @@ html, body, * {
 .hunt-table tr + tr > td.px-0 {
   max-width: 1px;
   overflow: visible;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
-/* Constrains expanded content to viewport width, independent of table width */
 .expanded-row-wrapper {
-  max-width: calc(100vw - var(--v-layout-left, 0px) - 48px);
+  max-width: min(calc(100cqw - 2px), calc(100vw - var(--v-layout-left, 0px) - 48px));
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  container-type: inline-size;
+  position: sticky;
+  left: 0;
+}
+
+.expanded-row-wrapper .v-window-item {
   overflow-x: auto;
 }
 
-/* 4-column attribute grid — responsive: 4 → 3 → 2 cols, then scroll */
+.expanded-row-wrapper .v-window-item > * {
+  min-width: 480px;
+}
+
 .expanded-fields-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(200px, 1fr));
@@ -479,13 +497,13 @@ html, body, * {
 
 @media (min-width: 960px) {
   .expanded-fields-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(200px, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
   .expanded-fields-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(200px, 1fr));
   }
 }
 
@@ -632,6 +650,20 @@ html, body, * {
 .v-data-table .v-expansion-panel:last-child {
   border-radius: 0 0 var(--so-radius-nested) var(--so-radius-nested) !important;
   border-bottom: none;
+}
+
+.playbook-ai-warning {
+  height: auto;
+  min-height: 54px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-right: 24px;
+}
+
+.playbook-ai-warning > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .v-data-table .v-expansion-panel-title {
@@ -1281,4 +1313,9 @@ dfn {
 
 .agentstudio-toolbar {
   width: fit-content;
+}
+
+#agentstudio-agents .expanded-row-wrapper .v-window-item,
+#agentstudio-skills .expanded-row-wrapper .v-window-item {
+  padding-top: 8px;
 }
