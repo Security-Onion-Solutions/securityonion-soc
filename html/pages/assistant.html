@@ -151,7 +151,7 @@
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" @keydown.enter.space.stop="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase" role="button" tabindex="0">fa-paperclip</v-icon>
+						<v-icon class="mr-2" id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" @keydown.enter.space.stop="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase" role="button" tabindex="0">fa-paperclip</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
 								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
@@ -178,7 +178,7 @@
 						</v-menu>
 					</template>
 					<v-spacer></v-spacer>
-					<div class="text-wrap mr-4" style="font-size: 14px;">
+					<div class="text-wrap mr-4 d-flex align-center" style="font-size: 14px;">
 						<v-tooltip v-if="agentic && creditBreakdown.length > 1" location="top">
 							<template #activator="{ props }">
 								<v-icon size="x-small" class="mr-1" v-bind="props" data-aid="assistant_total_credits_info" role="button" tabindex="0" :aria-label="i18n.totalCredits">fa-circle-info</v-icon>
@@ -190,7 +190,7 @@
 								</div>
 							</div>
 						</v-tooltip>
-						{{ i18n.totalCredits }}: <span class="text-primary" data-aid="assistant_total_credits">{{ formatCount(creditsUsed) }}</span>
+						<span>{{ i18n.totalCredits }}: <span class="text-primary" data-aid="assistant_total_credits">{{ formatCount(creditsUsed) }}</span></span>
 					</div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
 					<v-icon :color="getCompressColor()"
