@@ -777,8 +777,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	logger.WithFields(log.Fields{
-		"toolName": toolName,
-		"userId":   userID,
+		"userId": userID,
 	}).Info("executing tool for assistant")
 
 	result, err := tool.Execute(assistantCtx, ac.srv, toolReq)
@@ -787,9 +786,7 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 		return nil, err
 	}
 
-	logger.WithFields(log.Fields{
-		"toolResult": result,
-	}).Info("tool executed successfully")
+	logger.Info("tool executed successfully")
 
 	return result, nil
 }
