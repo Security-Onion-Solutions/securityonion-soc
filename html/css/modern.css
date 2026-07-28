@@ -378,7 +378,7 @@ html, body, * {
   border: 1px solid rgba(var(--v-theme-text), 0.06);
 }
 
-.hunt-table .v-table__wrapper {
+.hunt-table .v-table__wrapper:has(.expanded-row-wrapper) {
   container-type: inline-size;
 }
 
