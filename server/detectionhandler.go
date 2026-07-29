@@ -44,7 +44,8 @@ type BulkResp struct {
 }
 
 type ConvertContentResp struct {
-	Query string `json:"query" example:"somefield: somevalue AND anotherfield: 123"`
+	Query   string `json:"query" example:"somefield: somevalue AND anotherfield: 123"`
+	UseESQL bool   `json:"useEsql"`
 }
 
 type GenPublicIdResp struct {
@@ -1265,7 +1266,12 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, ConvertContentResp{Query: eaQuery})
+	var useEsql bool
+	if ue, ok := eng.(interface{ UseEsql() bool }); ok {
+		useEsql = ue.UseEsql()
+	}
+
+	web.Respond(w, r, http.StatusOK, ConvertContentResp{Query: eaQuery, UseESQL: useEsql})
 }
 
 // @Summary      Sync Detections

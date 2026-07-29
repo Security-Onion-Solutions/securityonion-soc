@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -182,7 +183,12 @@ func (impl *FakeMetrics) GetGridEps(ctx context.Context) int {
 }
 
 func (impl *FakeMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
+	node.HistoricalMetricsEnabled = true
 	return false
+}
+
+func (impl *FakeMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+	return nil, nil
 }
 
 func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {

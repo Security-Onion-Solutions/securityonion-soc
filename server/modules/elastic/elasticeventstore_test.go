@@ -18,13 +18,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apex/log"
-	"github.com/apex/log/handlers/memory"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
+	"github.com/tidwall/gjson"
 )
 
 func TestFieldMapping(tester *testing.T) {
@@ -1407,9 +1408,9 @@ func TestPopulateJobFromDocQuery_TunnelPath(t *testing.T) {
 	client, transport := modmock.NewMockClient(t)
 	srv := server.NewFakeAuthorizedServer(nil)
 	store := &ElasticEventstore{
-		esClient:          client,
-		server:            srv,
-		index:             "myIndex",
+		esClient:           client,
+		server:             srv,
+		index:              "myIndex",
 		lookupTunnelParent: true,
 	}
 
@@ -1454,9 +1455,9 @@ func TestPopulateJobFromDocQuery_ZeekPath_Injection(t *testing.T) {
 	client, transport := modmock.NewMockClient(t)
 	srv := server.NewFakeAuthorizedServer(nil)
 	store := &ElasticEventstore{
-		esClient:          client,
-		server:            srv,
-		index:             "myIndex",
+		esClient: client,
+		server:   srv,
+		index:    "myIndex",
 	}
 
 	// 1. Initial response with missing IP/Port and malicious fuid
@@ -1503,10 +1504,10 @@ func TestMSearch_Index_Injection(t *testing.T) {
 	attackIndex := `my-index" OR { "injected": "header" }`
 	criteria := []*model.EventMSearchCriteria{
 		{
-			Index:    attackIndex,
-			RawQuery: "*",
+			Index: attackIndex,
 		},
 	}
+	criteria[0].RawQuery = "*"
 	criteria[0].ParsedQuery = model.NewQuery()
 	criteria[0].ParsedQuery.Parse(criteria[0].RawQuery)
 
@@ -1520,7 +1521,7 @@ func TestMSearch_Index_Injection(t *testing.T) {
 
 	reqs := transport.GetRequests()
 	assert.NotEmpty(t, reqs)
-	
+
 	var foundReq *http.Request
 	for _, req := range reqs {
 		if req.Body != nil {
@@ -1530,7 +1531,7 @@ func TestMSearch_Index_Injection(t *testing.T) {
 	}
 	assert.NotNil(t, foundReq)
 	body, _ := io.ReadAll(foundReq.Body)
-	assert.Contains(t, string(body), `{"index":"my-index\" OR { \"injected\": \"header\" }"}`)
+	assert.Contains(t, string(body), `{"index":["my-index\" OR { \"injected\": \"header\" }"]}`)
 }
 
 func TestScroll_InjectionAttacks(t *testing.T) {
@@ -1576,7 +1577,7 @@ func TestScroll_InjectionAttacks(t *testing.T) {
 	transport.AddResponse(&http.Response{
 		StatusCode: 200,
 		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
-		Body: io.NopCloser(strings.NewReader(`{"took": 1, "timed_out": false, "_shards": {"total": 1, "successful": 1, "failed": 0}, "hits":{"total":2, "hits":[]}}`)),
+		Body:       io.NopCloser(strings.NewReader(`{"took": 1, "timed_out": false, "_shards": {"total": 1, "successful": 1, "failed": 0}, "hits":{"total":2, "hits":[]}}`)),
 	}, nil)
 
 	_, err := store.Scroll(ctx, criteria, []string{attackIndex})
@@ -1603,4 +1604,160 @@ func TestScroll_InjectionAttacks(t *testing.T) {
 		body, _ := io.ReadAll(scrollReq.Body)
 		assert.Contains(t, string(body), `"scroll_id":"my-scroll-id\" OR { \"injected\": \"scroll\" }"`)
 	}
+}
+
+func TestConvertFromElasticAsyncUpdateResults(t *testing.T) {
+	taskId, err := convertFromElasticAsyncUpdateResults(`{"task":"node-1:42"}`)
+	assert.NoError(t, err)
+	assert.Equal(t, "node-1:42", taskId)
+
+	_, err = convertFromElasticAsyncUpdateResults(`{"updated":3,"noops":0}`)
+	assert.Error(t, err, "a synchronous response has no task id")
+
+	_, err = convertFromElasticAsyncUpdateResults(`{"task":""}`)
+	assert.Error(t, err, "an empty task id is not valid")
+
+	_, err = convertFromElasticAsyncUpdateResults(`not json`)
+	assert.Error(t, err)
+}
+
+func TestParseAsyncUpdateOutcome(t *testing.T) {
+	// Success: all documents updated, no conflicts/failures.
+	updated, errs, rawErrs := parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"response":{"updated":5,"version_conflicts":0,"timed_out":false,"failures":[]}}`))
+	assert.Equal(t, 5, updated)
+	assert.Empty(t, errs)
+	assert.Empty(t, rawErrs)
+
+	// Version conflicts are intentionally tolerated (conflicts=proceed); not surfaced as errors.
+	updated, errs, rawErrs = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"response":{"updated":3,"version_conflicts":2,"timed_out":false,"failures":[]}}`))
+	assert.Equal(t, 3, updated)
+	assert.Empty(t, errs)
+	assert.Empty(t, rawErrs)
+
+	// Bulk failures surface a human-readable reason to the client and the raw JSON for logging.
+	_, errs, rawErrs = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"response":{"updated":1,"failures":[{"cause":{"type":"mapper_parsing_exception","reason":"boom"}}]}}`))
+	assert.Equal(t, []string{"boom"}, errs)
+	assert.Len(t, rawErrs, 1)
+	assert.Contains(t, rawErrs[0], "mapper_parsing_exception")
+
+	// Timeout is surfaced.
+	_, errs, _ = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"response":{"updated":0,"timed_out":true,"failures":[]}}`))
+	assert.Len(t, errs, 1)
+	assert.Contains(t, errs[0], "timeout")
+
+	// A top-level task error: reason preferred, raw JSON retained for logging.
+	_, errs, rawErrs = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"error":{"type":"script_exception","reason":"bad script"},"response":{}}`))
+	assert.Equal(t, []string{"bad script"}, errs)
+	assert.Len(t, rawErrs, 1)
+	assert.Contains(t, rawErrs[0], "script_exception")
+
+	// When no reason is present, fall back to the type.
+	_, errs, _ = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"error":{"type":"script_exception"},"response":{}}`))
+	assert.Equal(t, []string{"script_exception"}, errs)
+
+	// When neither reason nor type is present, fall back to a generic message.
+	_, errs, _ = parseAsyncUpdateOutcome(gjson.Parse(`{"completed":true,"error":{},"response":{}}`))
+	assert.Len(t, errs, 1)
+	assert.Contains(t, errs[0], "unexpected error")
+}
+
+func TestWaitForUpdateTaskSuccess(t *testing.T) {
+	client, transport := modmock.NewMockClient(t)
+	store := &ElasticEventstore{}
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":7,"version_conflicts":0,"timed_out":false,"failures":[]}}`)),
+	}, nil)
+
+	updated, errs := store.waitForUpdateTask(context.Background(), asyncTaskRef{client: client, taskId: "node-1:42"})
+	assert.Equal(t, 7, updated)
+	assert.Empty(t, errs)
+}
+
+func TestWaitForUpdateTaskFailure(t *testing.T) {
+	client, transport := modmock.NewMockClient(t)
+	store := &ElasticEventstore{}
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":1,"version_conflicts":0,"timed_out":false,"failures":[{"cause":{"type":"mapper_parsing_exception","reason":"boom"}}]}}`)),
+	}, nil)
+
+	updated, errs := store.waitForUpdateTask(context.Background(), asyncTaskRef{client: client, taskId: "node-1:42"})
+	assert.Equal(t, 1, updated)
+	assert.Len(t, errs, 1)
+	assert.Contains(t, errs[0], "boom")
+}
+
+func TestAggregateAsyncUpdate(t *testing.T) {
+	store := &ElasticEventstore{}
+
+	okClient, okTransport := modmock.NewMockClient(t)
+	okTransport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":7,"version_conflicts":0,"timed_out":false,"failures":[]}}`)),
+	}, nil)
+
+	failClient, failTransport := modmock.NewMockClient(t)
+	failTransport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":3,"version_conflicts":0,"timed_out":false,"failures":[{"cause":{"type":"mapper_parsing_exception","reason":"boom"}}]}}`)),
+	}, nil)
+
+	tasks := []asyncTaskRef{
+		{client: okClient, taskId: "node-1:1"},
+		{client: failClient, taskId: "node-2:2"},
+	}
+	status := store.aggregateAsyncUpdate(context.Background(), tasks, []string{"node-1:1", "node-2:2"})
+
+	assert.Equal(t, []string{"node-1:1", "node-2:2"}, status.TaskIds)
+	assert.Equal(t, 10, status.Updated) // counts summed across both hosts (7 + 3)
+	assert.False(t, status.Success)     // one host reported a failure
+	assert.Equal(t, []string{"boom"}, status.Errors)
+}
+
+func TestAggregateAsyncUpdateCapsErrors(t *testing.T) {
+	store := &ElasticEventstore{}
+
+	failures := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		failures = append(failures, fmt.Sprintf(`{"cause":{"type":"mapper_parsing_exception","reason":"boom-%d"}}`, i))
+	}
+	body := fmt.Sprintf(`{"completed":true,"response":{"updated":0,"version_conflicts":0,"timed_out":false,"failures":[%s]}}`, strings.Join(failures, ","))
+
+	client, transport := modmock.NewMockClient(t)
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}, nil)
+
+	status := store.aggregateAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"})
+
+	assert.False(t, status.Success)
+	// 8 failures -> first 5 plus a single summary line.
+	assert.Len(t, status.Errors, ASYNC_UPDATE_MAX_ERRORS+1)
+	assert.Equal(t, "boom-0", status.Errors[0])
+	assert.Equal(t, "boom-4", status.Errors[4])
+	assert.Equal(t, "...and 3 more error(s)", status.Errors[ASYNC_UPDATE_MAX_ERRORS])
+}
+
+func TestWatchAsyncUpdate(t *testing.T) {
+	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+
+	client, transport := modmock.NewMockClient(t)
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":4,"version_conflicts":0,"timed_out":false,"failures":[]}}`)),
+	}, nil)
+
+	// With no active websocket connections the broadcast is a no-op; this verifies the full
+	// watch-and-broadcast path runs to completion without panicking.
+	assert.NotPanics(t, func() {
+		store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"})
+	})
 }

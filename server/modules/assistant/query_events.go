@@ -90,10 +90,13 @@ type queryEventsArgs struct {
 	GroupByField *string `json:"groupby_field,omitempty"`
 }
 
-func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -110,9 +113,9 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
@@ -130,6 +133,15 @@ func (t *QueryEventsTool) Execute(ctx context.Context, server *server.Server, pa
 		query = fmt.Sprintf(`(%s) AND NOT metadata.raw_index:"logs-soc-so"`, query)
 	} else if query == "" {
 		query = `NOT metadata.raw_index:"logs-soc-so"`
+	}
+
+	// Treat junk sentinels as "not grouping"; models send these instead of
+	// omitting groupby_field, and grouping on one returns empty results.
+	if args.GroupByField != nil {
+		switch strings.ToLower(strings.TrimSpace(*args.GroupByField)) {
+		case "", "null", "none", "nil":
+			args.GroupByField = nil
+		}
 	}
 
 	if args.GroupByField != nil && *args.GroupByField != "" {

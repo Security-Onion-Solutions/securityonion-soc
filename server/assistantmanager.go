@@ -7,15 +7,41 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
+// ErrToolTurnBusy is returned when a tool request can't acquire its session's turn
+// lock because another tool turn for that session is already running. The handler
+// maps it to 409 Conflict so the client can retry, rather than blocking the request.
+var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
+
+// ErrToolUseNotFound is returned when a tool request names a toolUseId with no
+// matching assistant tool_use in the session (or the session itself can't be
+// found). The handler maps it to 404 Not Found.
+var ErrToolUseNotFound = errors.New("ERROR_TOOL_USE_NOT_FOUND")
+
+// ErrToolAlreadyResolved is returned when the targeted tool_use already has a
+// tool_result in the session's history, so approving or rejecting it again must
+// not re-execute the tool or duplicate the result. The handler maps it to 400.
+var ErrToolAlreadyResolved = errors.New("ERROR_TOOL_ALREADY_RESOLVED")
+
+// ErrToolRequestMismatch is returned when the targeted tool_use exists but the
+// request does not describe it: the tool name or params differ from what the
+// assistant asked to run. The handler maps it to 400.
+var ErrToolRequestMismatch = errors.New("ERROR_TOOL_REQUEST_MISMATCH")
+
 type AssistantManager interface {
-	Chat(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)
-	ChatStream(ctx context.Context, aiModel string, messages []*model.Message) (*http.Response, *model.AuxMessageData, error)
-	ExecuteTool(ctx context.Context, toolName string, params string, auxData string) (*model.ToolResponse, error)
+	Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)
+	SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error)
+	ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error)
+	ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error)
+	ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error)
+	ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error)
+	ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error)
+	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
 	Health(ctx context.Context, aiModel string) (*model.HealthResponse, error)
 }

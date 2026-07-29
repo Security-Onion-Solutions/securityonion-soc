@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -15,4 +16,5 @@ import (
 type Metrics interface {
 	GetGridEps(ctx context.Context) int
 	UpdateNodeMetrics(ctx context.Context, node *model.Node) bool
+	GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
 }

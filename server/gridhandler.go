@@ -7,11 +7,13 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
@@ -27,6 +29,7 @@ func RegisterGridRoutes(srv *Server, r chi.Router, prefix string) {
 	r.Route(prefix, func(r chi.Router) {
 		r.Get("/", h.getNodes)
 		r.Get("/status", h.getStatus)
+		r.Get("/metrics", h.getMetricsHistory)
 	})
 }
 
@@ -90,4 +93,75 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.Respond(w, r, http.StatusOK, newNodes)
+}
+
+// @Summary      Get Historical Grid Metrics
+// @Description  Retrieves historical time-series metrics for a specific node and metric type over a given time range.
+// @Tags         Grid
+// @Security     bearer[nodes/read]
+// @Produce      json
+// @Param        nodeId     query  string  false  "The optional node ID to retrieve metrics for"
+// @Param        container  query  string  false  "The optional container name to retrieve metrics for"
+// @Param        metric     query  string  true   "The name of the metric to retrieve (e.g., cpu, memory, load, disk, net)"
+// @Param        range   query  string  true   "Date range, in the specified timezone" example(2024/12/03 03:09:31 PM - 2024/12/04 03:09:31 PM)
+// @Param        zone    query  string  true   "Timezone of the date range" example(America/New_York)
+// @Param        format  query  string  true   "Date range date format" example(2006/01/02 3:04:05 PM)
+// @Success      200     {object}  map[string][]model.MetricSample "A map where keys are metric names/sources and values are arrays of metric samples"
+// @Failure      400     "The provided input parameters are malformed or invalid"
+// @Failure      401     "Request was not properly authenticated or authorized"
+// @Failure      403     "Insufficient permissions for this request"
+// @Failure      500     "Internal SOC error; review SOC logs"
+// @Router       /connect/grid/metrics [get]
+func (h *GridHandler) getMetricsHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := r.ParseForm()
+	if err != nil {
+		logger.WithError(err).Error("unable to parse query string")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	nodeId := r.Form.Get("nodeId")
+	container := r.Form.Get("container")
+	metricType := r.Form.Get("metric")
+	rangeVal := r.Form.Get("range")
+	format := r.Form.Get("format")
+	zone := r.Form.Get("zone")
+
+	if metricType == "" {
+		web.Respond(w, r, http.StatusBadRequest, "metric is required")
+		return
+	}
+
+	start, end, err := util.ParseDateRange(rangeVal, format, zone)
+	if err != nil {
+		logger.WithError(err).Error("unable to parse date range from query string")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if h.server.Metrics == nil {
+		web.Respond(w, r, http.StatusOK, make(map[string][]model.MetricSample))
+		return
+	}
+
+	data, err := h.server.Metrics.GetTimeSeriesMetrics(ctx, nodeId, container, metricType, start, end)
+	if err != nil {
+		logger.WithError(err).Error("unable to get time series metrics")
+		var unauthErr *model.Unauthorized
+		if errors.As(err, &unauthErr) {
+			web.Respond(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	if data == nil {
+		data = make(map[string][]model.MetricSample)
+	}
+
+	web.Respond(w, r, http.StatusOK, data)
 }

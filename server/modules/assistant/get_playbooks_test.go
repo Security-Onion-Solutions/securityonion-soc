@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"testing"
 
@@ -205,6 +206,76 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 										"@timestamp":     "2024-01-01T00:01:00Z",
 										"destination.ip": "192.168.1.1",
 										"source.ip":      "10.0.0.1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:   "playbook question search timed out",
+			params: `{"alert_id": "alert-timeout"}`,
+			mockEventResults: &model.EventSearchResults{
+				Events: []*model.EventRecord{
+					{
+						Source: "test-index",
+						Id:     "alert-timeout",
+						Payload: map[string]any{
+							"@timestamp": "2024-01-01T00:00:00Z",
+							"rule.uuid":  "test-rule-uuid-timeout",
+							"tags":       []string{"alert"},
+						},
+					},
+				},
+				TotalEvents: 1,
+				Metrics:     make(map[string][]*model.EventMetric),
+			},
+			mockDetection: &model.Detection{
+				PublicID: "test-rule-uuid-timeout",
+				Category: "malware",
+				Engine:   model.EngineNameSuricata,
+			},
+			mockPlaybooks: []*model.Playbook{
+				{
+					Name:        "Timeout Investigation",
+					Description: "Playbook whose question search timed out",
+					Questions: []*model.Question{
+						{
+							Question:      "What partial results were returned?",
+							Context:       "Search timed out while collecting results",
+							Range:         nil,
+							QueryTimedOut: true,
+							QueryResults: []*model.EventRecord{
+								{
+									Id: "alert-timeout",
+									Payload: map[string]any{
+										"@timestamp":   "2024-01-01T00:01:00Z",
+										"process.name": "slow.exe",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: []*SimplePlaybook{
+				{
+					Name:        "Timeout Investigation",
+					Description: "Playbook whose question search timed out",
+					Questions: []*SimpleQuestion{
+						{
+							Question: "What partial results were returned?",
+							Context:  "Search timed out while collecting results",
+							Range:    nil,
+							TimedOut: true,
+							QueryResults: []map[string]any{
+								{
+									"payload": map[string]any{
+										"_id":          "alert-timeout",
+										"@timestamp":   "2024-01-01T00:01:00Z",
+										"process.name": "slow.exe",
 									},
 								},
 							},
@@ -444,7 +515,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 
 			// Create tool and execute
 			tool := &GetPlaybooksTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, "")
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			// Assert error expectations
 			if tc.expectedError {
@@ -742,6 +813,97 @@ func TestSimplifyPlaybooks(t *testing.T) {
 				},
 			},
 			description: "Should preserve fields specified in QueryFields even if not in default list",
+		},
+		{
+			name: "timed out questions are included",
+			inputPlaybooks: []*model.Playbook{
+				{
+					Name:        "Timeout Investigation",
+					Description: "Playbook with timed out question searches",
+					Questions: []*model.Question{
+						{
+							Question:      "Question with partial results",
+							Context:       "Search timed out but returned some events",
+							QueryTimedOut: true,
+							QueryResults: []*model.EventRecord{
+								{
+									Id: "alert-1",
+									Payload: map[string]any{
+										"@timestamp":   "2024-01-01T00:01:00Z",
+										"process.name": "slow.exe",
+									},
+								},
+							},
+						},
+						{
+							Question: "Question that completed",
+							Context:  "Search finished in time",
+							QueryResults: []*model.EventRecord{
+								{
+									Id: "alert-1",
+									Payload: map[string]any{
+										"@timestamp": "2024-01-01T00:02:00Z",
+										"source.ip":  "10.0.0.1",
+									},
+								},
+							},
+						},
+						{
+							Question:      "Question with no results",
+							Context:       "Search timed out before finding anything",
+							QueryTimedOut: true,
+							QueryResults:  []*model.EventRecord{},
+						},
+						{
+							Question:     "Question that completed with no results",
+							Context:      "Nothing matched",
+							QueryResults: []*model.EventRecord{},
+						},
+					},
+				},
+			},
+			expectedResult: []*SimplePlaybook{
+				{
+					Name:        "Timeout Investigation",
+					Description: "Playbook with timed out question searches",
+					Questions: []*SimpleQuestion{
+						{
+							Question: "Question with partial results",
+							Context:  "Search timed out but returned some events",
+							TimedOut: true,
+							QueryResults: []map[string]any{
+								{
+									"payload": map[string]any{
+										"_id":          "alert-1",
+										"@timestamp":   "2024-01-01T00:01:00Z",
+										"process.name": "slow.exe",
+									},
+								},
+							},
+						},
+						{
+							Question: "Question that completed",
+							Context:  "Search finished in time",
+							QueryResults: []map[string]any{
+								{
+									"payload": map[string]any{
+										"_id":        "alert-1",
+										"@timestamp": "2024-01-01T00:02:00Z",
+										"source.ip":  "10.0.0.1",
+									},
+								},
+							},
+						},
+						{
+							Question:     "Question with no results",
+							Context:      "Search timed out before finding anything",
+							TimedOut:     true,
+							QueryResults: []map[string]any{},
+						},
+					},
+				},
+			},
+			description: "Should include timed out questions even without results, but still drop completed questions with no results",
 		},
 		{
 			name: "multiple playbooks",

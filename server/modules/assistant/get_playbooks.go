@@ -61,10 +61,13 @@ type getPlaybookQuestionsArgs struct {
 	PlaybookIndex *int   `json:"playbook_index,omitempty"`
 }
 
-func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (result *model.ToolResponse, err error) {
-	logger := log.FromContext(ctx)
+func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
+	logger := log.FromContext(ctx).WithFields(log.Fields{
+		"sessionId": req.SessionId,
+		"toolUseId": req.ToolUseId,
+	})
 
-	logger.WithField("toolParameters", params).Info("running tool for assistant")
+	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
 
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
@@ -81,35 +84,24 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 		}
 	}()
 
-	err = json.Unmarshal([]byte(params), args)
+	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
 	result.Parameters = args
 
 	// go get playbooks
-	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, args.AlertID)
-	criteria := model.NewEventSearchCriteria()
-
-	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
-
-	err = criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	event, err := server.FindEventBySocId(ctx, srv.Eventstore, args.AlertID, time.Time{})
 	if err != nil {
+		logger.WithError(err).Error("unable to find event by soc id")
 		return nil, err
 	}
-
-	events, err := srv.Eventstore.Search(ctx, criteria)
-	if err != nil {
-		return nil, err
-	}
-	if events.TotalEvents == 0 || len(events.Events) == 0 {
+	if event == nil {
 		logger.WithField("alertId", args.AlertID).Error("no alert found with corresponding ID")
 		return nil, errors.New("ERROR_ASSISTANT_NO_ALERT_FOUND")
 	}
-
-	event := events.Events[0]
 
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
@@ -119,6 +111,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	detection, err := srv.Detectionstore.GetDetectionByPublicId(ctx, detId)
 	if err != nil {
+		logger.WithError(err).WithField("detectionId", detId).Error("unable to retrieve detection by public Id")
 		return nil, err
 	}
 
@@ -142,12 +135,22 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 
 	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
 	if err != nil || len(playbooks) == 0 {
-		logger.WithField("publicId", detection.PublicID).Error("failed to get playbooks for detection")
+		logger.WithError(err).WithFields(log.Fields{
+			"publicId":                detection.PublicID,
+			"playbooksRetrievedCount": len(playbooks),
+		}).Error("failed to get playbooks for detection")
+
 		return nil, errors.New("ERROR_ASSISTANT_PLAYBOOKS_RETRIEVAL_FAILED")
 	}
 
 	if args.PlaybookIndex != nil {
 		if *args.PlaybookIndex < 0 || *args.PlaybookIndex >= len(playbooks) {
+			logger.WithFields(log.Fields{
+				"publicId":          detection.PublicID,
+				"argsPlaybookIndex": *args.PlaybookIndex,
+				"playbooksCount":    len(playbooks),
+			}).Error("invalid playbook index provided")
+
 			return nil, fmt.Errorf("invalid playbook index %d, detection has %d playbooks", *args.PlaybookIndex, len(playbooks))
 		}
 
@@ -155,6 +158,9 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, para
 	}
 
 	err = srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
+	if err != nil {
+		logger.WithError(err).Error("unable to execute playbook searches")
+	}
 
 	result.Result = simplifyPlaybooks(playbooks)
 
@@ -178,6 +184,7 @@ type SimpleQuestion struct {
 	Context      string  `json:"context"`
 	Range        *string `json:"range,omitempty"`
 	QueryResults any     `json:"queryResults"`
+	TimedOut     bool    `json:"timedOut"`
 }
 
 func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
@@ -186,12 +193,13 @@ func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
 		simpleQuestions := make([]*SimpleQuestion, 0, len(pb.Questions))
 
 		for _, q := range pb.Questions {
-			if len(q.QueryResults) != 0 {
+			if len(q.QueryResults) != 0 || q.QueryTimedOut {
 				simpleQuestions = append(simpleQuestions, &SimpleQuestion{
 					Question:     q.Question,
 					Context:      q.Context,
 					Range:        q.Range,
 					QueryResults: filterEvents(q.QueryResults, q.QueryFields...),
+					TimedOut:     q.QueryTimedOut,
 				})
 			}
 		}

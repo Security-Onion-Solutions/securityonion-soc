@@ -445,6 +445,16 @@
                   <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
                 </router-link>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_agentstudio" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic">
+                <template #prepend>
+                  <router-link to="/agentstudio" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-robot</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/agentstudio" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.agentstudio"></v-list-item-title>
+                </router-link>
+              </v-list-item>
             </v-list-item-group>
           </v-list>
           <v-divider></v-divider>
@@ -472,23 +482,24 @@
     <script src="js/external/vue-3.5.34.global.prod.js"></script>
     <script src="js/external/vue-router-5.0.6.min.js"></script>
     <script src="js/external/vuetify-v4.0.6.min.js"></script>
-    <script src="js/external/axios-1.15.2.min.js"></script>
+    <script src="js/external/axios-1.18.1.min.js"></script>
     <script src="js/external/moment-2.30.1.min.js"></script>
     <script src="js/external/moment-timezone-with-data-0.6.2.min.js"></script>
     <script src="js/external/chart-4.5.1.min.js"></script>
     <script type="module" src="js/external/vue-chartjs-5.3.3.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
     <script src="js/external/marked-18.0.2.min.js"></script>
-    <script src="js/external/dompurify-3.4.2.min.js"></script>
+    <script src="js/external/dompurify-3.4.12.min.js"></script>
     <script src="js/external/mermaid-11.15.0.min.js"></script>
     <script src="js/external/chartjs-chart-sankey-0.14.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.1.min.js"></script>
-    <script src="js/external/js-yaml.4.1.1.min.js"></script>
+    <script src="js/external/js-yaml.4.3.0.min.js"></script>
     <script src="js/external/lz-string.1.5.0.min.js"></script>
     <script type="module" src="js/external/vue-prism-editor-v2.0.0-alpha.2.umd.production.min.js"></script>
     <script src="js/external/prism-custom-v1.29.0.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/graphing.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/directives/fix-group-role.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/lucide-set.js?v=VERSION_PLACEHOLDER"></script>
@@ -496,23 +507,32 @@
     <script src="js/components/detection-panel.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/case-details-col.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/detection-details-col.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/tool-use-card.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/colors.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/config.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/downloads.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/home.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.sessions.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.streaming.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.tools.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/assistant.utils.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/assistant.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/grid.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/grid_metrics.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/gridmembers.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/terms.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/users.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/detection.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/agentstudio.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

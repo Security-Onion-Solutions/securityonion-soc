@@ -484,6 +484,35 @@ test('colorLicenseStatus', () => {
   expect(app.colorLicenseStatus("pending")).toBe('warning');
 });
 
+test('colorizeChip strips suffix after +', () => {
+  app.$vuetify.theme.current.dark = true;
+  expect(app.colorizeChip('red+lighten-2')).toBe('red');
+  app.$vuetify.theme.current.dark = false;
+  expect(app.colorizeChip('red+lighten-2')).toBe('error');
+});
+
+test('colorizeChip remaps white, red, and green when theme is light', () => {
+  app.$vuetify.theme.current.dark = false;
+  expect(app.colorizeChip('white')).toBe('secondary');
+  expect(app.colorizeChip('red')).toBe('error');
+  expect(app.colorizeChip('green')).toBe('success');
+  expect(app.colorizeChip('amber')).toBe('amber');
+});
+
+test('colorizeChip leaves colors alone when theme is dark', () => {
+  app.$vuetify.theme.current.dark = true;
+  expect(app.colorizeChip('white')).toBe('white');
+  expect(app.colorizeChip('red')).toBe('red');
+  expect(app.colorizeChip('green')).toBe('green');
+  expect(app.colorizeChip('amber')).toBe('amber');
+  app.$vuetify.theme.current.dark = false;
+});
+
+test('colorizeChip returns non-string colors unchanged', () => {
+  expect(app.colorizeChip(undefined)).toBe(undefined);
+  expect(app.colorizeChip(null)).toBe(null);
+});
+
 test('isIPv4', () => {
   expect(app.isIPv4('')).toBe(false);
   expect(app.isIPv4(null)).toBe(false);

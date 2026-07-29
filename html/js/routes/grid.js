@@ -71,24 +71,121 @@ routes.push({ path: '/grid', name: 'grid', component: {
     NodeStatusRestart: NodeStatusRestart,
     UNREALISTIC_AGE: UNREALISTIC_AGE,
     stalenessInterval: null,
+    metricsLoading: false,
+    metricsNodeId: '',
+    metricsNodeItems: [],
+    metricsContainerId: 'all',
+    activeTab: 'nodes',
+    metricsEnabled: false,
+    historicalMetricsEnabled: false,
+    selectedMetricsTitle: '',
+    metricsTimeRange: '1h',
+    metricsAutoRefresh: 0,
+    metricsRefreshInterval: null,
+    lastLoadedMetricsParams: null,
+    timeRangeItems: [
+      { title: this.$root.i18n.metricsLastMinute, value: '1m' },
+      { title: this.$root.i18n.metricsLast5Minutes, value: '5m' },
+      { title: this.$root.i18n.metricsLast15Minutes, value: '15m' },
+      { title: this.$root.i18n.metricsLastHour, value: '1h' },
+      { title: this.$root.i18n.metricsLast3Hours, value: '3h' },
+      { title: this.$root.i18n.metricsLast6Hours, value: '6h' },
+      { title: this.$root.i18n.metricsLast12Hours, value: '12h' },
+      { title: this.$root.i18n.metricsLast24Hours, value: '24h' },
+      { title: this.$root.i18n.metricsLast2Days, value: '2d' },
+      { title: this.$root.i18n.metricsLast7Days, value: '7d' },
+      { title: this.$root.i18n.metricsLast30Days, value: '30d' }
+    ],
+    autoRefreshItems: [
+      { title: this.$root.i18n.noRefresh, value: 0 },
+      { title: this.$root.i18n.interval30s, value: 30 },
+      { title: this.$root.i18n.interval1m, value: 60 },
+      { title: this.$root.i18n.interval5m, value: 300 }
+    ],
+    metricPanels: [],
+    chartResizeTracker: {},
   }},
   created() {
+    this.$root.initializeCharts();
   },
   unmounted() {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
     clearInterval(this.stalenessInterval);
+    if (this.metricsRefreshInterval) {
+      clearInterval(this.metricsRefreshInterval);
+    }
   },
   mounted() {
+    this.loadUrlParameters();
     this.$root.loadParameters("grid", this.initGrid);
   },
   watch: {
-    '$route': 'loadData',
+    '$route'(to, from) {
+      this.loadUrlParameters();
+      const gridIdChanged = (to.query && to.query.gridId) !== (from.query && from.query.gridId);
+      if (to.path !== from.path || gridIdChanged) {
+        this.loadData();
+        if (this.activeTab === 'metrics') {
+          this.loadHistoricalMetrics(true);
+        }
+      }
+    },
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'moreColumns': 'saveLocalSettings',
+    'zone'(val) {
+      this.saveTimezone();
+      if (this.activeTab === 'metrics') {
+        this.loadHistoricalMetrics(true);
+      }
+    },
+    'activeTab'(val) {
+      this.updateRoute();
+      if (val === 'metrics') {
+        if (this.metricsNodeId === undefined || this.metricsNodeId === null) {
+          this.metricsNodeId = '';
+        }
+        if (this.$root.parametersLoaded) {
+          const paramsChanged = !this.lastLoadedMetricsParams ||
+            this.lastLoadedMetricsParams.nodeId !== this.metricsNodeId ||
+            this.lastLoadedMetricsParams.container !== this.metricsContainerId ||
+            this.lastLoadedMetricsParams.timeRange !== this.metricsTimeRange ||
+            this.lastLoadedMetricsParams.zone !== (this.zone || 'UTC');
+
+          if (!this.metricPanels || this.metricPanels.length === 0 || paramsChanged) {
+            this.initMetricsCharts();
+            this.loadHistoricalMetrics();
+          }
+          this.setupMetricsAutoRefresh();
+        }
+      } else {
+        if (this.metricsRefreshInterval) {
+          clearInterval(this.metricsRefreshInterval);
+          this.metricsRefreshInterval = null;
+        }
+      }
+    },
+    'metricsNodeId'() {
+      this.updateRoute();
+    },
+    'metricsContainerId'() {
+      this.updateRoute();
+    },
+    'metricsTimeRange'() {
+      this.updateRoute();
+    },
+    'metricsAutoRefresh'() {
+      this.updateRoute();
+    }
   },
   methods: {
+    refresh() {
+      this.loadData();
+      if (this.activeTab === 'metrics') {
+        this.loadHistoricalMetrics(true);
+      }
+    },
     initGrid(params) {
       if (params.maxUploadSize) {
         this.maxUploadSizeBytes = params.maxUploadSize;
@@ -101,6 +198,12 @@ routes.push({ path: '/grid', name: 'grid', component: {
 
       this.loadData();
       this.stalenessInterval = setInterval(this.checkStaleness, STALENESS_CHECK_INTERVAL_MS);
+
+      if (this.activeTab === 'metrics') {
+        this.initMetricsCharts();
+        this.loadHistoricalMetrics();
+        this.setupMetricsAutoRefresh();
+      }
     },
     async loadData() {
       this.$root.startLoading();
@@ -144,6 +247,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
     updateMetricsEnabled() {
       this.$root.adjustSubgridColVisibility(this.headers);
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
+      this.historicalMetricsEnabled = !this.nodes.every(function(node) { return !node.historicalMetricsEnabled; });
+      this.metricsNodeItems = [
+        { title: this.i18n.metricsAllHosts || 'All Hosts', value: '' }
+      ].concat(this.nodes.map(n => ({ title: n.id, value: n.id })));
 
       this.$root.updateColumnClass(this.headers, this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
       this.$root.updateColumnClass(this.headers, this.i18n.memUsageAbbr, this.metricsEnabled, 'd-xl-table-cell');
@@ -466,6 +573,68 @@ routes.push({ path: '/grid', name: 'grid', component: {
       // expecting date in format YYYY-MM-DDTHH:mm:ss.SSSSSSSSS-HH:mm
       const zoned = moment.utc(data, 'YYYY-MM-DDTHH:mm:ss.SSSSSSSSSZ').tz(this.zone);
       return zoned.format(this.i18n.timestampFormat);
-    }
+    },
+    showNodeMetrics(nodeId) {
+      this.metricsNodeId = nodeId;
+      this.activeTab = 'metrics';
+    },
+    getMetricsContainerItems() {
+      const containerNames = new Set();
+      this.nodes.forEach(node => {
+        if (node.containers) {
+          node.containers.forEach(c => {
+            if (c.Name) {
+              containerNames.add(c.Name);
+            }
+          });
+        }
+      });
+      return [
+        { title: this.i18n.metricsAllContainers || 'All Containers', value: 'all' }
+      ].concat(Array.from(containerNames).sort().map(name => ({ title: name, value: name })));
+    },
+    loadUrlParameters() {
+      if (this.$route.query.tab) {
+        this.activeTab = this.$route.query.tab;
+      }
+      if (this.activeTab === 'metrics') {
+        if (this.$route.query.host !== undefined) {
+          this.metricsNodeId = this.$route.query.host;
+        }
+        if (this.$route.query.container !== undefined) {
+          this.metricsContainerId = this.$route.query.container;
+        }
+        if (this.$route.query.timeRange !== undefined) {
+          this.metricsTimeRange = this.$route.query.timeRange;
+        }
+        if (this.$route.query.autoRefresh !== undefined) {
+          this.metricsAutoRefresh = parseInt(this.$route.query.autoRefresh) || 0;
+        }
+      }
+    },
+    updateRoute() {
+      const query = {};
+      if (this.activeTab) {
+        query.tab = this.activeTab;
+      }
+      if (this.activeTab === 'metrics') {
+        query.host = this.metricsNodeId || '';
+        query.container = this.metricsContainerId || 'all';
+        query.timeRange = this.metricsTimeRange || '1h';
+        query.autoRefresh = this.metricsAutoRefresh !== undefined ? this.metricsAutoRefresh : 0;
+      }
+
+      const currentQuery = this.$route.query;
+      const isDifferent = Object.keys(query).length !== Object.keys(currentQuery).length ||
+        Object.keys(query).some(key => String(query[key]) !== String(currentQuery[key]));
+
+      if (isDifferent) {
+        this.$router.replace({ name: 'grid', query }).catch(err => {
+          if (err.name !== 'NavigationDuplicated') {
+            console.error(err);
+          }
+        });
+      }
+    },
   }
 }});

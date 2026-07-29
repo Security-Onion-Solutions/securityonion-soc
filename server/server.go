@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -29,6 +30,7 @@ const AGENT_ID = "00000000-0000-0000-0000-000000000001"
 type Server struct {
 	Config           *config.ServerConfig
 	Host             *web.Host
+	DB               db.DB
 	Datastore        Datastore
 	AdminClientstore AdminClientstore
 	AdminUserstore   AdminUserstore
@@ -40,6 +42,7 @@ type Server struct {
 	Detectionstore   Detectionstore
 	Assistantstore   Assistantstore
 	Configstore      Configstore
+	AdminConfigstore AdminConfigstore
 	GridMembersstore GridMembersstore
 	Metrics          Metrics
 	stoppedChan      chan bool
@@ -791,7 +794,7 @@ func (server *Server) GetTimezones() []string {
 	return zones
 }
 
-// @title           Security Onion Connect API
+// @title           Security Onion API
 // @description     Perform SOC operations via server-to-server integration using a client API account via OAuth2.0.
 // @termsOfService  https://securityonion.net/terms/
 
@@ -815,7 +818,7 @@ func (server *Server) GetTimezones() []string {
 // @host https://BASE_URL
 
 // @Summary      Obtain Access Token
-// @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion Connect API methods.
+// @Description  Exchanges a client ID and client secret for a temporary access token needed for calling Security Onion API methods.
 // @Description  The client ID and client secret are provided within the SOC Administration -> API Clients screen, when creating a new API client or when regenerating an API client's secret.
 // @Description  The client secrets are only temporarily visible during those two specific times.
 // @Description  The returned access token will expire within 1-2 hours, by default. Ensure the custom integration application is capable of exchanging for a new access token prior to the expiration.
@@ -838,7 +841,7 @@ type AccessTokenRequest struct {
 }
 
 type AccessTokenResponse struct {
-	// The access token to be used for all other Connect API requests."
+	// The access token to be used for all other API requests."
 	AccessToken string `json:"access_token" example:"ory_at_arkgYuJXYp5zwU8Xyh8-URW6QIUbaZVf4JwDPoNZh0g.YcF4W5i2qoQ2RTWZvLYLNIeUjGaUhYuewz9Gua0y7YA"`
 	// Amount of time, in seconds, before the access token expires."
 	ExpiresIn int `json:"expires_in" example:"3599"`

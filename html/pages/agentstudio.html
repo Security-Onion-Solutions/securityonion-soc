@@ -1,0 +1,243 @@
+<v-container v-if="!paramsLoaded" fluid data-aid="agentstudio_loading_parameters"></v-container>
+<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentstudio_screen">
+  <v-row>
+    <v-col>
+      <!-- Tabs (left) + shortened action toolbar (right) -->
+      <div class="d-flex align-center mb-2">
+        <v-tabs v-model="tab" color="primary" class="flex-grow-0" data-aid="agentstudio_tabs">
+          <v-tab value="agents" data-aid="agentstudio_agents_tab">
+            <v-icon class="mr-2">fa-robot</v-icon>{{ i18n.agentStudioAgents }}
+          </v-tab>
+          <v-tab value="skills" data-aid="agentstudio_skills_tab">
+            <v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioSkills }}
+          </v-tab>
+        </v-tabs>
+        <v-spacer></v-spacer>
+        <v-toolbar class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable">
+          <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="agentstudio_docs" :aria-label="i18n.contextualDocsBtn">
+            <v-icon>fa-circle-question</v-icon>
+          </v-btn>
+        </v-toolbar>
+      </div>
+
+      <v-tabs-window v-model="tab">
+        <!-- Agents tab -->
+        <v-tabs-window-item value="agents">
+          <v-row>
+            <v-col id="agentstudio-agents" class="section-panel" data-aid="agentstudio_agents_section">
+              <v-data-table :sort-by="sortByAgents" @update:sort-by="val => sortByAgents = val"
+                :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" must-sort :headers="agentHeaders" :items="agents" item-value="id" v-model:expanded="expandedAgents" data-aid="agentstudio_agents_table">
+                <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                  <tr>
+                    <template v-for="header in columns" :key="header.key">
+                      <th :class="{'is-sorted': isSorted(header)}" :data-aid="'agentstudio_agents_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                        <span @click="toggleSort(header)">{{ header.title }}</span>
+                        <template v-if="isSorted(header)">
+                          <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                        </template>
+                      </th>
+                    </template>
+                  </tr>
+                </template>
+                <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                    <td>
+                      <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_agents_expand">
+                        <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
+                        <v-icon v-else>fa-angle-right</v-icon>
+                      </v-btn>
+                    </td>
+                    <td>
+                      {{ item.name }}
+                    </td>
+                    <td>
+                      <v-chip v-if="item.isOrchestrator" size="small" color="primary" variant="tonal">{{ i18n.agentStudioOrchestrator }}</v-chip>
+                      <v-chip v-else size="small" variant="tonal">{{ i18n.agentStudioSpecialist }}</v-chip>
+                    </td>
+                    <td>{{ item.model }}</td>
+                    <td>
+                      <v-chip v-for="s in item.allowedSkills" :key="s" size="small" variant="tonal" class="mr-1 my-1">{{ s }}</v-chip>
+                      <span v-if="!item.allowedSkills.length" class="text-disabled">&mdash;</span>
+                    </td>
+                    <td>
+                      <v-chip v-for="d in item.canDelegateTo" :key="d" size="small" variant="outlined" class="mr-1 my-1">{{ d }}</v-chip>
+                      <span v-if="!item.canDelegateTo.length" class="text-disabled">&mdash;</span>
+                    </td>
+                  </tr>
+                </template>
+                <template #expanded-row="{ item }">
+                  <tr class="expanded-row" data-aid="agentstudio_agents_expanded">
+                    <td :colspan="agentHeaders.length" class="px-0">
+                      <div class="expanded-row-wrapper pa-4">
+                        <v-card variant="flat" class="agentstudio-editor">
+                          <v-tabs v-model="agentTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentstudio_agent_subtabs_' + item.id">
+                            <v-tab value="identity" :data-aid="'agentstudio_agent_subtab_identity_' + item.id"><v-icon class="mr-2">fa-id-card</v-icon>{{ i18n.agentStudioIdentity }}</v-tab>
+                            <v-tab value="model" :data-aid="'agentstudio_agent_subtab_model_' + item.id"><v-icon class="mr-2">fa-microchip</v-icon>{{ i18n.agentStudioModel }}</v-tab>
+                            <v-tab value="skills" :data-aid="'agentstudio_agent_subtab_skills_' + item.id"><v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioSkills }}</v-tab>
+                            <v-tab value="delegation" :data-aid="'agentstudio_agent_subtab_delegation_' + item.id"><v-icon class="mr-2">fa-sitemap</v-icon>{{ i18n.agentStudioDelegation }}</v-tab>
+                          </v-tabs>
+                          <v-divider></v-divider>
+                          <v-card-text>
+                            <v-tabs-window v-model="agentTabs[item.id]">
+                              <v-tabs-window-item value="identity">
+                                <v-row>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                  </v-col>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                  </v-col>
+                                  <v-col cols="12">
+                                    <v-textarea :model-value="item.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow readonly :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="model">
+                                <v-row>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="item.model" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioModelHelp" persistent-hint></v-text-field>
+                                  </v-col>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="item.provider" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="skills">
+                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioSkills }}</div>
+                                <div>
+                                  <v-chip v-for="s in item.allowedSkills" :key="s" size="small" variant="tonal" class="mr-1 my-1">{{ s }}</v-chip>
+                                  <span v-if="!item.allowedSkills.length" class="text-disabled">&mdash;</span>
+                                </div>
+                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSkillsHelp }}</div>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="delegation">
+                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioDelegatesTo }}</div>
+                                <div>
+                                  <v-chip v-for="d in item.canDelegateTo" :key="d" size="small" variant="outlined" class="mr-1 my-1">{{ d }}</v-chip>
+                                  <span v-if="!item.canDelegateTo.length" class="text-disabled">&mdash;</span>
+                                </div>
+                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioDelegationHelp }}</div>
+                              </v-tabs-window-item>
+                            </v-tabs-window>
+                          </v-card-text>
+                        </v-card>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
+            </v-col>
+          </v-row>
+        </v-tabs-window-item>
+
+        <!-- Skills tab -->
+        <v-tabs-window-item value="skills">
+          <v-row>
+            <v-col id="agentstudio-skills" class="section-panel" data-aid="agentstudio_skills_section">
+              <v-data-table :sort-by="sortBySkills" @update:sort-by="val => sortBySkills = val"
+                :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" must-sort :headers="skillHeaders" :items="skills" item-value="id" v-model:expanded="expandedSkills" data-aid="agentstudio_skills_table">
+                <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                  <tr>
+                    <template v-for="header in columns" :key="header.key">
+                      <th :class="{'is-sorted': isSorted(header)}" :data-aid="'agentstudio_skills_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                        <span @click="toggleSort(header)">{{ header.title }}</span>
+                        <template v-if="isSorted(header)">
+                          <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                        </template>
+                      </th>
+                    </template>
+                  </tr>
+                </template>
+                <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                    <td>
+                      <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_skills_expand">
+                        <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
+                        <v-icon v-else>fa-angle-right</v-icon>
+                      </v-btn>
+                    </td>
+                    <td>
+                      {{ item.name }}
+                    </td>
+                    <td>
+                      <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
+                      <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
+                    </td>
+                    <td>
+                      <v-chip v-for="a in skillUsedBy(item.name)" :key="a" size="small" variant="outlined" class="mr-1 my-1">{{ a }}</v-chip>
+                      <span v-if="!skillUsedBy(item.name).length" class="text-disabled">&mdash;</span>
+                    </td>
+                  </tr>
+                </template>
+                <template #expanded-row="{ item }">
+                  <tr class="expanded-row" data-aid="agentstudio_skills_expanded">
+                    <td :colspan="skillHeaders.length" class="px-0">
+                      <div class="expanded-row-wrapper pa-4">
+                        <v-card variant="flat" class="agentstudio-editor">
+                          <v-tabs v-model="skillTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentstudio_skill_subtabs_' + item.id">
+                            <v-tab value="tools" :data-aid="'agentstudio_skill_subtab_tools_' + item.id"><v-icon class="mr-2">fa-screwdriver-wrench</v-icon>{{ i18n.agentStudioToolsUnlocked }}</v-tab>
+                            <v-tab value="usage" :data-aid="'agentstudio_skill_subtab_usage_' + item.id"><v-icon class="mr-2">fa-users</v-icon>{{ i18n.agentStudioUsedBy }}</v-tab>
+                          </v-tabs>
+                          <v-divider></v-divider>
+                          <v-card-text>
+                            <v-tabs-window v-model="skillTabs[item.id]">
+                              <v-tabs-window-item value="tools">
+                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioToolsUnlocked }}</div>
+                                <div>
+                                  <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
+                                  <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
+                                </div>
+                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioToolsUnlockedHelp }}</div>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="usage">
+                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioUsedBy }}</div>
+                                <div>
+                                  <v-chip v-for="a in skillUsedBy(item.name)" :key="a" size="small" variant="outlined" class="mr-1 my-1">{{ a }}</v-chip>
+                                  <span v-if="!skillUsedBy(item.name).length" class="text-disabled">&mdash;</span>
+                                </div>
+                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioUsedByHelp }}</div>
+                              </v-tabs-window-item>
+                            </v-tabs-window>
+                          </v-card-text>
+                        </v-card>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
+            </v-col>
+          </v-row>
+        </v-tabs-window-item>
+      </v-tabs-window>
+    </v-col>
+  </v-row>
+</v-container>
+<v-container v-else-if="$root.isLicensed('oai') && !assistantEnabled" fluid data-aid="agentstudio_assistant_disabled">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8 d-flex align-center ga-2">
+      <div>{{ i18n.assistantDisabled }}</div>
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print text-decoration-none" data-aid="agentstudio_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
+        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+      </router-link>
+    </div>
+  </div>
+</v-container>
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentstudio_agentic_disabled">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8 d-flex align-center ga-2">
+      <div>{{ i18n.agenticDisabled }}</div>
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.modules.assistant.agentic'}}" class="no-print text-decoration-none" data-aid="agentstudio_config_entry_agentic" :aria-label="i18n.ariaVisitConfigEntry">
+        <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
+      </router-link>
+    </div>
+  </div>
+</v-container>
+<v-container v-else>
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8" v-html="i18n.assistantUnavailable"></div>
+  </div>
+</v-container>

@@ -89,3 +89,154 @@ func TestGetNodes(t *testing.T) {
 	// Verify the original node object was NOT modified
 	assert.Equal(t, "original-grid-id", originalNode.GridId)
 }
+
+type MockMetrics struct {
+	GetGridEpsFunc           func(ctx context.Context) int
+	UpdateNodeMetricsFunc    func(ctx context.Context, node *model.Node) bool
+	GetTimeSeriesMetricsFunc func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error)
+}
+
+func (m *MockMetrics) GetGridEps(ctx context.Context) int {
+	if m.GetGridEpsFunc != nil {
+		return m.GetGridEpsFunc(ctx)
+	}
+	return 0
+}
+
+func (m *MockMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
+	if m.UpdateNodeMetricsFunc != nil {
+		return m.UpdateNodeMetricsFunc(ctx, node)
+	}
+	return false
+}
+
+func (m *MockMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+	if m.GetTimeSeriesMetricsFunc != nil {
+		return m.GetTimeSeriesMetricsFunc(ctx, nodeId, container, metricType, startTime, endTime)
+	}
+	return nil, nil
+}
+
+type customTestError struct{}
+
+func (e customTestError) Error() string { return "custom error" }
+
+func TestGetMetricsHistory(t *testing.T) {
+	t.Run("missing metric", func(t *testing.T) {
+		srv := &Server{}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?range=now-1h:now", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid date range", func(t *testing.T) {
+		srv := &Server{}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?metric=cpu&range=invalid%20-%202023/01/15%205:00:00%20PM", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("metrics nil", func(t *testing.T) {
+		srv := &Server{Metrics: nil}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?metric=cpu&range=now-1h:now", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var res map[string][]model.MetricSample
+		err := json.Unmarshal(w.Body.Bytes(), &res)
+		assert.NoError(t, err)
+		assert.Empty(t, res)
+	})
+
+	t.Run("successful query", func(t *testing.T) {
+		now := time.Now()
+		samples := []model.MetricSample{
+			{Timestamp: now, Value: 12.34},
+		}
+		expectedData := map[string][]model.MetricSample{
+			"cpu_used": samples,
+		}
+
+		mockMetrics := &MockMetrics{
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+				assert.Equal(t, "node1", nodeId)
+				assert.Equal(t, "cpu", metricType)
+				return expectedData, nil
+			},
+		}
+
+		srv := &Server{Metrics: mockMetrics}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?metric=cpu&range=now-1h:now&nodeId=node1", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var res map[string][]model.MetricSample
+		err := json.Unmarshal(w.Body.Bytes(), &res)
+		assert.NoError(t, err)
+		assert.Contains(t, res, "cpu_used")
+		assert.Len(t, res["cpu_used"], 1)
+		assert.Equal(t, 12.34, res["cpu_used"][0].Value)
+	})
+
+	t.Run("unauthorized error", func(t *testing.T) {
+		mockMetrics := &MockMetrics{
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+				return nil, model.NewUnauthorized("user", "read", "nodes")
+			},
+		}
+
+		srv := &Server{Metrics: mockMetrics}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?metric=cpu&range=now-1h:now", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		mockMetrics := &MockMetrics{
+			GetTimeSeriesMetricsFunc: func(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
+				return nil, customTestError{}
+			},
+		}
+
+		srv := &Server{Metrics: mockMetrics}
+		h := &GridHandler{server: srv}
+
+		req := httptest.NewRequest("GET", "/metrics?metric=cpu&range=now-1h:now", nil)
+		ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		h.getMetricsHistory(w, req)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}

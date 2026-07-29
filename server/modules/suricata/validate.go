@@ -81,7 +81,7 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 				buf.WriteRune(ch)
 			}
 		case stateSource:
-			if ch == '<' || ch == '-' {
+			if ch == '<' || ch == '-' || ch == '=' {
 				out.Source = strings.TrimSpace(buf.String())
 				buf.Reset()
 				buf.WriteRune(ch)
@@ -92,8 +92,8 @@ func ParseSuricataRule(rule string) (*SuricataRule, error) {
 		case stateDirection:
 			if ch == ' ' {
 				out.Direction = strings.TrimSpace(buf.String())
-				if out.Direction != "<>" && out.Direction != "->" {
-					return nil, fmt.Errorf("invalid direction, must be '<>' or '->', got %s", out.Direction)
+				if out.Direction != "<>" && out.Direction != "->" && out.Direction != "=>" {
+					return nil, fmt.Errorf("invalid direction, must be '<>', '->', or '=>', got %s", out.Direction)
 				}
 
 				buf.Reset()

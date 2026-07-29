@@ -8,8 +8,10 @@ package playbook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -35,6 +37,8 @@ const (
 	DEFAULT_PLAYBOOK_IMPORT_FREQUENCY_SECONDS = 24 * 60 * 60
 	DEFAULT_PLAYBOOK_IMPORT_ERROR_SECONDS     = 10 * 60
 	DEFAULT_PLAYBOOK_REPO_PATH                = "/opt/sensoroni/playbooks"
+	DEFAULT_PLACEHOLDER_MAP_PATH              = "/opt/sensoroni/playbook_placeholder_map.yaml"
+	DEFAULT_USER_PLACEHOLDER_MAP_PATH         = "/opt/sensoroni/playbook_placeholder_map_custom.yaml"
 )
 
 var ( // treat as constant
@@ -60,6 +64,13 @@ type PlaybookDiskManager struct {
 	interruptChan                  chan bool
 	playbookImportFrequencySeconds int
 	playbookImportErrorSeconds     int
+
+	// placeholderMap maps a Sigma placeholder name (%name%) to the event field its value
+	// resolves from (via lookupEventValue). It is the shipped global map overlaid with the
+	// editable user map
+	placeholderMap         map[string]string
+	placeholderMapPath     string // shipped defaults, overwritten on upgrade
+	userPlaceholderMapPath string // grid-editable overrides, preserved across upgrades
 
 	PlaybooksByDetectionId map[string][]string
 	PlaybooksByCategory    map[string][]string
@@ -92,6 +103,28 @@ func (pdm *PlaybookDiskManager) Init(config module.ModuleConfig) (err error) {
 	pdm.playbookRepos, err = model.GetReposDefault(config, "playbookRepos", false, DEFAULT_PLAYBOOK_REPOS)
 	if err != nil {
 		return fmt.Errorf("unable to parse Playbooks playbookRepos: %w", err)
+	}
+
+	pdm.placeholderMapPath = module.GetStringDefault(config, "placeholderMapPath", DEFAULT_PLACEHOLDER_MAP_PATH)
+	pdm.userPlaceholderMapPath = module.GetStringDefault(config, "userPlaceholderMapPath", DEFAULT_USER_PLACEHOLDER_MAP_PATH)
+
+	// The combined map is the shipped global map overlaid with the editable user map
+	// (user entries win). Both are optional; a missing file just contributes nothing.
+	globalMap := pdm.loadPlaceholderMap(pdm.placeholderMapPath)
+	userMap := pdm.loadPlaceholderMap(pdm.userPlaceholderMapPath)
+	pdm.placeholderMap = mergePlaceholderMaps(globalMap, userMap)
+
+	if len(pdm.placeholderMap) == 0 {
+		log.WithFields(log.Fields{
+			"globalMapPath": pdm.placeholderMapPath,
+			"userMapPath":   pdm.userPlaceholderMapPath,
+		}).Warn("no playbook placeholder tokens declared")
+	} else {
+		log.WithFields(log.Fields{
+			"globalTokens": len(globalMap),
+			"userTokens":   len(userMap),
+			"totalTokens":  len(pdm.placeholderMap),
+		}).Info("loaded playbook placeholder maps")
 	}
 
 	return nil
@@ -552,28 +585,16 @@ func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) 
 	return pb, nil
 }
 
-func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id string) ([]*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id string, stage model.PlaybookStage, ts time.Time) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
-	query := fmt.Sprintf(`log.id.uid:"%[1]s" OR event.id:"%[1]s" OR _id:"%[1]s"`, id)
-	criteria := model.NewEventSearchCriteria()
-
-	dateRange := "1970-01-01T00:00:00Z - " + time.Now().Format(time.RFC3339)
-
-	err := criteria.Populate(query, dateRange, time.RFC3339, "", "0", "1")
+	event, err := server.FindEventBySocId(ctx, pdm.srv.Eventstore, id, ts)
 	if err != nil {
 		return nil, err
 	}
-
-	events, err := pdm.srv.Eventstore.Search(ctx, criteria)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for alert: %w", err)
-	}
-	if events.TotalEvents == 0 || len(events.Events) == 0 {
+	if event == nil {
 		return nil, fmt.Errorf("no alert found with ID %s", id)
 	}
-
-	event := events.Events[0]
 
 	detId, ok := event.Payload["rule.uuid"].(string)
 	if !ok {
@@ -604,20 +625,37 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 		}).Error("retrieved detection with unsupported engine")
 	}
 
+	// no playbooks for this detection is a valid state, not an error
 	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
-	if err != nil || len(playbooks) == 0 {
+	if err != nil {
 		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
 	}
+	if len(playbooks) == 0 {
+		return playbooks, nil
+	}
 
-	err = pdm.srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute playbook searches: %w", err)
+	switch stage {
+	case model.PlaybookStageSkeleton:
+		// questions only
+	case model.PlaybookStageConvert:
+		err = pdm.ConvertPlaybookQueries(ctx, event, playbooks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert playbook queries: %w", err)
+		}
+	default:
+		err = pdm.srv.Playbookstore.ExecutePlaybookSearches(ctx, event, playbooks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute playbook searches: %w", err)
+		}
 	}
 
 	return playbooks, nil
 }
 
-func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string) ([]*model.ConvertedQuery, error) {
+// ruleTitleRegex matches a top-level `title:` key in a Sigma rule document.
+var ruleTitleRegex = regexp.MustCompile(`(?m)^title:`)
+
+func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []string, event *model.EventRecord) ([]*model.ConvertedQuery, error) {
 	logger := log.FromContext(ctx)
 
 	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
@@ -625,10 +663,41 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		return nil, err
 	}
 
-	args := []string{"convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	// Resolve %placeholder% values from this alert's event via a per-call `vars:` pipeline.
+	// SecurityOnion_playbook_placeholders reads pipeline.vars; pySigma merges the -p pipelines.
+	// The combined placeholder map declares the known tokens; any token used in a query but
+	// undeclared is resolved by name against the event (see buildVarsFromEvent).
+	used := extractPlaceholders(queries...)
+	varsYaml, err := yaml.Marshal(map[string]interface{}{"vars": pdm.buildVarsFromEvent(event, pdm.placeholderMap, used)})
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal placeholder vars: %w", err)
+	}
 
-	cmd := exec.CommandContext(pdm.srv.Context, "sigma", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(queries, "\n---\n"))
+	varsPath := filepath.Join(os.TempDir(), "playbook-vars-"+uuid.New().String()+".yaml")
+	if err := pdm.WriteFile(varsPath, varsYaml, 0600); err != nil {
+		return nil, fmt.Errorf("unable to write placeholder vars file: %w", err)
+	}
+	defer func() {
+		if rmErr := pdm.DeleteFile(varsPath); rmErr != nil {
+			logger.WithError(rmErr).WithField("varsPath", varsPath).Warn("unable to remove placeholder vars file")
+		}
+	}()
+
+	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+
+	// pySigma rejects a title-less rule, so prepend a throwaway title to any query
+	// that lacks one. It is stripped from the OQL output and need not be unique.
+	titled := make([]string, len(queries))
+	for i, q := range queries {
+		if !ruleTitleRegex.MatchString(q) {
+			q = "title: Playbook Question\n" + q
+		}
+		titled[i] = q
+	}
+
+	// the request context, so an abandoned request stops its conversion
+	cmd := exec.CommandContext(ctx, "sigma", args...)
+	cmd.Stdin = strings.NewReader(strings.Join(titled, "\n---\n"))
 
 	raw, code, runtime, err := pdm.ExecCommand(cmd)
 
@@ -676,6 +745,170 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 	return output, nil
 }
 
+// ConvertPlaybookQueries fills each question's query from the alert event and
+// converts it to OQL in one batched sigma exec; on failure each query is retried
+// alone, so one bad query only leaves its own question unconverted.
+func (pdm *PlaybookDiskManager) ConvertPlaybookQueries(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
+	logger := log.FromContext(ctx)
+
+	// LEGACY {field} substitution; a no-op for %placeholder% playbooks, whose
+	// values are resolved at convert time via buildVarsFromEvent.
+	queryVariableSubstitution(event, pbs)
+
+	questions := make([]*model.Question, 0)
+	filled := make([]string, 0)
+	for _, pb := range pbs {
+		for _, question := range pb.Questions {
+			questions = append(questions, question)
+			filled = append(filled, question.FilledQuery)
+		}
+	}
+
+	if len(questions) == 0 {
+		return nil
+	}
+
+	converted, err := pdm.ConvertQuestions(ctx, filled, event)
+	if err != nil || len(converted) != len(filled) {
+		// conversion is positional, so a count mismatch cannot be mapped back safely
+		logger.WithError(err).WithFields(log.Fields{
+			"eventId":        event.Id,
+			"convertedCount": len(converted),
+			"questionCount":  len(filled),
+		}).Warn("batch conversion failed; converting questions individually")
+
+		converted = pdm.convertQuestionsIndividually(ctx, event, filled)
+	}
+
+	for i, question := range questions {
+		if converted[i] == nil {
+			continue
+		}
+
+		question.OqlQuery = converted[i].Query
+		question.QueryFields = converted[i].Fields
+		question.IsAggregate = isQuestionAggregate(question.Query)
+	}
+
+	return nil
+}
+
+// convertQuestionsIndividually converts each query in its own sigma exec,
+// returning a nil entry for any query that fails.
+func (pdm *PlaybookDiskManager) convertQuestionsIndividually(ctx context.Context, event *model.EventRecord, filled []string) []*model.ConvertedQuery {
+	logger := log.FromContext(ctx)
+
+	converted := make([]*model.ConvertedQuery, len(filled))
+	for i, query := range filled {
+		result, err := pdm.ConvertQuestions(ctx, []string{query}, event)
+		if err != nil || len(result) != 1 {
+			logger.WithError(err).WithField("eventId", event.Id).Warn("unable to convert question")
+			continue
+		}
+
+		converted[i] = result[0]
+	}
+
+	return converted
+}
+
+// buildQuestionCriteria converts one converted question into event store
+// search criteria, windowed around eventTime by the question's Range.
+// Rangeless questions are the caller's responsibility.
+func buildQuestionCriteria(eventTime time.Time, question *model.Question) (*model.EventSearchCriteria, error) {
+	if question.Range == nil {
+		return nil, errors.New("question has no range; it is answered by the alert itself")
+	}
+
+	if question.OqlQuery == "" {
+		return nil, errors.New("question has no converted query")
+	}
+
+	dateRange := buildQuestionRange(eventTime, *question.Range, "UTC")
+	if dateRange == "" {
+		return nil, fmt.Errorf("unable to build a date range from %q", *question.Range)
+	}
+
+	query := question.OqlQuery
+
+	if !question.IsAggregate {
+		query += " | sortby @timestamp"
+	}
+
+	criteria := model.NewEventSearchCriteria()
+
+	err := criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
+	if err != nil {
+		return nil, fmt.Errorf("unable to populate search criteria: %w", err)
+	}
+
+	criteria.Timeout = time.Second * 30
+	criteria.AllowTimeout = true
+
+	return criteria, nil
+}
+
+// ExecuteQuestionSearch runs one converted question's query against the event
+// store, windowed around eventTime by the question's Range, and fills its
+// QueryResults. Rangeless questions are the caller's responsibility.
+func (pdm *PlaybookDiskManager) ExecuteQuestionSearch(ctx context.Context, eventTime time.Time, question *model.Question) error {
+	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
+	if err != nil {
+		return err
+	}
+
+	criteria, err := buildQuestionCriteria(eventTime, question)
+	if err != nil {
+		return err
+	}
+
+	searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		return fmt.Errorf("unable to execute search: %w", err)
+	}
+
+	applyQuestionResults(question, searchResults)
+
+	return nil
+}
+
+// applyQuestionResults fills a question's QueryResults from its search results.
+func applyQuestionResults(question *model.Question, searchResults *model.EventSearchResults) {
+	if question.IsAggregate {
+		// the longest key holds the metrics grouped by the full set of fields
+		longest := ""
+		for key := range searchResults.Metrics {
+			if len(key) > len(longest) {
+				longest = key
+			}
+		}
+
+		events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
+
+		for _, metric := range searchResults.Metrics[longest] {
+			m := map[string]any{}
+
+			m["Count"] = metric.Value
+			// QueryFields can come from the request body, so don't trust it to
+			// line up with the metric keys
+			for k, v := range question.QueryFields {
+				if k >= len(metric.Keys) {
+					break
+				}
+				m[v] = metric.Keys[k]
+			}
+
+			events = append(events, &model.EventRecord{Payload: m})
+		}
+
+		question.QueryResults = events
+	} else {
+		question.QueryResults = searchResults.Events
+	}
+
+	question.QueryTimedOut = searchResults.TimedOut
+}
+
 func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, event *model.EventRecord, pbs []*model.Playbook) error {
 	logger := log.FromContext(ctx)
 
@@ -684,86 +917,90 @@ func (pdm *PlaybookDiskManager) ExecutePlaybookSearches(ctx context.Context, eve
 		return err
 	}
 
-	queryVariableSubstitution(event, pbs)
+	err = pdm.ConvertPlaybookQueries(ctx, event, pbs)
+	if err != nil {
+		return err
+	}
+
+	// the question queries are independent and read-only, so batch them all
+	// into a single msearch instead of executing them one at a time
+	batch := make([]*model.EventMSearchCriteria, 0)
+	questions := make([]*model.Question, 0)
+	playbookIds := make([]string, 0)
 
 	for _, pb := range pbs {
-		filled := lo.Map(pb.Questions, func(q *model.Question, _ int) string {
-			return q.FilledQuery
-		})
-
-		converted, err := pdm.ConvertQuestions(ctx, filled)
-		if err != nil {
-			logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to convert questions")
-			return err
-		}
-
-		for i := 0; i < len(pb.Questions); i++ {
-			if pb.Questions[i].Range == nil {
-				pb.Questions[i].QueryResults = []*model.EventRecord{event}
-			} else {
-				dateRange := buildQuestionRange(event, *pb.Questions[i].Range, "UTC")
-
-				criteria := model.NewEventSearchCriteria()
-
-				query := converted[i].Query
-				isAgg := isQuestionAggregate(pb.Questions[i].Query)
-
-				if !isAgg {
-					query += " | sortby @timestamp"
-				}
-
-				err = criteria.Populate(query, dateRange, time.RFC3339, "", "5", "5")
-				if err != nil {
-					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to populate search criteria")
-					return err
-				}
-
-				searchResults, err := pdm.srv.Eventstore.Search(ctx, criteria)
-				if err != nil {
-					logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to execute search")
-					return err
-				}
-
-				if isAgg {
-					longest := ""
-					for key := range searchResults.Metrics {
-						if len(key) > len(longest) {
-							longest = key
-						}
-					}
-
-					events := make([]*model.EventRecord, 0, len(searchResults.Metrics[longest]))
-
-					for _, metric := range searchResults.Metrics[longest] {
-						m := map[string]any{}
-
-						m["Count"] = metric.Value
-						for k, v := range converted[i].Fields {
-							m[v] = metric.Keys[k]
-						}
-
-						e := model.EventRecord{
-							Payload: m,
-						}
-
-						events = append(events, &e)
-					}
-
-					pb.Questions[i].QueryResults = events
-				} else {
-					pb.Questions[i].QueryResults = searchResults.Events
-				}
+		for _, question := range pb.Questions {
+			if question.Range == nil {
+				question.QueryResults = []*model.EventRecord{event}
+				continue
 			}
 
-			pb.Questions[i].OqlQuery = converted[i].Query
-			pb.Questions[i].QueryFields = converted[i].Fields
+			// unconverted questions stay unanswered without failing the rest
+			if question.OqlQuery == "" {
+				continue
+			}
+
+			criteria, err := buildQuestionCriteria(getEventTimestamp(event), question)
+			if err != nil {
+				logger.WithError(err).WithFields(log.Fields{"playbookId": pb.Id, "eventId": event.Id}).Warn("unable to build question search criteria")
+				continue
+			}
+
+			batch = append(batch, &model.EventMSearchCriteria{EventSearchCriteria: *criteria})
+			questions = append(questions, question)
+			playbookIds = append(playbookIds, pb.Id)
 		}
+	}
+
+	if len(batch) == 0 {
+		return nil
+	}
+
+	searchResults, err := pdm.srv.Eventstore.MSearch(ctx, batch)
+	if searchResults == nil || len(searchResults.Responses) != len(batch) {
+		responseCount := 0
+		if searchResults != nil {
+			responseCount = len(searchResults.Responses)
+		}
+
+		if err == nil {
+			err = fmt.Errorf("expected %d question search responses, got %d", len(batch), responseCount)
+		}
+
+		logger.WithError(err).WithFields(log.Fields{"eventId": event.Id}).Warn("unable to execute question searches")
+
+		return err
+	}
+
+	// responses come back in request order; a failed sub-query leaves its
+	// question unanswered without failing the rest
+	for i, res := range searchResults.Responses {
+		if len(res.Errors) != 0 {
+			logger.WithFields(log.Fields{
+				"playbookId":   playbookIds[i],
+				"eventId":      event.Id,
+				"searchErrors": res.Errors,
+			}).Warn("unable to execute question search")
+
+			if len(res.Events) == 0 {
+				continue
+			}
+		}
+
+		applyQuestionResults(questions[i], res)
 	}
 
 	return nil
 }
 
-// queryVariableSubstitution substitutes variables in playbook queries with values from the provided event data
+// queryVariableSubstitution substitutes {field} variables in playbook queries with values
+// from the alert event, writing the result to each question's FilledQuery.
+//
+// LEGACY: this is the original "normalized" playbook mechanism —  string replacement
+// of {payload.key} tokens BEFORE conversion. It is superseded by the %placeholder% pipeline
+// (SecurityOnion_playbook_placeholders + buildVarsFromEvent), which resolves values at `sigma convert` time
+// Un-normalized playbooks use %placeholder% and contain no {} tokens, so for them this is a
+// no-op (FilledQuery == Query). Retained only for any remaining normalized playbooks.
 func queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Playbook) {
 	// Fields that require special array handling
 	arrayFields := []string{"network.private_ip", "network.public_ip", "related.ip"}
@@ -864,16 +1101,14 @@ func queryVariableSubstitution(event *model.EventRecord, playbooks []*model.Play
 	}
 }
 
-// BuildQuestionRange builds a date range string for a question based on event timestamp and range specification
+// buildQuestionRange builds a date range string for a question based on the event timestamp and range specification
 // Range format examples: "+/-3d", "-1h", "30m", "2s"
 // Returns a formatted date range string like "2024/01/01 12:00:00 PM - 2024/01/01 01:00:00 PM"
-func buildQuestionRange(event *model.EventRecord, rangeStr string, timezone string) string {
+func buildQuestionRange(eventTime time.Time, rangeStr string, timezone string) string {
 	if rangeStr == "" {
 		return ""
 	}
 
-	// Get event timestamp
-	eventTime := getEventTimestamp(event)
 	if eventTime.IsZero() {
 		return ""
 	}

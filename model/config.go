@@ -10,6 +10,15 @@ import (
 	"regexp"
 )
 
+// SettingOrigin indicates where a setting value was loaded from.
+type SettingOrigin string
+
+const (
+	SettingOriginDefault SettingOrigin = "default" // value not yet customised
+	SettingOriginDB      SettingOrigin = "db"      // stored in Postgres
+	SettingOriginYaml    SettingOrigin = "yaml"    // stored in a pillar YAML file
+)
+
 type UiElement struct {
 	// (metadata) The field name to save this value as
 	Field string `json:"field" example:"some_key"`
@@ -90,7 +99,32 @@ type Setting struct {
 	UiElements []UiElement `json:"uiElements"`
 	// (metadata) Confirmation message to show when user clicks the delete button on a ui element. If omitted, no message will be shown.
 	UiElementsDeleteMessage string `json:"uiElementsDeleteMessage"`
+	// (metadata) The preferred storage location for this setting.
+	Storage string `json:"storage" example:"db,omitempty"`
+	// Origin indicates where the setting's current value was loaded from.
+	Origin SettingOrigin `json:"origin"`
+	// DuplicatedFromID is the setting ID this setting was duplicated from, if any.
+	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
+	// An optional note explaining the reason for this configuration change.
+	Note string `json:"note,omitempty" example:"Enabling this for the new site deployment"`
+	// History of changes to this setting.
+	History []AuditHistory `json:"history,omitempty"`
+	// AllowedNodeTypes is a list of node types that are allowed for per-node configuration.
+	// When set and the setting supports per-node configuration, only nodes with matching roles are shown.
+	AllowedNodeTypes []string `json:"allowedNodeTypes,omitempty"`
 }
+
+type AuditHistory struct {
+	Timestamp        string `json:"timestamp"`
+	UserID           string `json:"userId"`
+	OldValue         string `json:"oldValue"`
+	NewValue         string `json:"newValue"`
+	Note             string `json:"note"`
+	SettingID        string `json:"settingId,omitempty"`
+	NodeID           string `json:"nodeId,omitempty"`
+	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
+}
+
 
 func NewSetting(id string) *Setting {
 	setting := &Setting{}
@@ -109,8 +143,9 @@ func (setting *Setting) SupportsJinja() bool {
 }
 
 func (setting *Setting) IsDuplicatedSetting() bool {
-	// Assume descriptionless settings are duplicated, since annotations are lost for duplicated settings
-	return len(setting.Description) == 0
+	// A setting is duplicated if it explicitly carries a source ID (DB-sourced),
+	// or if it has no description (heuristic for yaml-sourced duplicates).
+	return setting.DuplicatedFromID != "" || len(setting.Description) == 0
 }
 
 func IsValidMinionId(id string) bool {

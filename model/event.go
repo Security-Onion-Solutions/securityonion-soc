@@ -46,6 +46,8 @@ type EventSearchResults struct {
 	Events []*EventRecord `json:"events"`
 	// The collection of aggregated metrics associated with this search
 	Metrics map[string]([]*EventMetric) `json:"metrics"`
+	// Did the query that produced these results time out while collecting them
+	TimedOut bool `json:"timedOut"`
 }
 
 func NewEventSearchResults() *EventSearchResults {
@@ -78,10 +80,12 @@ type EventSearchCriteria struct {
 	// The end of the search time range, in the requestor's timezone
 	EndTime time.Time `example:"2024-12-04T14:31:35-05:00"`
 	// The UTC date and time when the search request was submitted
-	CreateTime  time.Time       `example:"2024-12-04T19:31:42.73865332Z"`
-	ParsedQuery *Query          `json:"-"`
-	SortFields  []*SortCriteria `json:"-"`
-	SearchAfter []interface{}   `json:"-"`
+	CreateTime   time.Time       `example:"2024-12-04T19:31:42.73865332Z"`
+	ParsedQuery  *Query          `json:"-"`
+	SortFields   []*SortCriteria `json:"-"`
+	SearchAfter  []interface{}   `json:"-"`
+	Timeout      time.Duration   `json:"-"`
+	AllowTimeout bool            `json:"-"`
 }
 
 func (criteria *EventSearchCriteria) initSearchCriteria() {
@@ -176,6 +180,21 @@ type EventUpdateResults struct {
 	UpdatedCount int `json:"updatedCount" example:"1"`
 	// The number of events the were left unmodified
 	UnchangedCount int `json:"unchangedCount" example:"0"`
+	// The Elasticsearch task ids when the update runs asynchronously (one per host); empty for synchronous updates
+	TaskIds []string `json:"taskIds,omitempty"`
+}
+
+// EventAckStatus is broadcast to clients when an asynchronous acknowledge/update task
+// completes. Clients correlate it to their originating request via TaskIds.
+type EventAckStatus struct {
+	// The Elasticsearch task ids (one per host) that this status pertains to
+	TaskIds []string `json:"taskIds"`
+	// Whether the asynchronous update completed without any errors
+	Success bool `json:"success"`
+	// The total number of events that were updated
+	Updated int `json:"updated"`
+	// Any errors encountered while completing the asynchronous update
+	Errors []string `json:"errors"`
 }
 
 func NewEventUpdateResults() *EventUpdateResults {
@@ -287,20 +306,23 @@ func (criteria *EventScrollCriteria) Populate(query string, dateRange string, da
 }
 
 type EventMSearchCriteria struct {
-	Index       string
-	RawQuery    string
-	ParsedQuery *Query
+	EventSearchCriteria
+	// The indexes to search, comma-separated; empty means the event store's default indexes
+	Index string
 }
 
 func NewEventMSearchCriteria() *EventMSearchCriteria {
 	criteria := &EventMSearchCriteria{}
-	criteria.ParsedQuery = NewQuery()
+	criteria.initSearchCriteria()
 
 	return criteria
 }
 
 func (criteria *EventMSearchCriteria) Populate(index string, query string) error {
 	criteria.Index = index
+
+	criteria.MetricLimit = 0
+	criteria.EventLimit = 10
 
 	criteria.RawQuery = strings.TrimSpace(query)
 	err := criteria.ParsedQuery.Parse(query)

@@ -67,6 +67,32 @@ func TestParseRule(t *testing.T) {
 			Name:  "Minimal Rule With Multiple Detection Condition",
 			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: [ "conditionOne", "conditionTwo" ] }}`,
 		},
+		{
+			Name:  "Rule With Correlation",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+		},
+		{
+			Name:          "Rule With Incomplete Correlation - Missing Rules",
+			Input:         `{ id: "x", title: "title", correlation: { type: event_count, group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+			ExpectedError: util.Ptr("missing required fields: correlation.rules"),
+		},
+		{
+			Name:          "Rule With Incomplete Correlation - Missing Timespan",
+			Input:         `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], condition: { gte: 2 } }}`,
+			ExpectedError: util.Ptr("missing required fields: correlation.timespan"),
+		},
+		{
+			Name:  "Rule With Incomplete Correlation - Missing Condition",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s" }}`,
+		},
+		{
+			Name:  "Rule With Incomplete Correlation - Missing GroupBy",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], timespan: "30s", condition: { gte: 2 } }}`,
+		},
+		{
+			Name:          "Rule With Correlation but No LogSource or Detection",
+			Input:         `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+		},
 	}
 
 	for _, test := range table {

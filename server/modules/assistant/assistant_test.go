@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -24,6 +25,8 @@ import (
 	detectionsmock "github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -67,6 +70,9 @@ func TestBuildToolConfig(t *testing.T) {
 	testCases := []struct {
 		name           string
 		functions      map[string]Tool
+		delegates      map[string]Tool
+		toolFilter     []string
+		delegateFilter []string
 		expectError    bool
 		expectedLength int
 	}{
@@ -105,11 +111,37 @@ func TestBuildToolConfig(t *testing.T) {
 			expectError:    false,
 			expectedLength: 3,
 		},
+		{
+			name: "functions and delegates combined",
+			functions: map[string]Tool{
+				"tool_a": &mockTool{name: "tool_a", description: "Tool A"},
+			},
+			delegates: map[string]Tool{
+				"delegate_to_Hunter": &mockTool{name: "delegate_to_Hunter", description: "Hunter agent"},
+			},
+			expectError:    false,
+			expectedLength: 2, // one function + one delegate
+		},
+		{
+			name: "tool and delegate filters restrict the included tools",
+			functions: map[string]Tool{
+				"tool_a": &mockTool{name: "tool_a", description: "Tool A"},
+				"tool_b": &mockTool{name: "tool_b", description: "Tool B"},
+			},
+			delegates: map[string]Tool{
+				"delegate_to_Hunter":  &mockTool{name: "delegate_to_Hunter", description: "Hunter agent"},
+				"delegate_to_Auditor": &mockTool{name: "delegate_to_Auditor", description: "Auditor agent"},
+			},
+			toolFilter:     []string{"tool_a"},
+			delegateFilter: []string{"delegate_to_Hunter"},
+			expectError:    false,
+			expectedLength: 2, // only tool_a + delegate_to_Hunter survive the filters
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config, err := buildToolConfig(tc.functions)
+			config, err := buildToolConfig(tc.functions, tc.delegates, tc.toolFilter, tc.delegateFilter)
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -127,8 +159,10 @@ func TestBuildToolConfig(t *testing.T) {
 				// Verify tool choice structure
 				assert.Contains(t, toolConfig.ToolChoice, "auto")
 
-				// Verify tools are sorted alphabetically (if multiple)
-				if tc.expectedLength > 1 {
+				// Verify tools are sorted alphabetically (if multiple). Functions and
+				// delegates are each sorted independently and appended in that order, so
+				// only assert a global ordering when there are no delegates mixed in.
+				if tc.expectedLength > 1 && tc.delegates == nil {
 					for i := 1; i < len(toolConfig.Tools); i++ {
 						assert.True(t, toolConfig.Tools[i-1].Spec.Name <= toolConfig.Tools[i].Spec.Name,
 							"Tools should be sorted alphabetically")
@@ -144,7 +178,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 		name           string
 		toolName       string
 		params         string
-		executeFunc    func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
+		executeFunc    func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error)
 		expectedResult *model.ToolResponse
 		expectedError  error
 	}{
@@ -152,7 +186,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "successful tool execution",
 			toolName: "test_tool",
 			params:   `{"param1": "value1"}`,
-			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+			executeFunc: func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error) {
 				return &model.ToolResponse{
 					ToolName:       "test_tool",
 					OnBehalfOfUser: "test-user",
@@ -178,7 +212,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 			name:     "tool execution error",
 			toolName: "failing_tool",
 			params:   `{"param1": "value1"}`,
-			executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+			executeFunc: func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error) {
 				return nil, errors.New("tool execution failed")
 			},
 			expectedResult: nil,
@@ -204,7 +238,7 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.ExecuteTool(ctx, tc.toolName, tc.params, "")
+			result, err := ac.ExecuteTool(ctx, tc.toolName, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -326,7 +360,7 @@ func TestAssistantCoordinator_Balance(t *testing.T) {
 	}
 }
 
-func TestAssistantCoordinator_Chat(t *testing.T) {
+func TestAssistantCoordinator_Send(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		messages              []*model.Message
@@ -462,7 +496,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 			if len(tc.chatOpts) > 0 {
 				testTool = &mockTool{
 					name: "test_tool",
-					executeFunc: func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+					executeFunc: func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error) {
 						return &model.ToolResponse{
 							ToolName:       "test_tool",
 							OnBehalfOfUser: "test-user",
@@ -480,7 +514,9 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 				Config: &config.ServerConfig{
 					ClientParams: model.ClientParameters{
 						AssistantParams: model.AssistantParameters{
-							AvailableModels: []model.ModelParameters{},
+							AvailableModels: []model.ModelParameters{
+								{ID: "test-model", Adapter: "MyAdapter"},
+							},
 						},
 					},
 				},
@@ -504,7 +540,7 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, err := ac.Chat(ctx, "test-model@MyAdapter", tc.messages, tc.chatOpts...)
+			result, err := ac.Send(ctx, "test-model@MyAdapter", tc.messages, tc.chatOpts...)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -517,7 +553,48 @@ func TestAssistantCoordinator_Chat(t *testing.T) {
 	}
 }
 
-func TestAssistantCoordinator_ChatStream(t *testing.T) {
+// A model that is not present in AvailableModels is a bad request, not a silent
+// fallback: Send must return ErrInvalidModel without contacting any adapter.
+func TestAssistantCoordinator_Send_InvalidModel(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+
+	srv := &server.Server{
+		Host: &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{
+						{ID: "test-model", Adapter: "MyAdapter"},
+					},
+				},
+			},
+		},
+	}
+
+	ac := &AssistantCoordinator{
+		srv:       srv,
+		IOManager: mockIO,
+		adapters: map[string]server.AssistantAdapter{
+			"MyAdapter": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+		},
+		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	// "other-model" has a registered adapter but no AvailableModels entry.
+	result, err := ac.Send(ctx, "other-model@MyAdapter", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+
+	assert.ErrorIs(t, err, ErrInvalidModel)
+	assert.Nil(t, result)
+}
+
+func TestAssistantCoordinator_SendStream(t *testing.T) {
 	testCases := []struct {
 		name        string
 		messages    []*model.Message
@@ -595,7 +672,9 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 				Config: &config.ServerConfig{
 					ClientParams: model.ClientParameters{
 						AssistantParams: model.AssistantParameters{
-							AvailableModels: []model.ModelParameters{},
+							AvailableModels: []model.ModelParameters{
+								{ID: "test-model", Adapter: "whatever"},
+							},
 						},
 					},
 				},
@@ -616,7 +695,7 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			result, aux, err := ac.ChatStream(ctx, "test-model@whatever", tc.messages)
+			result, aux, err := ac.SendStream(ctx, "test-model@whatever", tc.messages)
 
 			assert.Nil(t, aux)
 			if tc.expectError {
@@ -629,6 +708,1735 @@ func TestAssistantCoordinator_ChatStream(t *testing.T) {
 				result.Body.Close()
 			}
 		})
+	}
+}
+
+// storedToolUseTurn returns a persisted assistant turn carrying tool_use blocks with
+// the given ids -- the turn a tool_result answers. A tool_result continuation
+// requires this turn in history before it dispatches (see awaitToolUseTurn).
+func storedToolUseTurn(toolUseIds ...string) *model.StoredMessage {
+	return storedNamedToolUseTurn("query_events", nil, toolUseIds...)
+}
+
+// storedNamedToolUseTurn is storedToolUseTurn for a specific tool name and input,
+// for tests whose requests must match the seeded tool_use under validateToolRequest
+// (same name, semantically equal params).
+func storedNamedToolUseTurn(name string, input json.RawMessage, toolUseIds ...string) *model.StoredMessage {
+	blocks := make([]model.ContentBlock, 0, len(toolUseIds))
+	for _, id := range toolUseIds {
+		blocks = append(blocks, model.ContentBlock{Type: "tool_use", Id: id, Name: name, Input: input})
+	}
+	return &model.StoredMessage{Message: &model.Message{Role: "assistant", ContentBlocks: blocks}}
+}
+
+func newChatInSessionCoordinator(t *testing.T, mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager, apiUrl string) *AssistantCoordinator {
+	t.Helper()
+
+	// The continuation paths load the session record once per turn via
+	// loadTurnSession(). Default to a bare record with no stored model so these
+	// existing tests fall back to the request/parent model exactly as before;
+	// tests that exercise the stored-model behavior build their own coordinator
+	// with a specific return.
+	mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(
+		[]*model.AssistantSession{{SessionId: "default-session"}}, nil).AnyTimes()
+
+	srv := &server.Server{
+		Assistantstore: mockAssistantstore,
+		Host:           &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{
+						{ID: "test-model", Adapter: "MyAdapter"},
+					},
+				},
+			},
+		},
+	}
+
+	return &AssistantCoordinator{
+		srv:       srv,
+		IOManager: mockIO,
+		adapters: map[string]server.AssistantAdapter{
+			"MyAdapter": &SOAiCloudAdapter{
+				apiUrl:    apiUrl,
+				srv:       srv,
+				IOManager: mockIO,
+			},
+		},
+		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		// Real polling attempts, but zero delay: tests supply complete history, so
+		// the few persist-only cases (no tool_use turn present) mustn't sleep.
+		toolUseTurnAttempts: DEFAULT_TOOL_USE_TURN_ATTEMPTS,
+	}
+}
+
+func TestAssistantCoordinator_ChatInSession(t *testing.T) {
+	const sessionId = "session-1"
+
+	t.Run("existing history persists user and response messages", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		history := []*model.StoredMessage{
+			{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
+			{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier reply"}}}},
+		}
+		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(history, nil)
+
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+			body, err := io.ReadAll(req.Body)
+			assert.NoError(t, err)
+			cr := &model.ChatRequest{}
+			assert.NoError(t, json.Unmarshal(body, cr))
+			assert.Len(t, cr.Messages, 3) // 2 history + 1 new
+			assert.Equal(t, "follow-up", cr.Messages[2].ContentBlocks[0].Text)
+
+			return &http.Response{
+				StatusCode: 200,
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"ok"}]}`)),
+			}, nil
+		})
+
+		// One save for the user message, one for the assistant response.
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		incMsg := &model.IncomingMessage{
+			Msg:       "follow-up",
+			SessionId: sessionId,
+			Model:     "test-model@MyAdapter",
+		}
+
+		response, err := ac.ChatInSession(ctx, incMsg, "", "")
+		assert.NoError(t, err)
+		assert.Len(t, response, 1)
+		assert.Equal(t, "ok", response[0].ContentBlocks[0].Text)
+	})
+
+	t.Run("empty history creates a new session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, session *model.AssistantSession) error {
+				assert.Equal(t, sessionId, session.SessionId)
+				assert.Equal(t, "hello", session.Title)
+				assert.Empty(t, session.Type)
+				assert.Empty(t, session.EntityId)
+				return nil
+			})
+
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"hi"}]}`)),
+		}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		incMsg := &model.IncomingMessage{
+			Msg:       "hello",
+			SessionId: sessionId,
+			Model:     "test-model@MyAdapter",
+		}
+
+		_, err := ac.ChatInSession(ctx, incMsg, "", "")
+		assert.NoError(t, err)
+	})
+
+	t.Run("entity fields populate the new session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, session *model.AssistantSession) error {
+				assert.Equal(t, "alert_investigation", session.Type)
+				assert.Equal(t, "alert-42", session.EntityId)
+				return nil
+			})
+
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"hi"}]}`)),
+		}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ChatInSession(ctx, &model.IncomingMessage{
+			Msg:       "investigate",
+			SessionId: sessionId,
+			Model:     "test-model@MyAdapter",
+		}, "alert_investigation", "alert-42")
+		assert.NoError(t, err)
+	})
+
+	t.Run("history not-found is tolerated", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("session not found"))
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"hi"}]}`)),
+		}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ChatInSession(ctx, &model.IncomingMessage{
+			Msg:       "hi",
+			SessionId: sessionId,
+			Model:     "test-model@MyAdapter",
+		}, "", "")
+		assert.NoError(t, err)
+	})
+
+	t.Run("upstream error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ChatInSession(ctx, &model.IncomingMessage{
+			Msg:       "hi",
+			SessionId: sessionId,
+			Model:     "test-model@MyAdapter",
+		}, "", "")
+		assert.Error(t, err)
+	})
+}
+
+func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testing.T) {
+	const sessionId = "session-stream-1"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+	// User message is saved before the stream begins.
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, sessionId, stored.SessionId)
+			assert.Equal(t, "user", stored.Message.Role)
+			return nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	stream, _, finalize, err := ac.ChatStreamInSession(ctx, &model.IncomingMessage{
+		Msg:       "stream me",
+		SessionId: sessionId,
+		Model:     "test-model@MyAdapter",
+	}, "", "")
+	assert.NoError(t, err)
+	assert.NotNil(t, stream)
+	assert.NotNil(t, finalize)
+	stream.Body.Close()
+
+	// Now exercise the finalize callback with a synthetic raw SSE blob; the
+	// coordinator should parse the assistant message and persist it.
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, sessionId, stored.SessionId)
+			assert.Equal(t, "assistant", stored.Message.Role)
+			return nil
+		})
+
+	raw := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[]}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: [DONE]`
+
+	assert.NoError(t, finalize([]byte(raw)))
+}
+
+func TestAssistantCoordinator_ToolInSession(t *testing.T) {
+	const sessionId = "session-tool-1"
+
+	makeReq := func() *model.ToolRequest {
+		return &model.ToolRequest{
+			SessionId: sessionId,
+			ToolUseId: "tool-use-1",
+			Params:    json.RawMessage(`{"q":"x"}`),
+			Model:     "test-model@MyAdapter",
+		}
+	}
+
+	t.Run("successful tool execution feeds back into Send and persists both messages", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// Loaded once by validateToolRequest; the continuation reuses the validated history.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
+		}, nil)
+
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+			body, err := io.ReadAll(req.Body)
+			assert.NoError(t, err)
+			cr := &model.ChatRequest{}
+			assert.NoError(t, json.Unmarshal(body, cr))
+			// The requesting tool_use turn and its tool_result answer are sent together.
+			assert.Len(t, cr.Messages, 2)
+			tr := cr.Messages[len(cr.Messages)-1]
+			assert.NotNil(t, tr.ContentBlocks[0].ToolResult)
+			assert.Equal(t, "tool-use-1", tr.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.False(t, tr.ContentBlocks[0].ToolResult.IsError)
+			return &http.Response{
+				StatusCode: 200,
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"done"}]}`)),
+			}, nil
+		})
+
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				assert.Equal(t, sessionId, stored.SessionId)
+				assert.Equal(t, []string{"tool_result"}, stored.Tags)
+				assert.NotNil(t, stored.Message.ContentBlocks[0].ToolResult)
+				return nil
+			})
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				assert.Equal(t, sessionId, stored.SessionId)
+				assert.Nil(t, stored.Tags)
+				assert.Equal(t, "assistant", stored.Message.Role)
+				return nil
+			})
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"query_events": &mockTool{
+				name: "query_events",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, makeReq(), "query_events")
+		assert.NoError(t, err)
+		assert.Len(t, resp, 1)
+		assert.Equal(t, "done", resp[0].ContentBlocks[0].Text)
+	})
+
+	t.Run("tool execution error wraps as error tool_result and chat still proceeds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
+		}, nil)
+
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+			body, _ := io.ReadAll(req.Body)
+			cr := &model.ChatRequest{}
+			assert.NoError(t, json.Unmarshal(body, cr))
+			tr := cr.Messages[len(cr.Messages)-1]
+			assert.True(t, tr.ContentBlocks[0].ToolResult.IsError)
+			assert.Equal(t, "error", tr.ContentBlocks[0].ToolResult.Status)
+			assert.Equal(t, "boom", tr.ContentBlocks[0].ToolResult.Content[0].Text)
+			return &http.Response{
+				StatusCode: 200,
+				Body: io.NopCloser(strings.NewReader(
+					`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"sorry"}]}`)),
+			}, nil
+		})
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"query_events": &mockTool{
+				name: "query_events",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return nil, errors.New("boom")
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, makeReq(), "query_events")
+		assert.NoError(t, err)
+		assert.Len(t, resp, 1)
+	})
+
+	t.Run("upstream Send error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
+		}, nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"query_events": &mockTool{
+				name: "query_events",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ToolInSession(ctx, makeReq(), "query_events")
+		assert.Error(t, err)
+	})
+}
+
+func TestAssistantCoordinator_ToolStreamInSession_FinalizeSavesResponse(t *testing.T) {
+	const sessionId = "session-tool-stream-1"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+		storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
+	}, nil)
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, sessionId, stored.SessionId)
+			assert.Equal(t, []string{"tool_result"}, stored.Tags)
+			assert.NotNil(t, stored.Message.ContentBlocks[0].ToolResult)
+			return nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ac.FunctionLibrary = map[string]Tool{
+		"query_events": &mockTool{
+			name: "query_events",
+			executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+			},
+		},
+	}
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: "tool-use-1",
+		Params:    json.RawMessage(`{"q":"x"}`),
+		Model:     "test-model@MyAdapter",
+	}, "query_events")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.NotNil(t, turn.Response)
+	assert.NotNil(t, turn.Finalize)
+	assert.Equal(t, sessionId, turn.SessionId)
+	assert.Nil(t, turn.Marker)
+	// The direct-execution path surfaces the tool result so the handler can stream it
+	// to the UI inline (no session re-fetch).
+	if assert.NotNil(t, turn.ToolResult) {
+		assert.Equal(t, "tool-use-1", turn.ToolResult.ToolUseId)
+		assert.False(t, turn.ToolResult.IsError)
+		if assert.NotEmpty(t, turn.ToolResult.Content) {
+			assert.Equal(t, map[string]any{"result": "ok"}, turn.ToolResult.Content[0].Json)
+		}
+	}
+	stream := turn.Response
+	finalize := turn.Finalize
+	stream.Body.Close()
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, sessionId, stored.SessionId)
+			assert.Equal(t, "assistant", stored.Message.Role)
+			return nil
+		})
+
+	raw := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[]}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: [DONE]`
+
+	assert.NoError(t, finalize([]byte(raw)))
+}
+
+// A rejected tool is not executed: the backend records an error tool_result flagged
+// "rejected" so the turn resolves and the assistant resumes.
+func TestAssistantCoordinator_ToolStreamInSession_RejectedTool(t *testing.T) {
+	const sessionId = "session-reject"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tool-use-1")}, nil)
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, []string{"tool_result"}, stored.Tags)
+			tr := stored.Message.ContentBlocks[0].ToolResult
+			if assert.NotNil(t, tr) {
+				assert.Equal(t, "tool-use-1", tr.ToolUseId)
+				assert.Equal(t, "rejected", tr.Status)
+				assert.True(t, tr.IsError)
+			}
+			return nil
+		})
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	// Executing this tool would fail the test -- a rejected tool must never run.
+	ac.FunctionLibrary = map[string]Tool{
+		"query_events": &mockTool{
+			name: "query_events",
+			executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+				t.Error("rejected tool must not be executed")
+				return nil, nil
+			},
+		},
+	}
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: sessionId, ToolUseId: "tool-use-1", Model: "test-model@MyAdapter", Rejected: true,
+	}, "query_events")
+	assert.NoError(t, err)
+	if assert.NotNil(t, turn) {
+		assert.NotNil(t, turn.Response)
+		if assert.NotNil(t, turn.ToolResult) {
+			assert.Equal(t, "tool-use-1", turn.ToolResult.ToolUseId)
+			assert.Equal(t, "rejected", turn.ToolResult.Status)
+			assert.True(t, turn.ToolResult.IsError)
+		}
+		turn.Response.Body.Close()
+	}
+}
+
+// Rejecting one tool of a parallel turn must not continue the turn while a sibling is
+// still unresolved -- it persists the rejection and waits (persist-only), exactly like
+// an executed sibling's result.
+func TestAssistantCoordinator_ToolStreamInSession_RejectedTool_CoalescesWithSibling(t *testing.T) {
+	const sessionId = "session-reject-parallel"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+		storedToolUseTurn("tool-a", "tool-b"),
+	}, nil)
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, []string{"tool_result"}, stored.Tags)
+			return nil
+		})
+	// MakeRequest must NOT be called: tool-b is still unresolved.
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: sessionId, ToolUseId: "tool-a", Model: "test-model@MyAdapter", Rejected: true,
+	}, "query_events")
+	assert.NoError(t, err)
+	if assert.NotNil(t, turn) {
+		assert.Nil(t, turn.Response) // persist-only: sibling tool-b still unresolved
+		if assert.NotNil(t, turn.ToolResult) {
+			assert.Equal(t, "tool-a", turn.ToolResult.ToolUseId)
+			assert.Equal(t, "rejected", turn.ToolResult.Status)
+		}
+	}
+}
+
+func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	// The child session is created with linkage back to the parent's delegate tool_use.
+	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, s *model.AssistantSession) error {
+			assert.Equal(t, "parent-session", s.ParentSessionId)
+			assert.Equal(t, "delegate-tooluse", s.ParentToolUseId)
+			// The parent has no stored model (helper returns none), so ParentModel
+			// falls back to the request model.
+			assert.Equal(t, "AgentClaude@SOAI", s.ParentModel)
+			// The child session records its own model (the delegate's agent id) so it
+			// resumes as the right agent without trusting the client.
+			assert.Equal(t, "test-model@MyAdapter", s.Model)
+			assert.Equal(t, "delegation", s.Type)
+			assert.Equal(t, "Hunter", s.DelegateAgent)
+			assert.NotEmpty(t, s.SessionId)
+			return nil
+		})
+
+	// The objective is seeded as the child's first user message.
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, "user", stored.Message.Role)
+			assert.Contains(t, stored.Message.ContentBlocks[0].Text, "find DNS beacons")
+			return nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	// The delegate's agent id doubles as the child model; use the test model so the
+	// adapter/model lookup in SendStream resolves.
+	delegate := NewDelegateTool("test-model@MyAdapter", "Hunter", "an event hunting agent")
+	ac.DelegationLibrary = map[string]Tool{delegate.GetName(): delegate}
+
+	// validateToolRequest loads the parent history once; the kickoff itself never does.
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+		storedNamedToolUseTurn(delegate.GetName(), json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
+	}, nil)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: "parent-session",
+		ToolUseId: "delegate-tooluse",
+		Params:    json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`),
+		Model:     "AgentClaude@SOAI",
+	}, delegate.GetName())
+
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.NotNil(t, turn.Response)
+	assert.Equal(t, "test-model@MyAdapter", turn.Model)
+	// The parent's delegate tool_use is intentionally NOT resolved here; instead a
+	// delegation_start marker tells the UI to nest the sub-agent's output.
+	assert.NotNil(t, turn.Marker)
+	assert.Equal(t, model.DelegationMarkerStart, turn.Marker.Type)
+	assert.Equal(t, "delegate-tooluse", turn.Marker.ParentToolUseId)
+	assert.Equal(t, "Hunter", turn.Marker.AgentName)
+	assert.Equal(t, turn.SessionId, turn.Marker.ChildSessionId)
+	assert.NotEqual(t, "parent-session", turn.SessionId)
+	// A delegation kickoff has no immediate result; it resolves through the marker
+	// path, so no tool_result event is emitted for the delegate tool_use.
+	assert.Nil(t, turn.ToolResult)
+
+	turn.Response.Body.Close()
+}
+
+// Same kickoff flow in agentic mode: the child session stores the agent name
+// as its model and the child's first turn resolves it through the agent's
+// model mapping back to the real model/adapter pair.
+func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	// validateToolRequest loads the parent history once; the kickoff itself never does.
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+		storedNamedToolUseTurn("delegate_to_Test_Hunter", json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
+	}, nil)
+
+	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, s *model.AssistantSession) error {
+			// The child session records the agent name as its model so it resumes
+			// as the right agent even when agents share an id@adapter pair.
+			assert.Equal(t, "Test Hunter", s.Model)
+			assert.Equal(t, "Test Hunter", s.DelegateAgent)
+			assert.Equal(t, "delegation", s.Type)
+			return nil
+		})
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+
+	// The child's first turn reaches the adapter with the real model id and the
+	// agent's prompt, proving the agent name stored on the child session
+	// resolved through the agent mapping in SendStream.
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		assert.NoError(t, err)
+		cr := &model.ChatRequest{}
+		assert.NoError(t, json.Unmarshal(body, cr))
+		assert.Equal(t, "test-model", cr.Model)
+		assert.Equal(t, "hunt things", cr.System)
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil
+	})
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
+		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
+	}
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{
+		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}},
+	}
+	ac.agentMapping = map[string]string{"Test Hunter": "test-model@MyAdapter"}
+
+	delegate := NewDelegateTool("Test Hunter", "Test Hunter", "an event hunting agent")
+	assert.Equal(t, "delegate_to_Test_Hunter", delegate.GetName())
+	ac.DelegationLibrary = map[string]Tool{delegate.GetName(): delegate}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: "parent-session",
+		ToolUseId: "delegate-tooluse",
+		Params:    json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`),
+		Model:     "AgentClaude@SOAI",
+	}, delegate.GetName())
+
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.NotNil(t, turn.Response)
+	assert.Equal(t, "Test Hunter", turn.Model)
+	assert.NotNil(t, turn.Marker)
+	assert.Equal(t, model.DelegationMarkerStart, turn.Marker.Type)
+	assert.Equal(t, "Test Hunter", turn.Marker.AgentName)
+
+	turn.Response.Body.Close()
+}
+
+// A tool approval resumes the session on the session's OWN stored model (a
+// sub-agent's agent id), not the client-supplied model. This is the regression
+// guard for the wrong-model-continues-a-sub-agent bug. The helper installs a
+// permissive GetSessions, so these build their coordinator inline to return a
+// specific session model.
+func TestAssistantCoordinator_ToolStreamInSession_UsesSessionModel(t *testing.T) {
+	buildAC := func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) *AssistantCoordinator {
+		srv := &server.Server{
+			Assistantstore: mockAssistantstore,
+			Host:           &web.Host{Version: "1.0.0"},
+			Config: &config.ServerConfig{
+				ClientParams: model.ClientParameters{
+					AssistantParams: model.AssistantParameters{
+						AvailableModels: []model.ModelParameters{{ID: "test-model", Adapter: "MyAdapter"}},
+					},
+				},
+			},
+		}
+		return &AssistantCoordinator{
+			srv:       srv,
+			IOManager: mockIO,
+			adapters: map[string]server.AssistantAdapter{
+				"MyAdapter": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+			},
+			toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+			FunctionLibrary: map[string]Tool{
+				"query_events": &mockTool{
+					name: "query_events",
+					executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+						return &model.ToolResponse{ToolName: "query_events", Result: "No events found"}, nil
+					},
+				},
+			},
+			toolUseTurnAttempts: DEFAULT_TOOL_USE_TURN_ATTEMPTS, // zero delay: tests must not sleep
+		}
+	}
+
+	t.Run("stored session model overrides the client model", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// The sub-agent session records its own (valid) model. The client posts a
+		// model with an unknown adapter; if the backend trusted it, SendStream would
+		// fail ErrInvalidModel. It must use the stored model instead.
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
+			{SessionId: "child-session", Model: "test-model@MyAdapter"},
+		}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+
+		ac := buildAC(mockAssistantstore, mockIO)
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+			SessionId: "child-session",
+			ToolUseId: "tu",
+			Params:    json.RawMessage(`{}`),
+			Model:     "wrong-model@NopeAdapter",
+		}, "query_events")
+		assert.NoError(t, err)
+		assert.NotNil(t, turn)
+		assert.Equal(t, "test-model@MyAdapter", turn.Model)
+		turn.Response.Body.Close()
+	})
+
+	t.Run("legacy session without a stored model falls back to the request model", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// Legacy session: no Model. The backend must fall back to the request model.
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
+			{SessionId: "legacy-session"},
+		}, nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+
+		ac := buildAC(mockAssistantstore, mockIO)
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+			SessionId: "legacy-session",
+			ToolUseId: "tu",
+			Params:    json.RawMessage(`{}`),
+			Model:     "test-model@MyAdapter",
+		}, "query_events")
+		assert.NoError(t, err)
+		assert.NotNil(t, turn)
+		assert.Equal(t, "test-model@MyAdapter", turn.Model)
+		turn.Response.Body.Close()
+	})
+}
+
+func TestAssistantCoordinator_ResolveDelegationStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	// Parent history still has the unanswered delegate tool_use.
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
+			{Type: "tool_use", Id: "delegate-tooluse", Name: "delegate_to_Hunter"},
+		}}},
+	}, nil)
+
+	// The parent is resumed with the sub-agent's answer wrapped as a tool_result.
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		assert.NoError(t, err)
+		cr := &model.ChatRequest{}
+		assert.NoError(t, json.Unmarshal(body, cr))
+		last := cr.Messages[len(cr.Messages)-1]
+		assert.Equal(t, "user", last.Role)
+		assert.NotNil(t, last.ContentBlocks[0].ToolResult)
+		assert.Equal(t, "delegate-tooluse", last.ContentBlocks[0].ToolResult.ToolUseId)
+
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil
+	})
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, stored *model.StoredMessage) error {
+			assert.Equal(t, []string{"tool_result"}, stored.Tags)
+			return nil
+		})
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	childSession := &model.AssistantSession{
+		SessionId:       "child-session",
+		ParentSessionId: "parent-session",
+		ParentToolUseId: "delegate-tooluse",
+		ParentModel:     "test-model@MyAdapter",
+	}
+
+	turn, err := ac.ResolveDelegationStream(ctx, childSession, "found 3 suspicious domains")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.Equal(t, "parent-session", turn.SessionId)
+	assert.NotNil(t, turn.Marker)
+	assert.Equal(t, model.DelegationMarkerResolved, turn.Marker.Type)
+	assert.Equal(t, "parent-session", turn.Marker.ParentSessionId)
+	assert.Equal(t, "delegate-tooluse", turn.Marker.ParentToolUseId)
+
+	turn.Response.Body.Close()
+}
+
+// A client that disconnects while a sub-agent is still running cancels the request
+// context. Folding the finished sub-agent's answer back into its parent must still
+// happen, so ResolveDelegationStream detaches before any elastic read or persistence.
+// We prove it by cancelling the inbound context up front and asserting every
+// store/upstream call receives a live (non-cancelled) context.
+func TestAssistantCoordinator_ResolveDelegationStream_DetachesFromRequestCtx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
+			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
+			return []*model.StoredMessage{storedToolUseTurn("delegate-tooluse")}, nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.StoredMessage) error {
+			assert.NoError(t, ctx.Err(), "tool_result persistence must run on a detached, non-cancelled context")
+			return nil
+		})
+
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user"))
+	cancel() // simulate the client disconnecting before resolution runs
+
+	childSession := &model.AssistantSession{
+		SessionId:       "child-session",
+		ParentSessionId: "parent-session",
+		ParentToolUseId: "delegate-tooluse",
+		ParentModel:     "test-model@MyAdapter",
+	}
+
+	turn, err := ac.ResolveDelegationStream(ctx, childSession, "found 3 suspicious domains")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.Equal(t, "parent-session", turn.SessionId)
+
+	turn.Response.Body.Close()
+}
+
+// ToolStreamInSession must also detach up front so that, on an early client
+// disconnect, the tool still executes to completion and its tool_result is persisted
+// (no dangling tool_use). Cancel the inbound context and assert the tool execution,
+// history load, and persistence all see a live context.
+func TestAssistantCoordinator_ToolStreamInSession_DetachesFromRequestCtx(t *testing.T) {
+	const sessionId = "session-tool-detach"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
+			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
+			return []*model.StoredMessage{storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1")}, nil
+		})
+
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ *model.StoredMessage) error {
+			assert.NoError(t, ctx.Err(), "tool_result persistence must run on a detached, non-cancelled context")
+			return nil
+		})
+
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("data: stream")),
+	}, nil)
+
+	toolExecuted := false
+	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+	ac.FunctionLibrary = map[string]Tool{
+		"query_events": &mockTool{
+			name: "query_events",
+			executeFunc: func(ctx context.Context, _ *server.Server, _ *model.ToolRequest) (*model.ToolResponse, error) {
+				toolExecuted = true
+				assert.NoError(t, ctx.Err(), "tool execution must run on a detached, non-cancelled context")
+				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user"))
+	cancel() // simulate the client disconnecting mid-turn
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{
+		SessionId: sessionId,
+		ToolUseId: "tool-use-1",
+		Params:    json.RawMessage(`{"q":"x"}`),
+		Model:     "test-model@MyAdapter",
+	}, "query_events")
+	assert.NoError(t, err)
+	assert.NotNil(t, turn)
+	assert.True(t, toolExecuted, "tool should execute despite the cancelled request context")
+
+	turn.Response.Body.Close()
+}
+
+// An agentic request routes through the agent->model mapping and setupAgent
+// (per-agent prompt + tool config) rather than the coordinator's shared
+// prompt/tools.
+func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		assert.NoError(t, err)
+		cr := &model.ChatRequest{}
+		assert.NoError(t, json.Unmarshal(body, cr))
+		// setupAgent installs the agent's own prompt and tool config.
+		assert.Equal(t, "You are a hunting agent.", cr.System)
+		assert.NotEmpty(t, cr.ToolConfig)
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: streaming response")),
+		}, nil
+	})
+
+	srv := &server.Server{
+		Host: &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{
+						{ID: "test-model", DisplayName: "TestModel", Adapter: "whatever", Enabled: true},
+					},
+				},
+			},
+		},
+	}
+
+	ac := &AssistantCoordinator{
+		IOManager:       mockIO,
+		toolConfig:      []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		srv:             srv,
+		isAgentic:       true,
+		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}},
+		},
+		agents: map[string]model.AgentParameters{
+			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}},
+		},
+		agentMapping: map[string]string{"Hunter": "test-model@whatever"},
+		adapters: map[string]server.AssistantAdapter{
+			"whatever": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	res, _, err := ac.SendStream(ctx, "Hunter", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	res.Body.Close()
+}
+
+// A model with no AvailableModels entry is a client error, not a silent fallback.
+func TestAssistantCoordinator_SendStream_InvalidModel(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+
+	srv := &server.Server{
+		Host: &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{{ID: "test-model", Adapter: "whatever"}},
+				},
+			},
+		},
+	}
+
+	ac := &AssistantCoordinator{
+		IOManager:  mockIO,
+		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		srv:        srv,
+		adapters: map[string]server.AssistantAdapter{
+			"whatever": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	res, _, err := ac.SendStream(ctx, "other-model@whatever", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+	assert.ErrorIs(t, err, ErrInvalidModel)
+	assert.Nil(t, res)
+}
+
+func TestAssistantCoordinator_SetupAgent(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		DelegationLibrary: map[string]Tool{
+			"delegate_to_Hunter": &mockTool{name: "delegate_to_Hunter", description: "hunter"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
+	}
+
+	req := &model.ChatRequest{SystemAppend: "leftover"}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Hunt"},
+		CanDelegateTo: []string{"delegate_to_Hunter"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+	// The agent's own prompt replaces the system prompt, and the append is rebuilt
+	// from the agent's skill prompts (plus any systemPromptAddendum).
+	assert.Equal(t, "You are a hunting agent.", req.System)
+	assert.Contains(t, req.SystemAppend, "Hunt skill prompt.")
+	assert.NotEmpty(t, req.ToolConfig)
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 2) // the skill's tool + the allowed delegate
+}
+
+func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
+	}
+
+	req := &model.ChatRequest{SystemAppend: "leftover"}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Bogus"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+	// The unknown skill is dropped: it contributes no prompt and no tools.
+	assert.Equal(t, "You are a hunting agent.", req.System)
+	assert.Empty(t, req.SystemAppend)
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 0)
+}
+
+func TestAssistantCoordinator_SetupAgent_DuplicateSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+		},
+	}
+
+	req := &model.ChatRequest{SystemAppend: "leftover"}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Hunt", "Hunt"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+	// The duplicate skill is dropped: its prompt and tool appear only once.
+	assert.Equal(t, 1, strings.Count(req.SystemAppend, "Hunt skill prompt."))
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 1)
+}
+
+func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
+	const sessionId = "session-tool-edge"
+
+	t.Run("async tool with neither result nor error returns nil", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// An async tool's turn ends at execution, so history is only loaded once, by
+		// validateToolRequest.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("async_tool", nil, "tu"),
+		}, nil)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"async_tool": &mockTool{
+				name: "async_tool",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return nil, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, &model.ToolRequest{
+			SessionId: sessionId, ToolUseId: "tu", Params: json.RawMessage(`{}`), Model: "test-model@MyAdapter",
+		}, "async_tool")
+		assert.NoError(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("delegation kickoff whose sub-agent requests a tool parks for approval", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// validateToolRequest loads the parent history once; the parked kickoff never does.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("delegate_to_Hunter", nil, "tu"),
+		}, nil)
+		// The child session is created and its objective seeded; then the sub-agent's
+		// first turn is run via Send (non-streaming).
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		// The sub-agent's first turn requests a tool, so it is returned for approval.
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"r","role":"assistant","content":[{"type":"tool_use","id":"sub-tu","name":"query_events","input":{}}]}`)),
+		}, nil)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.DelegationLibrary = map[string]Tool{
+			"delegate_to_Hunter": &mockTool{
+				name: "delegate_to_Hunter",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{
+						ToolName: "delegate_to_Hunter",
+						Result:   model.DelegationKickoff{ChildSessionId: "child-1", ChildModel: "test-model@MyAdapter", Objective: "o", AgentName: "Hunter"},
+					}, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, &model.ToolRequest{
+			SessionId: sessionId, ToolUseId: "tu", Params: json.RawMessage(`{}`), Model: "test-model@MyAdapter",
+		}, "delegate_to_Hunter")
+		assert.NoError(t, err)
+		assert.Len(t, resp, 1)
+		assert.True(t, messageHasToolUse(resp[0]))
+		assert.Equal(t, "query_events", resp[0].ContentBlocks[0].Name)
+	})
+
+	t.Run("history load error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"query_events": &mockTool{
+				name: "query_events",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ToolInSession(ctx, &model.ToolRequest{
+			SessionId: sessionId, ToolUseId: "tu", Params: json.RawMessage(`{}`), Model: "test-model@MyAdapter",
+		}, "query_events")
+		assert.Error(t, err)
+	})
+
+	t.Run("save tool_result error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"done"}]}`)),
+		}, nil)
+		// First persistence is the tool_result message; fail it.
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save failed"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ac.FunctionLibrary = map[string]Tool{
+			"query_events": &mockTool{
+				name: "query_events",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+				},
+			},
+		}
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.ToolInSession(ctx, &model.ToolRequest{
+			SessionId: sessionId, ToolUseId: "tu", Params: json.RawMessage(`{}`), Model: "test-model@MyAdapter",
+		}, "query_events")
+		assert.Error(t, err)
+	})
+}
+
+// newDelegationSyncCoordinator builds a coordinator wired with a delegate tool,
+// used by the non-streaming delegation chain tests. Tests supply their own
+// session-aware GetSessions expectation so loadTurnSession can link a child
+// back to its parent.
+func newDelegationSyncCoordinator(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) *AssistantCoordinator {
+	srv := &server.Server{
+		Assistantstore: mockAssistantstore,
+		Host:           &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{{ID: "test-model", Adapter: "MyAdapter"}},
+				},
+			},
+		},
+	}
+	return &AssistantCoordinator{
+		srv:       srv,
+		IOManager: mockIO,
+		adapters: map[string]server.AssistantAdapter{
+			"MyAdapter": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+		},
+		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		DelegationLibrary: map[string]Tool{
+			"delegate_to_Hunter": &mockTool{
+				name: "delegate_to_Hunter",
+				executeFunc: func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+					return &model.ToolResponse{
+						ToolName: "delegate_to_Hunter",
+						Result:   model.DelegationKickoff{ChildSessionId: "child-1", ChildModel: "test-model@MyAdapter", Objective: "o", AgentName: "Hunter"},
+					}, nil
+				},
+			},
+		},
+		toolUseTurnAttempts: DEFAULT_TOOL_USE_TURN_ATTEMPTS, // zero delay: tests must not sleep
+	}
+}
+
+// TestAssistantCoordinator_ToolInSession_Delegation covers the non-streaming
+// delegation chain: a text-only sub-agent turn is folded back into the parent's
+// delegate tool_use and the parent is resumed, all within one call.
+func TestAssistantCoordinator_ToolInSession_Delegation(t *testing.T) {
+	// GetSessions is session-aware: the child links back to a top-level parent.
+	sessions := func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		o := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(o)
+		}
+		switch o.SessionId() {
+		case "child-1":
+			return []*model.AssistantSession{{
+				SessionId:       "child-1",
+				Model:           "test-model@MyAdapter",
+				ParentSessionId: "parent-session",
+				ParentToolUseId: "delegate-tooluse",
+				ParentModel:     "test-model@MyAdapter",
+			}}, nil
+		case "parent-session":
+			return []*model.AssistantSession{{SessionId: "parent-session", Model: "test-model@MyAdapter"}}, nil
+		}
+		return nil, nil
+	}
+
+	req := func() *model.ToolRequest {
+		return &model.ToolRequest{
+			SessionId: "parent-session",
+			ToolUseId: "delegate-tooluse",
+			Params:    json.RawMessage(`{}`),
+			Model:     "test-model@MyAdapter",
+		}
+	}
+
+	t.Run("text-only sub-agent result folds into parent and returns the parent's turn", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(sessions).AnyTimes()
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		// Loaded twice: once by validateToolRequest, once by the delegation fold-back
+		// continuation, which runs after the lock was released and so reloads.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
+		}, nil).Times(2)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		turn := 0
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(r *http.Request, _ bool) (*http.Response, error) {
+			turn++
+			if turn == 1 {
+				// Sub-agent's first turn is text-only, so it resolves into the parent.
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(
+					`{"id":"r","role":"assistant","content":[{"type":"text","text":"child done"}]}`))}, nil
+			}
+			// Parent resume: the sub-agent's answer is wrapped as the delegate tool_result.
+			body, _ := io.ReadAll(r.Body)
+			cr := &model.ChatRequest{}
+			assert.NoError(t, json.Unmarshal(body, cr))
+			last := cr.Messages[len(cr.Messages)-1]
+			assert.NotNil(t, last.ContentBlocks[0].ToolResult)
+			assert.Equal(t, "delegate-tooluse", last.ContentBlocks[0].ToolResult.ToolUseId)
+			assert.False(t, last.ContentBlocks[0].ToolResult.IsError)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(
+				`{"id":"r","role":"assistant","content":[{"type":"text","text":"parent done"}]}`))}, nil
+		}).Times(2)
+
+		ac := newDelegationSyncCoordinator(mockAssistantstore, mockIO)
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, req(), "delegate_to_Hunter")
+		assert.NoError(t, err)
+		assert.Len(t, resp, 1)
+		assert.Equal(t, "parent done", resp[0].ContentBlocks[0].Text)
+	})
+
+	t.Run("empty sub-agent result yields an error tool_result to the parent", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(sessions).AnyTimes()
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		// Loaded twice: once by validateToolRequest, once by the delegation fold-back
+		// continuation, which runs after the lock was released and so reloads.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
+		}, nil).Times(2)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		turn := 0
+		mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(r *http.Request, _ bool) (*http.Response, error) {
+			turn++
+			if turn == 1 {
+				// Sub-agent returns no text at all.
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(
+					`{"id":"r","role":"assistant","content":[]}`))}, nil
+			}
+			body, _ := io.ReadAll(r.Body)
+			cr := &model.ChatRequest{}
+			assert.NoError(t, json.Unmarshal(body, cr))
+			last := cr.Messages[len(cr.Messages)-1]
+			assert.NotNil(t, last.ContentBlocks[0].ToolResult)
+			assert.True(t, last.ContentBlocks[0].ToolResult.IsError)
+			assert.Contains(t, last.ContentBlocks[0].ToolResult.Content[0].Text, "ERROR_DELEGATION_NO_RESULT")
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(
+				`{"id":"r","role":"assistant","content":[{"type":"text","text":"acknowledged"}]}`))}, nil
+		}).Times(2)
+
+		ac := newDelegationSyncCoordinator(mockAssistantstore, mockIO)
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		resp, err := ac.ToolInSession(ctx, req(), "delegate_to_Hunter")
+		assert.NoError(t, err)
+		assert.Len(t, resp, 1)
+		assert.Equal(t, "acknowledged", resp[0].ContentBlocks[0].Text)
+	})
+}
+
+func TestAssistantCoordinator_StartDelegation_ErrorPaths(t *testing.T) {
+	kickoff := model.DelegationKickoff{
+		ChildSessionId: "child-1",
+		ChildModel:     "test-model@MyAdapter",
+		Objective:      "find DNS beacons",
+		AgentName:      "Hunter",
+	}
+	toolReq := func() *model.ToolRequest {
+		return &model.ToolRequest{SessionId: "parent-session", ToolUseId: "delegate-tooluse", Model: "AgentClaude@SOAI"}
+	}
+
+	t.Run("create child session error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(errors.New("create failed"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.startDelegation(ctx, toolReq(), kickoff)
+		assert.Error(t, err)
+	})
+
+	t.Run("save objective error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save failed"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.startDelegation(ctx, toolReq(), kickoff)
+		assert.Error(t, err)
+	})
+
+	t.Run("upstream stream error at kickoff resolves the parent with an error result", func(t *testing.T) {
+		// The child session already exists, so a failed kickoff must NOT just propagate:
+		// it folds an error tool_result onto the parent's delegate tool_use and resumes
+		// the parent, so the delegation resolves instead of spinning forever on reload.
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
+		}, nil).AnyTimes()
+		// Two saves: the child's objective, then the parent's error tool_result.
+		var savedTags [][]string
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				savedTags = append(savedTags, stored.Tags)
+				return nil
+			}).Times(2)
+
+		// First MakeRequest is the failing kickoff; the second is the parent's
+		// continuation after the error result is folded in.
+		callCount := 0
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(
+			func(_ *http.Request, _ bool) (*http.Response, error) {
+				callCount++
+				if callCount == 1 {
+					return nil, errors.New("network error")
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: stream"))}, nil
+			}).Times(2)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		// Resolvable parent model so the continuation after the folded error can stream.
+		req := &model.ToolRequest{SessionId: "parent-session", ToolUseId: "delegate-tooluse", Model: "test-model@MyAdapter"}
+		turn, err := ac.startDelegation(ctx, req, kickoff)
+		assert.NoError(t, err)
+		if assert.NotNil(t, turn) {
+			assert.Nil(t, turn.Marker) // no delegation_start/resolved marker for a failed kickoff
+			if assert.NotNil(t, turn.ToolResult) {
+				assert.Equal(t, "delegate-tooluse", turn.ToolResult.ToolUseId)
+				assert.True(t, turn.ToolResult.IsError)
+			}
+			if turn.Response != nil {
+				turn.Response.Body.Close()
+			}
+		}
+		assert.Contains(t, savedTags, []string{"tool_result"})
+	})
+
+	t.Run("finalize persists the sub-agent's assistant message", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
+		// One save for the seeded objective before streaming begins.
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		turn, err := ac.startDelegation(ctx, toolReq(), kickoff)
+		assert.NoError(t, err)
+		assert.NotNil(t, turn)
+		turn.Response.Body.Close()
+
+		// finalize parses the sub-agent's turn and persists it to the child session.
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				assert.Equal(t, "child-1", stored.SessionId)
+				assert.Equal(t, "assistant", stored.Message.Role)
+				return nil
+			})
+
+		raw := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[]}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: [DONE]`
+		assert.NoError(t, turn.Finalize([]byte(raw)))
+	})
+}
+
+func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
+	const sessionId = "session-continue-err"
+	sess := func() *model.AssistantSession {
+		return &model.AssistantSession{SessionId: sessionId}
+	}
+	toolMsg := func() *model.Message {
+		return buildToolResultMessage("tu1", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
+	}
+
+	t.Run("history load error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), nil, waitForLock)
+		assert.Error(t, err)
+	})
+
+	t.Run("upstream stream error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), nil, waitForLock)
+		assert.Error(t, err)
+	})
+
+	t.Run("save tool_result error propagates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save failed"))
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), nil, waitForLock)
+		assert.Error(t, err)
+	})
+}
+
+// Every provider's tool_result status is success-or-error; internal markers like
+// "rejected" must be collapsed for the wire (here, once and centrally) without
+// mutating storage. cleanupMessages owns that canonicalization for all adapters.
+func TestCleanupMessages_CanonicalizesToolResultStatus(t *testing.T) {
+	rejected := &model.ToolResult{ToolUseId: "t1", Status: "rejected", IsError: true}
+	in := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{ToolResult: rejected}}},
+	}
+
+	out := cleanupMessages(in)
+	assert.Equal(t, "error", out[0].ContentBlocks[0].ToolResult.Status, "wire status must be provider-accepted")
+	assert.Equal(t, "rejected", rejected.Status, "stored status must be left untouched")
+
+	// Canonical / empty statuses are preserved exactly.
+	for _, s := range []string{"", "success", "error"} {
+		got := cleanupMessages([]*model.Message{
+			{Role: "user", ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{Status: s}}}},
+		})
+		assert.Equal(t, s, got[0].ContentBlocks[0].ToolResult.Status)
 	}
 }
 
@@ -739,6 +2547,49 @@ func TestCleanupMessages(t *testing.T) {
 					ContentBlocks: []model.ContentBlock{
 						{Type: "text", Text: "&nbsp;"},
 						{Type: "tool_use", Input: []byte(`{"param1": "value1"}`)},
+					},
+				},
+			},
+		},
+		{
+			// Parallel tool calls: results are stored as separate messages but must be
+			// sent as one user turn, or the model/gateway rejects the conversation.
+			name: "merges consecutive tool_result messages into one user turn",
+			inputMessages: []*model.Message{
+				{
+					Id:   "asst",
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Id: "tool-a", Input: []byte(`{}`)},
+						{Type: "tool_use", Id: "tool-b", Input: []byte(`{}`)},
+					},
+				},
+				{
+					Id:            "res-a",
+					Role:          "user",
+					ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{ToolUseId: "tool-a"}}},
+				},
+				{
+					Id:            "res-b",
+					Role:          "user",
+					ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{ToolUseId: "tool-b"}}},
+				},
+			},
+			expectedResults: []*model.Message{
+				{
+					Id:   "asst",
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{Type: "tool_use", Id: "tool-a", Input: []byte(`{}`)},
+						{Type: "tool_use", Id: "tool-b", Input: []byte(`{}`)},
+					},
+				},
+				{
+					Id:   "res-a", // merged into the first result message
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{ToolResult: &model.ToolResult{ToolUseId: "tool-a"}},
+						{ToolResult: &model.ToolResult{ToolUseId: "tool-b"}},
 					},
 				},
 			},
@@ -1090,6 +2941,39 @@ func TestAssistantCoordinator_Init(t *testing.T) {
 	}
 }
 
+// Init reads awaitToolUseTurn's polling bounds from the module config, falling
+// back to the defaults when unset.
+func TestAssistantCoordinator_Init_ToolUseTurnPollingConfig(t *testing.T) {
+	newAC := func() *AssistantCoordinator {
+		return NewAssistantCoordinator(&server.Server{
+			Context: context.Background(),
+			Config: &config.ServerConfig{
+				ClientParams: model.ClientParameters{
+					AssistantParams: model.AssistantParameters{},
+				},
+			},
+		})
+	}
+
+	t.Run("defaults when unconfigured", func(t *testing.T) {
+		ac := newAC()
+		assert.NoError(t, ac.Init(module.ModuleConfig{}))
+		assert.Equal(t, DEFAULT_TOOL_USE_TURN_ATTEMPTS, ac.toolUseTurnAttempts)
+		assert.Equal(t, DEFAULT_TOOL_USE_TURN_DELAY_MS*time.Millisecond, ac.toolUseTurnDelay)
+	})
+
+	t.Run("configured values override the defaults", func(t *testing.T) {
+		ac := newAC()
+		// Numbers decode from config as float64, matching the other int options.
+		assert.NoError(t, ac.Init(module.ModuleConfig{
+			"toolUseTurnAttempts": float64(3),
+			"toolUseTurnDelayMs":  float64(25),
+		}))
+		assert.Equal(t, 3, ac.toolUseTurnAttempts)
+		assert.Equal(t, 25*time.Millisecond, ac.toolUseTurnDelay)
+	})
+}
+
 // Helper types and functions for testing
 
 type mockAdapter struct {
@@ -1110,7 +2994,7 @@ type mockTool struct {
 	name        string
 	description string
 	schema      model.JSONSchema
-	executeFunc func(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error)
+	executeFunc func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error)
 }
 
 func (m *mockTool) GetName() string {
@@ -1125,9 +3009,9 @@ func (m *mockTool) GetSchema() model.JSONSchema {
 	return m.schema
 }
 
-func (m *mockTool) Execute(ctx context.Context, srv *server.Server, params string, auxData string) (*model.ToolResponse, error) {
+func (m *mockTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error) {
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx, srv, params, auxData)
+		return m.executeFunc(ctx, srv, req)
 	}
 	return &model.ToolResponse{
 		ToolName: m.name,
@@ -1142,8 +3026,8 @@ func TestEstimateRequestChars(t *testing.T) {
 		expected int
 	}{
 		{
-			name: "empty request",
-			req:  &model.ChatRequest{},
+			name:     "empty request",
+			req:      &model.ChatRequest{},
 			expected: 0,
 		},
 		{
@@ -1223,16 +3107,14 @@ func TestCheckRequestSize(t *testing.T) {
 		name        string
 		req         *model.ChatRequest
 		models      []model.ModelParameters
-		modelId     string
-		adapterName string
+		selector    string
 		expectError bool
 	}{
 		{
 			name:        "no model params found, skip check",
 			req:         &model.ChatRequest{System: strings.Repeat("a", 10000)},
 			models:      []model.ModelParameters{},
-			modelId:     "unknown",
-			adapterName: "SOAI",
+			selector:    "unknown@SOAI",
 			expectError: false,
 		},
 		{
@@ -1241,8 +3123,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 1000, CharsPerTokenEstimate: 0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector:    "model1@SOAI",
 			expectError: false,
 		},
 		{
@@ -1251,8 +3132,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
 			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 100
 			expectError: false,
 		},
@@ -1262,8 +3142,17 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
+			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
+			expectError: true,
+		},
+		{
+			name: "exceeds limit, resolved by bare id",
+			req:  &model.ChatRequest{System: strings.Repeat("a", 5000)},
+			models: []model.ModelParameters{
+				{ID: "model1", DisplayName: "Model One", Adapter: "SOAI", ContextLimitLarge: 1000, CharsPerTokenEstimate: 4.0},
+			},
+			selector: "model1",
 			// maxChars = 1000 * 4.0 * 1.1 = 4400, usedChars = 5000
 			expectError: true,
 		},
@@ -1273,8 +3162,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", ContextLimitSmall: 100, CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector: "model1@SOAI",
 			// maxChars = 100 * 4.0 * 1.1 = 440, usedChars = 500
 			expectError: true,
 		},
@@ -1284,8 +3172,7 @@ func TestCheckRequestSize(t *testing.T) {
 			models: []model.ModelParameters{
 				{ID: "model1", Adapter: "SOAI", CharsPerTokenEstimate: 4.0},
 			},
-			modelId:     "model1",
-			adapterName: "SOAI",
+			selector:    "model1@SOAI",
 			expectError: false,
 		},
 	}
@@ -1304,7 +3191,7 @@ func TestCheckRequestSize(t *testing.T) {
 				},
 			}
 
-			err := ac.checkRequestSize(tc.req, tc.modelId, tc.adapterName)
+			err := ac.checkRequestSize(tc.req, ac.resolveModel(tc.selector))
 			if tc.expectError {
 				assert.ErrorIs(t, err, ErrRequestTooLarge)
 			} else {
@@ -1312,4 +3199,969 @@ func TestCheckRequestSize(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newResolveTestCoordinator(models []model.ModelParameters) *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			Config: &config.ServerConfig{
+				ClientParams: model.ClientParameters{
+					AssistantParams: model.AssistantParameters{
+						AvailableModels: models,
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestResolveModel(t *testing.T) {
+	models := []model.ModelParameters{
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini", Enabled: true},
+		{ID: "plain-model", Adapter: "SOAI", Enabled: true},
+		{ID: "dual", Adapter: "A", Enabled: false},
+		{ID: "dual", Adapter: "B", Enabled: true},
+	}
+	ac := newResolveTestCoordinator(models)
+
+	t.Run("id@adapter resolves to the matching model", func(t *testing.T) {
+		params := ac.resolveModel("gemini-3.5-flash@Gemini")
+		assert.NotNil(t, params)
+		assert.Equal(t, "gemini-3.5-flash", params.ID)
+		assert.Equal(t, "Gemini", params.Adapter)
+	})
+
+	t.Run("bare id resolves and uses the model's own adapter", func(t *testing.T) {
+		params := ac.resolveModel("plain-model")
+		assert.NotNil(t, params)
+		assert.Equal(t, "SOAI", params.Adapter)
+	})
+
+	t.Run("bare id prefers an enabled model over an earlier disabled one", func(t *testing.T) {
+		params := ac.resolveModel("dual")
+		assert.NotNil(t, params)
+		assert.Equal(t, "B", params.Adapter)
+		assert.True(t, params.Enabled)
+	})
+
+	t.Run("disabled model is returned only when no enabled model matches id and adapter", func(t *testing.T) {
+		params := ac.resolveModel("dual@A")
+		assert.NotNil(t, params)
+		assert.Equal(t, "A", params.Adapter)
+		assert.False(t, params.Enabled)
+	})
+
+	t.Run("display name never resolves", func(t *testing.T) {
+		assert.Nil(t, ac.resolveModel("Agent Gemini"))
+	})
+
+	t.Run("unknown or empty selector resolves to nil", func(t *testing.T) {
+		assert.Nil(t, ac.resolveModel("nope@Nowhere"))
+		assert.Nil(t, ac.resolveModel("Nope"))
+		assert.Nil(t, ac.resolveModel(""))
+	})
+}
+
+func TestResolveAdapterName(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini", Enabled: true},
+	})
+
+	// Canonical id@adapter selector routes through the configured model.
+	assert.Equal(t, "Gemini", ac.resolveAdapterName("gemini-3.5-flash@Gemini"))
+	// A bare id routes through the configured model's own adapter.
+	assert.Equal(t, "Gemini", ac.resolveAdapterName("gemini-3.5-flash"))
+	// Unconfigured model falls back to the "@adapter" split so a registered
+	// adapter without an AvailableModels entry can still answer.
+	assert.Equal(t, "MyAdapter", ac.resolveAdapterName("other@MyAdapter"))
+	// A bare, unresolved selector is returned verbatim, not a phantom default.
+	assert.Equal(t, "unknown", ac.resolveAdapterName("unknown"))
+}
+
+// Regression guard: an agent mapped by bare model id to a non-SOAI adapter must
+// route to that model's real adapter, as the non-agentic selector path does.
+func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
+	})
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator"}}
+	ac.agentMapping = map[string]string{"Orchestrator": "sonnet"}
+
+	assert.Equal(t, "SOAIDEV", ac.resolveAdapterName("Orchestrator"))
+}
+
+// captureAdapter records the ChatRequest handed to it so tests can assert what
+// would be sent upstream.
+type captureAdapter struct {
+	lastReq *model.ChatRequest
+}
+
+func (a *captureAdapter) Protocol() string { return "capture" }
+
+func (a *captureAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+	a.lastReq = req
+	return &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "ok"}}}, nil
+}
+
+func (a *captureAdapter) SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error) {
+	a.lastReq = req
+	return &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}, &model.AuxMessageData{}, nil
+}
+
+func (a *captureAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {
+	return &model.BalanceResponse{}, nil
+}
+
+func (a *captureAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
+	return &model.HealthResponse{Status: "ok"}, nil
+}
+
+// Selecting a model by id@adapter (or bare id) must send the bare model id
+// upstream, never the full selector.
+func TestAssistantCoordinator_Send_ModelSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	for _, selector := range []string{"test-model@MyAdapter", "test-model"} {
+		adapter.lastReq = nil
+
+		result, err := ac.Send(ctx, selector, []*model.Message{
+			{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+		})
+
+		assert.NoError(t, err, selector)
+		assert.Len(t, result, 1, selector)
+		assert.NotNil(t, adapter.lastReq, selector)
+		assert.Equal(t, "test-model", adapter.lastReq.Model, selector)
+	}
+}
+
+// In agentic mode a selector that is not an agent name falls through to model
+// resolution (e.g. a session saved before agentic mode was enabled), taking the
+// plain prompt/tool setup rather than setupAgent. A selector matching neither
+// an agent nor a model is a client error.
+func TestAssistantCoordinator_Send_AgenticFallsThroughToModelSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+	ac.systemPrompt = "default prompt"
+	ac.isAgentic = true
+	ac.agents = map[string]model.AgentParameters{
+		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}},
+	}
+	ac.agentMapping = map[string]string{"Hunter": "test-model@MyAdapter"}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(ctx, "test-model@MyAdapter", msgs)
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.NotNil(t, adapter.lastReq)
+	assert.Equal(t, "test-model", adapter.lastReq.Model)
+	assert.Equal(t, "default prompt", adapter.lastReq.System)
+	assert.Equal(t, ac.toolConfig, adapter.lastReq.ToolConfig)
+
+	result, err = ac.Send(ctx, "Nope", msgs)
+	assert.ErrorIs(t, err, ErrInvalidModel)
+	assert.Nil(t, result)
+}
+
+// A delegate registered under multiple keys (selector + tool name) must appear
+// only once in the tool spec sent to the model.
+func TestBuildToolConfig_DedupesDelegates(t *testing.T) {
+	delegate := NewDelegateTool("Hunter", "Hunter", "desc")
+	delegates := map[string]Tool{
+		"Hunter":           delegate,
+		delegate.GetName(): delegate,
+	}
+
+	countDelegateSpecs := func(raw json.RawMessage) int {
+		var tc model.ToolConfig
+		assert.NoError(t, json.Unmarshal(raw, &tc))
+		count := 0
+		for _, spec := range tc.Tools {
+			if spec.Spec.Name == delegate.GetName() {
+				count++
+			}
+		}
+		return count
+	}
+
+	t.Run("nil filter includes the delegate once", func(t *testing.T) {
+		raw, err := buildToolConfig(map[string]Tool{}, delegates, nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, countDelegateSpecs(raw))
+	})
+
+	t.Run("filter matching both keys includes the delegate once", func(t *testing.T) {
+		raw, err := buildToolConfig(map[string]Tool{}, delegates, []string{}, []string{"Hunter", delegate.GetName()})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, countDelegateSpecs(raw))
+	})
+}
+
+// newSelectorLogCoordinator builds a coordinator whose srv.Context logs to an
+// in-memory handler so tests can assert on the entries emitted by selector
+// validation and delegate registration.
+func newSelectorLogCoordinator(models []model.ModelParameters) (*AssistantCoordinator, *memory.Handler) {
+	h := memory.New()
+	ctx := log.NewContext(context.Background(), &log.Logger{Handler: h, Level: log.DebugLevel})
+
+	ac := newResolveTestCoordinator(models)
+	ac.srv.Context = ctx
+	ac.DelegationLibrary = map[string]Tool{}
+
+	return ac, h
+}
+
+// logMessagesAt returns the messages of all captured entries at the given level.
+func logMessagesAt(h *memory.Handler, level log.Level) []string {
+	msgs := []string{}
+	for _, e := range h.Entries {
+		if e.Level == level {
+			msgs = append(msgs, e.Message)
+		}
+	}
+	return msgs
+}
+
+func TestValidateModelSelectors(t *testing.T) {
+	t.Run("clean config logs nothing", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
+			{ID: "model-b", DisplayName: "Agent B", Adapter: "SOAI", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, h.Entries)
+	})
+
+	t.Run("missing displayName is fine: it is optional, cosmetic-only", func(t *testing.T) {
+		models := []model.ModelParameters{
+			{ID: "model-a", DisplayName: "Agent A", Adapter: "SOAI", Enabled: true},
+			{ID: "model-c", Adapter: "SOAI", Enabled: true},
+		}
+		ac, h := newSelectorLogCoordinator(models)
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, h.Entries)
+
+		// The model stays enabled in the config slice the frontend is served from.
+		stored := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+		assert.True(t, stored[0].Enabled)
+		assert.True(t, stored[1].Enabled)
+	})
+
+	t.Run("duplicate enabled id@adapter pairs log an error, first wins", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", DisplayName: "Hunter", Adapter: "A", Enabled: true},
+			{ID: "model-a", DisplayName: "Hunter Two", Adapter: "A", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "duplicate model selector")
+
+		// An exact duplicate must not also fire the bare-id ambiguity warning.
+		assert.Empty(t, logMessagesAt(h, log.WarnLevel))
+	})
+
+	t.Run("two enabled models sharing an id on different adapters warn about bare-id ambiguity", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", Adapter: "A", Enabled: true},
+			{ID: "model-a", Adapter: "B", Enabled: true},
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, logMessagesAt(h, log.ErrorLevel))
+		warns := logMessagesAt(h, log.WarnLevel)
+		assert.Len(t, warns, 1)
+		assert.Contains(t, warns[0], "share an id")
+	})
+
+	t.Run("duplicate involving a disabled model logs nothing", func(t *testing.T) {
+		ac, h := newSelectorLogCoordinator([]model.ModelParameters{
+			{ID: "model-a", Adapter: "A", Enabled: true},
+			{ID: "model-a", Adapter: "A", Enabled: false},
+		})
+
+		ac.validateModelSelectors()
+
+		assert.Empty(t, h.Entries)
+	})
+}
+
+func TestRegisterDelegateTools(t *testing.T) {
+	t.Run("registers a delegate under the agent name and tool name", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{
+			"Hunter": {Name: "Hunter", Description: "an event hunter"},
+		}
+
+		ac.registerDelegateTools()
+
+		assert.Len(t, ac.DelegationLibrary, 2)
+		assert.Contains(t, ac.DelegationLibrary, "Hunter")
+		assert.Contains(t, ac.DelegationLibrary, "delegate_to_Hunter")
+		assert.Contains(t, ac.DelegationLibrary["Hunter"].GetDescription(), "an event hunter")
+	})
+
+	t.Run("sanitized tool name collision skips the second entirely", func(t *testing.T) {
+		// "A B" and "A_B" are distinct agent names but sanitize to the same
+		// tool name. Registration is sorted, so "A B" wins and "A_B" collides.
+		ac, h := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{
+			"A B": {Name: "A B"},
+			"A_B": {Name: "A_B"},
+		}
+
+		ac.registerDelegateTools()
+
+		assert.Len(t, ac.DelegationLibrary, 2)
+		assert.Contains(t, ac.DelegationLibrary, "A B")
+		assert.Contains(t, ac.DelegationLibrary, "delegate_to_A_B")
+		assert.NotContains(t, ac.DelegationLibrary, "A_B")
+
+		errors := logMessagesAt(h, log.ErrorLevel)
+		assert.Len(t, errors, 1)
+		assert.Contains(t, errors[0], "delegate tool name collides")
+	})
+
+	t.Run("no agents registers nothing", func(t *testing.T) {
+		ac, _ := newSelectorLogCoordinator(nil)
+		ac.agents = map[string]model.AgentParameters{}
+
+		ac.registerDelegateTools()
+
+		assert.Empty(t, ac.DelegationLibrary)
+	})
+}
+
+// Streaming twin of TestAssistantCoordinator_Send_ModelSelector: the
+// id@adapter selector resolves and the adapter receives the bare model id.
+func TestAssistantCoordinator_SendStream_ModelSelector(t *testing.T) {
+	adapter := &captureAdapter{}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"MyAdapter": adapter}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	res, _, err := ac.SendStream(ctx, "test-model@MyAdapter", []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	res.Body.Close()
+	assert.NotNil(t, adapter.lastReq)
+	assert.Equal(t, "test-model", adapter.lastReq.Model)
+	assert.True(t, adapter.lastReq.Stream)
+}
+
+// Balance and Health accept any selector form: id@adapter, a bare id, and
+// (leniently) an id@adapter with no configured model.
+func TestAssistantCoordinator_BalanceAndHealth_SelectorResolution(t *testing.T) {
+	newAC := func() *AssistantCoordinator {
+		ac := newResolveTestCoordinator([]model.ModelParameters{
+			{ID: "gemini-x", DisplayName: "Agent Gemini", Adapter: "Gemini"},
+		})
+		ac.adapters = map[string]server.AssistantAdapter{"Gemini": &captureAdapter{}}
+		return ac
+	}
+
+	ctx := context.Background()
+
+	t.Run("balance resolves id@adapter and bare-id selectors", func(t *testing.T) {
+		ac := newAC()
+		for _, selector := range []string{"gemini-x@Gemini", "gemini-x"} {
+			res, err := ac.Balance(ctx, selector)
+			assert.NoError(t, err, selector)
+			assert.NotNil(t, res, selector)
+		}
+	})
+
+	t.Run("balance errors for an unknown adapter", func(t *testing.T) {
+		ac := newAC()
+		res, err := ac.Balance(ctx, "whatever@Missing")
+		assert.ErrorContains(t, err, "assistant adapter not found")
+		assert.Nil(t, res)
+	})
+
+	t.Run("health resolves id@adapter and bare-id selectors", func(t *testing.T) {
+		ac := newAC()
+		for _, selector := range []string{"gemini-x@Gemini", "gemini-x"} {
+			res, err := ac.Health(ctx, selector)
+			assert.NoError(t, err, selector)
+			assert.NotNil(t, res, selector)
+			assert.Equal(t, "ok", res.Status)
+		}
+	})
+
+	t.Run("health errors for an unknown adapter", func(t *testing.T) {
+		ac := newAC()
+		res, err := ac.Health(ctx, "whatever@Missing")
+		assert.ErrorContains(t, err, "assistant adapter not found")
+		assert.Nil(t, res)
+	})
+}
+
+// A selector that resolves to a configured model whose adapter is not
+// registered fails with an adapter error (after resolution, before any send).
+func TestAssistantCoordinator_SendAndSendStream_AdapterNotFound(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Ghost Agent", Adapter: "Ghost"},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{}
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(ctx, "test-model@Ghost", msgs)
+	assert.ErrorContains(t, err, "assistant adapter not found")
+	assert.Nil(t, result)
+
+	res, _, err := ac.SendStream(ctx, "test-model@Ghost", msgs)
+	assert.ErrorContains(t, err, "assistant adapter not found")
+	assert.Nil(t, res)
+}
+
+// A context missing the requestor id (only possible on a non-HTTP call path)
+// must surface as an error from request preparation, not a panic.
+func TestAssistantCoordinator_SendAndSendStream_MissingRequestorId(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "test-model", DisplayName: "Agent Test", Adapter: "MyAdapter"},
+	})
+	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
+
+	msgs := []*model.Message{
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}},
+	}
+
+	result, err := ac.Send(context.Background(), "test-model@MyAdapter", msgs)
+	assert.ErrorContains(t, err, "missing requestor id")
+	assert.Nil(t, result)
+
+	res, _, err := ac.SendStream(context.Background(), "test-model@MyAdapter", msgs)
+	assert.ErrorContains(t, err, "missing requestor id")
+	assert.Nil(t, res)
+}
+
+func TestBuildToolResultMessage_NilResultNoError(t *testing.T) {
+	// A tool that returns neither a result nor an error (e.g. an async tool) must
+	// not panic when its tool_result message is built on the streaming path.
+	msg := buildToolResultMessage("tooluse-1", nil, nil)
+
+	assert.NotNil(t, msg)
+	assert.Equal(t, "user", msg.Role)
+	assert.Len(t, msg.ContentBlocks, 1)
+
+	tr := msg.ContentBlocks[0].ToolResult
+	assert.NotNil(t, tr)
+	assert.Equal(t, "tooluse-1", tr.ToolUseId)
+	assert.Empty(t, tr.Name)
+	assert.False(t, tr.IsError)
+}
+
+func TestBuildToolResultMessage_Error(t *testing.T) {
+	msg := buildToolResultMessage("tooluse-2", nil, errors.New("boom"))
+
+	tr := msg.ContentBlocks[0].ToolResult
+	assert.NotNil(t, tr)
+	assert.True(t, tr.IsError)
+	assert.Equal(t, "error", tr.Status)
+	assert.Equal(t, "boom", tr.Content[0].Text)
+}
+
+func TestBuildToolResultMessage_Result(t *testing.T) {
+	msg := buildToolResultMessage("tooluse-3", &model.ToolResponse{ToolName: "query_events", Result: "data"}, nil)
+
+	tr := msg.ContentBlocks[0].ToolResult
+	assert.NotNil(t, tr)
+	assert.Equal(t, "query_events", tr.Name)
+	assert.False(t, tr.IsError)
+	assert.NotNil(t, tr.Content[0].Json)
+}
+
+// loadTurnSession issues exactly one GetSessions call per turn, skipping the
+// message-meta query and requesting usage aggregation only when the sub-session
+// budget is enabled.
+func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
+	cases := []struct {
+		name          string
+		maxSubSession int
+		wantUsage     bool
+	}{
+		{name: "budget disabled skips usage aggregation", maxSubSession: 0, wantUsage: false},
+		{name: "budget enabled requests usage aggregation", maxSubSession: 500, wantUsage: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+			mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+					o := &model.GetSessionsOpts{}
+					for _, opt := range opts {
+						opt(o)
+					}
+					assert.Equal(t, "sess-1", o.SessionId())
+					assert.True(t, o.IncludeDeleted())
+					assert.False(t, o.MessageMeta())
+					assert.Equal(t, tc.wantUsage, o.Usage())
+					return []*model.AssistantSession{{SessionId: "sess-1"}}, nil
+				}).Times(1)
+
+			ac := &AssistantCoordinator{
+				srv:                 &server.Server{Assistantstore: mockAssistantstore},
+				maxSubSessionTokens: tc.maxSubSession,
+			}
+
+			sess := ac.loadTurnSession(context.Background(), "sess-1")
+			assert.NotNil(t, sess)
+			assert.Equal(t, "sess-1", sess.SessionId)
+		})
+	}
+
+	t.Run("empty session id makes no store call", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+		mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Times(0)
+
+		ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
+
+		assert.Nil(t, ac.loadTurnSession(context.Background(), ""))
+	})
+}
+
+func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
+	tests := []struct {
+		name              string
+		maxSubSession     int
+		sess              *model.AssistantSession
+		expectedIsSub     bool
+		expectedRemaining int
+	}{
+		{
+			name:          "budget disabled is never capped",
+			maxSubSession: 0,
+			sess:          &model.AssistantSession{SessionId: "child", ParentSessionId: "top"},
+		},
+		{
+			name:          "nil session (not found or lookup error) disables the cap",
+			maxSubSession: 1000,
+			sess:          nil,
+		},
+		{
+			name:          "top-level session is not capped",
+			maxSubSession: 1000,
+			sess:          &model.AssistantSession{SessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 500}},
+		},
+		{
+			name:              "sub-session reports remaining output budget",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 300}},
+			expectedIsSub:     true,
+			expectedRemaining: 700,
+		},
+		{
+			name:              "exhausted sub-session reports non-positive remaining",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top", Usage: &model.SessionUsage{TotalOutputTokens: 1200}},
+			expectedIsSub:     true,
+			expectedRemaining: -200,
+		},
+		{
+			name:              "sub-session with no usage yet has full budget",
+			maxSubSession:     1000,
+			sess:              &model.AssistantSession{SessionId: "child", ParentSessionId: "top"},
+			expectedIsSub:     true,
+			expectedRemaining: 1000,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := &AssistantCoordinator{maxSubSessionTokens: tc.maxSubSession}
+
+			isSub, remaining := ac.subSessionOutputBudget(tc.sess)
+
+			assert.Equal(t, tc.expectedIsSub, isSub)
+			if tc.expectedIsSub {
+				assert.Equal(t, tc.expectedRemaining, remaining)
+			}
+		})
+	}
+}
+
+// continueWithToolResultSync halts an exhausted sub-session: it persists the tool
+// result and a budget-exhausted notice as the final turn and returns that notice
+// (which the chaining loop folds back to the parent) WITHOUT making a model call.
+func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+	// Exactly two writes: the pending tool result, then the halt notice. No model
+	// call and no session lookup — the turn's session record is passed in.
+	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	ac := &AssistantCoordinator{
+		srv:                 &server.Server{Assistantstore: mockAssistantstore},
+		maxSubSessionTokens: 500,
+	}
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+	toolMsg := buildToolResultMessage("tu_1", &model.ToolResponse{ToolName: "x", Result: "r"}, nil)
+
+	// The sub-session has already spent its budget (1000 > 500).
+	sess := &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", Usage: &model.SessionUsage{TotalOutputTokens: 1000}}
+	resp, err := ac.continueWithToolResultSync(ctx, sess, "child", "model@Adapter", toolMsg, nil, waitForLock)
+
+	assert.NoError(t, err)
+	assert.Len(t, resp, 1)
+	assert.Equal(t, "assistant", resp[0].Role)
+	assert.Contains(t, messageText(resp[0]), "halted")
+}
+
+// newDelegationSession stamps the child's delegation depth as parent depth + 1.
+func TestAssistantCoordinator_newDelegationSession_Depth(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+	mockAssistantstore.EXPECT().
+		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*model.AssistantSession{{SessionId: "parent", Depth: 2, Model: "m@A"}}, nil)
+
+	ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
+
+	child := ac.newDelegationSession(
+		context.Background(),
+		&model.ToolRequest{SessionId: "parent", ToolUseId: "tu", Model: "m@A"},
+		model.DelegationKickoff{ChildSessionId: "child", ChildModel: "c@A", AgentName: "Hunter", Objective: "obj"},
+	)
+
+	assert.Equal(t, 3, child.Depth)
+	assert.Equal(t, "parent", child.ParentSessionId)
+}
+
+// delegationDepthRefusal refuses a delegation only when the new child (delegating
+// depth + 1) would exceed maxDelegationDepth, and is a no-op when the limit is off.
+func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
+	tests := []struct {
+		name          string
+		maxDepth      int
+		parentDepth   int
+		expectLookup  bool
+		expectRefusal bool
+	}{
+		{name: "disabled does not look up", maxDepth: 0, parentDepth: 5, expectLookup: false, expectRefusal: false},
+		{name: "under limit allowed", maxDepth: 3, parentDepth: 1, expectLookup: true, expectRefusal: false},
+		{name: "child equal to limit allowed", maxDepth: 3, parentDepth: 2, expectLookup: true, expectRefusal: false},
+		{name: "child over limit refused", maxDepth: 3, parentDepth: 3, expectLookup: true, expectRefusal: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+			if tc.expectLookup {
+				mockAssistantstore.EXPECT().
+					GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return([]*model.AssistantSession{{SessionId: "s", Depth: tc.parentDepth}}, nil)
+			}
+
+			ac := &AssistantCoordinator{
+				srv:                &server.Server{Assistantstore: mockAssistantstore},
+				maxDelegationDepth: tc.maxDepth,
+			}
+
+			refusal := ac.delegationDepthRefusal(context.Background(), &model.ToolRequest{SessionId: "s", ToolUseId: "tu"})
+
+			if !tc.expectRefusal {
+				assert.Nil(t, refusal)
+				return
+			}
+
+			assert.NotNil(t, refusal)
+			assert.Equal(t, "delegation", refusal.ContentBlocks[0].ToolResult.Name)
+			resultMap, ok := refusal.ContentBlocks[0].ToolResult.Content[0].Json.(map[string]any)
+			assert.True(t, ok)
+			assert.Contains(t, resultMap["result"].(string), "depth")
+		})
+	}
+}
+
+func TestAllToolUsesResolved(t *testing.T) {
+	mkAssistant := func(toolUseIds ...string) *model.Message {
+		m := &model.Message{Role: "assistant"}
+		for _, id := range toolUseIds {
+			m.ContentBlocks = append(m.ContentBlocks, model.ContentBlock{Type: "tool_use", Id: id})
+		}
+		return m
+	}
+	mkResult := func(toolUseId string) *model.Message {
+		return &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{ToolUseId: toolUseId}}}}
+	}
+
+	t.Run("no tool uses", func(t *testing.T) {
+		assert.True(t, allToolUsesResolved([]*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}}))
+	})
+	t.Run("single tool use resolved", func(t *testing.T) {
+		assert.True(t, allToolUsesResolved([]*model.Message{mkAssistant("a"), mkResult("a")}))
+	})
+	t.Run("parallel: one resolved, one pending", func(t *testing.T) {
+		assert.False(t, allToolUsesResolved([]*model.Message{mkAssistant("a", "b"), mkResult("a")}))
+	})
+	t.Run("parallel: both resolved", func(t *testing.T) {
+		assert.True(t, allToolUsesResolved([]*model.Message{mkAssistant("a", "b"), mkResult("a"), mkResult("b")}))
+	})
+	t.Run("parked delegate (no result) counts as unresolved", func(t *testing.T) {
+		assert.False(t, allToolUsesResolved([]*model.Message{mkAssistant("delegate-1")}))
+	})
+}
+
+func TestAssistantCoordinator_ContinueWithToolResult_CoalescesParallelTools(t *testing.T) {
+	const sessionId = "session-parallel"
+
+	t.Run("waits (persist-only) while a sibling tool_use is unresolved", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// One assistant turn requested two tools; neither is resolved yet.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
+				{Type: "tool_use", Id: "tool-a"},
+				{Type: "tool_use", Id: "tool-b"},
+			}}},
+		}, nil)
+		// The executed tool's result is persisted, but NO model turn is dispatched
+		// (MakeRequest must not be called -- sending now would orphan tool-b).
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				assert.Equal(t, []string{"tool_result"}, stored.Tags)
+				return nil
+			})
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		toolMsg := buildToolResultMessage("tool-a", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, nil, waitForLock)
+		assert.NoError(t, err)
+		if assert.NotNil(t, turn) {
+			assert.Nil(t, turn.Response) // persist-only: no continuation
+			if assert.NotNil(t, turn.ToolResult) {
+				assert.Equal(t, "tool-a", turn.ToolResult.ToolUseId)
+			}
+		}
+	})
+
+	t.Run("continues once the last sibling resolves", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// Two tools requested; tool-a already resolved. Resolving tool-b completes the set.
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
+				{Type: "tool_use", Id: "tool-a"},
+				{Type: "tool_use", Id: "tool-b"},
+			}}},
+			{Tags: []string{"tool_result"}, Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{
+				{ToolResult: &model.ToolResult{ToolUseId: "tool-a"}},
+			}}},
+		}, nil)
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		toolMsg := buildToolResultMessage("tool-b", &model.ToolResponse{ToolName: "get_playbooks", Result: "ok"}, nil)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, nil, waitForLock)
+		assert.NoError(t, err)
+		if assert.NotNil(t, turn) {
+			assert.NotNil(t, turn.Response) // continued: model turn dispatched
+			turn.Response.Body.Close()
+		}
+	})
+}
+
+func TestToolUseInHistory(t *testing.T) {
+	assistant := func(ids ...string) *model.Message {
+		blocks := make([]model.ContentBlock, 0, len(ids))
+		for _, id := range ids {
+			blocks = append(blocks, model.ContentBlock{Type: "tool_use", Id: id})
+		}
+		return &model.Message{Role: "assistant", ContentBlocks: blocks}
+	}
+	result := func(id string) *model.Message {
+		return &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{ToolResult: &model.ToolResult{ToolUseId: id}}}}
+	}
+
+	assert.True(t, toolUseInHistory([]*model.Message{assistant("a", "b")}, "b"))
+	assert.False(t, toolUseInHistory([]*model.Message{assistant("a")}, "b"))
+	assert.False(t, toolUseInHistory([]*model.Message{result("a")}, "a")) // a tool_result is not a tool_use
+	assert.False(t, toolUseInHistory(nil, ""))
+}
+
+func TestFindToolUse(t *testing.T) {
+	history := []*model.Message{
+		nil,
+		{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "tool_use", Id: "u"}}},         // wrong role
+		{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "&nbsp;"}}}, // no tool_use
+		{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "tool_use", Id: "a", Name: "query_events"}, {Type: "tool_use", Id: "b", Name: "ack_alerts"}}},
+	}
+
+	if cb := findToolUse(history, "b"); assert.NotNil(t, cb) {
+		assert.Equal(t, "ack_alerts", cb.Name)
+	}
+	assert.Nil(t, findToolUse(history, "u"), "a non-assistant turn's block is not a tool request")
+	assert.Nil(t, findToolUse(history, "missing"))
+	assert.Nil(t, findToolUse(history, ""))
+	assert.Nil(t, findToolUse(nil, "a"))
+}
+
+func TestJsonEqual(t *testing.T) {
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+
+	// All spellings of "no params" are equivalent.
+	assert.True(t, jsonEqual(nil, nil))
+	assert.True(t, jsonEqual(raw(""), nil))
+	assert.True(t, jsonEqual(raw("  "), raw("null")))
+	assert.True(t, jsonEqual(raw("{}"), nil)) // UI sends {} for a zero-arg tool; stored Input is nil
+	assert.True(t, jsonEqual(raw("{}"), raw("null")))
+
+	// Key order, whitespace, and nesting are compared semantically.
+	assert.True(t, jsonEqual(raw(`{"a":1,"b":[1,2]}`), raw(` { "b": [1, 2], "a": 1 } `)))
+	assert.True(t, jsonEqual(raw(`{"a":{"x":"y"}}`), raw(`{"a": {"x": "y"}}`)))
+	assert.True(t, jsonEqual(raw(`{"n":1.0}`), raw(`{"n":1}`)))
+
+	// Mismatches.
+	assert.False(t, jsonEqual(raw(`{"q":"x"}`), raw(`{"q":"y"}`)))
+	assert.False(t, jsonEqual(raw(`{"q":"x"}`), nil))
+	assert.False(t, jsonEqual(raw(`{"a":[1,2]}`), raw(`{"a":[2,1]}`)))
+	assert.False(t, jsonEqual(raw(`{"a":1}`), raw(`{"a":1,"b":2}`)))
+
+	// Unparseable input never matches, even against itself.
+	assert.False(t, jsonEqual(raw(`{"broken`), raw(`{"broken`)))
+	assert.False(t, jsonEqual(raw(`{"broken`), nil))
+}
+
+// continueWithToolResult must not dispatch a model turn while the assistant turn
+// that requested the tool is still absent from history. The turn that emitted the
+// tool_use is persisted asynchronously, so a fast continuation can load history
+// lacking its own tool_use; sending then would orphan the tool_result (the gateway
+// rejects it). Instead it persists the result and waits (persist-only).
+func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testing.T) {
+	const sessionId = "session-await"
+
+	t.Run("waits (persist-only) when the tool_use turn has not landed yet", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// The requesting tool_use turn never appears (its async finalize hasn't run).
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil).AnyTimes()
+		// The result is persisted, but NO model turn is dispatched (MakeRequest must
+		// not be called -- sending an orphaned tool_result errors at the gateway).
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, stored *model.StoredMessage) error {
+				assert.Equal(t, []string{"tool_result"}, stored.Tags)
+				return nil
+			})
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		toolMsg := buildToolResultMessage("tool-x", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, nil, waitForLock)
+		assert.NoError(t, err)
+		if assert.NotNil(t, turn) {
+			assert.Nil(t, turn.Response) // persist-only: no orphaned continuation
+			if assert.NotNil(t, turn.ToolResult) {
+				assert.Equal(t, "tool-x", turn.ToolResult.ToolUseId)
+			}
+		}
+	})
+
+	t.Run("continues once the tool_use turn becomes visible on reload", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockIO := detectionsmock.NewMockIOManager(ctrl)
+		mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
+
+		// First load races the async persist and misses the tool_use turn; a reload
+		// (awaitToolUseTurn) sees it once finalize lands.
+		calls := 0
+		mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error) {
+				calls++
+				if calls == 1 {
+					return []*model.StoredMessage{}, nil
+				}
+				return []*model.StoredMessage{storedToolUseTurn("tool-x")}, nil
+			}).AnyTimes()
+		mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+		mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+			StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: stream")),
+		}, nil)
+
+		ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+		toolMsg := buildToolResultMessage("tool-x", &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
+		turn, err := ac.continueWithToolResult(ctx, &model.AssistantSession{SessionId: sessionId}, sessionId, "test-model@MyAdapter", toolMsg, nil, waitForLock)
+		assert.NoError(t, err)
+		if assert.NotNil(t, turn) {
+			assert.NotNil(t, turn.Response) // continued after the turn landed
+			turn.Response.Body.Close()
+		}
+		assert.GreaterOrEqual(t, calls, 2, "should have reloaded until the tool_use turn appeared")
+	})
 }

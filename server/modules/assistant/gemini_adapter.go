@@ -9,11 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -144,8 +144,13 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 		ThinkingConfig: &genai.ThinkingConfig{
 			IncludeThoughts: true,
 		},
+		// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+		// Omitted when 0, leaving the model's own default in effect.
+		MaxOutputTokens: int32(req.MaxTokens),
+		CandidateCount:  1,
 	}, history)
 	if err != nil {
+		logger.WithError(err).Error("unable to create session")
 		return nil, err
 	}
 
@@ -174,47 +179,44 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 		})
 	}
 
-	// Get function calls
-	functionCalls := resp.FunctionCalls()
-	for _, fc := range functionCalls {
-		inputJSON, err := json.Marshal(fc.Args)
-		if err != nil {
-			logger.WithError(err).WithField("functionCall", fc).Error("failed to marshal function call args")
-			continue
-		}
-
-		toolUseId := fc.ID
-		if toolUseId == "" {
-			toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
-		}
-
-		// Find thought signature for this tool use
-		var thoughtSignature []byte
-		for _, cand := range resp.Candidates {
-			for _, part := range cand.Content.Parts {
-				if part.FunctionCall != nil && part.FunctionCall.ID == fc.ID {
-					thoughtSignature = part.ThoughtSignature
-					break
-				}
+	// Get function calls. Iterate the first candidate's parts directly (rather than
+	// resp.FunctionCalls(), which flattens away the parts) because each part pairs a
+	// function call with its thought signature, and Gemini supplies no call ids to
+	// re-associate them after the fact.
+	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			fc := part.FunctionCall
+			if fc == nil {
+				continue
 			}
-		}
 
-		message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
-			Type:             "tool_use",
-			Id:               toolUseId,
-			Name:             fc.Name,
-			Input:            inputJSON,
-			ThoughtSignature: thoughtSignature,
-		})
+			inputJSON, err := json.Marshal(fc.Args)
+			if err != nil {
+				logger.WithError(err).WithField("functionCall", fc).Error("failed to marshal function call args")
+				continue
+			}
+
+			toolUseId := fc.ID
+			if toolUseId == "" {
+				// Providers without a call id (e.g. Gemini) need a fallback id that is
+				// unique across the conversation, since the frontend keys lookups by id.
+				toolUseId = "toolu_" + uuid.NewString()
+			}
+
+			message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
+				Type:             "tool_use",
+				Id:               toolUseId,
+				Name:             fc.Name,
+				Input:            inputJSON,
+				ThoughtSignature: part.ThoughtSignature,
+			})
+		}
 	}
 
 	// Set stop reason
-	for _, cand := range resp.Candidates {
-		if cand.FinishReason != "" {
-			stopReason := string(cand.FinishReason)
-			message.StopReason = &stopReason
-			break
-		}
+	if len(resp.Candidates) > 0 && resp.Candidates[0].FinishReason != "" {
+		stopReason := string(resp.Candidates[0].FinishReason)
+		message.StopReason = &stopReason
 	}
 
 	// Set usage metadata
@@ -254,8 +256,13 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		ThinkingConfig: &genai.ThinkingConfig{
 			IncludeThoughts: true,
 		},
+		// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+		// Omitted when 0, leaving the model's own default in effect.
+		MaxOutputTokens: int32(req.MaxTokens),
+		CandidateCount:  1,
 	}, history)
 	if err != nil {
+		logger.WithError(err).Error("unable to create session")
 		return nil, nil, err
 	}
 
@@ -274,6 +281,7 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		finishReason := "end_turn"
 		var finalResp *genai.GenerateContentResponse
@@ -559,59 +567,15 @@ func convertTypeToGemini(typeStr string) genai.Type {
 }
 
 func getThought(resp *genai.GenerateContentResponse) (thought string) {
-	for _, cand := range resp.Candidates {
-		for _, part := range cand.Content.Parts {
-			if part.Thought {
-				thought += part.Text
-			}
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
+		return ""
+	}
+
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Thought {
+			thought += part.Text
 		}
 	}
 
 	return thought
-}
-
-func fabricateResponse(code int) (*http.Response, *io.PipeWriter) {
-	bodyReader, bodyWriter := io.Pipe()
-
-	response := &http.Response{
-		StatusCode: code,
-		Body:       bodyReader,
-		Header:     make(http.Header),
-	}
-
-	response.Header.Add("Content-Type", "text/event-stream")
-
-	return response, bodyWriter
-}
-
-// handleStreamError handles errors during streaming
-// Returns a replacement response (if first send error) and whether the caller should return
-func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger log.Interface, model string) (*http.Response, bool) {
-	if firstSend {
-		// No response sent to client yet - fabricate error response
-		logger.WithFields(log.Fields{
-			"model": model,
-		}).WithError(err).Error("first response error from gemini")
-
-		var body *io.PipeWriter
-		response, body := fabricateResponse(http.StatusInternalServerError)
-
-		// Write to pipe in goroutine to avoid blocking
-		go func() {
-			fmt.Fprint(body, "ERROR_FIRST_RESPONSE")
-			body.Close()
-		}()
-
-		return response, true
-	}
-
-	// Error after partial response sent to client
-	logger.WithFields(log.Fields{
-		"model": model,
-	}).WithError(err).Error("subsequent response error from gemini")
-
-	writer.writeError(err.Error())
-	writer.writeDone()
-
-	return nil, true
 }

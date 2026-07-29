@@ -114,17 +114,6 @@ components.push({
 				}
 				return presets;
 			},
-			colorizeChip(color) {
-				if (typeof color === 'string') {
-					color = color.split('+')[0];
-				}
-				if (color == "white" && !this.$root.$vuetify.theme.dark) {
-					color = "grey";
-				} else if (color == "amber" && !this.$root.$vuetify.theme.dark) {
-					color = "orange";
-				}
-				return color;
-			},
 		},
 	}
 });

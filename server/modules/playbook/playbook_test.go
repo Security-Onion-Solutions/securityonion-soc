@@ -19,6 +19,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
@@ -672,23 +673,51 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 	pdm := PlaybookDiskManager{
-		srv:       server.NewFakeAuthorizedServer(nil),
-		IOManager: iom,
+		srv:            server.NewFakeAuthorizedServer(nil),
+		IOManager:      iom,
+		placeholderMap: map[string]string{"ProcessGuid": "event_data.process.entity_id"},
 	}
+
+	var capturedVarsPath string
+	var capturedVarsContents string
+
+	// ConvertQuestions writes the per-event vars to a temp file, passes it to sigma
+	// convert via -p, then deletes it.
+	iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(path string, contents []byte, perm fs.FileMode) error {
+			capturedVarsPath = path
+			capturedVarsContents = string(contents)
+			assert.Equal(t, fs.FileMode(0600), perm)
+			return nil
+		})
 
 	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 		assert.True(t, strings.HasSuffix(cmd.Path, "sigma"))
-		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
+		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
 
 		in, err := io.ReadAll(cmd.Stdin)
 		assert.NoError(t, err)
-		assert.Equal(t, "query1\n---\nquery2", string(in))
+		// each title-less query gets a synthetic title injected before conversion
+		assert.Equal(t, "title: Playbook Question\nquery1\n---\ntitle: Playbook Question\nquery2", string(in))
 
 		return []byte("Converted Queries:\n" + `{"query": "query1", "fields": ["a", "b"]}` + "\n\n" + `{"query": "query2", "fields": ["b", "c"]}` + "\n\n"), 0, time.Second, nil
 	})
 
-	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"})
+	iom.EXPECT().DeleteFile(gomock.Any()).DoAndReturn(func(path string) error {
+		assert.Equal(t, capturedVarsPath, path)
+		return nil
+	})
+
+	event := &model.EventRecord{Payload: map[string]interface{}{
+		"event_data.process.entity_id": "{guid-123}",
+	}}
+
+	converted, err := pdm.ConvertQuestions(context.Background(), []string{"query1", "query2"}, event)
 	assert.NoError(t, err)
+
+	// the placeholder's value was resolved from the event into the vars file
+	assert.Contains(t, capturedVarsContents, "ProcessGuid:")
+	assert.Contains(t, capturedVarsContents, "{guid-123}")
 	assert.Equal(t, 2, len(converted))
 	assert.Equal(t, "query1", converted[0].Query)
 	assert.Equal(t, "query2", converted[1].Query)
@@ -784,6 +813,36 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.Equal(t, "repo2-playbook2.yaml", pdm.playbooksOnDisk["repo2-pb2"])
 }
 
+// loadPlaceholderMap must be non-fatal: a missing/malformed/empty map file yields an empty map
+// (never an error) so a bad map file can't abort Init
+func TestLoadPlaceholderMap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	pdm := &PlaybookDiskManager{IOManager: iom}
+
+	// unreadable/missing file -> empty (non-nil) map, never fatal
+	iom.EXPECT().ReadFile("/missing").Return(nil, errors.New("no such file"))
+	m := pdm.loadPlaceholderMap("/missing")
+	assert.NotNil(t, m)
+	assert.Empty(t, m)
+
+	// malformed YAML (a sequence, not a map) -> empty map
+	iom.EXPECT().ReadFile("/bad").Return([]byte("- not\n- a\n- map"), nil)
+	assert.Empty(t, pdm.loadPlaceholderMap("/bad"))
+
+	// empty file -> empty map (an empty layer is normal, e.g. the user map with only comments)
+	iom.EXPECT().ReadFile("/empty").Return([]byte(""), nil)
+	assert.Empty(t, pdm.loadPlaceholderMap("/empty"))
+
+	// valid map -> populated
+	iom.EXPECT().ReadFile("/ok").Return([]byte("src_ip: source.ip\nUser: user.name\n"), nil)
+	m = pdm.loadPlaceholderMap("/ok")
+	assert.Equal(t, "source.ip", m["src_ip"])
+	assert.Equal(t, "user.name", m["User"])
+}
+
 func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -868,27 +927,234 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 	assert.Equal(t, "generic-playbook", playbooks[0].Id)
 }
 
+func TestGetEventSpecificPlaybookAlertLookup(t *testing.T) {
+	ctx := context.Background()
+
+	alert := &model.EventRecord{
+		Id: "alert-1",
+		Payload: map[string]interface{}{
+			"rule.uuid": "det-1",
+		},
+	}
+
+	hit := model.NewEventSearchResults()
+	hit.TotalEvents = 1
+	hit.Events = []*model.EventRecord{alert}
+
+	miss := model.NewEventSearchResults()
+
+	ts := time.Date(2026, 6, 19, 15, 46, 16, 0, time.UTC)
+
+	tests := []struct {
+		name             string
+		ts               time.Time
+		searchResults    []*model.EventSearchResults
+		expectedSearches int
+		expectedError    string
+		verifyCriteria   func(t *testing.T, criterias []*model.EventSearchCriteria)
+	}{
+		{
+			name:             "no timestamp searches unbounded",
+			ts:               time.Time{},
+			searchResults:    []*model.EventSearchResults{hit},
+			expectedSearches: 1,
+			verifyCriteria: func(t *testing.T, criterias []*model.EventSearchCriteria) {
+				assert.Equal(t, 1970, criterias[0].BeginTime.Year())
+			},
+		},
+		{
+			name:             "timestamp bounds the search",
+			ts:               ts,
+			searchResults:    []*model.EventSearchResults{hit},
+			expectedSearches: 1,
+			verifyCriteria: func(t *testing.T, criterias []*model.EventSearchCriteria) {
+				assert.True(t, criterias[0].BeginTime.Equal(ts.Add(-24*time.Hour)))
+				assert.True(t, criterias[0].EndTime.Equal(ts.Add(24*time.Hour)))
+			},
+		},
+		{
+			name:             "bounded miss falls back to unbounded",
+			ts:               ts,
+			searchResults:    []*model.EventSearchResults{miss, hit},
+			expectedSearches: 2,
+			verifyCriteria: func(t *testing.T, criterias []*model.EventSearchCriteria) {
+				assert.True(t, criterias[0].BeginTime.Equal(ts.Add(-24*time.Hour)))
+				assert.Equal(t, 1970, criterias[1].BeginTime.Year())
+			},
+		},
+		{
+			name:             "alert not found in either search",
+			ts:               ts,
+			searchResults:    []*model.EventSearchResults{miss, miss},
+			expectedSearches: 2,
+			expectedError:    "no alert found",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			srv := server.NewFakeAuthorizedServer(nil)
+
+			eventstore := server.NewFakeEventstore()
+			eventstore.SearchResults = tc.searchResults
+			srv.Eventstore = eventstore
+
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "det-1").
+				Return(&model.Detection{PublicID: "det-1", Engine: model.EngineNameSuricata}, nil).AnyTimes()
+			srv.Detectionstore = detStore
+
+			pbStore := servermock.NewMockPlaybookstore(ctrl)
+			pbStore.EXPECT().GetPlaybooksForDetection(gomock.Any(), "det-1", gomock.Any(), model.EngineNameSuricata).
+				Return([]*model.Playbook{{}}, nil).AnyTimes()
+			srv.Playbookstore = pbStore
+
+			pdm := PlaybookDiskManager{srv: srv}
+
+			playbooks, err := pdm.GetEventSpecificPlaybook(ctx, "alert-1", model.PlaybookStageSkeleton, tc.ts)
+
+			if tc.expectedError != "" {
+				assert.ErrorContains(t, err, tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Len(t, playbooks, 1)
+			}
+
+			assert.Len(t, eventstore.InputSearchCriterias, tc.expectedSearches)
+			if tc.verifyCriteria != nil {
+				tc.verifyCriteria(t, eventstore.InputSearchCriterias)
+			}
+		})
+	}
+}
+
+func TestGetEventSpecificPlaybookStages(t *testing.T) {
+	ctx := context.Background()
+
+	setup := func(ctrl *gomock.Controller, playbooks []*model.Playbook) (*server.Server, *servermock.MockPlaybookstore) {
+		srv := server.NewFakeAuthorizedServer(nil)
+
+		hit := model.NewEventSearchResults()
+		hit.TotalEvents = 1
+		hit.Events = []*model.EventRecord{{
+			Id:      "alert-1",
+			Payload: map[string]interface{}{"rule.uuid": "det-1"},
+		}}
+
+		eventstore := server.NewFakeEventstore()
+		eventstore.SearchResults = []*model.EventSearchResults{hit}
+		srv.Eventstore = eventstore
+
+		detStore := servermock.NewMockDetectionstore(ctrl)
+		detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "det-1").
+			Return(&model.Detection{PublicID: "det-1", Engine: model.EngineNameSuricata}, nil)
+		srv.Detectionstore = detStore
+
+		pbStore := servermock.NewMockPlaybookstore(ctrl)
+		pbStore.EXPECT().GetPlaybooksForDetection(gomock.Any(), "det-1", gomock.Any(), model.EngineNameSuricata).
+			Return(playbooks, nil)
+		srv.Playbookstore = pbStore
+
+		return srv, pbStore
+	}
+
+	onePlaybook := func() []*model.Playbook {
+		return []*model.Playbook{{
+			Questions: []*model.Question{{Question: "Q?", Query: "aggregation: true\nquery: test", Range: util.Ptr("-1h")}},
+		}}
+	}
+
+	t.Run("full executes searches", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		playbooks := onePlaybook()
+		srv, pbStore := setup(ctrl, playbooks)
+		pbStore.EXPECT().ExecutePlaybookSearches(gomock.Any(), gomock.Any(), playbooks).Return(nil)
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		result, err := pdm.GetEventSpecificPlaybook(ctx, "alert-1", model.PlaybookStageFull, time.Time{})
+		assert.NoError(t, err)
+		assert.Equal(t, playbooks, result)
+	})
+
+	t.Run("convert converts queries without searching", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		srv, _ := setup(ctrl, onePlaybook())
+
+		iom := mock.NewMockIOManager(ctrl)
+		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+		iom.EXPECT().DeleteFile(gomock.Any()).Return(nil)
+		iom.EXPECT().ExecCommand(gomock.Any()).
+			Return([]byte("Converted Queries:\n{\"query\":\"converted-oql\",\"fields\":[\"f1\"]}\n"), 0, time.Second, nil)
+
+		pdm := PlaybookDiskManager{srv: srv, IOManager: iom}
+
+		result, err := pdm.GetEventSpecificPlaybook(ctx, "alert-1", model.PlaybookStageConvert, time.Time{})
+		assert.NoError(t, err)
+		assert.Equal(t, "converted-oql", result[0].Questions[0].OqlQuery)
+		assert.Equal(t, []string{"f1"}, result[0].Questions[0].QueryFields)
+		assert.True(t, result[0].Questions[0].IsAggregate)
+		assert.Nil(t, result[0].Questions[0].QueryResults)
+	})
+
+	t.Run("skeleton returns questions untouched", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		srv, _ := setup(ctrl, onePlaybook())
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		result, err := pdm.GetEventSpecificPlaybook(ctx, "alert-1", model.PlaybookStageSkeleton, time.Time{})
+		assert.NoError(t, err)
+		assert.Empty(t, result[0].Questions[0].OqlQuery)
+		assert.Nil(t, result[0].Questions[0].QueryResults)
+	})
+
+	t.Run("a detection without playbooks returns an empty list, not an error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		srv, _ := setup(ctrl, []*model.Playbook{})
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		result, err := pdm.GetEventSpecificPlaybook(ctx, "alert-1", model.PlaybookStageFull, time.Time{})
+		assert.NoError(t, err)
+		assert.Empty(t, result)
+	})
+}
+
 func TestExecutePlaybookSearches(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name            string
-		event           *model.EventRecord
-		playbooks       []*model.Playbook
-		convertResults  []*model.ConvertedQuery
-		convertError    error
-		searchResults   *model.EventSearchResults
-		searchError     error
-		expectedError   string
-		verifyQuestions func(t *testing.T, playbooks []*model.Playbook)
+		name             string
+		event            *model.EventRecord
+		playbooks        []*model.Playbook
+		convertResults   []*model.ConvertedQuery
+		convertError     error
+		searchResults    *model.EventSearchResults
+		msearchResponses []*model.EventSearchResults
+		searchError      error
+		expectedError    string
+		verifyQuestions  func(t *testing.T, playbooks []*model.Playbook)
 	}{
 		{
 			name: "successful execution with range question",
 			event: &model.EventRecord{
 				Id: "test-event-1",
 				Payload: map[string]interface{}{
-					"hostname":  "test-host",
-					"user.name": "test-user",
+					"@timestamp": "2024-01-01T12:00:00Z",
+					"hostname":   "test-host",
+					"user.name":  "test-user",
 				},
 			},
 			playbooks: []*model.Playbook{
@@ -987,7 +1253,7 @@ func TestExecutePlaybookSearches(t *testing.T) {
 			expectedError: "not authorized", // Will be set by unauthorized server
 		},
 		{
-			name: "convert questions error",
+			name: "conversion failure leaves questions unanswered",
 			event: &model.EventRecord{
 				Id:      "test-event-4",
 				Payload: map[string]interface{}{},
@@ -999,18 +1265,25 @@ func TestExecutePlaybookSearches(t *testing.T) {
 						{
 							Question: "Test question",
 							Query:    "invalid query",
+							Range:    util.Ptr("-1h"),
 						},
 					},
 				},
 			},
-			convertError:  errors.New("sigma conversion failed"),
-			expectedError: "sigma conversion failed",
+			convertError: errors.New("sigma conversion failed"),
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				question := playbooks[0].Questions[0]
+				assert.Empty(t, question.OqlQuery)
+				assert.Nil(t, question.QueryResults)
+			},
 		},
 		{
 			name: "eventstore search error",
 			event: &model.EventRecord{
-				Id:      "test-event-6",
-				Payload: map[string]interface{}{},
+				Id: "test-event-6",
+				Payload: map[string]interface{}{
+					"@timestamp": "2024-01-01T12:00:00Z",
+				},
 			},
 			playbooks: []*model.Playbook{
 				{
@@ -1038,7 +1311,8 @@ func TestExecutePlaybookSearches(t *testing.T) {
 			event: &model.EventRecord{
 				Id: "test-event-7",
 				Payload: map[string]interface{}{
-					"hostname": "multi-host",
+					"@timestamp": "2024-01-01T12:00:00Z",
+					"hostname":   "multi-host",
 				},
 			},
 			playbooks: []*model.Playbook{
@@ -1083,6 +1357,58 @@ func TestExecutePlaybookSearches(t *testing.T) {
 				assert.Equal(t, "historical-2", question2.QueryResults[1].Id)
 			},
 		},
+		{
+			name: "failed sub-query leaves its question unanswered without failing the rest",
+			event: &model.EventRecord{
+				Id: "test-event-8",
+				Payload: map[string]interface{}{
+					"@timestamp": "2024-01-01T12:00:00Z",
+					"hostname":   "partial-host",
+				},
+			},
+			playbooks: []*model.Playbook{
+				{
+					Auditable: model.Auditable{Id: "partial-failure-playbook"},
+					Questions: []*model.Question{
+						{
+							Question: "Bad query",
+							Range:    util.Ptr("-1h"),
+							Query:    "hostname: {hostname}",
+						},
+						{
+							Question: "Good query",
+							Range:    util.Ptr("-1h"),
+							Query:    "hostname: {hostname}",
+						},
+					},
+				},
+			},
+			convertResults: []*model.ConvertedQuery{
+				{Query: "hostname: partial-host", Fields: []string{"field1"}},
+				{Query: "hostname: partial-host", Fields: []string{"field2"}},
+			},
+			msearchResponses: []*model.EventSearchResults{
+				{
+					EventResults: model.EventResults{Errors: []string{"parsing_exception"}},
+				},
+				{
+					Events:   []*model.EventRecord{{Id: "good-result"}},
+					TimedOut: true,
+				},
+			},
+			verifyQuestions: func(t *testing.T, playbooks []*model.Playbook) {
+				assert.Len(t, playbooks[0].Questions, 2)
+
+				question1 := playbooks[0].Questions[0]
+				assert.Nil(t, question1.QueryResults)
+				assert.False(t, question1.QueryTimedOut)
+
+				question2 := playbooks[0].Questions[1]
+				assert.Len(t, question2.QueryResults, 1)
+				assert.Equal(t, "good-result", question2.QueryResults[0].Id)
+				assert.True(t, question2.QueryTimedOut)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1099,11 +1425,16 @@ func TestExecutePlaybookSearches(t *testing.T) {
 				srv = server.NewFakeAuthorizedServer(nil)
 
 				// Set up fake eventstore if we need search functionality
-				if tc.searchResults != nil || tc.searchError != nil {
+				if tc.searchResults != nil || tc.msearchResponses != nil || tc.searchError != nil {
 					fakeEventstore := server.NewFakeEventstore()
+
+					// question searches run as a single msearch batch
+					responses := tc.msearchResponses
 					if tc.searchResults != nil {
-						fakeEventstore.SearchResults = []*model.EventSearchResults{tc.searchResults}
+						responses = []*model.EventSearchResults{tc.searchResults}
 					}
+					fakeEventstore.MSearchResults = []*model.EventMSearchResults{{Responses: responses}}
+
 					if tc.searchError != nil {
 						fakeEventstore.Err = tc.searchError
 					}
@@ -1118,6 +1449,9 @@ func TestExecutePlaybookSearches(t *testing.T) {
 
 			// Set up ConvertQuestions expectations
 			if tc.convertResults != nil || tc.convertError != nil {
+				// ConvertQuestions writes a per-event vars temp file, then deletes it
+				iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				iom.EXPECT().DeleteFile(gomock.Any()).Return(nil).AnyTimes()
 				// Mock ExecCommand for ConvertQuestions
 				iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 					if tc.convertError != nil {
@@ -1149,15 +1483,252 @@ func TestExecutePlaybookSearches(t *testing.T) {
 					tc.verifyQuestions(t, tc.playbooks)
 				}
 
-				for _, pb := range tc.playbooks {
-					for _, q := range pb.Questions {
-						assert.NotEmpty(t, q.FilledQuery, "FilledQuery should not be empty")
-						assert.NotEmpty(t, q.QueryFields, "QueryFields should not be empty")
+				if tc.convertError == nil {
+					for _, pb := range tc.playbooks {
+						for _, q := range pb.Questions {
+							assert.NotEmpty(t, q.FilledQuery, "FilledQuery should not be empty")
+							assert.NotEmpty(t, q.QueryFields, "QueryFields should not be empty")
+						}
 					}
 				}
 			}
 		})
 	}
+}
+
+func TestConvertPlaybookQueriesFallback(t *testing.T) {
+	ctx := context.Background()
+
+	setup := func(t *testing.T) (*PlaybookDiskManager, []*model.Playbook, *mock.MockIOManager) {
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		playbooks := []*model.Playbook{{
+			Questions: []*model.Question{
+				{Question: "One?", Query: "query: one", Range: util.Ptr("-1h")},
+				{Question: "Two?", Query: "query: two", Range: util.Ptr("-1h")},
+			},
+		}}
+
+		iom := mock.NewMockIOManager(ctrl)
+		iom.EXPECT().WriteFile(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		iom.EXPECT().DeleteFile(gomock.Any()).Return(nil).AnyTimes()
+
+		return &PlaybookDiskManager{srv: server.NewFakeAuthorizedServer(nil), IOManager: iom}, playbooks, iom
+	}
+
+	event := &model.EventRecord{Id: "alert-1", Payload: map[string]interface{}{}}
+	oneConverted := []byte("Converted Queries:\n{\"query\":\"oql-one\",\"fields\":[\"f1\"]}\n")
+
+	t.Run("batch failure retries questions individually", func(t *testing.T) {
+		pdm, playbooks, iom := setup(t)
+
+		calls := 0
+		iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+			calls++
+			switch calls {
+			case 1: // batch fails
+				return nil, 1, time.Second, errors.New("batch failed")
+			case 2: // first question converts alone
+				return oneConverted, 0, time.Second, nil
+			default: // second question fails alone too
+				return nil, 1, time.Second, errors.New("bad question")
+			}
+		}).Times(3)
+
+		err := pdm.ConvertPlaybookQueries(ctx, event, playbooks)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "oql-one", playbooks[0].Questions[0].OqlQuery)
+		assert.Equal(t, []string{"f1"}, playbooks[0].Questions[0].QueryFields)
+		assert.Empty(t, playbooks[0].Questions[1].OqlQuery)
+	})
+
+	t.Run("count mismatch retries questions individually", func(t *testing.T) {
+		pdm, playbooks, iom := setup(t)
+
+		// the batch returns one converted query for two questions, then each
+		// individual retry returns its one query
+		iom.EXPECT().ExecCommand(gomock.Any()).Return(oneConverted, 0, time.Second, nil).Times(3)
+
+		err := pdm.ConvertPlaybookQueries(ctx, event, playbooks)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "oql-one", playbooks[0].Questions[0].OqlQuery)
+		assert.Equal(t, "oql-one", playbooks[0].Questions[1].OqlQuery)
+	})
+}
+
+func TestExecuteQuestionSearch(t *testing.T) {
+	ctx := context.Background()
+
+	eventTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("non-aggregate question sorts by timestamp and returns events", func(t *testing.T) {
+		srv := server.NewFakeAuthorizedServer(nil)
+
+		results := model.NewEventSearchResults()
+		results.Events = []*model.EventRecord{{Id: "hit-1"}, {Id: "hit-2"}}
+
+		eventstore := server.NewFakeEventstore()
+		eventstore.SearchResults = []*model.EventSearchResults{results}
+		srv.Eventstore = eventstore
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		question := &model.Question{
+			Query:    "query: test",
+			Range:    util.Ptr("-1h"),
+			OqlQuery: "hostname: test-host",
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.NoError(t, err)
+		assert.Equal(t, results.Events, question.QueryResults)
+
+		criteria := eventstore.InputSearchCriterias[0]
+		assert.Equal(t, "hostname: test-host | sortby @timestamp", criteria.RawQuery)
+		assert.Equal(t, 5, criteria.MetricLimit)
+		assert.Equal(t, 5, criteria.EventLimit)
+		assert.True(t, criteria.BeginTime.Equal(eventTime.Add(-time.Hour)))
+		assert.True(t, criteria.EndTime.Equal(eventTime))
+	})
+
+	t.Run("aggregate question maps the longest metrics key into Count rows", func(t *testing.T) {
+		srv := server.NewFakeAuthorizedServer(nil)
+
+		results := model.NewEventSearchResults()
+		results.Metrics = map[string][]*model.EventMetric{
+			"groupby|source.ip": {{Keys: []interface{}{"9.9.9.9"}, Value: 7}},
+			"groupby|source.ip|destination.ip": {
+				{Keys: []interface{}{"1.2.3.4", "5.6.7.8"}, Value: 10},
+			},
+		}
+
+		eventstore := server.NewFakeEventstore()
+		eventstore.SearchResults = []*model.EventSearchResults{results}
+		srv.Eventstore = eventstore
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		question := &model.Question{
+			Query:       "aggregation: true\nquery: test",
+			Range:       util.Ptr("+/-1h"),
+			OqlQuery:    "hostname: test-host | groupby source.ip destination.ip",
+			QueryFields: []string{"source.ip", "destination.ip"},
+			IsAggregate: true,
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.NoError(t, err)
+
+		// aggregate queries run as-is, without the sortby suffix
+		assert.Equal(t, "hostname: test-host | groupby source.ip destination.ip", eventstore.InputSearchCriterias[0].RawQuery)
+
+		assert.Len(t, question.QueryResults, 1)
+		assert.Equal(t, map[string]any{
+			"Count":          float64(10),
+			"source.ip":      "1.2.3.4",
+			"destination.ip": "5.6.7.8",
+		}, question.QueryResults[0].Payload)
+	})
+
+	t.Run("more fields than metric keys does not panic", func(t *testing.T) {
+		srv := server.NewFakeAuthorizedServer(nil)
+
+		results := model.NewEventSearchResults()
+		results.Metrics = map[string][]*model.EventMetric{
+			"groupby|source.ip": {{Keys: []interface{}{"9.9.9.9"}, Value: 7}},
+		}
+
+		eventstore := server.NewFakeEventstore()
+		eventstore.SearchResults = []*model.EventSearchResults{results}
+		srv.Eventstore = eventstore
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		// fields come from the request body, so they may not match the query
+		question := &model.Question{
+			Query:       "aggregation: true\nquery: test",
+			Range:       util.Ptr("-1h"),
+			OqlQuery:    "hostname: test-host | groupby source.ip",
+			QueryFields: []string{"source.ip", "destination.ip", "extra"},
+			IsAggregate: true,
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]any{
+			"Count":     float64(7),
+			"source.ip": "9.9.9.9",
+		}, question.QueryResults[0].Payload)
+	})
+
+	t.Run("question without a range is rejected", func(t *testing.T) {
+		pdm := PlaybookDiskManager{srv: server.NewFakeAuthorizedServer(nil)}
+
+		question := &model.Question{OqlQuery: "hostname: test-host"}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.ErrorContains(t, err, "no range")
+	})
+
+	t.Run("question without a converted query is rejected", func(t *testing.T) {
+		pdm := PlaybookDiskManager{srv: server.NewFakeAuthorizedServer(nil)}
+
+		question := &model.Question{Range: util.Ptr("-1h")}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.ErrorContains(t, err, "no converted query")
+	})
+
+	t.Run("unusable range is rejected instead of searching a default window", func(t *testing.T) {
+		pdm := PlaybookDiskManager{srv: server.NewFakeAuthorizedServer(nil)}
+
+		question := &model.Question{
+			Range:    util.Ptr("-1x"),
+			OqlQuery: "hostname: test-host",
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.ErrorContains(t, err, "unable to build a date range")
+
+		// a zero event time is equally unusable
+		question.Range = util.Ptr("-1h")
+		err = pdm.ExecuteQuestionSearch(ctx, time.Time{}, question)
+		assert.ErrorContains(t, err, "unable to build a date range")
+	})
+
+	t.Run("search errors are propagated", func(t *testing.T) {
+		srv := server.NewFakeAuthorizedServer(nil)
+
+		eventstore := server.NewFakeEventstore()
+		eventstore.Err = errors.New("elasticsearch connection failed")
+		srv.Eventstore = eventstore
+
+		pdm := PlaybookDiskManager{srv: srv}
+
+		question := &model.Question{
+			Query:    "query: test",
+			Range:    util.Ptr("-1h"),
+			OqlQuery: "hostname: test-host",
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.ErrorContains(t, err, "elasticsearch connection failed")
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		pdm := PlaybookDiskManager{srv: server.NewFakeUnauthorizedServer()}
+
+		question := &model.Question{
+			Range:    util.Ptr("-1h"),
+			OqlQuery: "hostname: test-host",
+		}
+
+		err := pdm.ExecuteQuestionSearch(ctx, eventTime, question)
+		assert.Error(t, err)
+	})
 }
 
 func TestQueryVariableSubstitution(t *testing.T) {
@@ -1726,7 +2297,7 @@ func TestBuildQuestionRange(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := buildQuestionRange(tc.event, tc.rangeStr, tc.timezone)
+			result := buildQuestionRange(getEventTimestamp(tc.event), tc.rangeStr, tc.timezone)
 
 			if tc.shouldBeEmpty {
 				assert.Empty(t, result, "Expected empty result")

@@ -176,27 +176,6 @@ test('selectList merges array values when customEnabled', () => {
   expect(comp.selectList('tags', ['b', 'c', 'd'])).toEqual(['a', 'b', 'c', 'd']);
 });
 
-test('colorizeChip strips suffix after +', () => {
-  expect(comp.colorizeChip('red+lighten-2')).toBe('red');
-});
-
-test('colorizeChip remaps white and amber when theme is light', () => {
-  comp.$root.$vuetify.theme.dark = false;
-  expect(comp.colorizeChip('white')).toBe('grey');
-  expect(comp.colorizeChip('amber')).toBe('orange');
-});
-
-test('colorizeChip leaves white and amber alone when theme is dark', () => {
-  comp.$root.$vuetify.theme.dark = true;
-  expect(comp.colorizeChip('white')).toBe('white');
-  expect(comp.colorizeChip('amber')).toBe('amber');
-  comp.$root.$vuetify.theme.dark = false;
-});
-
-test('colorizeChip returns non-string colors unchanged', () => {
-  expect(comp.colorizeChip(undefined)).toBe(undefined);
-  expect(comp.colorizeChip(null)).toBe(null);
-});
 
 test('mounted populates userList from $root.getActiveUsers', async () => {
   const users = [{ id: 'u1', email: 'a@b.c' }];

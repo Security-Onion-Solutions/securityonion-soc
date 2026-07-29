@@ -1,0 +1,104 @@
+// Copyright 2019 Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
+package onionconfig
+
+import (
+	"testing"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/onionconfig/database"
+	"github.com/stretchr/testify/assert"
+)
+
+func sp(s string) *string {
+	return &s
+}
+
+func TestDecodeJSONBValue_Nil(t *testing.T) {
+	assert.Equal(t, "", decodeJSONBValue(nil))
+}
+
+func TestDecodeJSONBValue_Null(t *testing.T) {
+	assert.Equal(t, "", decodeJSONBValue(sp("null")))
+}
+
+func TestDecodeJSONBValue_StringJSON(t *testing.T) {
+	assert.Equal(t, "hello", decodeJSONBValue(sp(`"hello"`)))
+}
+
+func TestDecodeJSONBValue_NumberJSON(t *testing.T) {
+	assert.Equal(t, "42", decodeJSONBValue(sp("42")))
+}
+
+func TestDecodeJSONBValue_BoolJSON(t *testing.T) {
+	assert.Equal(t, "true", decodeJSONBValue(sp("true")))
+}
+
+func TestDecodeJSONBValue_ObjectJSON(t *testing.T) {
+	assert.Equal(t, `{"a":1}`, decodeJSONBValue(sp(`{"a":1}`)))
+}
+
+func TestEncodeSettingValue_Empty(t *testing.T) {
+	s := model.NewSetting("test")
+	s.Value = ""
+	// settingToDBRow handles the empty -> nil conversion, encodeSettingValue just marshals.
+	assert.Equal(t, `""`, encodeSettingValue(s))
+}
+
+func TestEncodeSettingValue_PlainString(t *testing.T) {
+	s := model.NewSetting("test")
+	s.Value = "some value"
+	assert.Equal(t, `"some value"`, encodeSettingValue(s))
+}
+
+func TestEncodeSettingValue_ValidJSON(t *testing.T) {
+	s := model.NewSetting("test")
+	s.Value = `{"key":"val"}`
+	assert.Equal(t, `{"key":"val"}`, encodeSettingValue(s))
+}
+
+func TestEncodeSettingValue_BoolJSON(t *testing.T) {
+	s := model.NewSetting("test")
+	s.Value = "true"
+	// Now marshaled to JSON string "true" instead of JSON boolean true
+	assert.Equal(t, `"true"`, encodeSettingValue(s))
+}
+
+func TestDbRowToSetting(t *testing.T) {
+	row := database.SettingRow{
+		SettingID:        "soc.config.key",
+		Value:            sp(`"myvalue"`),
+		DuplicatedFromID: "soc.config.orig",
+		NodeID:           "node1",
+	}
+	s := dbRowToSetting(row)
+	assert.Equal(t, "soc.config.key", s.Id)
+	assert.Equal(t, "myvalue", s.Value)
+	assert.Equal(t, "soc.config.orig", s.DuplicatedFromID)
+	assert.Equal(t, "node1", s.NodeId)
+	assert.Equal(t, model.SettingOriginDB, s.Origin)
+}
+
+func TestSettingToDBRow(t *testing.T) {
+	s := model.NewSetting("soc.config.key")
+	s.Value = "hello"
+	s.NodeId = "node2"
+	s.DuplicatedFromID = "soc.config.orig"
+
+	row := settingToDBRow(s)
+	assert.Equal(t, "soc.config.key", row.SettingID)
+	assert.Equal(t, `"hello"`, *row.Value)
+	assert.Equal(t, "node2", row.NodeID)
+	assert.Equal(t, "soc.config.orig", row.DuplicatedFromID)
+}
+
+func TestSettingToDBRow_Empty(t *testing.T) {
+	s := model.NewSetting("soc.config.key")
+	s.Value = ""
+	row := settingToDBRow(s)
+	assert.Nil(t, row.Value)
+}

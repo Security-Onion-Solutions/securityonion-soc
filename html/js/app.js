@@ -137,15 +137,21 @@ $(document).ready(function () {
             dark: false,
             colors: {
               success: '#3A833C',
-              lightsuccess: '#3A833C',
+              altsuccess: '#357938',
               primary: '#0B78D0',
-              lightprimary: '#096DBC',
+              altprimary: '#096DBC',
               secondary: '#424242',
               info: '#0B78D0',
-              lightinfo: '#0B78D0',
+              altinfo: '#0A6FC2',
+              warning: '#fb8c00',
+              altwarning: '#B34D00',
+              'on-warning': '#000000',
+              'on-altwarning': '#ffffff',
               error: '#EB0000',
-              lighterror: '#EB0000',
+              alterror: '#D60000',
+              amber: '#707000',
               nav_background: '#000000',
+              nav_background_link: '#039FDD',
               nav: '#ffffff',
               table_background: '#fafafa',
               drawer_background: '#f0f0f0',
@@ -162,15 +168,21 @@ $(document).ready(function () {
             dark: true,
             colors: {
               success: '#3A833C',
-              lightsuccess: '#49A74B',
+              altsuccess: '#49A74B',
               primary: '#007CAD',
-              lightprimary: '#039FDD',
+              altprimary: '#039FDD',
               secondary: '#2C3347',
               info: '#0B78D0',
-              lightinfo: '#2597F4',
+              altinfo: '#2597F4',
+              warning: '#fb8c00',
+              altwarning: '#fb8c00',
+              'on-warning': '#000000',
+              'on-altwarning': '#000000',
               error: '#EB0000',
-              lighterror: '#FF5757',
+              alterror: '#FF5757',
+              amber: '#ffc107',
               nav_background: '#000000',
+              nav_background_link: '#039FDD',
               nav: '#ffffff',
               table_background: '#222a3f',
               drawer_background: '#252B3B',
@@ -814,6 +826,9 @@ $(document).ready(function () {
         makeHeader(label, value) {
           return { text: label, value: value };
         },
+        formatValueWithDefault(value, defaultValue) {
+          return (value === null || value === '' ? defaultValue : String(value));
+        },
         formatDateTime(date) {
           return this.formatDate(date, this.i18n.dateTimeFormat, this.i18n.dateUnknown);
         },
@@ -978,6 +993,28 @@ $(document).ready(function () {
           if (value == "high_false") return "red-lighten-1";
           if (value == "critical_false") return "red-darken-4";
           return "icon";
+        },
+        colorizeChip(color) {
+          if (typeof color === 'string') {
+            color = color.split('+')[0];
+          }
+
+          if (!this.$vuetify.theme.current.dark) {
+            // light mode
+            switch (color) {
+              case 'white':
+                color = 'secondary';
+                break;
+              case 'red':
+                color = 'error';
+                break;
+              case 'green':
+                color = 'success';
+                break;
+            }
+          }
+
+          return color;
         },
         isNodeInSubgrid(node) {
           return node.gridId != null && node.gridId.trim().length > 0;
@@ -1875,6 +1912,7 @@ $(document).ready(function () {
           formatMarkdown: this.formatMarkdown,
           formatTimestamp: this.formatTimestamp,
           colorSeverity: this.colorSeverity,
+          colorizeChip: this.colorizeChip,
           dateToRange: this.dateToRange,
         };
 

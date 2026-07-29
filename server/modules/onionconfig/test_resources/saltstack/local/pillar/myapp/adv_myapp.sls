@@ -1,0 +1,2 @@
+myapp:
+  global: advanced

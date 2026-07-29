@@ -1,3 +1,9 @@
+// Copyright 2019 Jason Ertel (github.com/jertel).
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package server
 
 import (
@@ -27,11 +33,35 @@ func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Sett
 	return nil
 }
 
-func (f *FakeConfigstore) SyncSettings(ctx context.Context) error {
+func (f *FakeConfigstore) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (f *FakeConfigstore) GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*ConfigHistory, error) {
+	return &ConfigHistory{}, nil
+}
+
+func (f *FakeConfigstore) RevertSetting(ctx context.Context, settingID, nodeID string, timestamp time.Time, note string) error {
 	return nil
 }
 
-func (f *FakeConfigstore) SyncModule(ctx context.Context, module string, force bool) error {
+func (f *FakeConfigstore) RevertAllSettings(ctx context.Context, timestamp time.Time, note string) (int, error) {
+	return 0, nil
+}
+
+func (f *FakeConfigstore) GetRevertCount(ctx context.Context, timestamp time.Time) (int, error) {
+	return 0, nil
+}
+
+type FakeAdminConfigstore struct {
+	SyncModuleError error
+}
+
+func (f *FakeAdminConfigstore) SyncSettings(ctx context.Context) error {
+	return nil
+}
+
+func (f *FakeAdminConfigstore) SyncModule(ctx context.Context, module string, force bool) error {
 	return f.SyncModuleError
 }
 
@@ -39,23 +69,23 @@ func TestConfigHandler_putSyncModule(t *testing.T) {
 	tests := []struct {
 		name           string
 		module         string
-		force          string
+		async          string
 		syncModuleErr  error
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
-			name:           "Success without force",
+			name:           "Success without async",
 			module:         "soc",
-			force:          "",
+			async:          "",
 			syncModuleErr:  nil,
 			expectedStatus: http.StatusOK,
 			expectedBody:   "",
 		},
 		{
-			name:           "Success with force",
+			name:           "Success with async",
 			module:         "myapp",
-			force:          "true",
+			async:          "true",
 			syncModuleErr:  nil,
 			expectedStatus: http.StatusOK,
 			expectedBody:   "",
@@ -63,7 +93,7 @@ func TestConfigHandler_putSyncModule(t *testing.T) {
 		{
 			name:           "SyncModule error",
 			module:         "soc",
-			force:          "false",
+			async:          "false",
 			syncModuleErr:  errors.New("ERROR_SYNC_FAILED"),
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody:   "ERROR_SYNC_FAILED",
@@ -73,7 +103,8 @@ func TestConfigHandler_putSyncModule(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := NewFakeAuthorizedServer(nil)
-			srv.Configstore = &FakeConfigstore{
+			srv.Configstore = &FakeConfigstore{}
+			srv.AdminConfigstore = &FakeAdminConfigstore{
 				SyncModuleError: tt.syncModuleErr,
 			}
 
@@ -85,7 +116,7 @@ func TestConfigHandler_putSyncModule(t *testing.T) {
 			r.Put("/sync/{module}", h.putSyncModule)
 
 			w := httptest.NewRecorder()
-			req := httptest.NewRequest("PUT", "/sync/"+tt.module+"?force="+tt.force, bytes.NewReader([]byte{}))
+			req := httptest.NewRequest("PUT", "/sync/"+tt.module+"?async="+tt.async, bytes.NewReader([]byte{}))
 			ctx := context.WithValue(req.Context(), web.ContextKeyRequestId, "test-request")
 			ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 			req = req.WithContext(ctx)
@@ -115,7 +146,7 @@ func TestConfigHandler_putSyncModule_NoConfigstore(t *testing.T) {
 	r.Put("/sync/{module}", h.putSyncModule)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("PUT", "/sync/soc", bytes.NewReader([]byte{}))
+	req := httptest.NewRequest("PUT", "/api/config/sync/soc", bytes.NewReader([]byte{}))
 	ctx := context.WithValue(req.Context(), web.ContextKeyRequestId, "test-request")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	req = req.WithContext(ctx)

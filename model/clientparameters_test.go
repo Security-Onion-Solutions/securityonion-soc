@@ -244,3 +244,11 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestModelParameters_Selector(t *testing.T) {
+	named := &ModelParameters{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"}
+	assert.Equal(t, "gemini-3.5-flash@Gemini", named.Selector())
+
+	unnamed := &ModelParameters{ID: "qwen/qwen2.5-small", Adapter: "MyOpenAIChatAdapter"}
+	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.Selector())
+}

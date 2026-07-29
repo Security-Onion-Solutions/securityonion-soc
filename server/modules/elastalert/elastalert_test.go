@@ -386,23 +386,11 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
-	iom.EXPECT().ExecCommand(gomock.Cond(func(x any) bool {
-		cmd := x.(*exec.Cmd)
-
-		if !strings.HasSuffix(cmd.Path, "sigma") {
-			return false
-		}
-
-		if !slices.Contains(cmd.Args, "convert") {
-			return false
-		}
-
-		if cmd.Stdin == nil {
-			return false
-		}
-
-		return true
-	})).Return([]byte("<eql>"), 0, time.Duration(0), nil)
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<eql>"), 0, time.Duration(0), nil
+	})
 
 	engine := ElastAlertEngine{
 		IOManager:          iom,
@@ -428,6 +416,16 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
+	// Verify ecs_windows pipeline is included when useEsql is false
+	hasEcsWindows := false
+	for i, arg := range capturedArgs {
+		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
+			hasEcsWindows = true
+			break
+		}
+	}
+	assert.True(t, hasEcsWindows, "ecs_windows pipeline should be included when useEsql is false")
+
 	// No license
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -447,6 +445,201 @@ realert:
 type: any
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
+`
+	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestElastAlertInitUseEsql(t *testing.T) {
+	srv := &server.Server{Config: &config.ServerConfig{}}
+	mod := NewElastAlertEngine(srv)
+	err := mod.Init(module.ModuleConfig{"useEsql": true})
+	assert.NoError(t, err)
+	assert.True(t, mod.UseEsql())
+}
+
+func TestCustomWrapperTimestampFieldDefault(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "@timestamp",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(yml), "timestamp_field:")
+	assert.True(t, strings.Contains(string(yml), "@timestamp") || strings.Contains(string(yml), "'@timestamp'"))
+}
+
+func TestCustomWrapperTimestampFieldOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, string(yml), "timestamp_field")
+}
+
+func TestCustomWrapperTimestampFieldEsql(t *testing.T) {
+	t.Parallel()
+
+	wrapper := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "timebucket",
+	}
+
+	yml, err := yaml.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(yml), "timestamp_field: timebucket")
+}
+
+func TestCustomWrapperTimestampFieldYamlRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	original := &CustomWrapper{
+		DetectionTitle:    "Test Rule",
+		DetectionPublicId: "test-id",
+		EventSeverity:     4,
+		SigmaLevel:        "high",
+		Index:             ".ds-logs-*",
+		Name:              "Test Rule -- test-id",
+		Type:              "any",
+		TimestampField:    "@timestamp",
+		Filter:            []map[string]interface{}{map[string]interface{}{"eql": "test filter"}},
+	}
+
+	yml, err := yaml.Marshal(original)
+	assert.NoError(t, err)
+
+	var decoded CustomWrapper
+	err = yaml.Unmarshal(yml, &decoded)
+	assert.NoError(t, err)
+
+	assert.Equal(t, original.TimestampField, decoded.TimestampField)
+}
+
+func TestWrapRuleTimestampFieldDefault(t *testing.T) {
+	t.Parallel()
+
+	engine := ElastAlertEngine{
+		useEsql: false,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	wrapped, err := engine.wrapRule(det, "test filter")
+	assert.NoError(t, err)
+	assert.Contains(t, wrapped, "timestamp_field:")
+	assert.True(t, strings.Contains(wrapped, "@timestamp") || strings.Contains(wrapped, "'@timestamp'"))
+}
+
+func TestWrapRuleTimestampFieldEsql(t *testing.T) {
+	t.Parallel()
+
+	engine := ElastAlertEngine{
+		useEsql: true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	wrapped, err := engine.wrapRule(det, "test filter")
+	assert.NoError(t, err)
+	assert.Contains(t, wrapped, "timestamp_field: '@timestamp'")
+}
+
+func TestSigmaToElastAlertESQL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<esql>"), 0, time.Duration(0), nil
+	})
+
+	engine := ElastAlertEngine{
+		IOManager: iom,
+		useEsql:   true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+	assert.Equal(t, "<esql>", query)
+
+	// Verify ecs_windows pipeline is NOT included when useEsql is true
+	hasEcsWindows := false
+	for i, arg := range capturedArgs {
+		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
+			hasEcsWindows = true
+			break
+		}
+	}
+	assert.False(t, hasEcsWindows, "ecs_windows pipeline should NOT be included when useEsql is true")
+
+	wrappedRule, err := engine.wrapRule(det, query)
+	assert.NoError(t, err)
+
+	expected := `detection_title: Test Detection
+detection_public_id: 11111111-1111-1111-1111-111111111111
+event.module: sigma
+event.dataset: sigma.alert
+event.severity: 4
+sigma_level: high
+alert:
+    - modules.so.securityonion-es.SecurityOnionESAlerter
+index: .ds-logs-*
+name: Test Detection -- 11111111-1111-1111-1111-111111111111
+realert:
+    seconds: 0
+type: any
+filter:
+    - esql: <esql>
+timestamp_field: "@timestamp"
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -515,6 +708,7 @@ realert:
 filter:
     - eql: <eql>
 foo: bar
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -604,6 +798,7 @@ realert:
 filter:
     - eql: <eql>
 foo: car
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -688,6 +883,7 @@ realert:
     seconds: 0
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -771,6 +967,7 @@ realert:
 filter:
     - eql: <eql>
 foo: bar
+timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
 }
@@ -848,6 +1045,7 @@ realert:
     seconds: 0
 filter:
     - eql: <eql>
+timestamp_field: '@timestamp'
 is_enabled: False
 `
 	assert.YAMLEq(t, expected, wrappedRule)
@@ -1314,7 +1512,7 @@ func TestSyncElastAlert(t *testing.T) {
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("[sigma rule]"), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: '[sigma rule]'\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: '[sigma rule]'\ntimestamp_field: '@timestamp'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 		{
@@ -1375,7 +1573,7 @@ sofilter_hosts:
 				// sigmaToElastAlert
 				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte(`any where process.command_line:"*\\local\\temp\\*" and process.command_line:"*//b /e:jscript*" and process.command_line:"*.txt*"`), 0, time.Duration(0), nil)
 				// WriteFile when enabling
-				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\n"), fs.FileMode(0644)).Return(nil)
+				m.EXPECT().WriteFile(SimpleRuleSID+".yml", []byte("detection_title: TEST\ndetection_public_id: "+SimpleRuleSID+"\nevent.module: sigma\nevent.dataset: sigma.alert\nevent.severity: 3\nsigma_level: medium\nalert:\n    - modules.so.securityonion-es.SecurityOnionESAlerter\nindex: .ds-logs-*\nname: TEST -- "+SimpleRuleSID+"\nrealert:\n    seconds: 0\ntype: any\nfilter:\n    - eql: any where process.command_line:\"*\\\\local\\\\temp\\\\*\" and process.command_line:\"*//b /e:jscript*\" and process.command_line:\"*.txt*\"\ntimestamp_field: '@timestamp'\n"), fs.FileMode(0644)).Return(nil)
 			},
 		},
 	}

@@ -53,10 +53,36 @@ routes.push({
         confirmRemoveEntryMessage: "",
         confirmRemoveEntryIdx: 0,
         oldGridId: null,
-        changedModules: [],
+        showNoteDialog: false,
+        note: "",
+        pendingSave: null,
+        showHistoryDialog: false,
+        isGlobalHistory: false,
+        historySetting: null,
+        historyNodeId: null,
+        auditHistory: [],
+        historyPage: 1,
+        historyTotal: 0,
+        pageSize: 25,
+        historySort: 'ts',
+        historyOrder: 'desc',
+        confirmRevertDialog: false,
+        confirmRevertEntry: null,
+        confirmRevertAllCount: 0,
+        confirmRevertAllInput: '',
+        revertAllSettings: false,
+        revertAllCountLoading: false,
+        restoreNote: '',
+        restoreNoteDefault: '',
+        expandedHistoryRows: new Set(),
+        historySearch: '',
+        appliedHistorySearch: '',
+        historyFilteredTotal: 0,
+        skipAdvancedReload: false,
       }
     },
     mounted() {
+      this.skipAdvancedReload = true;
       this.loadLocalSettings();
       this.processRouteParameters();
       this.loadData();
@@ -65,10 +91,27 @@ routes.push({
       "active": "selectSetting",
       "advanced": "toggleAdvanced",
       '$route': "onRouteUpdate",
+      revertAllSettings(val) {
+        if (this.confirmRevertEntry && this.restoreNote === this.restoreNoteDefault) {
+          const key = val ? 'settingRevertNoteDefaultAll' : 'settingRevertNoteDefault';
+          this.restoreNote = this.i18n[key].replace('{timestamp}', this.$root.formatDateTime(this.confirmRevertEntry?.timestamp));
+          this.restoreNoteDefault = this.restoreNote;
+        }
+        if (val && this.confirmRevertEntry) {
+          this.fetchRevertAllCount();
+        }
+      },
   },
   computed: {
     selected() {
       return this.findActiveSetting();
+    },
+    filteredAuditHistory() {
+      return this.getFilteredAuditHistory();
+    },
+    historyTotalPages() {
+      if (this.historyFilteredTotal <= 0) return 1;
+      return Math.ceil(this.historyFilteredTotal / this.pageSize);
     },
   },
   methods: {
@@ -78,13 +121,18 @@ routes.push({
           // Override the tip timeout duration due to this relatively complex messaging being displayed.
           this.$root.showTip(this.i18n.settingChangeInProgress, 30000);
         }
+        this.skipAdvancedReload = true;
         this.loadData();
       } else {
         this.refreshTree();
       }
     },
     toggleAdvanced() {
-      this.loadData();
+      if (this.skipAdvancedReload) {
+        this.skipAdvancedReload = false;
+      } else {
+        this.loadData();
+      }
       this.saveLocalSettings();
     },
     processRouteParameters() {
@@ -203,10 +251,196 @@ routes.push({
         }
       });
     },
+    showHistory(setting = null, nodeId = "") {
+      this.historySetting = setting;
+      this.historyNodeId = nodeId;
+      this.isGlobalHistory = !setting;
+      this.historyPage = 1;
+      this.expandedHistoryRows = new Set();
+      this.historySearch = '';
+      this.appliedHistorySearch = '';
+      return this.fetchHistory();
+    },
+    async fetchHistory() {
+      this.$root.startLoading();
+      try {
+        const offset = (this.historyPage - 1) * this.pageSize;
+        let url = 'config/history';
+        if (!this.isGlobalHistory && this.historySetting) {
+          url += `/${this.historySetting.id}${this.historyNodeId ? "/" + this.historyNodeId : ""}`;
+        }
+        const res = await this.$root.papi.get(url, {
+          params: { limit: this.pageSize, offset, sort: this.historySort, order: this.historyOrder }
+        });
+        this.auditHistory = res.data.history || [];
+        for (let i = 0; i < this.auditHistory.length; i++) {
+          if (this.$root && typeof this.$root.populateUserDetails === 'function') {
+            await this.$root.populateUserDetails(this.auditHistory[i], 'userId', 'userName');
+          } else {
+            this.auditHistory[i].userName = this.auditHistory[i].userId;
+          }
+        }
+        this.historyTotal = res.data.total;
+        this.historyFilteredTotal = this.auditHistory.length;
+        this.showHistoryDialog = true;
+      } catch (e) {
+        this.$root.showError(this.i18n.settingHistoryError);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    showGlobalHistory() {
+      this.showHistory();
+    },
+    toggleHistoryRow(index) {
+      const next = new Set(this.expandedHistoryRows);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      this.expandedHistoryRows = next;
+    },
+    getFirstLine(note) {
+      if (!note) return '-';
+      return note.split('\n')[0];
+    },
+    getSortLabel(col) {
+      switch (col) {
+        case 'ts': return 'Time';
+        case 'settingId': return 'Setting ID';
+        case 'user': return 'User';
+        case 'nodeId': return 'Node';
+        default: return col;
+      }
+    },
+    goToSetting(settingId) {
+      this.active = [settingId];
+      this.showHistoryDialog = false;
+    },
+    updateHistorySort(col) {
+      if (this.historySort === col) {
+        this.historyOrder = this.historyOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.historySort = col;
+        this.historyOrder = 'desc';
+      }
+      this.historyPage = 1;
+      this.fetchHistory();
+    },
+    goToFirstPage() {
+      this.historyPage = 1;
+      this.fetchHistory();
+    },
+    goToLastPage() {
+      this.historyPage = Math.ceil(this.historyTotal / this.pageSize) || 1;
+      this.fetchHistory();
+    },
+    applyHistoryFilter() {
+      this.appliedHistorySearch = this.historySearch || '';
+      this.historyFilteredTotal = this.getFilteredAuditHistory().length;
+      if (this.historyPage > this.historyTotalPages()) {
+        this.historyPage = this.historyTotalPages();
+      }
+    },
+    getFilteredAuditHistory() {
+      if (!this.appliedHistorySearch || this.appliedHistorySearch.trim() === '') {
+        return this.auditHistory;
+      }
+      const search = this.appliedHistorySearch.toLowerCase();
+      return this.auditHistory.filter(entry => {
+        const settingId = (entry?.settingId || '').toLowerCase();
+        const newValue = this.$root.formatValueWithDefault(entry?.newValue, this.i18n.settingDefaultNone).toLowerCase();
+        const oldValue = this.$root.formatValueWithDefault(entry?.oldValue, this.i18n.settingDefaultNone).toLowerCase();
+        const nodeId = (entry?.nodeId || '').toLowerCase();
+        const userName = (entry?.userName || '').toLowerCase();
+        const userId = (entry?.userId || '').toLowerCase();
+        return settingId.includes(search) ||
+               newValue.includes(search) ||
+               oldValue.includes(search) ||
+               nodeId.includes(search) ||
+               userName.includes(search) ||
+               userId.includes(search);
+      });
+    },
+    async fetchRevertAllCount() {
+      this.revertAllCountLoading = true;
+      this.$root.startLoading();
+      try {
+        const res = await this.$root.papi.get('config/history/revert/all/count', {
+          params: { timestamp: this.confirmRevertEntry?.timestamp }
+        });
+        this.confirmRevertAllCount = res.data.count;
+      } catch (e) {
+        this.confirmRevertAllCount = 0;
+      } finally {
+        this.revertAllCountLoading = false;
+        this.$root.stopLoading();
+      }
+    },
+    async revertSetting(entry) {
+      this.confirmRevertEntry = entry;
+      this.revertAllSettings = false;
+      this.confirmRevertAllInput = '';
+      this.confirmRevertAllCount = 0;
+      this.restoreNote = this.i18n.settingRevertNoteDefault.replace('{timestamp}', this.$root.formatDateTime(entry?.timestamp));
+      this.restoreNoteDefault = this.restoreNote;
+      this.confirmRevertDialog = true;
+    },
+    async confirmRevert() {
+      this.$root.startLoading();
+      try {
+        if (this.revertAllSettings) {
+          if (this.confirmRevertAllCount > 1 && this.confirmRevertAllInput != this.confirmRevertAllCount) {
+            return;
+          }
+          await this.$root.papi.post('config/history/revert/all', {
+            timestamp: this.confirmRevertEntry?.timestamp,
+            note: this.restoreNote
+          });
+          await this.loadData();
+        } else {
+          await this.$root.papi.post(`config/history/revert/${this.confirmRevertEntry.settingId}${this.confirmRevertEntry.nodeId ? "/" + this.confirmRevertEntry.nodeId : ""}`, {
+            timestamp: this.confirmRevertEntry?.timestamp,
+            note: this.restoreNote,
+            duplicatedFromId: this.confirmRevertEntry?.duplicatedFromId || ''
+          });
+          const setting = this.settings.find(s => s.id === this.confirmRevertEntry.settingId);
+          const entryDuplicatedFromId = this.confirmRevertEntry?.duplicatedFromId || '';
+          const needReload = !setting ||
+            (setting.duplicatedFromId && !this.confirmRevertEntry.oldValue) ||
+            (entryDuplicatedFromId !== (setting.duplicatedFromId || ''));
+          if (needReload) {
+            await this.loadData();
+          } else if (setting) {
+            setting.duplicatedFromId = entryDuplicatedFromId;
+            if (this.confirmRevertEntry.nodeId) {
+              if (this.confirmRevertEntry.oldValue === null) {
+                setting.nodeValues.delete(this.confirmRevertEntry.nodeId);
+              } else {
+                setting.nodeValues.set(this.confirmRevertEntry.nodeId, this.confirmRevertEntry.oldValue);
+              }
+            } else if (!this.confirmRevertEntry.oldValue && setting.default) {
+              setting.value = setting.default
+            } else {
+              setting.value = this.confirmRevertEntry.oldValue;
+            }
+          }
+        }
+        this.confirmRevertDialog = false;
+        this.showHistoryDialog = false;
+        this.$root.showTip(this.i18n.settingReverted);
+      } catch (e) {
+        this.$root.showError(this.i18n.settingRevertError);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
     create(setting) {
       const created = {
         id: setting.id,
         global: setting.global,
+        allowedNodeTypes: setting.allowedNodeTypes,
         node: setting.node,
         title: setting.title,
         description: setting.description,
@@ -231,6 +465,7 @@ routes.push({
         options: setting.options,
         optionSeparator: setting.optionSeparator,
         required: setting.required,
+        duplicatedFromId: setting.duplicatedFromId || '',
       };
       this.merge(created, setting);
       return created;
@@ -309,6 +544,8 @@ routes.push({
         this.refreshTree();
       } catch (error) {
         this.$root.showError(error);
+      } finally {
+        this.skipAdvancedReload = false;
       }
       this.$root.stopLoading();
     },
@@ -322,9 +559,11 @@ routes.push({
     },
     getSettingName(setting) {
       var name = setting.name;
-      var title = this.translate("setting_", setting.id, setting.title);
-      if (title) {
-        return title;
+      if (!setting.duplicatedFromId) {
+        var title = this.translate("setting_", setting.id, setting.title);
+        if (title) {
+          name = title;
+        }
       }
       return name;
     },
@@ -702,9 +941,6 @@ routes.push({
 
           this.countCustomized();
           this.notifyChangedSetting(this.resetSetting);
-
-          // Show update to user
-          this.$root.showTip(this.i18n.settingDeleted);
         } catch (error) {
           this.$root.showError(this.i18n.settingDeleteError);
         }
@@ -714,72 +950,88 @@ routes.push({
       this.cancel(true);
     },
     async save(setting, nodeId) {
-      if (!nodeId) {
-        if (this.form.key != setting.id) return;
-      } else {
-        if (this.form.key != nodeId) return;
-      }
-
-      if (setting) {
-        if (this.form.value instanceof Array) {
-          this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
-        } 
-        this.form.value = "" + this.form.value; // ensure string
-        this.form.value = this.form.value.trim();
-        if (!this.uiElementsHaveValidInputs(setting)) {
-          this.$root.showWarning(this.i18n.settingIncomplete)
-          return;
-        }
-        try {
-          this.pack(setting);
-        } catch (e) {
-          this.$root.showError(this.i18n.settingValidationFailed);
-          return;
-        }
-        if (setting.required && !this.form.value) {
-          this.$root.showError(this.i18n.settingValidationFailed);
-          return;
-        }
-        if (setting.regex) {
-          var test_values = [this.form.value];
-          if (setting.multiline) {
-            test_values = this.form.value.split("\n");
+      if (!this.showNoteDialog) {
+        if (setting) {
+          if (this.form.value instanceof Array) {
+            this.form.value = this.form.value.join(setting.optionSeparator ? setting.optionSeparator : "\n");
           }
-          for (var idx = 0; idx < test_values.length; idx++) {
-            const re = new RegExp(setting.regex);
-            if (!re.test(test_values[idx])) {
-              this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
-              return;
+          this.form.value = "" + this.form.value; // ensure string
+          this.form.value = this.form.value.trim();
+          if (!this.uiElementsHaveValidInputs(setting)) {
+            this.$root.showWarning(this.i18n.settingIncomplete)
+            return;
+          }
+          try {
+            this.pack(setting);
+          } catch (e) {
+            this.$root.showError(this.i18n.settingValidationFailed);
+            return;
+          }
+          if (setting.required && !this.form.value) {
+            this.$root.showError(this.i18n.settingValidationFailed);
+            return;
+          }
+          if (setting.regex) {
+            var test_values = [this.form.value];
+            if (setting.multiline) {
+              test_values = this.form.value.split("\n");
+            }
+            for (var idx = 0; idx < test_values.length; idx++) {
+              const re = new RegExp(setting.regex);
+              if (!re.test(test_values[idx])) {
+                this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
+                return;
+              }
             }
           }
         }
+        this.note = "";
+        this.pendingSave = { setting, nodeId };
+        this.showNoteDialog = true;
+        return;
+      }
+
+      this.showNoteDialog = false;
+      if (!this.pendingSave) return;
+      const { setting: s, nodeId: n } = this.pendingSave;
+      this.pendingSave = null;
+
+      if (!n) {
+        if (this.form.key != s.id) return;
+      } else {
+        if (this.form.key != n) return;
+      }
+
+      if (s) {
         this.$root.startLoading();
         try {
           const server_setting = {
-            id: setting.id,
-            nodeId: nodeId,
+            id: s.id,
+            nodeId: n,
             value: this.form.value,
-            file: setting.file,
-            syntax: setting.syntax,
+            file: s.file,
+            syntax: s.syntax,
+            note: this.note,
+            duplicatedFromId: s.duplicatedFromId || '',
           };
           await this.$root.papi.put('config/', server_setting);
 
           // Update UI
-          if (!nodeId) {
-            setting.value = this.form.value
+          if (!n) {
+            s.value = this.form.value
           } else {
-            setting.nodeValues.set(nodeId, this.form.value);
+            s.nodeValues.set(n, this.form.value);
           }
 
           // Do not exit edit mode when working with UI Elements
-          if (!setting.uiElements) {
+          if (!s.uiElements) {
             this.cancel(true);
           } else {
-            this.unpack(setting);
+            this.unpack(s);
           }
 
           this.countCustomized();
-          this.notifyChangedSetting(setting);
+          this.notifyChangedSetting(s);
         } catch (error) {
           var msg = this.i18n.settingSaveError;
           if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
@@ -791,93 +1043,15 @@ routes.push({
       }
     },
     notifyChangedSetting(setting) {
-      const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
-
-      const moduleStateMap = new Map();
-
-      // Some modules do not map directly to a similarly named salt state.
-      // These modules are mapped to a list of states that should be run to apply the changes.
-      moduleStateMap.set("advanced", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("bpf.zeek", ["zeek"]);
-      moduleStateMap.set("bpf.pcap", ["pcap"]);
-      moduleStateMap.set("bpf.suricata", ["suricata"]);
-      moduleStateMap.set("elastic_fleet_package_registry", ["elastic-fleet-package-registry"]);
-      moduleStateMap.set("global", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("host", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("patch", ["patch.os"]);
-      moduleStateMap.set("vm", ["vm.user"]);
-      
-      var override = false;
-      moduleStateMap.forEach((modules, prefix) => {
-        if (setting.id.startsWith(prefix)) {
-          modules.forEach(module => this.changedModules.push(module));
-          override = true;
-        }
-      });
-
-      if (!override) {
-        const module = setting.id.split(".")[0];
-
-        if (module && !this.changedModules.includes(module)) {
-          this.changedModules.push(module);
-        }
-      }
-
-      this.changedModules = [...new Set(this.changedModules)].sort();
-
-      // If multiple modules are changed, require a full grid highstate.
-      // Otherwise, if this is a multi-node grid we need perform more checks.
-      if (this.changedModules.length == 1 && !this.isSingleNodeGrid()) {
-        // Perform second stage check to verify that the changed module is 
-        // only found on the manager node. If not, require a full grid highstate.
-        managerOnlyStates = [
-          "backup",
-          "ca",
-          "elastalert",
-          "hydra",
-          "influxdb",
-          "kibana",
-          "kratos",
-          "manager",
-          "registry",
-          "soc",
-          "telegraf"
-        ]
-
-        const mappedSetting = this.changedModules[0];
-        const mappedSettingPrefix = mappedSetting.split(".")[0];
-        if (!managerOnlyStates.includes(mappedSettingPrefix)) {
-          this.changedModules = [...REQUIRE_GRID_HIGHSTATE];
-        }
-      }
+      this.$root.showTip(this.i18n.settingsSynchronizing, 15000);
     },
     async sync() {
       this.$root.startLoading();
       try {
-        this.changedModules = [];
         await this.$root.papi.put('config/sync');
         this.$root.showTip(this.i18n.settingsSynchronized);
       } catch (error) {
          this.$root.showError(error);
-      }
-      this.$root.stopLoading();
-    },
-    async syncModule(module) {
-      tmpModules = this.changedModules;
-      this.$root.startLoading();
-      try {
-        this.changedModules = [];
-        await this.$root.papi.put('config/sync/' + module);
-        this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinished, {"module": module}));
-      } catch (error) {
-        if (error.response && error.response.data == "ERROR_SALT_ALREADY_RUNNING") {
-          this.$root.showTip(this.$root.localizeMessage(error));
-          this.changedModules = tmpModules;
-        } else if (error.response && (error.response.status >= 502 && error.response.status <= 504)) {
-          this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinishedRestarting, {"module": module}));
-        } else {
-          this.$root.showError(error);
-        }
       }
       this.$root.stopLoading();
     },
@@ -944,8 +1118,14 @@ routes.push({
     },
     recomputeAvailableNodes(setting) {
       if (!setting) return;
+      const allowedTypes = setting.allowedNodeTypes;
       const eligible = this.nodes.filter(n => {
-        return n.status == GridMemberAccepted && !setting.nodeValues.has(n.id);
+        if (n.status != GridMemberAccepted) return false;
+        if (setting.nodeValues.has(n.id)) return false;
+        if (allowedTypes && allowedTypes.length > 0) {
+          return allowedTypes.includes(n.role);
+        }
+        return true;
       });
       this.availableNodes = eligible.map(n => { return { title: n.name + " (" + n.role + ")", value: n.id } });
     },
@@ -970,6 +1150,7 @@ routes.push({
       var new_setting = structuredClone(Vue.toRaw(setting));
       new_setting.id = new_id;
       new_setting.name = new_name;
+      new_setting.duplicatedFromId = setting.duplicatedFromId || setting.id;
       this.settings.push(new_setting);
       this.settings.sort((a,b) => { if (a.id > b.id) return 1; else if (a.id < b.id) return -1; else return 0 });
       this.refreshTree();

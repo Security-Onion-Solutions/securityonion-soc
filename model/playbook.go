@@ -40,16 +40,33 @@ type Question struct {
 	AnswerSources []string `yaml:"answer_sources" json:"answer_sources"`
 	// A raw YAML Sigma query that can be used to find the answer to this question. May contain variables that will be replaced with values from the alert.
 	Query string `json:"query"`
-	// The query after variable substitution has been performed.
+	// The query after LEGACY {field} variable substitution (queryVariableSubstitution) has been performed.
 	FilledQuery string `json:"filledQuery,omitempty" yaml:"filledQuery,omitempty"`
 	// The results after the queries have been substituted, converted, and executed.
 	QueryResults []*EventRecord `json:"queryResults" yaml:"-"`
+	// Indicates if the QueryResults were cut short by a timeout.
+	QueryTimedOut bool `json:"queryTimedOut" yaml:"-"`
 
-	// not returned by the API, only used internally
+	// The fields below are populated at conversion time; the UI echoes them back
+	// when executing a single question (POST /playbook/question).
+
+	// Fields the converted query returns; used as result columns.
 	QueryFields []string `json:"fields" yaml:"-"`
 	// The event-specific query in OQL format
 	OqlQuery string `json:"oqlQuery" yaml:"-"`
+	// Whether the query is a Sigma aggregation.
+	IsAggregate bool `json:"isAggregate" yaml:"-"`
 }
+
+// PlaybookStage selects how much of the query pipeline runs when fetching
+// event-specific playbooks.
+type PlaybookStage string
+
+const (
+	PlaybookStageSkeleton PlaybookStage = "skeleton" // questions only
+	PlaybookStageConvert  PlaybookStage = "convert"  // queries converted to OQL, not executed
+	PlaybookStageFull     PlaybookStage = "full"     // queries converted and executed
+)
 
 type ConvertedQuery struct {
 	// The OQL result of the converted Sigma query.

@@ -43,18 +43,18 @@ func (m *MockTool) EXPECT() *MockToolMockRecorder {
 }
 
 // Execute mocks base method.
-func (m *MockTool) Execute(arg0 context.Context, arg1 *server.Server, arg2, arg3 string) (*model.ToolResponse, error) {
+func (m *MockTool) Execute(arg0 context.Context, arg1 *server.Server, arg2 *model.ToolRequest) (*model.ToolResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Execute", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Execute", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*model.ToolResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Execute indicates an expected call of Execute.
-func (mr *MockToolMockRecorder) Execute(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockToolMockRecorder) Execute(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Execute", reflect.TypeOf((*MockTool)(nil).Execute), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Execute", reflect.TypeOf((*MockTool)(nil).Execute), arg0, arg1, arg2)
 }
 
 // GetDescription mocks base method.

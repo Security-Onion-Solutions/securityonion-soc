@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 	"sync"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
@@ -74,7 +76,9 @@ func (w *sseEventWriter) writeDone() error {
 }
 
 func (w *sseEventWriter) writeError(message string) error {
-	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","message":%s}`+"\n\n", strconv.Quote(message))
+	// Nest the message under "error" so both server.UnstreamResponse (sm.Error.Message)
+	// and the UI's SSE handler (c.error.message) can read it.
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"error","error":{"type":"error","message":%s}}`+"\n\n", strconv.Quote(message))
 	w.logger.WithError(errors.New(message)).Error("writing error event to SSE stream")
 
 	return err
@@ -123,7 +127,9 @@ func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse
 		p.writeText(text)
 	}
 
-	// Extract function calls
+	// Extract function calls from the first candidate only, matching the SDK helpers
+	// (Text(), FunctionCalls()) — additional candidates are alternative completions,
+	// not parts of this response.
 	functionCalls := resp.FunctionCalls()
 	if len(functionCalls) > 0 {
 		// Close any open text/thought block
@@ -131,38 +137,15 @@ func (p *streamProcessor) processGeminiChunk(resp *genai.GenerateContentResponse
 			p.closeOpenBlock()
 		}
 
-		// Collect thought signatures from candidates
-		for _, cand := range resp.Candidates {
-			for _, part := range cand.Content.Parts {
-				if part.FunctionCall != nil {
-					toolUseId := part.FunctionCall.ID
-					if toolUseId == "" {
-						toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
-					}
-					if part.ThoughtSignature != nil {
-						thoughtSigs[toolUseId] = part.ThoughtSignature
-					}
-				}
-			}
-
-			if cand.FinishReason != "" {
-				finishReason = string(cand.FinishReason)
-			}
-		}
-
-		// Write function calls
-		sigs := p.writeGeminiFunctionCalls(functionCalls)
-		for id, sig := range sigs {
-			thoughtSigs[id] = sig
-		}
+		// Write each function-call block and collect its thought signature keyed by
+		// the same id the block was assigned, so UnstreamResponse can re-attach it.
+		// The FunctionCalls() gate above guarantees Candidates[0].Content is non-nil.
+		thoughtSigs = p.writeGeminiFunctionCalls(resp.Candidates[0].Content.Parts)
 	}
 
-	// Check for finish reason in candidates
-	for _, cand := range resp.Candidates {
-		if cand.FinishReason != "" {
-			finishReason = string(cand.FinishReason)
-			break
-		}
+	// Check for finish reason
+	if len(resp.Candidates) > 0 && resp.Candidates[0].FinishReason != "" {
+		finishReason = string(resp.Candidates[0].FinishReason)
 	}
 
 	return thoughtSigs, finishReason, nil
@@ -225,12 +208,17 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 
 // writeError writes an error event and done message
 func (p *streamProcessor) writeError(err error) {
+	// Pipe writes block until the caller starts reading the response body, so
+	// the caller must be released before the first write on every path.
+	p.releaseCaller()
+
 	p.writer.writeError(err.Error())
 	p.writer.writeDone()
 }
 
-// finalizeGemini closes any open blocks and writes final events
-func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+func (p *streamProcessor) finalize(finishReason string) {
+	p.ensureFirstSend()
+
 	if p.hasOpenBlock {
 		p.closeOpenBlock()
 	}
@@ -240,6 +228,15 @@ func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.Gener
 	}
 
 	p.writer.writeStopReason(finishReason)
+}
+
+// finalizeGemini closes any open blocks and writes final events
+func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.GenerateContentResponseUsageMetadata) {
+	// An empty stream reaches finalize without any content event; emit the
+	// message_start (which also releases the blocked caller) so the SSE stream
+	// stays well-formed for UnstreamResponse.
+	p.finalize(finishReason)
+
 	if usage != nil {
 		p.writer.writeUsage(int64(usage.PromptTokenCount), int64(usage.CandidatesTokenCount))
 	}
@@ -249,15 +246,10 @@ func (p *streamProcessor) finalizeGemini(finishReason string, usage *genai.Gener
 
 // finalizeOpenAI closes any open blocks and writes final events
 func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.ResponseUsage) {
-	if p.hasOpenBlock {
-		p.closeOpenBlock()
-	}
+	// See finalizeGemini: empty streams must still release the caller and emit
+	// a well-formed message_start.
+	p.finalize(finishReason)
 
-	if finishReason == "" {
-		finishReason = "end_turn"
-	}
-
-	p.writer.writeStopReason(finishReason)
 	p.writer.writeUsage(int64(usage.InputTokens), int64(usage.OutputTokens))
 
 	p.writer.writeMessageStop()
@@ -267,9 +259,20 @@ func (p *streamProcessor) finalizeOpenAI(finishReason string, usage responses.Re
 // ensureFirstSend handles first send ceremony (only once)
 func (p *streamProcessor) ensureFirstSend() {
 	if p.firstSend {
-		p.wg.Done()
-		p.firstSend = false
+		p.releaseCaller()
 		p.writer.writeMessageStart(p.model)
+	}
+}
+
+// releaseCaller unblocks the SendMessageStream caller waiting on wg for the
+// first event. ensureFirstSend covers the normal path; adapters must ALSO
+// defer this in their stream goroutine so exits before any content — a
+// first-chunk error or an empty stream — can't leave the caller blocked on
+// wg.Wait forever. Safe to call more than once.
+func (p *streamProcessor) releaseCaller() {
+	if p.firstSend {
+		p.firstSend = false
+		p.wg.Done()
 	}
 }
 
@@ -285,16 +288,28 @@ func (p *streamProcessor) writeText(text string) {
 	p.hasOpenBlock = true
 }
 
-// writeGeminiFunctionCalls writes function call blocks and returns their thought signatures
-func (p *streamProcessor) writeGeminiFunctionCalls(functionCalls []*genai.FunctionCall) map[string][]byte {
+// writeGeminiFunctionCalls writes a content block for each function-call part and
+// returns the parts' thought signatures keyed by the id assigned to each block.
+// It takes the raw parts (not just the function calls) because the thought
+// signature lives on the part alongside its function call: minting the id here and
+// keying the signature by that same id keeps the block id and the signature key in
+// lockstep, which is what UnstreamResponse relies on to re-attach signatures.
+func (p *streamProcessor) writeGeminiFunctionCalls(parts []*genai.Part) map[string][]byte {
 	thoughtSigs := make(map[string][]byte)
 
-	for _, fc := range functionCalls {
+	for _, part := range parts {
+		fc := part.FunctionCall
+		if fc == nil {
+			continue
+		}
 		p.ensureFirstSend()
 
 		toolUseId := fc.ID
 		if toolUseId == "" {
-			toolUseId = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+			// Gemini doesn't supply call ids; mint a unique one so the frontend's
+			// id-keyed lookups don't collide across turns. Generated once here and
+			// reused below as the thought-signature key, so the two always agree.
+			toolUseId = "toolu_" + uuid.NewString()
 		}
 
 		toolUseBlock := map[string]any{
@@ -315,6 +330,10 @@ func (p *streamProcessor) writeGeminiFunctionCalls(functionCalls []*genai.Functi
 
 		p.writer.writeContentBlockStop(p.contentBlockIndex)
 		p.contentBlockIndex++
+
+		if part.ThoughtSignature != nil {
+			thoughtSigs[toolUseId] = part.ThoughtSignature
+		}
 	}
 
 	return thoughtSigs
@@ -324,7 +343,7 @@ func (p *streamProcessor) writeOpenAIFunctionHeader(id string, name string) {
 	p.ensureFirstSend()
 
 	if id == "" {
-		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+		id = "toolu_" + uuid.NewString()
 	}
 
 	toolUseBlock := map[string]any{
@@ -407,7 +426,7 @@ func (p *streamProcessor) writeChatCompletionFunctionHeader(id string, name stri
 	p.ensureFirstSend()
 
 	if id == "" {
-		id = fmt.Sprintf("toolu_%d", p.contentBlockIndex)
+		id = "toolu_" + uuid.NewString()
 	}
 
 	toolUseBlock := map[string]any{
@@ -437,6 +456,10 @@ func (p *streamProcessor) writeChatCompletionFunctionStop() {
 
 // finalizeChatCompletion closes any open blocks and writes final events for ChatCompletion streaming
 func (p *streamProcessor) finalizeChatCompletion(finishReason string, usage *openai.CompletionUsage) {
+	// See finalizeGemini: empty streams must still release the caller and emit
+	// a well-formed message_start.
+	p.ensureFirstSend()
+
 	if p.hasOpenBlock {
 		if p.writingOpenAIToolUse {
 			p.writeChatCompletionFunctionStop()
@@ -475,4 +498,53 @@ func extractReasoning(delta openai.ChatCompletionChunkChoiceDelta) (string, bool
 	}
 
 	return "", false
+}
+
+func fabricateResponse(code int) (*http.Response, *io.PipeWriter) {
+	bodyReader, bodyWriter := io.Pipe()
+
+	response := &http.Response{
+		StatusCode: code,
+		Body:       bodyReader,
+		Header:     make(http.Header),
+	}
+
+	response.Header.Add("Content-Type", "text/event-stream")
+
+	return response, bodyWriter
+}
+
+// handleStreamError handles errors during streaming
+// Returns a replacement response (if first send error) and whether the caller should return
+func handleStreamError(err error, firstSend bool, writer *sseEventWriter, logger log.Interface, model string) (*http.Response, bool) {
+	if firstSend {
+		// No response sent yet: fabricate a 200 SSE stream carrying the real error as an
+		// "error" event so UnstreamResponse parses it and the UI can render it, rather
+		// than an opaque sentinel body.
+		logger.WithFields(log.Fields{
+			"model": model,
+		}).WithError(err).Error("first response error from the LLM")
+
+		response, body := fabricateResponse(http.StatusOK)
+		errWriter := newSSEEventWriter(logger, body)
+
+		// Write to pipe in goroutine to avoid blocking
+		go func() {
+			errWriter.writeError(err.Error())
+			errWriter.writeDone()
+			body.Close()
+		}()
+
+		return response, true
+	}
+
+	// Error after partial response sent to client
+	logger.WithFields(log.Fields{
+		"model": model,
+	}).WithError(err).Error("subsequent response error from the LLM")
+
+	writer.writeError(err.Error())
+	writer.writeDone()
+
+	return nil, true
 }

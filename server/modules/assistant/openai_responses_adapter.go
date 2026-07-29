@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -14,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
@@ -72,17 +75,23 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 		prompt += "\n" + req.SystemAppend
 	}
 
-	// Call non-streaming API
-	resp, err := a.client.ResponsesNew(ctx, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	// Call non-streaming API
+	resp, err := a.client.ResponsesNew(ctx, params)
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"model": req.Model,
@@ -115,7 +124,8 @@ func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.Cha
 			// Handle function calls (tool use)
 			toolUseId := item.CallID
 			if toolUseId == "" {
-				toolUseId = fmt.Sprintf("toolu_%d", len(message.ContentBlocks))
+				// Fallback id must be unique across the conversation (frontend keys by id).
+				toolUseId = "toolu_" + uuid.NewString()
 			}
 
 			message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{
@@ -164,16 +174,22 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 	noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
 	noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
 
-	stream := a.client.ResponsesNewStreaming(noTimeoutContext, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
 		Instructions: openai.String(prompt),
 		Tools:        tools,
-		MaxToolCalls: openai.Int(1),
 		Reasoning: shared.ReasoningParam{
 			Summary: "auto",
 		},
-	})
+	}
+
+	// MaxTokens (when set, e.g. by a per-sub-session budget) caps output tokens.
+	if req.MaxTokens > 0 {
+		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
+	}
+
+	stream := a.client.ResponsesNewStreaming(noTimeoutContext, params)
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 
@@ -203,6 +219,7 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 
 	go func() {
 		defer bodyWriter.Close()
+		defer processor.releaseCaller()
 
 		finishReason := "end_turn"
 
@@ -435,7 +452,11 @@ func convertToolConfigToOpenAI(req *model.ChatRequest) []responses.ToolUnionPara
 
 func convertPropertyToOpenAI(prop *model.ToolSchemaProperty) map[string]any {
 	result := map[string]any{
-		"type": prop.Type,
+		"type": []string{prop.Type},
+	}
+
+	if strings.EqualFold(prop.Type, "object") {
+		result["additionalProperties"] = false
 	}
 
 	if prop.Description != "" {
@@ -450,10 +471,19 @@ func convertPropertyToOpenAI(prop *model.ToolSchemaProperty) map[string]any {
 	if len(prop.Items) > 0 {
 		if prop.Type == "object" {
 			items := make(map[string]any)
+			names := make([]string, 0, len(prop.Items))
 			for itemName, itemSchema := range prop.Items {
-				items[itemName] = convertPropertyToOpenAI(&itemSchema)
+				names = append(names, itemName)
+				child := convertPropertyToOpenAI(&itemSchema)
+				// strict mode lists every property in `required`; the schema model
+				// can't express per-field optionality at the nested level, so make
+				// each field nullable to keep optional fields satisfiable.
+				child["type"] = append(child["type"].([]string), "null")
+				items[itemName] = child
 			}
+			slices.Sort(names)
 			result["properties"] = items
+			result["required"] = names
 		} else if prop.Type == "array" {
 			for _, itemSchema := range prop.Items {
 				result["items"] = convertPropertyToOpenAI(&itemSchema)
@@ -474,17 +504,25 @@ func convertJSONSchemaToOpenAI(schema *model.ToolSchema) map[string]any {
 		"type": schema.Type,
 	}
 
+	allPropNames := make([]string, 0, len(schema.Properties))
+
 	if len(schema.Properties) > 0 {
 		properties := make(map[string]any)
 		for propName, propSchema := range schema.Properties {
-			properties[propName] = convertPropertyToOpenAI(&propSchema)
+			allPropNames = append(allPropNames, propName)
+			prop := convertPropertyToOpenAI(&propSchema)
+			if !slices.Contains(schema.Required, propName) {
+				prop["type"] = append(prop["type"].([]string), "null")
+			}
+			properties[propName] = prop
 		}
 		result["properties"] = properties
 	}
 
-	if len(schema.Required) > 0 {
-		result["required"] = schema.Required
-	}
+	slices.Sort(allPropNames)
+	result["required"] = allPropNames
+
+	result["additionalProperties"] = false
 
 	return result
 }
