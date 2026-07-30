@@ -488,5 +488,22 @@ test('logstash_eps panel resolves title to Logstash Events Received and labelKey
 	expect(logstashPanel.labelKeys).toEqual(['metricsEventsReceived']);
 });
 
+test('populateMetricsChart clears leftover host datasets when single host response is received', () => {
+	const chart = {
+		key: 0,
+		datasets: [
+			{ label: 'host1', data: [{ x: new Date(), y: 10 }] },
+			{ label: 'host2', data: [{ x: new Date(), y: 20 }] }
+		]
+	};
+	const data = { memory_used: [{ timestamp: '2026-06-30T00:00:00Z', value: 45.6 }] };
+	comp.populateMetricsChart(chart, data, ['memory_used'], ['#f67019'], ['Memory Usage']);
+	expect(chart.key).toBe(1);
+	expect(chart.datasets.length).toBe(1);
+	expect(chart.datasets[0].label).toBe('Memory Usage');
+	expect(chart.datasets[0].data[0].y).toBe(45.6);
+});
+
+
 
 

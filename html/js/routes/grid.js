@@ -167,6 +167,12 @@ routes.push({ path: '/grid', name: 'grid', component: {
       }
     },
     'metricsNodeId'() {
+      if (this.metricsContainerId && this.metricsContainerId !== 'all') {
+        const validContainers = this.getMetricsContainerItems().map(item => item.value);
+        if (!validContainers.includes(this.metricsContainerId)) {
+          this.metricsContainerId = 'all';
+        }
+      }
       this.updateRoute();
     },
     'metricsContainerId'() {
@@ -581,6 +587,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
     getMetricsContainerItems() {
       const containerNames = new Set();
       this.nodes.forEach(node => {
+        if (this.metricsNodeId && node.id !== this.metricsNodeId) {
+          return;
+        }
         if (node.containers) {
           node.containers.forEach(c => {
             if (c.Name) {
