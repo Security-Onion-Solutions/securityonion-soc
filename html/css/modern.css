@@ -314,15 +314,18 @@ html, body, * {
   background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
 }
 
-.theme-links .v-list-item:focus-within {
+.theme-links .v-list-item:focus-visible,
+.theme-links .v-list-item:has(:focus-visible) {
   background-color: rgba(var(--v-theme-text), var(--v-focus-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active) {
+.theme-links .v-list-item:has(a.router-link-active),
+.theme-links .v-list-item.nav-active {
   background-color: rgba(var(--v-theme-text), var(--v-activated-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active):hover {
+.theme-links .v-list-item:has(a.router-link-active):hover,
+.theme-links .v-list-item.nav-active:hover {
   background-color: rgba(var(--v-theme-text), calc(var(--v-activated-opacity, 0.12) + var(--v-hover-opacity, 0.04)));
 }
 
@@ -1277,6 +1280,26 @@ dfn {
 /* Rows inside the per-agent credit breakdown tooltip. */
 .assistant-credit-breakdown {
   font-variant-numeric: tabular-nums;
+}
+
+.chat-container .message-item .flex-grow-1 {
+  min-width: 0;
+}
+
+.chat-container .message-item {
+  min-width: 480px;
+}
+
+.chat-container .message-item .text-body-2 table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-container .message-item .text-body-2 pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 /* Agent Studio inline editor card (inside an expanded data-table row). */
