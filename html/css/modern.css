@@ -314,15 +314,18 @@ html, body, * {
   background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
 }
 
-.theme-links .v-list-item:focus-within {
+.theme-links .v-list-item:focus-visible,
+.theme-links .v-list-item:has(:focus-visible) {
   background-color: rgba(var(--v-theme-text), var(--v-focus-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active) {
+.theme-links .v-list-item:has(a.router-link-active),
+.theme-links .v-list-item.nav-active {
   background-color: rgba(var(--v-theme-text), var(--v-activated-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active):hover {
+.theme-links .v-list-item:has(a.router-link-active):hover,
+.theme-links .v-list-item.nav-active:hover {
   background-color: rgba(var(--v-theme-text), calc(var(--v-activated-opacity, 0.12) + var(--v-hover-opacity, 0.04)));
 }
 

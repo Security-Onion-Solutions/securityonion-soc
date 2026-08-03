@@ -254,7 +254,7 @@
                 <v-list-item-title v-text="i18n.home"></v-list-item-title>
               </router-link>
             </v-list-item>
-            <v-list-item data-aid="nav_assistant">
+            <v-list-item data-aid="nav_assistant" :class="{ 'nav-active': $route.name === 'assistant' }">
               <template #prepend>
                 <router-link to="/assistant" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                   <v-icon>fa-microchip</v-icon>
@@ -435,7 +435,7 @@
                   <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')">
+              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')" :class="{ 'nav-active': $route.name === 'aimetrics' }">
                 <template #prepend>
                   <router-link to="/aimetrics" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                     <v-icon>fa-microchip</v-icon>
