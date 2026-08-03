@@ -1279,6 +1279,26 @@ dfn {
   font-variant-numeric: tabular-nums;
 }
 
+.chat-container .message-item .flex-grow-1 {
+  min-width: 0;
+}
+
+.chat-container .message-item {
+  min-width: 480px;
+}
+
+.chat-container .message-item .text-body-2 table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.chat-container .message-item .text-body-2 pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Agent Studio inline editor card (inside an expanded data-table row). */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
