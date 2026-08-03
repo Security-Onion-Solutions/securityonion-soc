@@ -1319,3 +1319,8 @@ dfn {
 #agentstudio-skills .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
 }
+
+pre[class*="language-"] {
+  border: unset !important;
+  box-shadow: unset !important;
+}

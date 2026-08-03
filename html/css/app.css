@@ -342,6 +342,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   white-space: nowrap;
   opacity: 60%;
   font-size: 75%;
+  color: rgb(var(--v-theme-text));
 }
 
 .case.blocked {

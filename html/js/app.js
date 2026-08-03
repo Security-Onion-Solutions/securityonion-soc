@@ -1205,9 +1205,9 @@ $(document).ready(function () {
           var link = $('link[href^="css/external/prism-custom-"]')[0];
           if (link) {
             if (this.$vuetify.theme.current.dark) {
-              link.href = "css/external/prism-custom-dark-v1.29.0.css";
+              link.href = "css/external/prism-custom-dark-v1.30.0.css";
             } else {
-              link.href = "css/external/prism-custom-light-v1.29.0.css";
+              link.href = "css/external/prism-custom-light-v1.30.0.css";
             }
           }
         },
