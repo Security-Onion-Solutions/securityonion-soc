@@ -1290,11 +1290,14 @@ dfn {
   min-width: 480px;
 }
 
-.chat-container .message-item .text-body-2 table {
-  display: block;
-  width: max-content;
+.markdown-table-scroll {
   max-width: 100%;
   overflow-x: auto;
+}
+
+.markdown-table-scroll:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 
 .chat-container .message-item .text-body-2 pre {
@@ -1341,9 +1344,4 @@ dfn {
 #agentstudio-agents .expanded-row-wrapper .v-window-item,
 #agentstudio-skills .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
-}
-
-pre[class*="language-"] {
-  border: unset !important;
-  box-shadow: unset !important;
 }

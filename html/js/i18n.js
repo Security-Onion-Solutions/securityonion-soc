@@ -139,6 +139,7 @@ const i18n = {
       ariaRemoveColumn: 'Remove column',
       ariaRemoveGroup: 'Remove group',
       ariaSankeyChartFor: 'Sankey chart for {title}',
+      ariaScrollableTable: 'Scrollable table',
       ariaSecurityKeyName: 'Security key name',
       ariaSecurityOnionSolutionsLogo: 'Security Onion Solutions logo',
       ariaSelectAllEvents: 'Select all events',
