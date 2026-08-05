@@ -1350,7 +1350,7 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p,
 .chat-container .message-item .text-body-2 ul,
 .chat-container .message-item .text-body-2 ol,
-.chat-container .message-item .text-body-2 table,
+.chat-container .message-item .text-body-2 .markdown-table-scroll,
 .chat-container .message-item .text-body-2 pre,
 .chat-container .message-item .text-body-2 hr {
   margin-top: 0;
@@ -1365,7 +1365,7 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p:last-child,
 .chat-container .message-item .text-body-2 ul:last-child,
 .chat-container .message-item .text-body-2 ol:last-child,
-.chat-container .message-item .text-body-2 table:last-child,
+.chat-container .message-item .text-body-2 .markdown-table-scroll:last-child,
 .chat-container .message-item .text-body-2 pre:last-child,
 .chat-container .message-item .text-body-2 hr:last-child {
   margin-bottom: 0;
@@ -1373,7 +1373,8 @@ ul ul ul {
 
 .chat-container .message-item .text-body-2 table {
   border-collapse: collapse;
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
 }
 
 .chat-container .message-item .text-body-2 th,

@@ -937,6 +937,7 @@ $(document).ready(function () {
             if (str) {
               md = marked.parse(str);
               md = DOMPurify.sanitize(md);
+              md = this.wrapScrollableTables(md);
             }
             return md;
           } else {
@@ -960,9 +961,26 @@ $(document).ready(function () {
               this.initializeMermaid();
               md = marked.parse(str);
               md = DOMPurify.sanitize(md);
+              md = this.wrapScrollableTables(md);
             }
             return md;
           }
+        },
+        wrapScrollableTables(html) {
+          if (!html || html.indexOf('<table') == -1) return html;
+          const template = document.createElement('template');
+          template.innerHTML = html;
+          template.content.querySelectorAll('table').forEach(table => {
+            if (table.parentElement && table.parentElement.classList.contains('markdown-table-scroll')) return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'markdown-table-scroll';
+            wrapper.setAttribute('tabindex', '0');
+            wrapper.setAttribute('role', 'region');
+            wrapper.setAttribute('aria-label', this.i18n.ariaScrollableTable);
+            table.replaceWith(wrapper);
+            wrapper.appendChild(table);
+          });
+          return template.innerHTML;
         },
         initializeMermaid() {
           if (typeof mermaid !== 'undefined' && !this.mermaidInitialized) {
