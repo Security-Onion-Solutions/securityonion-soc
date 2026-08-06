@@ -23,6 +23,7 @@ func TestPreprocessPriority(tester *testing.T) {
 	assert.Equal(tester, 120, handler.PreprocessPriority())
 }
 func TestPreprocess(tester *testing.T) {
+	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_API, 0, 0, "", "")
 	expectedId := "112233"
 
@@ -57,4 +58,48 @@ func TestPreprocess(tester *testing.T) {
 	if assert.NotNil(tester, requestorId) {
 		assert.Equal(tester, expectedId, requestorId)
 	}
+}
+
+func TestPreprocessNoBearerProvided(tester *testing.T) {
+	clientstore := NewHydraClientstore(server.NewFakeAuthorizedServer(make(map[string][]string)))
+	_ = clientstore.Init("some/url")
+	handler := NewHydraPreprocessor(clientstore)
+	request, _ := http.NewRequest("GET", "", nil)
+
+	request.Header.Set("Authorization", "abc")
+
+	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
+	assert.Nil(tester, err)
+	assert.Zero(tester, statusCode)
+	assert.NotNil(tester, ctx)
+}
+
+func TestPreprocessAPIDisabledBearerProvided(tester *testing.T) {
+	clientstore := NewHydraClientstore(server.NewFakeAuthorizedServer(make(map[string][]string)))
+	_ = clientstore.Init("some/url")
+	handler := NewHydraPreprocessor(clientstore)
+	request, _ := http.NewRequest("GET", "", nil)
+
+	request.Header.Set("Authorization", "Bearer abc")
+
+	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
+	assert.NotNil(tester, err)
+	assert.Equal(tester, statusCode, http.StatusServiceUnavailable)
+	assert.NotNil(tester, ctx)
+}
+
+func TestPreprocessAPIEnabledMissingBearerToken(tester *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_API, 1, 0, "", "")
+	clientstore := NewHydraClientstore(server.NewFakeAuthorizedServer(make(map[string][]string)))
+	_ = clientstore.Init("some/url")
+	handler := NewHydraPreprocessor(clientstore)
+	request, _ := http.NewRequest("GET", "", nil)
+
+	request.Header.Set("Authorization", "Bearer ")
+
+	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
+	assert.NotNil(tester, err)
+	assert.Equal(tester, statusCode, http.StatusUnauthorized)
+	assert.NotNil(tester, ctx)
 }
