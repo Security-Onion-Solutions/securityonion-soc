@@ -68,19 +68,20 @@ func TestAssistantCoordinator_StartStopIsRunning(t *testing.T) {
 
 func TestBuildToolConfig(t *testing.T) {
 	testCases := []struct {
-		name           string
-		functions      map[string]Tool
-		delegates      map[string]Tool
-		toolFilter     []string
-		delegateFilter []string
-		expectError    bool
-		expectedLength int
+		name            string
+		functions       map[string]Tool
+		delegates       map[string]Tool
+		toolFilter      []string
+		delegateFilter  []string
+		expectError     bool
+		expectNilConfig bool
+		expectedLength  int
 	}{
 		{
-			name:           "empty functions map",
-			functions:      map[string]Tool{},
-			expectError:    false,
-			expectedLength: 0,
+			name:            "empty functions map",
+			functions:       map[string]Tool{},
+			expectError:     false,
+			expectNilConfig: true,
 		},
 		{
 			name: "single function",
@@ -145,6 +146,9 @@ func TestBuildToolConfig(t *testing.T) {
 
 			if tc.expectError {
 				assert.Error(t, err)
+				assert.Nil(t, config)
+			} else if tc.expectNilConfig {
+				assert.NoError(t, err)
 				assert.Nil(t, config)
 			} else {
 				assert.NoError(t, err)
@@ -392,7 +396,7 @@ func TestSOAiCloudAdapter_Embed(t *testing.T) {
 			},
 			expectedResult: &model.EmbeddingResponse{
 				Model:      "embed-model",
-				Embeddings: [][]float64{{0.1, 0.2}, {0.3, 0.4}},
+				Embeddings: [][]float32{{0.1, 0.2}, {0.3, 0.4}},
 				Usage:      &model.Usage{InputTokens: 7},
 			},
 			expectedError: false,
@@ -1988,9 +1992,7 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 	assert.Equal(t, "You are a hunting agent.", req.System)
 	assert.Empty(t, req.SystemAppend)
 
-	var tc model.ToolConfig
-	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
-	assert.Len(t, tc.Tools, 0)
+	assert.Nil(t, req.ToolConfig)
 }
 
 func TestAssistantCoordinator_SetupAgent_DisabledSkill(t *testing.T) {

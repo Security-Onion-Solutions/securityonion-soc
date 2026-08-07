@@ -45,6 +45,7 @@ var (
 	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
 	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
 	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase      = errors.New("no database configured")
 )
 
 const (
@@ -66,6 +67,8 @@ const (
 	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
 	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
 	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
+
+	DEFAULT_MEMORY_PROXIMITY_THRESHOLD = 0.8
 )
 
 //go:embed SOSystemPrompt.bin
@@ -120,9 +123,10 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
-	useMemory          bool
-	terminateMemory    context.CancelCauseFunc
-	memoryScanInterval time.Duration
+	useMemory                bool
+	terminateMemory          context.CancelCauseFunc
+	memoryScanInterval       time.Duration
+	memoryProximityThreshold float64
 
 	detections.IOManager
 }
@@ -188,6 +192,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
+	ac.memoryProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_PROXIMITY_THRESHOLD)
 
 	ac.loadAdapters(config)
 

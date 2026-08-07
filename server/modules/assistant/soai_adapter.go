@@ -143,13 +143,11 @@ func (a *SOAiCloudAdapter) Embed(ctx context.Context, req *model.EmbeddingReques
 		return nil, err
 	}
 
-	logger.WithField("rawEmbedResponseBody", string(resBody)).Debug("embed response received")
-
 	response := &model.EmbeddingResponse{}
 
 	err = json.Unmarshal(resBody, response)
 	if err != nil {
-		logger.WithError(err).WithField("rawEmbedResponseBody", string(resBody)).Error("unable to unmarshal JSON response")
+		logger.WithError(err).WithField("embedResponseBodyLength", len(resBody)).Error("unable to unmarshal JSON response")
 		return nil, err
 	}
 

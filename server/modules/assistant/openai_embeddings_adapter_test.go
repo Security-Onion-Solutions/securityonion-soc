@@ -128,7 +128,7 @@ func TestOpenAIEmbeddingsAdapter_Embed(t *testing.T) {
 		require.NotNil(t, resp)
 		assert.Equal(t, "text-embedding-3-small", resp.Model)
 		require.Len(t, resp.Embeddings, 1)
-		assert.Equal(t, []float64{0.1, 0.2, 0.3}, resp.Embeddings[0])
+		assert.Equal(t, []float32{0.1, 0.2, 0.3}, resp.Embeddings[0])
 		require.NotNil(t, resp.Usage)
 		assert.Equal(t, 7, resp.Usage.InputTokens)
 		assert.Equal(t, 0, resp.Usage.OutputTokens)
@@ -159,9 +159,9 @@ func TestOpenAIEmbeddingsAdapter_Embed(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, resp.Embeddings, 3)
-		assert.Equal(t, []float64{1.0}, resp.Embeddings[0])
-		assert.Equal(t, []float64{2.0}, resp.Embeddings[1])
-		assert.Equal(t, []float64{3.0}, resp.Embeddings[2])
+		assert.Equal(t, []float32{1.0}, resp.Embeddings[0])
+		assert.Equal(t, []float32{2.0}, resp.Embeddings[1])
+		assert.Equal(t, []float32{3.0}, resp.Embeddings[2])
 	})
 
 	t.Run("input and dimensions are forwarded to the client", func(t *testing.T) {
@@ -171,7 +171,10 @@ func TestOpenAIEmbeddingsAdapter_Embed(t *testing.T) {
 				captured = params
 				return &openai.CreateEmbeddingResponse{
 					Model: "text-embedding-3-large",
-					Data:  []openai.Embedding{{Index: 0, Embedding: []float64{0.5}}},
+					Data: []openai.Embedding{
+						{Index: 0, Embedding: []float64{0.5}},
+						{Index: 1, Embedding: []float64{0.6}},
+					},
 				}, nil
 			},
 		}

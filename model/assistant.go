@@ -7,9 +7,13 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/util"
 )
 
 const (
@@ -71,7 +75,7 @@ type EmbeddingResponse struct {
 	// The model used to generate the embeddings.
 	Model string `json:"model" example:"text-embedding-3-small"`
 	// One embedding vector per input, in the same order as the request inputs.
-	Embeddings [][]float64 `json:"embeddings"`
+	Embeddings [][]float32 `json:"embeddings"`
 	// Token usage for the request.
 	Usage *Usage `json:"usage,omitempty"`
 }
@@ -627,4 +631,134 @@ type ExtractedFact struct {
 	Category   string  `json:"category"`
 	Durability string  `json:"durability"`
 	Confidence float64 `json:"confidence"`
+}
+
+type Memory struct {
+	Auditable
+	MemoryText   string
+	SessionId    string
+	Embedding    []float32
+	ModelID      string
+	TargetUserId *string
+}
+
+type NearbyMemory struct {
+	Similarity float64
+	Memory     *Memory
+}
+
+type ReconciledMemory struct {
+	Action  string
+	ReEmbed bool
+	Memory  *Memory
+}
+
+type ReconcileMemoryBody struct {
+	Candidate ReconcileCandidate `json:"candidate"`
+	Neighbors []MemoryNeighbor   `json:"neighbors"`
+}
+
+type ReconcileCandidate struct {
+	Content string `json:"content"`
+	Scope   string `json:"scope"`
+}
+
+type MemoryNeighbor struct {
+	Id         string  `json:"id"`
+	Content    string  `json:"content"`
+	Scope      string  `json:"scope"`
+	Similarity float64 `json:"similarity"`
+}
+
+type MemoryOp struct {
+	Reasoning  string  `json:"reasoning"`
+	Op         string  `json:"op"`
+	TargetId   *string `json:"target_id"`
+	Content    *string `json:"content"`
+	Confidence float64 `json:"confidence"`
+}
+
+type MemoryOperations struct {
+	Operations []*MemoryOp `json:"operations"`
+}
+
+func (memOps *MemoryOperations) Validate(neighbors []MemoryNeighbor) (err error) {
+	allowedOps := []string{"ADD", "UPDATE", "DELETE", "NOOP"}
+	adds, updates, noops := 0, 0, 0
+
+	type counter struct {
+		totalRefs int
+		deletes   int
+	}
+
+	ids := map[string]*counter{}
+	for _, n := range neighbors {
+		ids[n.Id] = &counter{}
+	}
+
+	for _, op := range memOps.Operations {
+		oper := strings.ToUpper(op.Op)
+		if !slices.Contains(allowedOps, oper) {
+			return fmt.Errorf("invalid op: %s", oper)
+		}
+
+		switch oper {
+		case "ADD":
+			if op.TargetId != nil {
+				return fmt.Errorf("ADD with TargetId")
+			}
+
+			adds++
+		case "UPDATE":
+			if op.TargetId == nil {
+				return fmt.Errorf("UPDATE without TargetId")
+			}
+
+			_, ok := ids[*op.TargetId]
+			if !ok {
+				return fmt.Errorf("UPDATE with non-existing TargetId")
+			}
+
+			ids[*op.TargetId].totalRefs = ids[*op.TargetId].totalRefs + 1
+
+			updates++
+		case "DELETE":
+			if op.TargetId == nil {
+				return fmt.Errorf("DELETE without TargetId")
+			}
+
+			_, ok := ids[*op.TargetId]
+			if !ok {
+				return fmt.Errorf("DELETE with non-existing TargetId")
+			}
+		case "NOOP":
+			noops++
+		}
+	}
+
+	if adds+updates+noops > 1 {
+		return fmt.Errorf("expected at most 1 ADD, UPDATE, and/or NOOP operation, got ADD: %d, UPDATE: %d, NOOP: %d", adds, updates, noops)
+	}
+
+	tooManyOps := map[string]int{}
+	tooManyDeletes := map[string]int{}
+	for id, count := range ids {
+		if count.totalRefs > 1 {
+			tooManyOps[id] = count.totalRefs
+		}
+
+		if count.deletes > 1 {
+			tooManyDeletes[id] = count.deletes
+		}
+	}
+
+	if len(tooManyOps) != 0 {
+		return fmt.Errorf("expected at most one operation per TargetId, got: %v", util.TruncateMap(tooManyOps, 5))
+	}
+
+	if len(tooManyDeletes) != 0 {
+		return fmt.Errorf("expected at most one DELETE operation for any one memory, got: %v", util.TruncateMap(tooManyDeletes, 5))
+	}
+
+	return nil
 }

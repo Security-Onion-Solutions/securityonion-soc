@@ -1,95 +1,37 @@
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package assistant
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/apex/log"
+	"github.com/pgvector/pgvector-go"
 )
 
 func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
-	memoryAgent, memoryModel, err := ac.resolveAgent("Memory")
-	if err != nil {
-		logger.WithError(err).Error("unable to resolve Memory agent")
-	}
-
-	embedAgent, embedModel, err := ac.resolveAgent("Embed")
-	if err != nil {
-		logger.WithError(err).Error("unable to resolve Embed agent")
-	}
-
-	_, _, _, _ = memoryAgent, memoryModel, embedAgent, embedModel
-
-	extract := sync.OnceFunc(func() {
-		details := &model.AssistantSessionDetails{
-			Session: &model.AssistantSession{
-				LastMemoryScannedIndex: 0,
-			},
-			History: []*model.StoredMessage{
-				{
-					Message: &model.Message{
-						Role: "user",
-						ContentBlocks: []model.ContentBlock{
-							{
-								Type: "text",
-								Text: "I keep getting OOM crashes on my Elasticsearch VM. I'm on Ubuntu and I run everything through Docker Compose. Our team standardized on Forgejo for CI last quarter. Btw I always use `any` in Go now, never interface{}.",
-							},
-						},
-					},
-				},
-				{
-					Message: &model.Message{
-						Role: "assistant",
-						ContentBlocks: []model.ContentBlock{
-							{
-								Type: "text",
-								Text: "Have you tried capping the JVM heap? You could also enable AlwaysPreTouch.",
-							},
-						},
-					},
-				},
-				{
-					Message: &model.Message{
-						Role: "user",
-						ContentBlocks: []model.ContentBlock{
-							{
-								Type: "text",
-								Text: "Yeah AlwaysPreTouch helped. I'll set the heap cap.",
-							},
-						},
-					},
-				},
-			},
-		}
-
-		facts, err := ac.extractFacts(ctx, details, memoryAgent, memoryModel)
-		if err != nil {
-			logger.WithError(err).Error("unable to extract facts")
-			return
-		}
-
-		logger.WithField("facts", len(facts)).Info("extracted facts")
-
-		justFacts := make([]string, 0, len(facts))
-		for _, f := range facts {
-			justFacts = append(justFacts, f.Fact)
-		}
-
-		res, err := ac.Embed(ctx, embedModel.DisplayName, justFacts)
-		if err != nil {
-			logger.WithError(err).Error("unable to embed")
-			return
-		}
-
-		_ = res
+	justonce := sync.OnceFunc(func() {
+		ac.scanForMemories(ctx)
 	})
+
+	ticker := time.NewTicker(ac.memoryScanInterval)
 
 	for {
 		select {
@@ -98,14 +40,194 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 			logger.WithField("cause", err).Info("memory worker shutting down")
 
 			return
-		case <-time.After(ac.memoryScanInterval):
+		case <-ticker.C:
 		}
 
-		extract()
+		justonce()
+	}
+}
+
+func (ac *AssistantCoordinator) scanForMemories(ctx context.Context) {
+	logger := log.FromContext(ctx)
+
+	memoryAgent, memoryModel, err := ac.resolveAgent("Memory")
+	if err != nil {
+		logger.WithError(err).Error("unable to resolve Memory agent, ending scan")
+		return
+	}
+
+	_, embedModel, err := ac.resolveAgent("Embed")
+	if err != nil {
+		logger.WithError(err).Error("unable to resolve Embed agent, ending scan")
+		return
+	}
+
+	sessionDetails := &model.AssistantSessionDetails{
+		Session: &model.AssistantSession{
+			Auditable: model.Auditable{
+				UserId: "ABC",
+			},
+			SessionId:              "TestSession",
+			LastMemoryScannedIndex: 0,
+		},
+		History: []*model.StoredMessage{
+			{
+				Message: &model.Message{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{
+							Type: "text",
+							Text: "I keep getting OOM crashes on my Elasticsearch VM. I'm on Ubuntu and I run everything through Docker Compose. Our team standardized on Forgejo for CI last quarter. Btw I always use `any` in Go now, never interface{}.",
+						},
+					},
+				},
+			},
+			{
+				Message: &model.Message{
+					Role: "assistant",
+					ContentBlocks: []model.ContentBlock{
+						{
+							Type: "text",
+							Text: "Have you tried capping the JVM heap? You could also enable AlwaysPreTouch.",
+						},
+					},
+				},
+			},
+			{
+				Message: &model.Message{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{
+							Type: "text",
+							Text: "Yeah AlwaysPreTouch helped. I'll set the heap cap.",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	queryResults := []*model.AssistantSessionDetails{sessionDetails}
+
+	for _, sessionDetails := range queryResults {
+		// Extract
+		facts, err := ac.extractFacts(ctx, sessionDetails, memoryAgent, memoryModel)
+		if err != nil {
+			logger.WithError(err).Error("unable to extract facts")
+			continue
+		}
+
+		logger.WithField("facts", len(facts)).Info("extracted facts")
+
+		if len(facts) == 0 {
+			continue
+		}
+
+		justFacts := make([]string, 0, len(facts))
+		for _, f := range facts {
+			justFacts = append(justFacts, f.Fact)
+		}
+
+		// Embed
+		res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
+		if err != nil {
+			logger.WithError(err).Error("unable to embed")
+			continue
+		}
+
+		if len(res.Embeddings) != len(facts) {
+			logger.WithFields(log.Fields{
+				"embeddingsCount": len(res.Embeddings),
+				"factsCount":      len(facts),
+			}).Error("unexpected number of embeddings returned")
+
+			continue
+		}
+
+		mems := make([]*model.Memory, 0, len(facts))
+		for i, fact := range facts {
+			var target *string
+
+			if strings.EqualFold(fact.Scope, "user") {
+				target = new(sessionDetails.Session.UserId)
+			}
+
+			mems = append(mems, &model.Memory{
+				Auditable: model.Auditable{
+					UserId: server.SYSTEM_ID,
+					Kind:   "memory",
+				},
+				MemoryText:   fact.Fact,
+				SessionId:    sessionDetails.Session.SessionId,
+				Embedding:    res.Embeddings[i],
+				ModelID:      res.Model,
+				TargetUserId: target,
+			})
+		}
+
+		// Reconcile
+		memChanges, err := ac.reconcileMemories(ctx, mems)
+		if err != nil {
+			logger.WithError(err).Error("unable to reconcile memories")
+			continue
+		}
+
+		logger.WithField("numChanges", len(memChanges)).Info("changes recommended after reconciling")
+
+		// Reembed
+		reembed := []*model.ReconciledMemory{}
+		for _, change := range memChanges {
+			if change.ReEmbed {
+				reembed = append(reembed, change)
+			}
+		}
+
+		if len(reembed) != 0 {
+			justFacts = make([]string, 0, len(reembed))
+			for _, r := range reembed {
+				justFacts = append(justFacts, r.Memory.MemoryText)
+			}
+
+			res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
+			if err != nil {
+				logger.WithError(err).Error("unable to embed")
+				continue
+			}
+
+			if len(res.Embeddings) != len(reembed) {
+				logger.WithFields(log.Fields{
+					"embeddingsCount": len(res.Embeddings),
+					"reembedCount":    len(reembed),
+				}).Error("unexpected number of embeddings returned")
+
+				continue
+			}
+
+			for i, emb := range res.Embeddings {
+				reembed[i].Memory.Embedding = emb
+			}
+		}
+
+		// Update
+		if len(memChanges) != 0 {
+			created, updated, deleted, errMap := ac.applyMemories(ctx, memChanges)
+			if len(errMap) != 0 {
+				logger.WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to apply reconciled memories")
+			}
+
+			logger.WithFields(log.Fields{
+				"memories": len(facts),
+				"created":  created,
+				"updated":  updated,
+				"deleted":  deleted,
+				"errored":  len(errMap),
+			}).Info("applied memories")
+		}
 	}
 }
 
 func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.AgentParameters, memoryModel *model.ModelParameters) ([]*model.ExtractedFact, error) {
+	logger := log.FromContext(ctx)
 	ts := buildMemoryExtractTranscript(details)
 
 	req := &model.ChatRequest{
@@ -129,14 +251,27 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 		return nil, err
 	}
 
-	adapter := ac.adapters[memoryModel.Adapter]
+	adapter, ok := ac.adapters[memoryModel.Adapter]
+	if !ok {
+		logger.WithField("adapterName", memoryModel.Adapter).Error("Memory Agent's model references unknown adapter")
+		return nil, fmt.Errorf("unknown adapter for memory model")
+	}
 
 	msg, err := adapter.SendMessage(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	jsn := msg.ContentBlocks[0].Text
+	var jsn string
+	for _, cb := range msg.ContentBlocks {
+		if strings.EqualFold(cb.Type, "Text") {
+			jsn = cb.Text
+		}
+	}
+
+	if len(jsn) == 0 {
+		return nil, fmt.Errorf("no returned content from Extraction agent")
+	}
 
 	extracted := []*model.ExtractedFact{}
 
@@ -146,6 +281,351 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 	}
 
 	return extracted, nil
+}
+
+func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*model.Memory) (ops []*model.ReconciledMemory, err error) {
+	if ac.srv.DB == nil {
+		return nil, ErrNoDatabase
+	}
+
+	logger := log.FromContext(ctx)
+
+	// retrieve agent and setup before looping
+	agentParams, modelParams, err := ac.resolveAgent("Reconcile")
+	if err != nil {
+		return nil, err
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("Reconcile Agent's model references unknown adapter")
+		return nil, fmt.Errorf("unknown adapter for memory model")
+	}
+
+	ops = make([]*model.ReconciledMemory, 0, len(mems))
+
+	for _, mem := range mems {
+		// find similar memories
+		nearby, err := ac.FindNearbyMemories(ctx, mem.Embedding, mem.TargetUserId, mem.ModelID, ac.memoryProximityThreshold, -1)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(nearby) == 0 {
+			// there are no similar memories, add this memory
+			ops = append(ops, &model.ReconciledMemory{
+				Action: "ADD",
+				Memory: mem,
+			})
+
+			continue
+		}
+
+		// there are similar memories so we're going to ask the Reconcile agent
+		// to sort things out
+
+		memScope := "global"
+		if mem.TargetUserId != nil {
+			memScope = "user"
+		}
+
+		body := model.ReconcileMemoryBody{
+			Candidate: model.ReconcileCandidate{
+				Content: mem.MemoryText,
+				Scope:   memScope,
+			},
+			Neighbors: make([]model.MemoryNeighbor, 0, len(nearby)),
+		}
+
+		for _, near := range nearby {
+			nearbyScope := "global"
+			if near.Memory.TargetUserId != nil {
+				nearbyScope = "user"
+			}
+
+			body.Neighbors = append(body.Neighbors, model.MemoryNeighbor{
+				Id:         near.Memory.Id,
+				Content:    near.Memory.MemoryText,
+				Scope:      nearbyScope,
+				Similarity: near.Similarity,
+			})
+		}
+
+		rawBody, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+
+		req := &model.ChatRequest{
+			Messages: []*model.Message{
+				{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{
+							Type: "text",
+							Text: string(rawBody),
+						},
+					},
+				},
+			},
+			UserId: server.SYSTEM_ID,
+			Model:  modelParams.ID,
+		}
+
+		err = ac.setupAgent(ctx, req, agentParams)
+		if err != nil {
+			return nil, err
+		}
+
+		msg, err := adapter.SendMessage(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		var rawResult string
+		for _, cb := range msg.ContentBlocks {
+			if strings.EqualFold(cb.Type, "Text") {
+				rawResult = cb.Text
+			}
+		}
+
+		if len(rawResult) == 0 {
+			return nil, fmt.Errorf("no returned content from Reconcile agent")
+		}
+
+		changes := model.MemoryOperations{}
+
+		err = json.Unmarshal([]byte(rawResult), &changes)
+		if err != nil {
+			return nil, err
+		}
+
+		err = changes.Validate(body.Neighbors)
+		if err != nil {
+			logger.WithError(err).Error("invalid reconciliation of memory")
+			return nil, err
+		}
+
+		for _, op := range changes.Operations {
+			action := strings.ToUpper(op.Op)
+			reembed := false
+
+			switch action {
+			case "ADD":
+				if op.Content != nil && mem.MemoryText != *op.Content {
+					mem.MemoryText = *op.Content
+					reembed = true
+				}
+			case "UPDATE":
+				if op.Content != nil && mem.MemoryText != *op.Content {
+					mem.MemoryText = *op.Content
+					reembed = true
+				}
+				if op.TargetId != nil {
+					mem.Auditable.Id = *op.TargetId
+				}
+			case "NOOP":
+				continue
+			}
+
+			if action == "DELETE" {
+				// changes.Validate() ensured op.TargetId is not null
+				ops = append(ops, &model.ReconciledMemory{
+					Action: action,
+					Memory: &model.Memory{
+						Auditable: model.Auditable{
+							Id: *op.TargetId,
+						},
+					},
+				})
+			} else {
+				ops = append(ops, &model.ReconciledMemory{
+					Action:  action,
+					ReEmbed: reembed,
+					Memory:  mem,
+				})
+			}
+		}
+	}
+
+	return ops, nil
+}
+
+func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embedding []float32, userId *string, modelID string, minSimilarity float64, limit int) ([]*model.NearbyMemory, error) {
+	if ac.srv.DB == nil {
+		return nil, ErrNoDatabase
+	}
+
+	var lim any // "... LIMIT NULL" means no limit
+	if limit > 0 {
+		lim = limit
+	}
+
+	args := []any{pgvector.NewVector(embedding), modelID, minSimilarity, lim}
+
+	stmt := `SELECT id, created_at, updated_at, user_id, memory_text, session_id, embedding, model_id, target_user_id, 1 - (embedding <=> $1) AS similarity
+		FROM memories
+		WHERE model_id = $2`
+
+	if userId != nil {
+		stmt += ` AND target_user_id = $5`
+		args = append(args, *userId)
+	} else {
+		stmt += ` AND target_user_id IS NULL`
+	}
+
+	stmt += ` AND 1 - (embedding <=> $1) >= $3
+		ORDER BY embedding <=> $1
+		LIMIT $4`
+
+	var rows db.Rows
+	var err error
+
+	rows, err = ac.srv.DB.Query(ctx, stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	mems := []*model.NearbyMemory{}
+
+	for rows.Next() {
+		mem := &model.Memory{
+			Auditable: model.Auditable{
+				Kind: "memory",
+			},
+		}
+
+		var sessionId *string
+		var vec pgvector.Vector
+		var similarity float64
+
+		err = rows.Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.UserId, &mem.MemoryText, &sessionId, &vec, &mem.ModelID, &mem.TargetUserId, &similarity)
+		if err != nil {
+			return nil, err
+		}
+
+		if sessionId != nil {
+			mem.SessionId = *sessionId
+		}
+
+		mem.Embedding = vec.Slice()
+
+		mems = append(mems, &model.NearbyMemory{
+			Similarity: similarity,
+			Memory:     mem,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return mems, nil
+}
+
+func (ac *AssistantCoordinator) AddMemory(ctx context.Context, mem *model.Memory) error {
+	if ac.srv.DB == nil {
+		return ErrNoDatabase
+	}
+
+	var sessionId *string
+	if mem.SessionId != "" {
+		sessionId = &mem.SessionId
+	}
+
+	return ac.srv.DB.QueryRow(ctx, `
+		INSERT INTO memories (user_id, memory_text, session_id, embedding, model_id, target_user_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, created_at, updated_at`,
+		mem.UserId, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId).
+		Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime)
+}
+
+func (ac *AssistantCoordinator) UpdateMemory(ctx context.Context, mem *model.Memory) error {
+	if ac.srv.DB == nil {
+		return ErrNoDatabase
+	}
+
+	if mem.Id == "" {
+		return fmt.Errorf("cannot update memory without an id")
+	}
+
+	var sessionId *string
+	if mem.SessionId != "" {
+		sessionId = &mem.SessionId
+	}
+
+	return ac.srv.DB.QueryRow(ctx, `
+		UPDATE memories
+		SET memory_text = $2, session_id = $3, embedding = $4, model_id = $5, target_user_id = $6, updated_at = now()
+		WHERE id = $1
+		RETURNING updated_at`,
+		mem.Id, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId).
+		Scan(&mem.UpdateTime)
+}
+
+func (ac *AssistantCoordinator) DeleteMemory(ctx context.Context, id string) error {
+	if ac.srv.DB == nil {
+		return ErrNoDatabase
+	}
+
+	if id == "" {
+		return fmt.Errorf("cannot delete memory without an id")
+	}
+
+	return ac.srv.DB.Exec(ctx, `DELETE FROM memories WHERE id = $1`, id)
+}
+
+func (ac *AssistantCoordinator) applyMemories(ctx context.Context, memories []*model.ReconciledMemory) (created int, updated int, deleted int, errMap map[string]string) {
+	errMap = map[string]string{}
+
+	for _, mem := range memories {
+		action := strings.ToUpper(mem.Action)
+
+		var err error
+
+		switch action {
+		case "ADD":
+			err = ac.AddMemory(ctx, mem.Memory)
+			if err == nil {
+				created++
+			}
+		case "UPDATE":
+			err = ac.UpdateMemory(ctx, mem.Memory)
+			if err == nil {
+				updated++
+			}
+		case "DELETE":
+			err = ac.DeleteMemory(ctx, mem.Memory.Id)
+			if err == nil {
+				deleted++
+			}
+		case "NOOP":
+		default:
+			err = fmt.Errorf("unknown memory action: %s", mem.Action)
+		}
+
+		if err != nil {
+			if action != "DELETE" {
+				if mem.Memory.Id != "" {
+					errMap[mem.Memory.Id] = err.Error()
+				} else {
+					// no ID and we want to keep memories out of the log
+					// so md5 fingerprint
+					h := md5.Sum([]byte(mem.Memory.MemoryText))
+					fp := base64.StdEncoding.EncodeToString(h[:])
+
+					errMap[fp] = err.Error()
+				}
+			} else {
+				errMap["DELETE "+mem.Memory.Id] = err.Error()
+			}
+		}
+	}
+
+	return created, updated, deleted, errMap
 }
 
 func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string {

@@ -1,3 +1,8 @@
+// Copyright Security Onion Solutions LLC and/or licensed to Security Onion Solutions LLC under one
+// or more contributor license agreements. Licensed under the Elastic License 2.0 as shown at
+// https://securityonion.net/license; you may not use this file except in compliance with the
+// Elastic License 2.0.
+
 package assistant
 
 import (
@@ -89,18 +94,26 @@ func (a *OpenAIEmbeddingsAdapter) Embed(ctx context.Context, req *model.Embeddin
 
 	// Preserve request order. The API returns each embedding with its input
 	// Index, so place vectors by index rather than trusting slice order.
-	embeddings := make([][]float64, len(resp.Data))
+	embeddings := make([][]float32, len(req.Input))
 	for _, item := range resp.Data {
 		idx := int(item.Index)
 		if idx < 0 || idx >= len(embeddings) {
-			// Unexpected index from the provider; skip rather than panic.
+			// Unexpected index from the provider
 			logger.WithFields(log.Fields{
 				"index": idx,
-				"count": len(embeddings),
-			}).Warn("embedding index out of range, skipping")
-			continue
+				"count": len(req.Input),
+			}).Error("embedding index out of range")
+
+			return nil, errors.New("unexpected embedding response")
 		}
-		embeddings[idx] = item.Embedding
+
+		embeddings[idx] = shrinkEmbed(item.Embedding)
+	}
+
+	for _, emb := range embeddings {
+		if len(emb) == 0 {
+			return nil, errors.New("incomplete embedding response")
+		}
 	}
 
 	return &model.EmbeddingResponse{
@@ -133,4 +146,13 @@ func (a *OpenAIEmbeddingsAdapter) GetBalance(ctx context.Context) (*model.Balanc
 
 func (a *OpenAIEmbeddingsAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, error) {
 	return checkOpenAIHealth(ctx, a.client, a.healthTimeoutSeconds)
+}
+
+func shrinkEmbed(vec []float64) []float32 {
+	vec2 := make([]float32, 0, len(vec))
+	for _, f := range vec {
+		vec2 = append(vec2, float32(f))
+	}
+
+	return vec2
 }

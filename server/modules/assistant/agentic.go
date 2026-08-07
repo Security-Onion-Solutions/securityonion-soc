@@ -374,6 +374,12 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			CanDelegateTo: []string{},
 			Prompt:        prompts["prompt_agent_embed"],
 		},
+		"Reconcile": {
+			Name:          "Reconcile",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_reconcile"],
+		},
 	}
 
 	ac.SkillLibrary = map[string]model.Skill{
@@ -427,6 +433,7 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		ac.builtinSkills[name] = skill
 	}
 
+	// small value for testing, real value will probably be more like 5-15 mins
 	ac.memoryScanInterval = time.Second * 3
 }
 
