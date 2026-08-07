@@ -223,77 +223,56 @@
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-memusage-${index}-label`" class="filter label">{{ i18n.memUsage }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_memory" v-model="item.memoryUsedPct" height="15" :color="formatLinearColor(item.memoryUsedPct, 70, 80, 90)" :aria-labelledby="`node-memusage-${index}-label`">
-																	<template #default="{ value }">
-																		<strong>{{ formatDecimal1(item.memoryUsedPct) }}% {{ i18n.of }} {{ formatDecimal1(item.memoryTotalGB) }} {{ i18n.gigabytes }}</strong>
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.memoryUsedPct) }}% {{ i18n.of }} {{ formatDecimal1(item.memoryTotalGB) }} {{ i18n.gigabytes }}</div>
+																<v-progress-linear id="node_memory" v-model="item.memoryUsedPct" height="6" :color="formatLinearColor(item.memoryUsedPct, 70, 80, 90)" :aria-labelledby="`node-memusage-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-swapusage-${index}-label`" class="filter label">{{ i18n.swapUsage }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_swap" v-model="item.swapUsedPct" height="15" :color="formatLinearColor(item.swapUsedPct, 70, 80, 90)" :aria-labelledby="`node-swapusage-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.swapUsedPct) }}% {{ i18n.of }} {{ formatDecimal1(item.swapTotalGB) }} {{ i18n.gigabytes }}
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.swapUsedPct) }}% {{ i18n.of }} {{ formatDecimal1(item.swapTotalGB) }} {{ i18n.gigabytes }}</div>
+																<v-progress-linear id="node_swap" v-model="item.swapUsedPct" height="6" :color="formatLinearColor(item.swapUsedPct, 70, 80, 90)" :aria-labelledby="`node-swapusage-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-cpuusage-${index}-label`" class="filter label">{{ i18n.cpuUsage }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_cpu" v-model="item.cpuUsedPct" height="15" :color="formatLinearColor(item.cpuUsedPct, 85, 90, 95)" :aria-labelledby="`node-cpuusage-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.cpuUsedPct) }}%
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.cpuUsedPct) }}%</div>
+																<v-progress-linear id="node_cpu" v-model="item.cpuUsedPct" height="6" :color="formatLinearColor(item.cpuUsedPct, 85, 90, 95)" :aria-labelledby="`node-cpuusage-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-iowait-${index}-label`" class="filter label">{{ i18n.ioWait }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_ioWait" v-model="item.ioWaitPct" height="15" :color="formatLinearColor(item.ioWaitPct, 2.5, 5, 10)" :aria-labelledby="`node-iowait-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.ioWaitPct) }}%
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.ioWaitPct) }}%</div>
+																<v-progress-linear id="node_ioWait" v-model="item.ioWaitPct" height="6" :color="formatLinearColor(item.ioWaitPct, 2.5, 5, 10)" :aria-labelledby="`node-iowait-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled && canTest(item)">
 															<dt :id="`node-captureloss-${index}-label`" class="filter label">{{ i18n.captureLoss }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_captureLoss" v-model="item.captureLossPct" height="15" :color="formatLinearColor(item.captureLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-captureloss-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.captureLossPct) }}%
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.captureLossPct) }}%</div>
+																<v-progress-linear id="node_captureLoss" v-model="item.captureLossPct" height="6" :color="formatLinearColor(item.captureLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-captureloss-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled && hasZeek(item)">
 															<dt :id="`node-zeekloss-${index}-label`" class="filter label">{{ i18n.zeekLoss }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_zeekLoss" v-model="item.zeekLossPct" height="15" :color="formatLinearColor(item.zeekLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-zeekloss-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.zeekLossPct) }}%
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.zeekLossPct) }}%</div>
+																<v-progress-linear id="node_zeekLoss" v-model="item.zeekLossPct" height="6" :color="formatLinearColor(item.zeekLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-zeekloss-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled && hasSuri(item)">
 															<dt :id="`node-suricataloss-${index}-label`" class="filter label">{{ i18n.suricataLoss }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_suricataLoss" v-model="item.suriLossPct" height="15" :color="formatLinearColor(item.suriLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-suricataloss-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.suriLossPct) }}%
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.suriLossPct) }}%</div>
+																<v-progress-linear id="node_suricataLoss" v-model="item.suriLossPct" height="6" :color="formatLinearColor(item.suriLossPct, 0.01, 0.5, 1.5)" :aria-labelledby="`node-suricataloss-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
@@ -333,22 +312,16 @@
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-diskroot-${index}-label`" class="filter label">{{ i18n.diskUsageRoot }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_diskRoot" v-model="item.diskUsedRootPct" height="15" :color="formatLinearColor(item.diskUsedRootPct, 85, 90, 95)" :aria-labelledby="`node-diskroot-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.diskUsedRootPct) }}% {{ i18n.of }} {{ formatDecimal1(item.diskTotalRootGB) }} {{ i18n.gigabytes }}
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.diskUsedRootPct) }}% {{ i18n.of }} {{ formatDecimal1(item.diskTotalRootGB) }} {{ i18n.gigabytes }}</div>
+																<v-progress-linear id="node_diskRoot" v-model="item.diskUsedRootPct" height="6" :color="formatLinearColor(item.diskUsedRootPct, 85, 90, 95)" :aria-labelledby="`node-diskroot-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">
 															<dt :id="`node-disknsm-${index}-label`" class="filter label">{{ i18n.diskUsageNsm }}:</dt>
 															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'">
-																<v-progress-linear id="node_diskNsm" v-model="item.diskUsedNsmPct" height="15" :color="formatLinearColor(item.diskUsedNsmPct, 85, 90, 95)" :aria-labelledby="`node-disknsm-${index}-label`">
-																	<template #default="{ value }">
-																		{{ formatDecimal1(item.diskUsedNsmPct) }}% {{ i18n.of }} {{ formatDecimal1(item.diskTotalNsmGB) }} {{ i18n.gigabytes }}
-																	</template>
-																</v-progress-linear>
+																<div>{{ formatDecimal1(item.diskUsedNsmPct) }}% {{ i18n.of }} {{ formatDecimal1(item.diskTotalNsmGB) }} {{ i18n.gigabytes }}</div>
+																<v-progress-linear id="node_diskNsm" v-model="item.diskUsedNsmPct" height="6" :color="formatLinearColor(item.diskUsedNsmPct, 85, 90, 95)" :aria-labelledby="`node-disknsm-${index}-label`"></v-progress-linear>
 															</dd>
 														</template>
 

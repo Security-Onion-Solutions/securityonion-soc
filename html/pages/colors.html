@@ -58,9 +58,10 @@
           </div>
 
           <div v-if="surface.progress" class="mt-2">
-            <v-progress-linear v-for="p in progressFor(surface)" :key="p" :color="p" :model-value="65" height="15" class="mb-1" aria-label="progress">
-              <span class="text-caption">65% ({{ p }})</span>
-            </v-progress-linear>
+            <div v-for="p in progressFor(surface)" :key="p" class="mb-1">
+              <div class="text-caption">65% ({{ p }})</div>
+              <v-progress-linear :color="p" :model-value="65" height="6" aria-label="progress"></v-progress-linear>
+            </div>
           </div>
           </section>
         </div>
