@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 )
 
 const DEFAULT_GROUP_FETCH_LIMIT = 10
@@ -229,9 +230,43 @@ type AgentParameters struct {
 	IsOrchestrator bool     `json:"isOrchestrator"`
 	CanDelegateTo  []string `json:"canDelegateTo"`
 	AllowedSkills  []string `json:"allowedSkills"`
-	// Prompt is the agent's system prompt; never serialized to the browser.
+	// Prompt is the agent's built-in system prompt, shipped with the product and
+	// never serialized to the browser. Empty for admin-created agents, whose
+	// instructions live entirely in PersonaAddendum.
 	Prompt      string `json:"-"`
 	Description string `json:"agentDescription"`
+	// IsSystem marks an agent that ships with the product. System agents cannot be
+	// renamed, deleted or duplicated, and their Prompt is not viewable or editable;
+	// admins may still enable/disable them, retarget their model, adjust their
+	// delegation, and append a PersonaAddendum.
+	IsSystem bool `json:"isSystem"`
+	// Enabled reports whether the agent participates at runtime. A disabled agent is
+	// not registered as a delegate and is not offered as a chat target, but is still
+	// published so the Agent Studio can list and re-enable it.
+	Enabled bool `json:"enabled"`
+	// PersonaAddendum is the admin-authored persona. It is exposed to the browser
+	// (unlike Prompt) because an admin wrote it and must be able to edit it. For a
+	// system agent it is appended to the built-in Prompt; for an admin-created agent
+	// Prompt is empty, so this is the agent's entire persona. See EffectivePrompt.
+	PersonaAddendum string `json:"personaAddendum"`
+}
+
+// EffectivePrompt returns the system prompt the agent actually runs with: its
+// built-in prompt with the admin-authored persona appended. Either part may be
+// empty -- a system agent with no addendum runs on the built-in text alone, and an
+// admin-created agent runs on its addendum alone.
+func (a *AgentParameters) EffectivePrompt() string {
+	prompt := strings.TrimSpace(a.Prompt)
+	addendum := strings.TrimSpace(a.PersonaAddendum)
+
+	switch {
+	case prompt == "":
+		return addendum
+	case addendum == "":
+		return prompt
+	default:
+		return prompt + "\n\n" + addendum
+	}
 }
 
 type AdapterParameters struct {

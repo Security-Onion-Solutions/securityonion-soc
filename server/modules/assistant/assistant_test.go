@@ -1436,7 +1436,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *
 	}
 	ac.isAgentic = true
 	ac.agents = map[string]model.AgentParameters{
-		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}},
+		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Test Hunter": "test-model@MyAdapter"}
 
@@ -1782,7 +1782,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}},
 		},
 		agents: map[string]model.AgentParameters{
-			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}},
+			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}, Enabled: true},
 		},
 		agentMapping: map[string]string{"Hunter": "test-model@whatever"},
 		adapters: map[string]server.AssistantAdapter{
@@ -3285,7 +3285,7 @@ func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
 		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
 	})
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator"}}
+	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator", Enabled: true}}
 	ac.agentMapping = map[string]string{"Orchestrator": "sonnet"}
 
 	assert.Equal(t, "SOAIDEV", ac.resolveAdapterName("Orchestrator"))
@@ -3362,7 +3362,7 @@ func TestAssistantCoordinator_Send_AgenticFallsThroughToModelSelector(t *testing
 	ac.systemPrompt = "default prompt"
 	ac.isAgentic = true
 	ac.agents = map[string]model.AgentParameters{
-		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}},
+		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Hunter": "test-model@MyAdapter"}
 
@@ -3518,7 +3518,7 @@ func TestRegisterDelegateTools(t *testing.T) {
 	t.Run("registers a delegate under the agent name and tool name", func(t *testing.T) {
 		ac, _ := newSelectorLogCoordinator(nil)
 		ac.agents = map[string]model.AgentParameters{
-			"Hunter": {Name: "Hunter", Description: "an event hunter"},
+			"Hunter": {Name: "Hunter", Description: "an event hunter", Enabled: true},
 		}
 
 		ac.registerDelegateTools()
@@ -3534,8 +3534,8 @@ func TestRegisterDelegateTools(t *testing.T) {
 		// tool name. Registration is sorted, so "A B" wins and "A_B" collides.
 		ac, h := newSelectorLogCoordinator(nil)
 		ac.agents = map[string]model.AgentParameters{
-			"A B": {Name: "A B"},
-			"A_B": {Name: "A_B"},
+			"A B": {Name: "A B", Enabled: true},
+			"A_B": {Name: "A_B", Enabled: true},
 		}
 
 		ac.registerDelegateTools()

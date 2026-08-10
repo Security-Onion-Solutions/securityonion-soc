@@ -24,14 +24,28 @@ import (
 // "assistant.agents" config setting (one JSON object per line, matching the
 // []{} uiElements convention). It carries the agent's model so this one setting
 // drives both the agent definitions and the agent->model mapping.
+//
+// An entry whose name matches a system agent is an *override*: only the fields an
+// admin may change are written, and everything omitted -- above all the built-in
+// prompt, which is never sent to the browser and so cannot round-trip through the
+// Agent Studio -- is restored from the system definition (see applyBuiltinDefaults).
+// An entry with no matching system agent is an admin-created agent, defined
+// entirely by what is stored here.
 type storedAgent struct {
-	Name           string   `json:"name"`
-	IsOrchestrator bool     `json:"isOrchestrator"`
-	Model          string   `json:"model"`
-	AllowedSkills  []string `json:"allowedSkills"`
-	CanDelegateTo  []string `json:"canDelegateTo"`
-	Description    string   `json:"description"`
-	Prompt         string   `json:"prompt"`
+	Name string `json:"name"`
+	// Enabled is a pointer so an absent field means "unchanged" (defaulting to
+	// enabled) rather than "disabled", which is what a bare bool would decode to.
+	Enabled        *bool `json:"enabled,omitempty"`
+	IsOrchestrator bool  `json:"isOrchestrator"`
+	// Model is a model selector ("id@adapter", or a bare id), the same form
+	// agentMapping carries and resolveModel understands -- not a display name.
+	Model         string   `json:"model"`
+	AllowedSkills []string `json:"allowedSkills"`
+	CanDelegateTo []string `json:"canDelegateTo"`
+	Description   string   `json:"description"`
+	// Persona is the admin-authored persona: an addendum to the built-in prompt for
+	// a system agent, or the entire prompt for an admin-created one.
+	Persona string `json:"persona"`
 }
 
 // reloadAgentConfiguration re-reads the agentic configuration from the config
@@ -85,6 +99,9 @@ func (ac *AssistantCoordinator) reloadAgentConfiguration(ctx context.Context) {
 	defer ac.agentMu.Unlock()
 
 	if newAgents != nil {
+		ac.applyBuiltinDefaults(newAgents)
+		ac.restoreMissingBuiltins(newAgents, newMapping)
+		ac.ensureEnabledOrchestrator(ctx, newAgents)
 		ac.agents = newAgents
 		ac.agentMapping = newMapping
 	}
@@ -94,6 +111,83 @@ func (ac *AssistantCoordinator) reloadAgentConfiguration(ctx context.Context) {
 	ac.validateAgentMappings()
 	ac.registerDelegateTools()
 	ac.exposeAgents()
+}
+
+// applyBuiltinDefaults restores, from the system-provided set, the fields an admin
+// may not change on an agent that names a built-in, and marks it as a system
+// agent. A stored entry is therefore an override rather than a replacement. This
+// is what keeps the embedded prompt intact: it is never sent to the browser
+// (AgentParameters.Prompt is json:"-"), so a definition saved from the Agent Studio
+// necessarily omits it, and a straight replacement would blank every system
+// persona on the first save. Agents with no matching built-in are admin-created and
+// are left exactly as stored.
+func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.AgentParameters) {
+	for name, agent := range agents {
+		builtin, ok := ac.builtinAgents[name]
+		if !ok {
+			continue
+		}
+
+		// Not editable on a system agent: the built-in definition always wins.
+		agent.IsSystem = true
+		agent.Prompt = builtin.Prompt
+		agent.IsOrchestrator = builtin.IsOrchestrator
+		agent.Description = builtin.Description
+		agent.AllowedSkills = builtin.AllowedSkills
+
+		// Editable, but an omitted value falls back to the built-in.
+		if agent.CanDelegateTo == nil {
+			agent.CanDelegateTo = builtin.CanDelegateTo
+		}
+
+		agents[name] = agent
+	}
+}
+
+// restoreMissingBuiltins re-adds any system agent the stored configuration does
+// not mention, along with its startup model mapping. System agents can only be
+// disabled, never deleted, so a setting written before a release introduced a new
+// built-in must not hide it.
+func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.AgentParameters, mapping map[string]string) {
+	for name, builtin := range ac.builtinAgents {
+		if _, ok := agents[name]; ok {
+			continue
+		}
+
+		agents[name] = builtin
+
+		if selector, ok := ac.builtinAgentMapping[name]; ok && mapping[name] == "" {
+			mapping[name] = selector
+		}
+	}
+}
+
+// ensureEnabledOrchestrator guarantees at least one orchestrator stays enabled. A
+// grid with none has no entry point for agentic chat, so a configuration that
+// disables the last one is corrected here -- the system orchestrators are
+// re-enabled and the problem logged -- rather than silently disabling the
+// assistant. The Agent Studio refuses the same edit up front; this is the backstop
+// for a hand-edited setting.
+func (ac *AssistantCoordinator) ensureEnabledOrchestrator(ctx context.Context, agents map[string]model.AgentParameters) {
+	for _, agent := range agents {
+		if agent.IsOrchestrator && agent.Enabled {
+			return
+		}
+	}
+
+	restored := make([]string, 0, 1)
+	for name, agent := range agents {
+		if !agent.IsOrchestrator || !agent.IsSystem {
+			continue
+		}
+		agent.Enabled = true
+		agents[name] = agent
+		restored = append(restored, name)
+	}
+	sort.Strings(restored)
+
+	log.FromContext(ctx).WithField("reEnabled", restored).
+		Error("configuration leaves no enabled orchestrator; re-enabling system orchestrators")
 }
 
 // parseAgentsSetting decodes the "assistant.agents" setting value into the agent
@@ -137,12 +231,14 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.AgentParameter
 			continue
 		}
 		agents[sa.Name] = model.AgentParameters{
-			Name:           sa.Name,
-			IsOrchestrator: sa.IsOrchestrator,
-			CanDelegateTo:  sa.CanDelegateTo,
-			AllowedSkills:  sa.AllowedSkills,
-			Description:    sa.Description,
-			Prompt:         sa.Prompt,
+			Name:            sa.Name,
+			IsOrchestrator:  sa.IsOrchestrator,
+			CanDelegateTo:   sa.CanDelegateTo,
+			AllowedSkills:   sa.AllowedSkills,
+			Description:     sa.Description,
+			PersonaAddendum: sa.Persona,
+			// Absent means unchanged, which for a new entry means enabled.
+			Enabled: sa.Enabled == nil || *sa.Enabled,
 		}
 		if strings.TrimSpace(sa.Model) != "" {
 			mapping[sa.Name] = sa.Model
@@ -242,6 +338,21 @@ func (ac *AssistantCoordinator) setupAgentic() {
 			AdditionalPrompt: prompts["prompt_skill_tuning"],
 		},
 	}
+
+	// Everything defined above ships with the product and starts enabled. Marking it
+	// here keeps the definitions above free of two fields that never vary.
+	for name, agent := range ac.agents {
+		agent.IsSystem = true
+		agent.Enabled = true
+		ac.agents[name] = agent
+	}
+
+	// Snapshot the system-provided set before any config-driven reload can replace
+	// it; reloads merge stored overrides on top of this (see applyBuiltinDefaults).
+	ac.builtinAgents = make(map[string]model.AgentParameters, len(ac.agents))
+	for name, agent := range ac.agents {
+		ac.builtinAgents[name] = agent
+	}
 }
 
 func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string {
@@ -306,7 +417,13 @@ func (ac *AssistantCoordinator) loadAgentMapping(config module.ModuleConfig) map
 func (ac *AssistantCoordinator) validateAgentMappings() {
 	logger := log.FromContext(ac.srv.Context)
 
-	for name := range ac.agents {
+	for name, agent := range ac.agents {
+		// A disabled agent never executes, so it needs no usable model. Keep it in the
+		// set regardless of its mapping so the Agent Studio can still list and fix it.
+		if !agent.Enabled {
+			continue
+		}
+
 		modelSelector, mapped := ac.agentMapping[name]
 		if !mapped || modelSelector == "" {
 			logger.WithField("agent", name).Error("agent has no configured model mapping; disabling agent")

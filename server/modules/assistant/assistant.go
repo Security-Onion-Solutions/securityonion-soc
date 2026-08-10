@@ -89,6 +89,16 @@ type AssistantCoordinator struct {
 	agents            map[string]model.AgentParameters
 	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
 
+	// builtinAgents and builtinAgentMapping are the system-provided agent set and
+	// its startup model mapping, captured before any config-driven reload and never
+	// mutated afterwards. A reload treats a stored entry as an override on top of
+	// these, so fields an admin cannot edit -- above all the embedded prompt, which
+	// is never sent to the browser and so cannot round-trip through the Agent Studio
+	// -- survive a save, and a newly shipped built-in still reaches a grid whose
+	// setting predates it.
+	builtinAgents       map[string]model.AgentParameters
+	builtinAgentMapping map[string]string
+
 	systemPrompt         string
 	systemPromptAddendum string
 
@@ -177,6 +187,13 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	if ac.isAgentic {
 		ac.setupAgentic()
 		ac.agentMapping = ac.loadAgentMapping(config)
+
+		// Snapshot the system-provided mapping alongside the agents themselves; a
+		// reload restores it for any built-in the stored setting does not mention.
+		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+		for name, selector := range ac.agentMapping {
+			ac.builtinAgentMapping[name] = selector
+		}
 	}
 
 	ac.validateModelSelectors()
@@ -270,6 +287,12 @@ func (ac *AssistantCoordinator) registerDelegateTools() {
 
 	for _, name := range names {
 		agent := ac.agents[name]
+
+		// A disabled agent is not a delegation target: no delegate tool is registered
+		// for it, so no other agent can hand work to it.
+		if !agent.Enabled {
+			continue
+		}
 
 		delegate := NewDelegateTool(name, name, agent.Description)
 		toolName := delegate.GetName()
@@ -580,8 +603,8 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 // resolveAgent resolves an agent name to its definition and the model that
 // executes it. The model is found by mapping the agent name through
 // ac.agentMapping to a model selector ("id@adapter" or bare id) and then
-// resolveModel. Returns ErrInvalidAgent when the agent is unknown or its
-// mapped model is missing; callers surface this as a client error. Only
+// resolveModel. Returns ErrInvalidAgent when the agent is unknown, disabled, or
+// its mapped model is missing; callers surface this as a client error. Only
 // meaningful in agentic mode.
 func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
 	ac.agentMu.RLock()
@@ -589,7 +612,10 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameter
 	modelSelector, mapped := ac.agentMapping[name]
 	ac.agentMu.RUnlock()
 
-	if !ok || !mapped {
+	// A disabled agent is published to the Agent Studio but must not execute, so it
+	// resolves like an unknown one -- including for a stored session that was
+	// started before it was disabled.
+	if !ok || !mapped || !agent.Enabled {
 		return nil, nil, ErrInvalidAgent
 	}
 
@@ -2281,7 +2307,9 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.AgentParameters) (err error) {
 	logger := log.FromContext(ctx)
 
-	req.System = agent.Prompt // build system prompt for this agent
+	// Built-in prompt plus the admin-authored persona; for an admin-created agent the
+	// persona is the whole thing (see AgentParameters.EffectivePrompt).
+	req.System = agent.EffectivePrompt()
 
 	allowedTools := map[string]struct{}{}
 	seenSkills := map[string]struct{}{}
