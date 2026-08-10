@@ -2145,6 +2145,94 @@ test('moveEntryWrapWithoutPlus', () => {
   expect(comp.form.entries[2]._title).toBe('3');
 });
 
+test('canDragEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  expect(comp.canDragEntry(0)).toBe(true);
+  expect(comp.canDragEntry(1)).toBe(true);
+  expect(comp.canDragEntry(2)).toBe(false);
+
+  comp.form.entries = [{_title: '1'}, {_title: '2'}];
+  expect(comp.canDragEntry(0)).toBe(true);
+  expect(comp.canDragEntry(1)).toBe(true);
+  expect(comp.canDragEntry(99)).toBe(false);
+});
+
+test('onEntryDragStart / onEntryDragOver / onEntryDragLeave / onEntryDragEnd', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  const preventDefault = jest.fn();
+  const setData = jest.fn();
+  const evt = { preventDefault, dataTransfer: { effectAllowed: '', setData }, currentTarget: { getBoundingClientRect: () => ({ top: 100, height: 50 }) }, clientY: 110 };
+
+  // Cannot drag '+' entry
+  comp.onEntryDragStart(evt, 2);
+  expect(preventDefault).toHaveBeenCalled();
+  expect(comp.draggedEntryIdx).toBeNull();
+
+  // Valid drag start
+  comp.onEntryDragStart(evt, 0);
+  expect(comp.draggedEntryIdx).toBe(0);
+  expect(evt.dataTransfer.effectAllowed).toBe('move');
+  expect(setData).toHaveBeenCalledWith('text/plain', '0');
+
+  // Drag over target above midline
+  comp.onEntryDragOver(evt, 1);
+  expect(comp.dragOverEntryIdx).toBe(1);
+  expect(comp.dragPosition).toBe('above');
+
+  // Drag over target below midline
+  evt.clientY = 140;
+  comp.onEntryDragOver(evt, 1);
+  expect(comp.dragOverEntryIdx).toBe(1);
+  expect(comp.dragPosition).toBe('below');
+
+  // Drag over non-draggable target (e.g., '+')
+  comp.onEntryDragOver(evt, 2);
+  expect(comp.dragOverEntryIdx).toBe(1); // untouched
+
+  // Drag leave
+  comp.onEntryDragLeave(evt, 1);
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+
+  // Drag end
+  comp.draggedEntryIdx = 0;
+  comp.dragOverEntryIdx = 1;
+  comp.dragPosition = 'above';
+  comp.onEntryDragEnd();
+  expect(comp.draggedEntryIdx).toBeNull();
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+});
+
+test('onEntryDrop and reorderEntry above/below', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.regenEntryTitles = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.draggedEntryIdx = 0;
+  comp.dragOverEntryIdx = 2;
+  comp.dragPosition = 'below';
+
+  const preventDefault = jest.fn();
+  const evt = { preventDefault, dataTransfer: { getData: () => '0' } };
+
+  // Dropping below item index 2 -> target insertion index becomes 2
+  comp.onEntryDrop(evt, 2, {});
+  expect(preventDefault).toHaveBeenCalled();
+  expect(comp.draggedEntryIdx).toBeNull();
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.regenEntryTitles).toHaveBeenCalled();
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  // Element at index 0 ('1') moved below index 2 (so position 2)
+  expect(comp.form.entries.map(e => e._title)).toEqual(['2', '3', '1', '+']);
+});
+
 test('getSettingLink', () => {
   const setting = { id: 'test.setting', advanced: true };
 

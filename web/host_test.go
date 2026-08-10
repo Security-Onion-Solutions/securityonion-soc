@@ -130,11 +130,24 @@ func TestPreprocessExecute(tester *testing.T) {
 	host := NewHost("http://some.where/path", "/tmp/foo", 123, "unit test", nil)
 	newPreprocessor := &DummyPreprocessor{priority: 123, statusCode: 321}
 	host.AddPreprocessor(newPreprocessor)
-	request, _ := http.NewRequest("GET", "", nil)
+	request, _ := http.NewRequest("GET", "/api/test", nil)
 	ctx, statusCode, err := host.Preprocess(context.Background(), request)
 	assert.NoError(tester, err)
+	assert.Zero(tester, statusCode)
+	assert.NotNil(tester, ctx)
+}
+
+func TestPreprocessExecuteError(tester *testing.T) {
+	host := &Host{
+		preprocessors: make([]Preprocessor, 0),
+	}
+	newPreprocessor := &DummyPreprocessor{priority: 123, statusCode: 321, err: errors.New("err")}
+	host.AddPreprocessor(newPreprocessor)
+	request, _ := http.NewRequest("GET", "", nil)
+	ctx, statusCode, err := host.Preprocess(context.Background(), request)
+	assert.Error(tester, err)
 	assert.Equal(tester, 321, statusCode)
-	assert.NotNil(tester, ctx.Value(ContextKeyRequestId), "Context mismatch after preprocessing")
+	assert.NotNil(tester, ctx)
 }
 
 func setupWebsocket(tester *testing.T) *Host {

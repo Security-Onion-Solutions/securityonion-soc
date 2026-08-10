@@ -290,34 +290,47 @@
 										</v-btn>
 									</div>
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
-										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title">
-											<v-expansion-panel-title hide-actions="true">
-												<span class="entry-heading" role="heading" :aria-level="3">{{ entry._title }}</span>
-												<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounded="xs" class="mx-4" v-text="entry._status" :aria-label="$root.replaceActionVar(i18n.ariaStatus, 'status', entry._status)"></v-chip>
-												<div v-if="entry._title != '+'" class="float-right ml-2">
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up" :aria-label="i18n.ariaMoveEntryUp">
-														<v-icon>fa-arrow-up</v-icon>
-													</v-btn>
-													<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
-														<v-icon>fa-arrow-down</v-icon>
-													</v-btn>
-												</div>
-											</v-expansion-panel-title>
-											<v-expansion-panel-text>
-												<v-form v-model="uiElementsValid">
-													<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
-														<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
-														<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
-														<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
-														<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
+										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title"
+											:draggable="canDragEntry(entryIdx)"
+											@dragstart="onEntryDragStart($event, entryIdx)"
+											@dragover="onEntryDragOver($event, entryIdx)"
+											@dragleave="onEntryDragLeave($event, entryIdx)"
+											@drop="onEntryDrop($event, entryIdx, selected)"
+											@dragend="onEntryDragEnd"
+											:class="{
+												'entry-dragging': draggedEntryIdx === entryIdx,
+												'entry-drag-above': (dragOverEntryIdx === entryIdx && dragPosition === 'above') || (dragOverEntryIdx === entryIdx - 1 && dragPosition === 'below'),
+												'entry-drag-below': (dragOverEntryIdx === entryIdx && dragPosition === 'below') || (dragOverEntryIdx === entryIdx + 1 && dragPosition === 'above'),
+												'entry-recently-moved': recentlyMovedItem === entry
+											}">
+												<v-expansion-panel-title hide-actions="true">
+													<span class="entry-heading" role="heading" :aria-level="3">{{ entry._title }}</span>
+													<v-chip v-if="!!entry._status" :color="entry._statusColor ? entry._statusColor : 'secondary'" variant="elevated" density="compact" rounded="xs" class="mx-4" v-text="entry._status" :aria-label="$root.replaceActionVar(i18n.ariaStatus, 'status', entry._status)"></v-chip>
+													<div v-if="entry._title != '+'" class="float-right ml-2 d-flex align-center">
+														<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, true)" :disabled="!canMoveEntry(entryIdx, true)" data-aid="config_entry_move_up" :aria-label="i18n.ariaMoveEntryUp">
+															<v-icon>fa-arrow-up</v-icon>
+														</v-btn>
+														<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
+															<v-icon>fa-arrow-down</v-icon>
+														</v-btn>
+														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder">fa-grip-vertical</v-icon>
 													</div>
-												</v-form>
-												<p>* {{ i18n.requiredField }}</p>
-												<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry" :aria-label="i18n.settingDeleteEntryHelp">
-													<v-icon color="error">fa-trash</v-icon>
-												</v-btn>
-											</v-expansion-panel-text>
-										</v-expansion-panel>
+												</v-expansion-panel-title>
+												<v-expansion-panel-text>
+													<v-form v-model="uiElementsValid">
+														<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
+															<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
+															<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
+															<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
+															<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
+														</div>
+													</v-form>
+													<p>* {{ i18n.requiredField }}</p>
+													<v-btn v-if="!isEntryEmpty(selected, entry)" id="'setting-element-' + entryIdx + '-delete-' + entry['field']" icon variant="text" size="small" @click="showClearEntryDialog(selected, entryIdx)" :title="i18n.settingDeleteEntryHelp" data-aid="config_item_delete_entry" :aria-label="i18n.settingDeleteEntryHelp">
+														<v-icon color="error">fa-trash</v-icon>
+													</v-btn>
+												</v-expansion-panel-text>
+											</v-expansion-panel>
 									</v-expansion-panels>
 									<div v-else>
 										<div v-if="isToggle(selected)">

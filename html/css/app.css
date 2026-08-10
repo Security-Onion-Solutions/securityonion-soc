@@ -1536,4 +1536,38 @@ ul ul ul {
   border-left: 4px solid rgb(var(--v-theme-primary)) !important;
 }
 
+.grab-handle {
+  cursor: grab;
+}
+
+.grab-handle:active {
+  cursor: grabbing;
+}
+
+.entry-dragging {
+  opacity: 0.5;
+}
+
+.entry-drag-above {
+  background: linear-gradient(to bottom, rgba(var(--v-theme-primary), 0.25) 0%, rgba(var(--v-theme-primary), 0) 50%) !important;
+}
+
+.entry-drag-below {
+  background: linear-gradient(to top, rgba(var(--v-theme-primary), 0.25) 0%, rgba(var(--v-theme-primary), 0) 50%) !important;
+}
+
+.entry-recently-moved,
+.entry-recently-moved .v-expansion-panel-title {
+  animation: entry-moved-gradient 1s ease-out forwards;
+}
+
+@keyframes entry-moved-gradient {
+  0% {
+    background-color: rgba(var(--v-theme-primary), 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 

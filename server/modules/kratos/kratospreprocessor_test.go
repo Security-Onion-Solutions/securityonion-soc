@@ -27,7 +27,16 @@ func TestPreprocess(tester *testing.T) {
 	user := model.NewUser()
 	user.Id = expectedId
 	userstore := NewKratosUserstore(server.NewFakeAuthorizedServer(make(map[string][]string)))
-	userstore.Init("some/url")
+	userstore.Init("some/adminurl", "some/publicurl")
+
+	// ValidateSession mock response
+	whoamiResp := &http.Response{
+		StatusCode: 200,
+		Header:     make(http.Header),
+	}
+	whoamiResp.Header.Set(HeaderKratosAuthenticatedIdentityId, expectedId)
+	userstore.publicClient.MockResponse(whoamiResp, nil)
+
 	kratosUsersResponseJson := `
     [
       {
@@ -63,8 +72,7 @@ func TestPreprocess(tester *testing.T) {
 
 	handler := NewKratosPreprocessor(userstore)
 	request, _ := http.NewRequest("GET", "", nil)
-
-	request.Header.Set("x-user-id", expectedId)
+	request.AddCookie(&http.Cookie{Name: "ory_kratos_session", Value: "session123"})
 
 	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
 	if assert.Nil(tester, err) {

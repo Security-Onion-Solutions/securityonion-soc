@@ -8,17 +8,21 @@ package kratos
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
+const HeaderKratosAuthenticatedIdentityId = "X-Kratos-Authenticated-Identity-Id"
+
 type KratosPreprocessor struct {
-	userstore *KratosUserstore
+	userstore server.Userstore
 }
 
-func NewKratosPreprocessor(impl *KratosUserstore) *KratosPreprocessor {
+func NewKratosPreprocessor(impl server.Userstore) *KratosPreprocessor {
 	return &KratosPreprocessor{
 		userstore: impl,
 	}
@@ -32,19 +36,38 @@ func (proc *KratosPreprocessor) Preprocess(ctx context.Context, request *http.Re
 	var statusCode int
 	var err error
 
-	userId := request.Header.Get("x-user-id")
-	if userId != "" {
-		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
-		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, false)
-		user, err := proc.userstore.GetUser(ctx, userId)
-		if err == nil {
-			username := strings.ToLower(user.Email)
-			if strings.TrimSpace(user.SearchUsername) != "" {
-				username = user.SearchUsername
-			}
-			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, username)
-		}
+	cookie, cookieErr := request.Cookie("ory_kratos_session")
+	if cookieErr != nil || cookie == nil || cookie.Value == "" {
+		return ctx, http.StatusUnauthorized, errors.New("Missing ory_kratos_session cookie")
 	}
 
-	return ctx, statusCode, err
+	resp, err := proc.userstore.ValidateSession(ctx, request)
+	if err != nil {
+		return ctx, http.StatusUnauthorized, err
+	}
+	if resp == nil || resp.StatusCode != http.StatusOK {
+		status := http.StatusUnauthorized
+		if resp != nil && resp.StatusCode != 0 {
+			status = resp.StatusCode
+		}
+		return ctx, status, errors.New("Unauthorized session")
+	}
+
+	userId := resp.Header.Get(HeaderKratosAuthenticatedIdentityId)
+	if userId == "" {
+		return ctx, http.StatusUnauthorized, errors.New("Missing identity header in session validation response")
+	}
+
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, userId)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, false)
+	user, err := proc.userstore.GetUserById(ctx, userId)
+	if err == nil && user != nil {
+		username := strings.ToLower(user.Email)
+		if strings.TrimSpace(user.SearchUsername) != "" {
+			username = user.SearchUsername
+		}
+		ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, username)
+	}
+
+	return ctx, statusCode, nil
 }
