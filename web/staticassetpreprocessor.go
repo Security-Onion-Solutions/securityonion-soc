@@ -31,7 +31,9 @@ func (processor *StaticAssetPreprocessor) Preprocess(ctx context.Context, req *h
 
 	path := req.URL.Path
 
-	if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
+	// Note: /joblookup is a deprecated, legacy endpoint for original customers that customized their actions menu.
+	// This avoids them having to make changes to their config to point to the /api/joblookup endpoint.
+	if strings.HasPrefix(path, "/joblookup") || strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
 		return ctx, http.StatusUnauthorized, errors.New("Static assets preprocessor does not handle API or WebSocket requests")
 	}
 
