@@ -33,7 +33,7 @@ func (proc *HydraPreprocessor) PreprocessPriority() int {
 func (proc *HydraPreprocessor) Preprocess(ctx context.Context, request *http.Request) (context.Context, int, error) {
 	token := request.Header.Get("Authorization")
 	if len(token) == 0 || !strings.HasPrefix(token, "Bearer ") {
-		return ctx, 0, nil
+		return ctx, http.StatusUnauthorized, errors.New("Missing or invalid authorization header for bearer token")
 	}
 
 	if !licensing.IsEnabled(licensing.FEAT_API) {

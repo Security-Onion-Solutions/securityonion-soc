@@ -69,8 +69,8 @@ func TestPreprocessNoBearerProvided(tester *testing.T) {
 	request.Header.Set("Authorization", "abc")
 
 	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
-	assert.Nil(tester, err)
-	assert.Zero(tester, statusCode)
+	assert.NotNil(tester, err)
+	assert.Equal(tester, statusCode, http.StatusUnauthorized)
 	assert.NotNil(tester, ctx)
 }
 

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,6 +34,10 @@ func (impl *FakeUserstore) GetUserById(ctx context.Context, id string) (*model.U
 		}
 	}
 	return nil, errors.New("not found")
+}
+
+func (impl *FakeUserstore) ValidateSession(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return nil, nil
 }
 
 type FakeRolestore struct {

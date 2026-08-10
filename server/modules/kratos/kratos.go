@@ -7,6 +7,8 @@
 package kratos
 
 import (
+	"strings"
+
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -30,9 +32,18 @@ func (kratos *Kratos) PrerequisiteModules() []string {
 
 func (kratos *Kratos) Init(cfg module.ModuleConfig) error {
 	kratos.config = cfg
-	url, err := module.GetString(cfg, "hostUrl")
+	adminUrl, err := module.GetString(cfg, "hostUrl")
 	if err == nil {
-		err = kratos.impl.Init(url)
+		publicUrl, publicErr := module.GetString(cfg, "publicHostUrl")
+		if publicErr != nil || publicUrl == "" {
+			if strings.Contains(adminUrl, ":4434") {
+				publicUrl = strings.Replace(adminUrl, ":4434", ":4433", 1)
+			} else {
+				publicUrl = adminUrl
+			}
+		}
+
+		err = kratos.impl.Init(adminUrl, publicUrl)
 		if err == nil {
 			kratos.server.Userstore = kratos.impl
 			err = kratos.server.Host.AddPreprocessor(NewKratosPreprocessor(kratos.impl))

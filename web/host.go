@@ -69,9 +69,9 @@ func NewHost(address string, htmlDir string, timeoutMs int, version string, srvK
 		Version:                 version,
 		SrvKey:                  srvKey,
 	}
-	err := host.AddPreprocessor(NewBasePreprocessor())
+	err := host.AddPreprocessor(NewStaticAssetPreprocessor())
 	if err != nil {
-		log.WithError(err).Error("Unable to add base preprocessor")
+		log.WithError(err).Error("Unable to add static asset preprocessor")
 	}
 	return host
 }
@@ -259,11 +259,18 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 			"processorPriority": preprocessor.PreprocessPriority(),
 			"processorType":     reflect.TypeOf(preprocessor).String(),
 		}).Debug("Preprocessing request")
-		ctx, statusCode, err = preprocessor.Preprocess(ctx, req)
-		if err != nil {
-			break
+		pCtx, pStatusCode, pErr := preprocessor.Preprocess(ctx, req)
+		if pErr == nil {
+			log.WithFields(log.Fields{
+				"processorPriority": preprocessor.PreprocessPriority(),
+				"processorType":     reflect.TypeOf(preprocessor).String(),
+			}).Debug("Preprocessor succeeded request")
+			return pCtx, 0, nil
 		}
+		statusCode = pStatusCode
+		err = pErr
 	}
+
 	return ctx, statusCode, err
 }
 

@@ -21,24 +21,20 @@ func TestAuthInit(tester *testing.T) {
 	auth := NewStaticKeyAuth(srv)
 	cfg := make(module.ModuleConfig)
 
-	authInit(tester, auth, cfg, true, "")
+	authInit(tester, auth, cfg, true)
 
 	cfg["apiKey"] = "abc"
-	authInit(tester, auth, cfg, true, "")
-
-	expectedCidr := "172.17.0.0/24"
-	cfg["anonymousCidr"] = expectedCidr
-	authInit(tester, auth, cfg, false, expectedCidr)
+	authInit(tester, auth, cfg, false)
 }
 
-func authInit(tester *testing.T, auth *StaticKeyAuth, cfg module.ModuleConfig, failure bool, expectedCidr string) {
+func authInit(tester *testing.T, auth *StaticKeyAuth, cfg module.ModuleConfig, failure bool) {
 	assert.Len(tester, auth.server.Host.Preprocessors(), 1)
 	err := auth.Init(cfg)
 	if failure {
 		assert.Error(tester, err, "Expected Init error")
 	} else {
 		if assert.Nil(tester, err) {
-			assert.Equal(tester, expectedCidr, auth.impl.anonymousNetwork.String())
+			assert.Equal(tester, "abc", auth.impl.apiKey)
 			assert.Len(tester, auth.server.Host.Preprocessors(), 2)
 		}
 	}

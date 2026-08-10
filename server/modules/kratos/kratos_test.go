@@ -23,9 +23,18 @@ func TestInit(tester *testing.T) {
 	err := kratos.Init(cfg)
 	assert.Error(tester, err)
 
-	cfg["hostUrl"] = "abc"
+	cfg["hostUrl"] = "https://localhost:4434"
 	err = kratos.Init(cfg)
 	if assert.Nil(tester, err) {
 		assert.NotNil(tester, kratos.server.Userstore)
+		assert.Equal(tester, "https://localhost:4434", kratos.impl.client.HostUrl())
+		assert.Equal(tester, "https://localhost:4433", kratos.impl.publicClient.HostUrl())
+	}
+
+	kratos2 := NewKratos(server.NewServer(scfg, ""))
+	cfg["publicHostUrl"] = "https://public.kratos:4433"
+	err = kratos2.Init(cfg)
+	if assert.Nil(tester, err) {
+		assert.Equal(tester, "https://public.kratos:4433", kratos2.impl.publicClient.HostUrl())
 	}
 }
