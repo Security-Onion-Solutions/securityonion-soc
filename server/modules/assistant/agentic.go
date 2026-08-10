@@ -20,31 +20,32 @@ import (
 	"github.com/apex/log"
 )
 
-// storedAgent is the JSON shape of a single agent as persisted in the
-// "assistant.agents" config setting (one JSON object per line, matching the
-// []{} uiElements convention). It carries the agent's model so this one setting
-// drives both the agent definitions and the agent->model mapping.
-//
-// An entry whose name matches a system agent is an *override*: only the fields an
-// admin may change are written, and everything omitted -- above all the built-in
-// prompt, which is never sent to the browser and so cannot round-trip through the
-// Agent Studio -- is restored from the system definition (see applyBuiltinDefaults).
-// An entry with no matching system agent is an admin-created agent, defined
-// entirely by what is stored here.
+// storedAgent is one agent in the "assistant.agents" setting: a JSON object per
+// line, matching the []{} uiElements convention. An entry naming a system agent is
+// an override, not a replacement (see applyBuiltinDefaults).
 type storedAgent struct {
 	Name string `json:"name"`
-	// Enabled is a pointer so an absent field means "unchanged" (defaulting to
-	// enabled) rather than "disabled", which is what a bare bool would decode to.
+	// Pointer so an absent field means enabled rather than disabled.
 	Enabled        *bool `json:"enabled,omitempty"`
 	IsOrchestrator bool  `json:"isOrchestrator"`
-	// Model is a model selector ("id@adapter", or a bare id), the same form
-	// agentMapping carries and resolveModel understands -- not a display name.
+	// A model selector ("id@adapter" or bare id), not a display name.
 	Model         string   `json:"model"`
 	AllowedSkills []string `json:"allowedSkills"`
 	CanDelegateTo []string `json:"canDelegateTo"`
 	Description   string   `json:"description"`
-	// Persona is the admin-authored persona: an addendum to the built-in prompt for
-	// a system agent, or the entire prompt for an admin-created one.
+	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
+	Persona string `json:"persona"`
+}
+
+// storedSkill is one skill in the "assistant.skills" setting, following the same
+// conventions as storedAgent.
+type storedSkill struct {
+	Name string `json:"name"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Ignored for a system skill, whose tool set is fixed by the built-in.
+	Tools []string `json:"tools"`
+	// Addendum to the built-in guidance for a system skill; all of it otherwise.
 	Persona string `json:"persona"`
 }
 
@@ -95,8 +96,19 @@ func (ac *AssistantCoordinator) reloadAgentConfiguration(ctx context.Context) {
 		logger.WithError(perr).Error("unable to parse assistant.agents setting; keeping current agent set")
 	}
 
+	newSkills, serr := parseSkillsSetting(byID[ConfigSettingSkills])
+	if serr != nil {
+		logger.WithError(serr).Error("unable to parse assistant.skills setting; keeping current skill set")
+	}
+
 	ac.agentMu.Lock()
 	defer ac.agentMu.Unlock()
+
+	if newSkills != nil {
+		ac.applyBuiltinSkillDefaults(newSkills)
+		ac.restoreMissingBuiltinSkills(newSkills)
+		ac.SkillLibrary = newSkills
+	}
 
 	if newAgents != nil {
 		ac.applyBuiltinDefaults(newAgents)
@@ -113,14 +125,88 @@ func (ac *AssistantCoordinator) reloadAgentConfiguration(ctx context.Context) {
 	ac.exposeAgents()
 }
 
-// applyBuiltinDefaults restores, from the system-provided set, the fields an admin
-// may not change on an agent that names a built-in, and marks it as a system
-// agent. A stored entry is therefore an override rather than a replacement. This
-// is what keeps the embedded prompt intact: it is never sent to the browser
-// (AgentParameters.Prompt is json:"-"), so a definition saved from the Agent Studio
-// necessarily omits it, and a straight replacement would blank every system
-// persona on the first save. Agents with no matching built-in are admin-created and
-// are left exactly as stored.
+// parseSkillsSetting decodes the "assistant.skills" setting. Returns (nil, nil)
+// when absent or empty, signaling the caller to keep the current skills.
+func parseSkillsSetting(setting *model.Setting) (map[string]model.Skill, error) {
+	if setting == nil {
+		return nil, nil
+	}
+
+	value := strings.TrimSpace(setting.Value)
+	if value == "" {
+		return nil, nil
+	}
+
+	var stored []storedSkill
+	if strings.HasPrefix(value, "[") {
+		if err := json.Unmarshal([]byte(value), &stored); err != nil {
+			return nil, fmt.Errorf("parsing skills array: %w", err)
+		}
+	} else {
+		for _, line := range strings.Split(value, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var ss storedSkill
+			if err := json.Unmarshal([]byte(line), &ss); err != nil {
+				return nil, fmt.Errorf("parsing skill entry %q: %w", line, err)
+			}
+			stored = append(stored, ss)
+		}
+	}
+
+	skills := make(map[string]model.Skill, len(stored))
+	for _, ss := range stored {
+		if strings.TrimSpace(ss.Name) == "" {
+			continue
+		}
+		skills[ss.Name] = model.Skill{
+			Name:            ss.Name,
+			Tools:           ss.Tools,
+			PersonaAddendum: ss.Persona,
+			Enabled:         ss.Enabled == nil || *ss.Enabled,
+		}
+	}
+
+	if len(skills) == 0 {
+		return nil, nil
+	}
+
+	return skills, nil
+}
+
+// applyBuiltinSkillDefaults restores what an admin may not change on a system
+// skill. Its tool set is fixed because the shipped guidance is written against it.
+func (ac *AssistantCoordinator) applyBuiltinSkillDefaults(skills map[string]model.Skill) {
+	for name, skill := range skills {
+		builtin, ok := ac.builtinSkills[name]
+		if !ok {
+			continue
+		}
+
+		skill.IsSystem = true
+		skill.AdditionalPrompt = builtin.AdditionalPrompt
+		skill.Tools = builtin.Tools
+
+		skills[name] = skill
+	}
+}
+
+// restoreMissingBuiltinSkills re-adds any system skill the setting omits: they can
+// be disabled but never deleted.
+func (ac *AssistantCoordinator) restoreMissingBuiltinSkills(skills map[string]model.Skill) {
+	for name, builtin := range ac.builtinSkills {
+		if _, ok := skills[name]; ok {
+			continue
+		}
+		skills[name] = builtin
+	}
+}
+
+// applyBuiltinDefaults restores what an admin may not change on a system agent.
+// Critically that includes the built-in prompt: it never reaches the browser, so a
+// save from the Agent Studio omits it and a straight replacement would blank it.
 func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.AgentParameters) {
 	for name, agent := range agents {
 		builtin, ok := ac.builtinAgents[name]
@@ -128,14 +214,13 @@ func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.Age
 			continue
 		}
 
-		// Not editable on a system agent: the built-in definition always wins.
 		agent.IsSystem = true
 		agent.Prompt = builtin.Prompt
 		agent.IsOrchestrator = builtin.IsOrchestrator
 		agent.Description = builtin.Description
 		agent.AllowedSkills = builtin.AllowedSkills
 
-		// Editable, but an omitted value falls back to the built-in.
+		// Editable, so only fall back when omitted.
 		if agent.CanDelegateTo == nil {
 			agent.CanDelegateTo = builtin.CanDelegateTo
 		}
@@ -144,10 +229,8 @@ func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.Age
 	}
 }
 
-// restoreMissingBuiltins re-adds any system agent the stored configuration does
-// not mention, along with its startup model mapping. System agents can only be
-// disabled, never deleted, so a setting written before a release introduced a new
-// built-in must not hide it.
+// restoreMissingBuiltins re-adds any system agent the setting omits, with its
+// startup model mapping: they can be disabled but never deleted.
 func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.AgentParameters, mapping map[string]string) {
 	for name, builtin := range ac.builtinAgents {
 		if _, ok := agents[name]; ok {
@@ -162,12 +245,8 @@ func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.A
 	}
 }
 
-// ensureEnabledOrchestrator guarantees at least one orchestrator stays enabled. A
-// grid with none has no entry point for agentic chat, so a configuration that
-// disables the last one is corrected here -- the system orchestrators are
-// re-enabled and the problem logged -- rather than silently disabling the
-// assistant. The Agent Studio refuses the same edit up front; this is the backstop
-// for a hand-edited setting.
+// ensureEnabledOrchestrator keeps at least one orchestrator enabled; a grid with
+// none has no entry point for agentic chat. Backstop for a hand-edited setting.
 func (ac *AssistantCoordinator) ensureEnabledOrchestrator(ctx context.Context, agents map[string]model.AgentParameters) {
 	for _, agent := range agents {
 		if agent.IsOrchestrator && agent.Enabled {
@@ -339,19 +418,27 @@ func (ac *AssistantCoordinator) setupAgentic() {
 		},
 	}
 
-	// Everything defined above ships with the product and starts enabled. Marking it
-	// here keeps the definitions above free of two fields that never vary.
+	// Everything above ships with the product and starts enabled.
 	for name, agent := range ac.agents {
 		agent.IsSystem = true
 		agent.Enabled = true
 		ac.agents[name] = agent
 	}
+	for name, skill := range ac.SkillLibrary {
+		skill.IsSystem = true
+		skill.Enabled = true
+		ac.SkillLibrary[name] = skill
+	}
 
-	// Snapshot the system-provided set before any config-driven reload can replace
-	// it; reloads merge stored overrides on top of this (see applyBuiltinDefaults).
+	// Snapshot before any reload can replace them; stored overrides merge onto these.
 	ac.builtinAgents = make(map[string]model.AgentParameters, len(ac.agents))
 	for name, agent := range ac.agents {
 		ac.builtinAgents[name] = agent
+	}
+
+	ac.builtinSkills = make(map[string]model.Skill, len(ac.SkillLibrary))
+	for name, skill := range ac.SkillLibrary {
+		ac.builtinSkills[name] = skill
 	}
 }
 
@@ -418,8 +505,7 @@ func (ac *AssistantCoordinator) validateAgentMappings() {
 	logger := log.FromContext(ac.srv.Context)
 
 	for name, agent := range ac.agents {
-		// A disabled agent never executes, so it needs no usable model. Keep it in the
-		// set regardless of its mapping so the Agent Studio can still list and fix it.
+		// Never executes, so it needs no usable model; keep it listed so it can be fixed.
 		if !agent.Enabled {
 			continue
 		}
@@ -466,12 +552,11 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.srv.Config.ClientParams.AssistantParams.AvailableAgents = agents
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
 	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
+	ac.srv.Config.ClientParams.AssistantParams.AvailableTools = ac.exposeToolCatalog()
 }
 
-// exposeSkills returns the client-facing skill catalog (name and tools) built
-// from the coordinator's SkillLibrary, sorted by name for a stable order. It
-// backs the read-only Skills view in the Agent Studio. The skill's prompt
-// guidance is intentionally not exposed (see model.SkillParameters).
+// exposeSkills returns the skill catalog for the Agent Studio, sorted by name and
+// including disabled skills so they can be re-enabled.
 func (ac *AssistantCoordinator) exposeSkills() []model.SkillParameters {
 	names := make([]string, 0, len(ac.SkillLibrary))
 	for name := range ac.SkillLibrary {
@@ -483,10 +568,25 @@ func (ac *AssistantCoordinator) exposeSkills() []model.SkillParameters {
 	for _, name := range names {
 		skill := ac.SkillLibrary[name]
 		skills = append(skills, model.SkillParameters{
-			Name:  skill.Name,
-			Tools: skill.Tools,
+			Name:            skill.Name,
+			Tools:           skill.Tools,
+			IsSystem:        skill.IsSystem,
+			Enabled:         skill.Enabled,
+			PersonaAddendum: skill.PersonaAddendum,
 		})
 	}
 
 	return skills
+}
+
+// exposeToolCatalog returns the tool names an admin-created skill may grant.
+// Delegate tools are absent: they are granted through delegation, not skills.
+func (ac *AssistantCoordinator) exposeToolCatalog() []string {
+	tools := make([]string, 0, len(ac.FunctionLibrary))
+	for name := range ac.FunctionLibrary {
+		tools = append(tools, name)
+	}
+	sort.Strings(tools)
+
+	return tools
 }

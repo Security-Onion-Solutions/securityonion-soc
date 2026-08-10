@@ -89,15 +89,11 @@ type AssistantCoordinator struct {
 	agents            map[string]model.AgentParameters
 	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
 
-	// builtinAgents and builtinAgentMapping are the system-provided agent set and
-	// its startup model mapping, captured before any config-driven reload and never
-	// mutated afterwards. A reload treats a stored entry as an override on top of
-	// these, so fields an admin cannot edit -- above all the embedded prompt, which
-	// is never sent to the browser and so cannot round-trip through the Agent Studio
-	// -- survive a save, and a newly shipped built-in still reaches a grid whose
-	// setting predates it.
+	// The system-provided sets, captured at setup and never mutated after. A reload
+	// merges stored overrides onto these, so what an admin cannot edit survives a save.
 	builtinAgents       map[string]model.AgentParameters
 	builtinAgentMapping map[string]string
+	builtinSkills       map[string]model.Skill
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -132,6 +128,8 @@ const (
 	// under the assistant module's config namespace, alongside the other assistant
 	// module settings (adapters, systemPromptAddendum, ...).
 	ConfigSettingAgents = "soc.config.server.modules.assistant.agents"
+	// Skill definitions, in the same structured form as the agents setting.
+	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
 	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
 	// limits that can be hot-reloaded.
 	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
@@ -188,8 +186,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		ac.setupAgentic()
 		ac.agentMapping = ac.loadAgentMapping(config)
 
-		// Snapshot the system-provided mapping alongside the agents themselves; a
-		// reload restores it for any built-in the stored setting does not mention.
+		// A reload restores this for any built-in the stored setting omits.
 		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
 		for name, selector := range ac.agentMapping {
 			ac.builtinAgentMapping[name] = selector
@@ -288,8 +285,7 @@ func (ac *AssistantCoordinator) registerDelegateTools() {
 	for _, name := range names {
 		agent := ac.agents[name]
 
-		// A disabled agent is not a delegation target: no delegate tool is registered
-		// for it, so no other agent can hand work to it.
+		// Not a delegation target, so no other agent can hand work to it.
 		if !agent.Enabled {
 			continue
 		}
@@ -477,6 +473,7 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 
 	for _, id := range []string{
 		ConfigSettingAgents,
+		ConfigSettingSkills,
 		ConfigSettingMaxDelegationDepth,
 		ConfigSettingMaxSubSessionTokens,
 	} {
@@ -494,7 +491,7 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 	}
 
 	switch setting.Id {
-	case ConfigSettingAgents, ConfigSettingMaxDelegationDepth, ConfigSettingMaxSubSessionTokens:
+	case ConfigSettingAgents, ConfigSettingSkills, ConfigSettingMaxDelegationDepth, ConfigSettingMaxSubSessionTokens:
 		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading agentic configuration after config change")
 		ac.reloadAgentConfiguration(ctx)
 	}
@@ -612,9 +609,7 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameter
 	modelSelector, mapped := ac.agentMapping[name]
 	ac.agentMu.RUnlock()
 
-	// A disabled agent is published to the Agent Studio but must not execute, so it
-	// resolves like an unknown one -- including for a stored session that was
-	// started before it was disabled.
+	// A disabled agent is published but must not execute, even for a stored session.
 	if !ok || !mapped || !agent.Enabled {
 		return nil, nil, ErrInvalidAgent
 	}
@@ -2307,8 +2302,6 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.AgentParameters) (err error) {
 	logger := log.FromContext(ctx)
 
-	// Built-in prompt plus the admin-authored persona; for an admin-created agent the
-	// persona is the whole thing (see AgentParameters.EffectivePrompt).
 	req.System = agent.EffectivePrompt()
 
 	allowedTools := map[string]struct{}{}
@@ -2338,8 +2331,18 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 
 		seenSkills[skillName] = struct{}{}
 
-		if skill.AdditionalPrompt != "" {
-			prompts = append(prompts, skill.AdditionalPrompt)
+		// Grants nothing, but stays listed on the agent so re-enabling restores it.
+		if !skill.Enabled {
+			logger.WithFields(log.Fields{
+				"skillName": skillName,
+				"agentName": agent.Name,
+			}).Debug("agent holds a disabled skill, granting nothing for it")
+
+			continue
+		}
+
+		if guidance := skill.EffectiveGuidance(); guidance != "" {
+			prompts = append(prompts, guidance)
 		}
 
 		for _, tool := range skill.Tools {

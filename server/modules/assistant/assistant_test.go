@@ -1779,7 +1779,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		isAgentic:       true,
 		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, Enabled: true},
 		},
 		agents: map[string]model.AgentParameters{
 			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}, Enabled: true},
@@ -1845,7 +1845,7 @@ func TestAssistantCoordinator_SetupAgent(t *testing.T) {
 			"delegate_to_Hunter": &mockTool{name: "delegate_to_Hunter", description: "hunter"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 
@@ -1875,7 +1875,7 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 			"query_events": &mockTool{name: "query_events", description: "events"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 
@@ -1896,13 +1896,73 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 	assert.Len(t, tc.Tools, 0)
 }
 
+func TestAssistantCoordinator_SetupAgent_DisabledSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+			"query_cases":  &mockTool{name: "query_cases", description: "cases"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt":    {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
+			"Respond": {Name: "Respond", Tools: []string{"query_cases"}, AdditionalPrompt: "Respond skill prompt.", Enabled: false},
+		},
+	}
+
+	req := &model.ChatRequest{}
+	agentParams := &model.AgentParameters{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Hunt", "Respond"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+
+	// The disabled skill grants neither guidance nor tools; the enabled one is unaffected.
+	assert.Equal(t, "Hunt skill prompt.", req.SystemAppend)
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 1)
+	assert.Equal(t, "query_events", tc.Tools[0].Spec.Name)
+}
+
+func TestAssistantCoordinator_SetupAgent_PersonaAddendum(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {
+				Name:             "Hunt",
+				Tools:            []string{"query_events"},
+				AdditionalPrompt: "Hunt skill prompt.",
+				PersonaAddendum:  "Prefer narrow time ranges.",
+				Enabled:          true,
+			},
+		},
+	}
+
+	req := &model.ChatRequest{}
+	agentParams := &model.AgentParameters{
+		Prompt:          "You are a hunting agent.",
+		PersonaAddendum: "Always cite the index you queried.",
+		AllowedSkills:   []string{"Hunt"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "You are a hunting agent.\n\nAlways cite the index you queried.", req.System)
+	assert.Equal(t, "Hunt skill prompt.\n\nPrefer narrow time ranges.", req.SystemAppend)
+}
+
 func TestAssistantCoordinator_SetupAgent_DuplicateSkill(t *testing.T) {
 	ac := &AssistantCoordinator{
 		FunctionLibrary: map[string]Tool{
 			"query_events": &mockTool{name: "query_events", description: "events"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 

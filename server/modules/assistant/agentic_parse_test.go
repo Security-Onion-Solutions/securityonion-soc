@@ -42,8 +42,6 @@ func TestParseAgentsSetting(t *testing.T) {
 		hunter := agents["Hunter"]
 		assert.Equal(t, []string{"Hunt"}, hunter.AllowedSkills)
 		assert.Equal(t, "finds things", hunter.Description)
-		// The stored persona is admin-authored, so it lands in PersonaAddendum; the
-		// built-in Prompt is never carried by the setting.
 		assert.Equal(t, "be a hunter", hunter.PersonaAddendum)
 		assert.Empty(t, hunter.Prompt)
 
@@ -79,8 +77,6 @@ func TestParseAgentsSetting(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, agents, 3)
 
-		// An absent flag means "unchanged", which for a stored entry means enabled --
-		// a bare bool would have decoded the omission as disabled.
 		assert.True(t, agents["Default"].Enabled)
 		assert.False(t, agents["Off"].Enabled)
 		assert.True(t, agents["On"].Enabled)
@@ -116,9 +112,8 @@ func TestParseIntSetting(t *testing.T) {
 	}
 }
 
-// builtinMergeCoordinator returns a coordinator whose built-in set stands in for
-// the product's shipped agents, so the merge steps can be exercised without
-// depending on the embedded prompt file.
+// builtinMergeCoordinator stands in for the shipped agents so the merge steps can
+// be tested without the embedded prompt file.
 func builtinMergeCoordinator() (*AssistantCoordinator, *memory.Handler) {
 	ac, h := newSelectorLogCoordinator(nil)
 	ac.builtinAgents = map[string]model.AgentParameters{
@@ -151,8 +146,7 @@ func TestApplyBuiltinDefaults(t *testing.T) {
 	t.Run("a stored system agent keeps its built-in prompt and uneditable fields", func(t *testing.T) {
 		ac, _ := builtinMergeCoordinator()
 
-		// What the Agent Studio can actually save for a system agent: it never received
-		// the prompt, so it cannot send one back.
+		// All the Agent Studio can save: it never received the prompt.
 		agents := map[string]model.AgentParameters{
 			"Hunter": {Name: "Hunter", Enabled: false, PersonaAddendum: "also check DNS"},
 		}
@@ -166,7 +160,6 @@ func TestApplyBuiltinDefaults(t *testing.T) {
 		assert.Equal(t, []string{"Hunt"}, hunter.AllowedSkills)
 		assert.Equal(t, []string{}, hunter.CanDelegateTo)
 
-		// Admin-editable values are preserved.
 		assert.False(t, hunter.Enabled)
 		assert.Equal(t, "also check DNS", hunter.PersonaAddendum)
 		assert.Equal(t, "built-in hunter prompt\n\nalso check DNS", hunter.EffectivePrompt())
@@ -194,7 +187,6 @@ func TestApplyBuiltinDefaults(t *testing.T) {
 		custom := agents["Custom"]
 		assert.False(t, custom.IsSystem)
 		assert.Empty(t, custom.Prompt)
-		// With no built-in text, the persona is the entire prompt.
 		assert.Equal(t, "my own agent", custom.EffectivePrompt())
 	})
 }
@@ -212,7 +204,7 @@ func TestRestoreMissingBuiltins(t *testing.T) {
 		require.Contains(t, agents, "Hunter", "a system agent may be disabled but never deleted")
 		assert.Equal(t, "built-in hunter prompt", agents["Hunter"].Prompt)
 		assert.Equal(t, "m2@a", mapping["Hunter"])
-		// A built-in the setting did mention keeps its configured model.
+		// A built-in the setting mentions keeps its configured model.
 		assert.Equal(t, "custom@a", mapping["Orchestrator"])
 	})
 }
@@ -260,5 +252,95 @@ func TestEnsureEnabledOrchestrator(t *testing.T) {
 		// Only system orchestrators are restored; an admin may disable their own.
 		assert.False(t, agents["MyOrchestrator"].Enabled)
 		assert.Len(t, logMessagesAt(h, log.ErrorLevel), 1)
+	})
+}
+
+func TestParseSkillsSetting(t *testing.T) {
+	t.Run("nil or empty setting keeps current skills", func(t *testing.T) {
+		for _, s := range []*model.Setting{nil, {Id: ConfigSettingSkills, Value: ""}, {Id: ConfigSettingSkills, Value: "  \n "}} {
+			skills, err := parseSkillsSetting(s)
+			assert.NoError(t, err)
+			assert.Nil(t, skills)
+		}
+	})
+
+	t.Run("newline-delimited objects populate the library", func(t *testing.T) {
+		value := `{"name":"Hunt","persona":"prefer narrow queries"}
+{"name":"Custom","tools":["query_events"],"enabled":false}`
+
+		skills, err := parseSkillsSetting(&model.Setting{Id: ConfigSettingSkills, Value: value})
+		require.NoError(t, err)
+		require.Len(t, skills, 2)
+
+		assert.Equal(t, "prefer narrow queries", skills["Hunt"].PersonaAddendum)
+		assert.Empty(t, skills["Hunt"].AdditionalPrompt)
+		assert.True(t, skills["Hunt"].Enabled, "an absent enabled flag means enabled")
+
+		assert.Equal(t, []string{"query_events"}, skills["Custom"].Tools)
+		assert.False(t, skills["Custom"].Enabled)
+	})
+
+	t.Run("json array form is accepted and unnamed entries are skipped", func(t *testing.T) {
+		value := `[{"name":"A","tools":["t1"]},{"name":"","tools":["t2"]}]`
+		skills, err := parseSkillsSetting(&model.Setting{Id: ConfigSettingSkills, Value: value})
+		require.NoError(t, err)
+		require.Len(t, skills, 1)
+		assert.Contains(t, skills, "A")
+	})
+
+	t.Run("malformed json returns an error", func(t *testing.T) {
+		_, err := parseSkillsSetting(&model.Setting{Id: ConfigSettingSkills, Value: `{"name":"X"`})
+		assert.Error(t, err)
+	})
+}
+
+func TestApplyBuiltinSkillDefaults(t *testing.T) {
+	ac, _ := builtinMergeCoordinator()
+	ac.builtinSkills = map[string]model.Skill{
+		"Hunt": {
+			Name:             "Hunt",
+			Tools:            []string{"query_events", "get_playbooks"},
+			AdditionalPrompt: "built-in hunt guidance",
+			IsSystem:         true,
+			Enabled:          true,
+		},
+	}
+
+	t.Run("a stored system skill keeps its built-in guidance and tool set", func(t *testing.T) {
+		// A save cannot carry the built-in guidance, nor widen a system skill's tools.
+		skills := map[string]model.Skill{
+			"Hunt": {Name: "Hunt", Tools: []string{"create_detection"}, Enabled: false, PersonaAddendum: "narrow queries"},
+		}
+
+		ac.applyBuiltinSkillDefaults(skills)
+
+		hunt := skills["Hunt"]
+		assert.True(t, hunt.IsSystem)
+		assert.Equal(t, "built-in hunt guidance", hunt.AdditionalPrompt)
+		assert.Equal(t, []string{"query_events", "get_playbooks"}, hunt.Tools, "a system skill's tool set is fixed")
+		assert.False(t, hunt.Enabled)
+		assert.Equal(t, "built-in hunt guidance\n\nnarrow queries", hunt.EffectiveGuidance())
+	})
+
+	t.Run("an admin-created skill keeps its own tools and guidance", func(t *testing.T) {
+		skills := map[string]model.Skill{
+			"Mine": {Name: "Mine", Tools: []string{"query_cases"}, Enabled: true, PersonaAddendum: "my guidance"},
+		}
+
+		ac.applyBuiltinSkillDefaults(skills)
+
+		mine := skills["Mine"]
+		assert.False(t, mine.IsSystem)
+		assert.Equal(t, []string{"query_cases"}, mine.Tools)
+		assert.Equal(t, "my guidance", mine.EffectiveGuidance())
+	})
+
+	t.Run("a built-in absent from the setting is restored", func(t *testing.T) {
+		skills := map[string]model.Skill{"Mine": {Name: "Mine", Enabled: true}}
+
+		ac.restoreMissingBuiltinSkills(skills)
+
+		require.Contains(t, skills, "Hunt", "a system skill may be disabled but never deleted")
+		assert.Equal(t, "built-in hunt guidance", skills["Hunt"].AdditionalPrompt)
 	})
 }

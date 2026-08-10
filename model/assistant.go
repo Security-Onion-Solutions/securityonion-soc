@@ -8,6 +8,7 @@ package model
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -501,8 +502,31 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// Skill is a bundle of tools plus the guidance that teaches an agent to use them.
 type Skill struct {
-	Name             string
-	Tools            []string
+	Name  string
+	Tools []string
+	// Built-in guidance, never sent to the browser. Empty for admin-created skills.
 	AdditionalPrompt string
+	IsSystem         bool
+	// A disabled skill grants nothing, but is still published so it can be re-enabled.
+	Enabled bool
+	// Admin-authored guidance; exposed because an admin wrote it.
+	PersonaAddendum string
+}
+
+// EffectiveGuidance is the built-in guidance with the admin addendum appended;
+// either part may be empty.
+func (s *Skill) EffectiveGuidance() string {
+	guidance := strings.TrimSpace(s.AdditionalPrompt)
+	addendum := strings.TrimSpace(s.PersonaAddendum)
+
+	switch {
+	case guidance == "":
+		return addendum
+	case addendum == "":
+		return guidance
+	default:
+		return guidance + "\n\n" + addendum
+	}
 }

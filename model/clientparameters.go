@@ -194,15 +194,19 @@ type AssistantParameters struct {
 	Agentic                bool                `json:"agentic"`
 	AvailableAgents        []AgentParameters   `json:"availableAgents"`
 	AvailableSkills        []SkillParameters   `json:"availableSkills"`
-	AgentMapping           map[string]string   `json:"agentMapping"`
+	// Tool names an admin-created skill may grant; delegate tools excluded.
+	AvailableTools []string          `json:"availableTools"`
+	AgentMapping   map[string]string `json:"agentMapping"`
 }
 
-// SkillParameters is the client-facing view of an agent skill: its name and the
-// tools it unlocks. The skill's prompt guidance (AdditionalPrompt) is
-// intentionally not exposed to the browser, matching the agent persona.
+// SkillParameters is the client-facing view of a skill. Skill.AdditionalPrompt is
+// deliberately absent; PersonaAddendum is exposed because an admin authored it.
 type SkillParameters struct {
-	Name  string   `json:"name"`
-	Tools []string `json:"tools"`
+	Name            string   `json:"name"`
+	Tools           []string `json:"tools"`
+	IsSystem        bool     `json:"isSystem"`
+	Enabled         bool     `json:"enabled"`
+	PersonaAddendum string   `json:"personaAddendum"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,
@@ -230,31 +234,18 @@ type AgentParameters struct {
 	IsOrchestrator bool     `json:"isOrchestrator"`
 	CanDelegateTo  []string `json:"canDelegateTo"`
 	AllowedSkills  []string `json:"allowedSkills"`
-	// Prompt is the agent's built-in system prompt, shipped with the product and
-	// never serialized to the browser. Empty for admin-created agents, whose
-	// instructions live entirely in PersonaAddendum.
+	// Built-in prompt, never sent to the browser. Empty for admin-created agents.
 	Prompt      string `json:"-"`
 	Description string `json:"agentDescription"`
-	// IsSystem marks an agent that ships with the product. System agents cannot be
-	// renamed, deleted or duplicated, and their Prompt is not viewable or editable;
-	// admins may still enable/disable them, retarget their model, adjust their
-	// delegation, and append a PersonaAddendum.
-	IsSystem bool `json:"isSystem"`
-	// Enabled reports whether the agent participates at runtime. A disabled agent is
-	// not registered as a delegate and is not offered as a chat target, but is still
-	// published so the Agent Studio can list and re-enable it.
+	IsSystem    bool   `json:"isSystem"`
+	// A disabled agent is still published so the Agent Studio can re-enable it.
 	Enabled bool `json:"enabled"`
-	// PersonaAddendum is the admin-authored persona. It is exposed to the browser
-	// (unlike Prompt) because an admin wrote it and must be able to edit it. For a
-	// system agent it is appended to the built-in Prompt; for an admin-created agent
-	// Prompt is empty, so this is the agent's entire persona. See EffectivePrompt.
+	// Admin-authored persona; exposed because an admin wrote it. See EffectivePrompt.
 	PersonaAddendum string `json:"personaAddendum"`
 }
 
-// EffectivePrompt returns the system prompt the agent actually runs with: its
-// built-in prompt with the admin-authored persona appended. Either part may be
-// empty -- a system agent with no addendum runs on the built-in text alone, and an
-// admin-created agent runs on its addendum alone.
+// EffectivePrompt is the built-in prompt with the admin persona appended; either
+// part may be empty.
 func (a *AgentParameters) EffectivePrompt() string {
 	prompt := strings.TrimSpace(a.Prompt)
 	addendum := strings.TrimSpace(a.PersonaAddendum)
