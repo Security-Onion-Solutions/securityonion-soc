@@ -41,6 +41,12 @@ func TestStaticAssetPreprocessor(tester *testing.T) {
 	assert.Error(tester, err)
 	assert.Equal(tester, http.StatusUnauthorized, statusCode)
 
+	// Legacy API path should fail
+	req, _ = http.NewRequest(http.MethodGet, "/joblookup", nil)
+	ctx, statusCode, err = handler.Preprocess(context.Background(), req)
+	assert.Error(tester, err)
+	assert.Equal(tester, http.StatusUnauthorized, statusCode)
+
 	// API path should fail
 	req, _ = http.NewRequest(http.MethodGet, "/api/users", nil)
 	ctx, statusCode, err = handler.Preprocess(context.Background(), req)
