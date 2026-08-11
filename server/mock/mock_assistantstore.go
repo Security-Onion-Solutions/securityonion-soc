@@ -70,6 +70,21 @@ func (mr *MockAssistantstoreMockRecorder) DeleteSession(arg0, arg1 any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSession", reflect.TypeOf((*MockAssistantstore)(nil).DeleteSession), arg0, arg1)
 }
 
+// FindSessionsPendingMemoryScan mocks base method.
+func (m *MockAssistantstore) FindSessionsPendingMemoryScan(arg0 context.Context) ([]*model.AssistantSessionDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindSessionsPendingMemoryScan", arg0)
+	ret0, _ := ret[0].([]*model.AssistantSessionDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindSessionsPendingMemoryScan indicates an expected call of FindSessionsPendingMemoryScan.
+func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), arg0)
+}
+
 // GetChatHistory mocks base method.
 func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string) ([]*model.StoredMessage, error) {
 	m.ctrl.T.Helper()
@@ -147,6 +162,20 @@ func (m *MockAssistantstore) SaveChat(arg0 context.Context, arg1 *model.StoredMe
 func (mr *MockAssistantstoreMockRecorder) SaveChat(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChat", reflect.TypeOf((*MockAssistantstore)(nil).SaveChat), arg0, arg1)
+}
+
+// UpdateSessionMemoryScanIndex mocks base method.
+func (m *MockAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Context, sessionId string, scannedIndex int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSessionMemoryScanIndex", ctx, sessionId, scannedIndex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSessionMemoryScanIndex indicates an expected call of UpdateSessionMemoryScanIndex.
+func (mr *MockAssistantstoreMockRecorder) UpdateSessionMemoryScanIndex(ctx, sessionId, scannedIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionMemoryScanIndex", reflect.TypeOf((*MockAssistantstore)(nil).UpdateSessionMemoryScanIndex), ctx, sessionId, scannedIndex)
 }
 
 // UpdateSessionTags mocks base method.

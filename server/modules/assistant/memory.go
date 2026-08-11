@@ -12,9 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -26,10 +26,6 @@ import (
 
 func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 	logger := log.FromContext(ctx)
-
-	justonce := sync.OnceFunc(func() {
-		ac.scanForMemories(ctx)
-	})
 
 	ticker := time.NewTicker(ac.memoryScanInterval)
 
@@ -43,13 +39,18 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		justonce()
+		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())
+		logger.Info("starting memory scan")
+
+		start := time.Now()
+
+		ac.scanForMemories(ctx, logger)
+
+		logger.WithField("memoryScanDuration", time.Since(start)).Info("scan completed")
 	}
 }
 
-func (ac *AssistantCoordinator) scanForMemories(ctx context.Context) {
-	logger := log.FromContext(ctx)
-
+func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log.Entry) {
 	memoryAgent, memoryModel, err := ac.resolveAgent("Memory")
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Memory agent, ending scan")
@@ -62,54 +63,22 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context) {
 		return
 	}
 
-	sessionDetails := &model.AssistantSessionDetails{
-		Session: &model.AssistantSession{
-			Auditable: model.Auditable{
-				UserId: "ABC",
-			},
-			SessionId:              "TestSession",
-			LastMemoryScannedIndex: 0,
-		},
-		History: []*model.StoredMessage{
-			{
-				Message: &model.Message{
-					Role: "user",
-					ContentBlocks: []model.ContentBlock{
-						{
-							Type: "text",
-							Text: "I keep getting OOM crashes on my Elasticsearch VM. I'm on Ubuntu and I run everything through Docker Compose. Our team standardized on Forgejo for CI last quarter. Btw I always use `any` in Go now, never interface{}.",
-						},
-					},
-				},
-			},
-			{
-				Message: &model.Message{
-					Role: "assistant",
-					ContentBlocks: []model.ContentBlock{
-						{
-							Type: "text",
-							Text: "Have you tried capping the JVM heap? You could also enable AlwaysPreTouch.",
-						},
-					},
-				},
-			},
-			{
-				Message: &model.Message{
-					Role: "user",
-					ContentBlocks: []model.ContentBlock{
-						{
-							Type: "text",
-							Text: "Yeah AlwaysPreTouch helped. I'll set the heap cap.",
-						},
-					},
-				},
-			},
-		},
+	logger.Info("scanning for sessions that need memory processing")
+
+	queryResults, err := ac.srv.Assistantstore.FindSessionsPendingMemoryScan(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to find sessions pending memory scan")
+		return
 	}
 
-	queryResults := []*model.AssistantSessionDetails{sessionDetails}
+	logger.WithField("sessionCount", len(queryResults)).Info("query complete")
 
 	for _, sessionDetails := range queryResults {
+		logger.WithFields(log.Fields{
+			"sessionId":              sessionDetails.Session.SessionId,
+			"lastMemoryScannedIndex": sessionDetails.Session.LastMemoryScannedIndex,
+		}).Info("scanning for memories to add")
+
 		// Extract
 		facts, err := ac.extractFacts(ctx, sessionDetails, memoryAgent, memoryModel)
 		if err != nil {
@@ -117,111 +86,123 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context) {
 			continue
 		}
 
-		logger.WithField("facts", len(facts)).Info("extracted facts")
+		logger.WithField("factsCount", len(facts)).Info("extracted facts")
 
-		if len(facts) == 0 {
-			continue
-		}
-
-		justFacts := make([]string, 0, len(facts))
-		for _, f := range facts {
-			justFacts = append(justFacts, f.Fact)
-		}
-
-		// Embed
-		res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
-		if err != nil {
-			logger.WithError(err).Error("unable to embed")
-			continue
-		}
-
-		if len(res.Embeddings) != len(facts) {
-			logger.WithFields(log.Fields{
-				"embeddingsCount": len(res.Embeddings),
-				"factsCount":      len(facts),
-			}).Error("unexpected number of embeddings returned")
-
-			continue
-		}
-
-		mems := make([]*model.Memory, 0, len(facts))
-		for i, fact := range facts {
-			var target *string
-
-			if strings.EqualFold(fact.Scope, "user") {
-				target = new(sessionDetails.Session.UserId)
+		if len(facts) != 0 {
+			justFacts := make([]string, 0, len(facts))
+			for _, f := range facts {
+				justFacts = append(justFacts, f.Fact)
 			}
 
-			mems = append(mems, &model.Memory{
-				Auditable: model.Auditable{
-					UserId: server.SYSTEM_ID,
-					Kind:   "memory",
-				},
-				MemoryText:   fact.Fact,
-				SessionId:    sessionDetails.Session.SessionId,
-				Embedding:    res.Embeddings[i],
-				ModelID:      res.Model,
-				TargetUserId: target,
-			})
-		}
+			logger.WithField("sessionId", sessionDetails.Session.SessionId).Info("embedding facts")
 
-		// Reconcile
-		memChanges, err := ac.reconcileMemories(ctx, mems)
-		if err != nil {
-			logger.WithError(err).Error("unable to reconcile memories")
-			continue
-		}
-
-		logger.WithField("numChanges", len(memChanges)).Info("changes recommended after reconciling")
-
-		// Reembed
-		reembed := []*model.ReconciledMemory{}
-		for _, change := range memChanges {
-			if change.ReEmbed {
-				reembed = append(reembed, change)
-			}
-		}
-
-		if len(reembed) != 0 {
-			justFacts = make([]string, 0, len(reembed))
-			for _, r := range reembed {
-				justFacts = append(justFacts, r.Memory.MemoryText)
-			}
-
+			// Embed
 			res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
 			if err != nil {
 				logger.WithError(err).Error("unable to embed")
 				continue
 			}
 
-			if len(res.Embeddings) != len(reembed) {
+			if len(res.Embeddings) != len(facts) {
 				logger.WithFields(log.Fields{
 					"embeddingsCount": len(res.Embeddings),
-					"reembedCount":    len(reembed),
+					"factsCount":      len(facts),
 				}).Error("unexpected number of embeddings returned")
 
 				continue
 			}
 
-			for i, emb := range res.Embeddings {
-				reembed[i].Memory.Embedding = emb
+			mems := make([]*model.Memory, 0, len(facts))
+			for i, fact := range facts {
+				var target *string
+
+				if strings.EqualFold(fact.Scope, "user") {
+					target = new(sessionDetails.Session.UserId)
+				}
+
+				mems = append(mems, &model.Memory{
+					Auditable: model.Auditable{
+						UserId: server.SYSTEM_ID,
+						Kind:   "memory",
+					},
+					MemoryText:   fact.Fact,
+					SessionId:    sessionDetails.Session.SessionId,
+					Embedding:    res.Embeddings[i],
+					ModelID:      res.Model,
+					TargetUserId: target,
+				})
+			}
+
+			logger.Info("reconciling against existing memories")
+
+			// Reconcile
+			memChanges, err := ac.reconcileMemories(ctx, mems)
+			if err != nil {
+				logger.WithError(err).Error("unable to reconcile memories")
+				continue
+			}
+
+			logger.WithField("numChanges", len(memChanges)).Info("reconciled memories")
+
+			// Reembed
+			reembed := []*model.ReconciledMemory{}
+			for _, change := range memChanges {
+				if change.ReEmbed {
+					reembed = append(reembed, change)
+				}
+			}
+
+			if len(reembed) != 0 {
+				logger.WithField("reembedCount", len(reembed)).Info("reembeding reconciled memories that were altered")
+
+				justFacts = make([]string, 0, len(reembed))
+				for _, r := range reembed {
+					justFacts = append(justFacts, r.Memory.MemoryText)
+				}
+
+				res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
+				if err != nil {
+					logger.WithError(err).Error("unable to embed")
+					continue
+				}
+
+				if len(res.Embeddings) != len(reembed) {
+					logger.WithFields(log.Fields{
+						"embeddingsCount": len(res.Embeddings),
+						"reembedCount":    len(reembed),
+					}).Error("unexpected number of embeddings returned")
+
+					continue
+				}
+
+				for i, emb := range res.Embeddings {
+					reembed[i].Memory.Embedding = emb
+				}
+			}
+
+			// Update
+			if len(memChanges) != 0 {
+				logger.Info("applying memory changes")
+
+				created, updated, deleted, errMap := ac.applyMemories(ctx, memChanges)
+				if len(errMap) != 0 {
+					logger.WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to apply reconciled memories")
+				}
+
+				logger.WithFields(log.Fields{
+					"memories": len(facts),
+					"created":  created,
+					"updated":  updated,
+					"deleted":  deleted,
+					"errored":  len(errMap),
+				}).Info("applied memories")
 			}
 		}
 
-		// Update
-		if len(memChanges) != 0 {
-			created, updated, deleted, errMap := ac.applyMemories(ctx, memChanges)
-			if len(errMap) != 0 {
-				logger.WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to apply reconciled memories")
-			}
-
-			logger.WithFields(log.Fields{
-				"memories": len(facts),
-				"created":  created,
-				"updated":  updated,
-				"deleted":  deleted,
-				"errored":  len(errMap),
-			}).Info("applied memories")
+		err = ac.srv.Assistantstore.UpdateSessionMemoryScanIndex(ctx, sessionDetails.Session.SessionId, len(sessionDetails.History))
+		if err != nil {
+			logger.WithError(err).WithField("sessionId", sessionDetails.Session.SessionId).Error("unable to update session with new memory scan count")
+			continue
 		}
 	}
 }
@@ -468,7 +449,7 @@ func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embeddin
 		WHERE model_id = $2`
 
 	if userId != nil {
-		stmt += ` AND target_user_id = $5`
+		stmt += ` AND (target_user_id = $5 OR target_user_id IS NULL)`
 		args = append(args, *userId)
 	} else {
 		stmt += ` AND target_user_id IS NULL`

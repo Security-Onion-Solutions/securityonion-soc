@@ -434,7 +434,7 @@ func (ac *AssistantCoordinator) setupAgentic() {
 	}
 
 	// small value for testing, real value will probably be more like 5-15 mins
-	ac.memoryScanInterval = time.Second * 3
+	ac.memoryScanInterval = time.Second * 30
 }
 
 func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string {

@@ -396,6 +396,12 @@ type AssistantSession struct {
 	// messages in the session have been scanned for memory extraction. Extraction
 	// always begins with the oldest messages in a session.
 	LastMemoryScannedIndex int `json:"lastMemoryScannedIndex,omitempty" example:"4"`
+	// A denormalized count of the messages saved to this session, incremented on
+	// each chat save so the memory scanner can find sessions with unscanned
+	// messages in a single query. Not omitempty so new sessions index an explicit
+	// 0; sessions created before this field existed have no value, which the
+	// scanner treats as pending until its index update heals it.
+	MessageCount int `json:"messageCount" example:"7"`
 }
 
 const (

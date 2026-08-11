@@ -101,137 +101,131 @@ func newEmbeddingsAdapter(client OpenAIClient) *OpenAIEmbeddingsAdapter {
 }
 
 func TestOpenAIEmbeddingsAdapter_Embed(t *testing.T) {
-	t.Run("single input returns single vector with usage", func(t *testing.T) {
-		mockClient := &mockOpenAIClient{
-			embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
-				return &openai.CreateEmbeddingResponse{
-					Model: "text-embedding-3-small",
-					Data: []openai.Embedding{
-						{Index: 0, Embedding: []float64{0.1, 0.2, 0.3}},
-					},
-					Usage: openai.CreateEmbeddingResponseUsage{
-						PromptTokens: 7,
-						TotalTokens:  7,
-					},
-				}, nil
+	upstreamErr := errors.New("upstream failure")
+
+	tests := []struct {
+		name         string
+		mockResponse *openai.CreateEmbeddingResponse
+		mockErr      error
+		request      *model.EmbeddingRequest
+		validate     func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams)
+	}{
+		{
+			name: "single input returns single vector with usage",
+			mockResponse: &openai.CreateEmbeddingResponse{
+				Model: "text-embedding-3-small",
+				Data: []openai.Embedding{
+					{Index: 0, Embedding: []float64{0.1, 0.2, 0.3}},
+				},
+				Usage: openai.CreateEmbeddingResponseUsage{
+					PromptTokens: 7,
+					TotalTokens:  7,
+				},
 			},
-		}
-
-		adapter := newEmbeddingsAdapter(mockClient)
-
-		resp, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
-			Model: "text-embedding-3-small",
-			Input: []string{"hello world"},
-		})
-
-		require.NoError(t, err)
-		require.NotNil(t, resp)
-		assert.Equal(t, "text-embedding-3-small", resp.Model)
-		require.Len(t, resp.Embeddings, 1)
-		assert.Equal(t, []float32{0.1, 0.2, 0.3}, resp.Embeddings[0])
-		require.NotNil(t, resp.Usage)
-		assert.Equal(t, 7, resp.Usage.InputTokens)
-		assert.Equal(t, 0, resp.Usage.OutputTokens)
-	})
-
-	t.Run("multiple inputs returned index-aligned regardless of order", func(t *testing.T) {
-		mockClient := &mockOpenAIClient{
-			embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
-				// Return out of order to verify the adapter places by Index.
-				return &openai.CreateEmbeddingResponse{
-					Model: "text-embedding-3-small",
-					Data: []openai.Embedding{
-						{Index: 2, Embedding: []float64{3.0}},
-						{Index: 0, Embedding: []float64{1.0}},
-						{Index: 1, Embedding: []float64{2.0}},
-					},
-					Usage: openai.CreateEmbeddingResponseUsage{PromptTokens: 9, TotalTokens: 9},
-				}, nil
+			request: &model.EmbeddingRequest{
+				Model: "text-embedding-3-small",
+				Input: []string{"hello world"},
 			},
-		}
-
-		adapter := newEmbeddingsAdapter(mockClient)
-
-		resp, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
-			Model: "text-embedding-3-small",
-			Input: []string{"a", "b", "c"},
-		})
-
-		require.NoError(t, err)
-		require.Len(t, resp.Embeddings, 3)
-		assert.Equal(t, []float32{1.0}, resp.Embeddings[0])
-		assert.Equal(t, []float32{2.0}, resp.Embeddings[1])
-		assert.Equal(t, []float32{3.0}, resp.Embeddings[2])
-	})
-
-	t.Run("input and dimensions are forwarded to the client", func(t *testing.T) {
-		var captured openai.EmbeddingNewParams
-		mockClient := &mockOpenAIClient{
-			embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
-				captured = params
-				return &openai.CreateEmbeddingResponse{
-					Model: "text-embedding-3-large",
-					Data: []openai.Embedding{
-						{Index: 0, Embedding: []float64{0.5}},
-						{Index: 1, Embedding: []float64{0.6}},
-					},
-				}, nil
+			validate: func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams) {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, "text-embedding-3-small", resp.Model)
+				require.Len(t, resp.Embeddings, 1)
+				assert.Equal(t, []float32{0.1, 0.2, 0.3}, resp.Embeddings[0])
+				require.NotNil(t, resp.Usage)
+				assert.Equal(t, 7, resp.Usage.InputTokens)
+				assert.Equal(t, 0, resp.Usage.OutputTokens)
 			},
-		}
-
-		adapter := newEmbeddingsAdapter(mockClient)
-
-		_, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
-			Model:      "text-embedding-3-large",
-			Input:      []string{"x", "y"},
-			Dimensions: 256,
-		})
-
-		require.NoError(t, err)
-		assert.Equal(t, "text-embedding-3-large", captured.Model)
-		assert.Equal(t, []string{"x", "y"}, captured.Input.OfArrayOfStrings)
-		require.True(t, captured.Dimensions.Valid(), "dimensions should be set")
-		assert.Equal(t, int64(256), captured.Dimensions.Value)
-	})
-
-	t.Run("dimensions omitted when not requested", func(t *testing.T) {
-		var captured openai.EmbeddingNewParams
-		mockClient := &mockOpenAIClient{
-			embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
-				captured = params
-				return &openai.CreateEmbeddingResponse{Data: []openai.Embedding{{Index: 0, Embedding: []float64{0.5}}}}, nil
+		},
+		{
+			name: "multiple inputs returned index-aligned regardless of order",
+			// Return out of order to verify the adapter places by Index.
+			mockResponse: &openai.CreateEmbeddingResponse{
+				Model: "text-embedding-3-small",
+				Data: []openai.Embedding{
+					{Index: 2, Embedding: []float64{3.0}},
+					{Index: 0, Embedding: []float64{1.0}},
+					{Index: 1, Embedding: []float64{2.0}},
+				},
+				Usage: openai.CreateEmbeddingResponseUsage{PromptTokens: 9, TotalTokens: 9},
 			},
-		}
-
-		adapter := newEmbeddingsAdapter(mockClient)
-
-		_, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
-			Model: "text-embedding-3-small",
-			Input: []string{"x"},
-		})
-
-		require.NoError(t, err)
-		assert.False(t, captured.Dimensions.Valid(), "dimensions should be unset")
-	})
-
-	t.Run("client error is propagated", func(t *testing.T) {
-		wantErr := errors.New("upstream failure")
-		mockClient := &mockOpenAIClient{
-			embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
-				return nil, wantErr
+			request: &model.EmbeddingRequest{
+				Model: "text-embedding-3-small",
+				Input: []string{"a", "b", "c"},
 			},
-		}
+			validate: func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams) {
+				require.NoError(t, err)
+				require.Len(t, resp.Embeddings, 3)
+				assert.Equal(t, []float32{1.0}, resp.Embeddings[0])
+				assert.Equal(t, []float32{2.0}, resp.Embeddings[1])
+				assert.Equal(t, []float32{3.0}, resp.Embeddings[2])
+			},
+		},
+		{
+			name: "input and dimensions are forwarded to the client",
+			mockResponse: &openai.CreateEmbeddingResponse{
+				Model: "text-embedding-3-large",
+				Data: []openai.Embedding{
+					{Index: 0, Embedding: []float64{0.5}},
+					{Index: 1, Embedding: []float64{0.6}},
+				},
+			},
+			request: &model.EmbeddingRequest{
+				Model:      "text-embedding-3-large",
+				Input:      []string{"x", "y"},
+				Dimensions: 256,
+			},
+			validate: func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams) {
+				require.NoError(t, err)
+				assert.Equal(t, "text-embedding-3-large", capturedParams.Model)
+				assert.Equal(t, []string{"x", "y"}, capturedParams.Input.OfArrayOfStrings)
+				require.True(t, capturedParams.Dimensions.Valid(), "dimensions should be set")
+				assert.Equal(t, int64(256), capturedParams.Dimensions.Value)
+			},
+		},
+		{
+			name:         "dimensions omitted when not requested",
+			mockResponse: &openai.CreateEmbeddingResponse{Data: []openai.Embedding{{Index: 0, Embedding: []float64{0.5}}}},
+			request: &model.EmbeddingRequest{
+				Model: "text-embedding-3-small",
+				Input: []string{"x"},
+			},
+			validate: func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams) {
+				require.NoError(t, err)
+				assert.False(t, capturedParams.Dimensions.Valid(), "dimensions should be unset")
+			},
+		},
+		{
+			name:    "client error is propagated",
+			mockErr: upstreamErr,
+			request: &model.EmbeddingRequest{
+				Model: "text-embedding-3-small",
+				Input: []string{"hello"},
+			},
+			validate: func(t *testing.T, resp *model.EmbeddingResponse, err error, capturedParams openai.EmbeddingNewParams) {
+				assert.Nil(t, resp)
+				assert.ErrorIs(t, err, upstreamErr)
+			},
+		},
+	}
 
-		adapter := newEmbeddingsAdapter(mockClient)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var captured openai.EmbeddingNewParams
+			mockClient := &mockOpenAIClient{
+				embeddingsNewFunc: func(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+					captured = params
+					return tt.mockResponse, tt.mockErr
+				},
+			}
 
-		resp, err := adapter.Embed(context.Background(), &model.EmbeddingRequest{
-			Model: "text-embedding-3-small",
-			Input: []string{"hello"},
+			adapter := newEmbeddingsAdapter(mockClient)
+
+			resp, err := adapter.Embed(context.Background(), tt.request)
+
+			tt.validate(t, resp, err, captured)
 		})
-
-		assert.Nil(t, resp)
-		assert.ErrorIs(t, err, wantErr)
-	})
+	}
 }
 
 func TestOpenAIEmbeddingsAdapter_ChatUnsupported(t *testing.T) {
