@@ -88,3 +88,16 @@ func TestPreprocess(tester *testing.T) {
 		assert.Equal(tester, expectedId, requestorId)
 	}
 }
+
+func TestPreprocessWithAuthorizationHeader(tester *testing.T) {
+	handler := NewKratosPreprocessor(nil)
+	request, _ := http.NewRequest("GET", "", nil)
+	request.Header.Set("Authorization", "Bearer token123")
+
+	ctx, statusCode, err := handler.Preprocess(context.Background(), request)
+	assert.Equal(tester, http.StatusUnauthorized, statusCode)
+	if assert.Error(tester, err) {
+		assert.Equal(tester, "Unexpected authorization header", err.Error())
+	}
+	assert.Equal(tester, context.Background(), ctx)
+}
