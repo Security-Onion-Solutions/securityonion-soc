@@ -36,6 +36,11 @@ func (proc *KratosPreprocessor) Preprocess(ctx context.Context, request *http.Re
 	var statusCode int
 	var err error
 
+	if request.Header.Get("Authorization") != "" {
+		// This is an API client request, don't validate the session
+		return ctx, http.StatusUnauthorized, errors.New("Unexpected authorization header")
+	}
+
 	cookie, cookieErr := request.Cookie("ory_kratos_session")
 	if cookieErr != nil || cookie == nil || cookie.Value == "" {
 		return ctx, http.StatusUnauthorized, errors.New("Missing ory_kratos_session cookie")
