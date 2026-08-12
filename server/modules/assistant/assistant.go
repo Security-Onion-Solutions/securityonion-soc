@@ -127,6 +127,8 @@ type AssistantCoordinator struct {
 	terminateMemory          context.CancelCauseFunc
 	memoryScanInterval       time.Duration
 	memoryProximityThreshold float64
+	memoryAgents             map[string]model.AgentParameters // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
+	memoryMapping            map[string]string                // map[roleName]modelSelector from the memoryModel/embedModel/reconcileModel config keys
 
 	detections.IOManager
 }
@@ -194,28 +196,48 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
 	ac.memoryProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_PROXIMITY_THRESHOLD)
 
+	// small value for testing, real value will probably be more like 5-15 mins
+	ac.memoryScanInterval = time.Second * 30
+
 	ac.loadAdapters(config)
 
 	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
+	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
+    
 	if ac.isAgentic {
-		ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
-		ac.setupAgentic()
-		ac.agentMapping = ac.loadAgentMapping(config)
-
-		// A reload restores this for any built-in the stored setting omits.
-		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
-		for name, selector := range ac.agentMapping {
-			ac.builtinAgentMapping[name] = selector
-		}
+		
 	}
+
 
 	ac.validateModelSelectors()
 
-	if ac.isAgentic {
-		ac.validateAgentMappings()
-		ac.registerDelegateTools()
-		ac.exposeAgents()
+	if ac.isAgentic || ac.useMemory {
+		prompts := ac.unzipAndUnmarshal(allPrompts)
+
+		if ac.isAgentic {
+			ac.setupAgentic(prompts)
+			ac.agentMapping = ac.loadAgentMapping(config)
+
+            ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+		    for name, selector := range ac.agentMapping {
+		    	ac.builtinAgentMapping[name] = selector
+            }
+
+			ac.validateAgentMappings()
+			ac.registerDelegateTools()
+			ac.exposeAgents()
+		}
+
+		if ac.useMemory {
+			ac.setupMemoryAgents(prompts)
+			ac.memoryMapping = map[string]string{
+				"Memory":    module.GetStringDefault(config, "memoryModel", ""),
+				"Embed":     module.GetStringDefault(config, "embedModel", ""),
+				"Reconcile": module.GetStringDefault(config, "reconcileModel", ""),
+			}
+			ac.validateMemoryMappings()
+		}
 	}
 
 	ac.getPrompt()
@@ -647,6 +669,23 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.Agent, *model.
 	}
 
 	modelParams := ac.resolveModel(modelSelector)
+	if modelParams == nil {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	return &agent, modelParams, nil
+}
+
+// resolveMemoryAgent resolves an internal memory role (Memory, Embed,
+// Reconcile) to its prompt-holding definition and the model that executes it,
+// configured via the memoryModel/embedModel/reconcileModel module config keys.
+func (ac *AssistantCoordinator) resolveMemoryAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+	agent, ok := ac.memoryAgents[name]
+	if !ok {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	modelParams := ac.resolveModel(ac.memoryMapping[name])
 	if modelParams == nil {
 		return nil, nil, ErrInvalidAgent
 	}

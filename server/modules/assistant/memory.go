@@ -24,6 +24,56 @@ import (
 	"github.com/pgvector/pgvector-go"
 )
 
+// setupMemoryAgents defines the internal roles backing the background memory
+// worker: Memory extracts facts from session transcripts, Embed names the
+// embedding model, and Reconcile merges new facts against stored memories.
+func (ac *AssistantCoordinator) setupMemoryAgents(prompts map[string]string) {
+	ac.memoryAgents = map[string]model.AgentParameters{
+		"Memory": {
+			Name:          "Memory",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_memory"],
+		},
+		"Embed": {
+			Name:          "Embed",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_embed"],
+		},
+		"Reconcile": {
+			Name:          "Reconcile",
+			AllowedSkills: []string{},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_reconcile"],
+		},
+	}
+}
+
+// validateMemoryMappings drops any memory role whose configured model
+// selector is missing or does not resolve to an enabled model.
+func (ac *AssistantCoordinator) validateMemoryMappings() {
+	logger := log.FromContext(ac.srv.Context)
+
+	for name := range ac.memoryAgents {
+		modelSelector, mapped := ac.memoryMapping[name]
+		if !mapped || modelSelector == "" {
+			logger.WithField("memoryRole", name).Error("memory role has no configured model; disabling role")
+			delete(ac.memoryAgents, name)
+			continue
+		}
+
+		params := ac.resolveModel(modelSelector)
+		if params == nil || !params.Enabled {
+			logger.WithFields(log.Fields{
+				"memoryRole": name,
+				"model":      modelSelector,
+			}).Error("memory role maps to a model that is not configured or not enabled; disabling role")
+			delete(ac.memoryAgents, name)
+		}
+	}
+}
+
 func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
@@ -51,13 +101,13 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 }
 
 func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log.Entry) {
-	memoryAgent, memoryModel, err := ac.resolveAgent("Memory")
+	memoryAgent, memoryModel, err := ac.resolveMemoryAgent("Memory")
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Memory agent, ending scan")
 		return
 	}
 
-	_, embedModel, err := ac.resolveAgent("Embed")
+	_, embedModel, err := ac.resolveMemoryAgent("Embed")
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Embed agent, ending scan")
 		return
@@ -272,7 +322,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 	logger := log.FromContext(ctx)
 
 	// retrieve agent and setup before looping
-	agentParams, modelParams, err := ac.resolveAgent("Reconcile")
+	agentParams, modelParams, err := ac.resolveMemoryAgent("Reconcile")
 	if err != nil {
 		return nil, err
 	}

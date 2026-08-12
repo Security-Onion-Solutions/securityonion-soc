@@ -89,7 +89,7 @@ func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 }
 
 // newReconcileTestCoordinator builds the minimal coordinator reconcileMemories
-// needs: a resolvable "Reconcile" agent mapped to an enabled model whose
+// needs: a resolvable "Reconcile" memory role mapped to an enabled model whose
 // adapter is registered.
 func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAdapter) *AssistantCoordinator {
 	return &AssistantCoordinator{
@@ -102,8 +102,8 @@ func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAda
 			}},
 		},
 		adapters:                 map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		agents:                   map[string]model.AgentParameters{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
-		agentMapping:             map[string]string{"Reconcile": "rec-model@TestAdapter"},
+		memoryAgents:             map[string]model.AgentParameters{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
+		memoryMapping:            map[string]string{"Reconcile": "rec-model@TestAdapter"},
 		memoryProximityThreshold: 0.8,
 	}
 }
@@ -759,7 +759,7 @@ func neighborRows(rows ...nearbyRowFixture) *mockdb.MockRows {
 
 func TestReconcileMemoriesInvalidAgent(t *testing.T) {
 	ac := newReconcileTestCoordinator(&mockdb.MockDB{}, &scriptedAdapter{})
-	delete(ac.agents, "Reconcile")
+	delete(ac.memoryAgents, "Reconcile")
 
 	_, err := ac.reconcileMemories(context.Background(), nil)
 
