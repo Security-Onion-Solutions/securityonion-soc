@@ -82,11 +82,11 @@ func TestLoadLocalSettings(tester *testing.T) {
 	assert.Equal(tester, true, settings[count].ReadonlyUi)
 	assert.Equal(tester, "[]{}", settings[count].ForcedType)
 	assert.Equal(tester, "json", settings[count].Syntax)
-	assert.Equal(tester, 7, len(settings[count].UiElements))
+	assert.Equal(tester, 8, len(settings[count].UiElements))
 	assert.Equal(tester, "name", settings[count].UiElements[0].Field)
 	assert.Equal(tester, true, settings[count].UiElements[0].Required)
-	assert.Equal(tester, "prompt", settings[count].UiElements[6].Field)
-	assert.Equal(tester, true, settings[count].UiElements[6].Multiline)
+	assert.Equal(tester, "persona", settings[count].UiElements[7].Field)
+	assert.Equal(tester, true, settings[count].UiElements[7].Multiline)
 	assert.Equal(tester, "", settings[count].NodeId)
 	count++
 

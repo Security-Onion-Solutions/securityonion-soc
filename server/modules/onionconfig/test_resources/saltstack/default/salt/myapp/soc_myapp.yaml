@@ -11,6 +11,9 @@ myapp:
       label: Name
       forcedType: string
       required: true
+    - field: enabled
+      label: Enabled
+      forcedType: bool
     - field: isOrchestrator
       label: Orchestrator
       forcedType: bool
@@ -26,7 +29,7 @@ myapp:
     - field: description
       label: Description
       forcedType: string
-    - field: prompt
+    - field: persona
       label: Persona
       forcedType: string
       multiline: true
