@@ -19,6 +19,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/pgvector/pgvector-go"
@@ -136,7 +137,17 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			continue
 		}
 
-		logger.WithField("factsCount", len(facts)).Info("extracted facts")
+		before := len(facts)
+
+		// filter facts by user permissions
+		facts = ac.filterFactsByUserPerms(facts, sessionDetails.Session.UserId)
+
+		filteredFacts := len(facts) - before
+
+		logger.WithFields(log.Fields{
+			"factsCount":    len(facts),
+			"factsFiltered": filteredFacts,
+		}).Info("extracted facts")
 
 		if len(facts) != 0 {
 			justFacts := make([]string, 0, len(facts))
@@ -255,6 +266,42 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			continue
 		}
 	}
+}
+
+// filterFactsByUserPerms filters out candidate facts that the user is not allowed to write.
+func (ac *AssistantCoordinator) filterFactsByUserPerms(facts []*model.ExtractedFact, userId string) (filtered []*model.ExtractedFact) {
+	filtered = make([]*model.ExtractedFact, 0, len(facts))
+
+	userCtx := context.WithValue(context.Background(), web.ContextKeyRequestorId, userId)
+
+	// check if user can write to memory at all
+	err := ac.srv.CheckAuthorized(userCtx, "write_self", "memory")
+	if err != nil {
+		return nil
+	}
+
+	canWriteGlobal := false
+
+	// check if user can write to global memory
+	err = ac.srv.CheckAuthorized(userCtx, "write_global", "memory")
+	if err == nil {
+		canWriteGlobal = true
+	}
+
+	// the memory scanner cannot result in a fact written by one user being applied
+	// explicitly to another user, no need to check write_all here.
+
+	for _, fact := range facts {
+		if strings.EqualFold(fact.Scope, "global") {
+			if canWriteGlobal {
+				filtered = append(filtered, fact)
+			}
+		} else {
+			filtered = append(filtered, fact)
+		}
+	}
+
+	return filtered
 }
 
 func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.AgentParameters, memoryModel *model.ModelParameters) ([]*model.ExtractedFact, error) {

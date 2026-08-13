@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	pgvector "github.com/pgvector/pgvector-go"
 	"github.com/stretchr/testify/assert"
@@ -477,6 +479,116 @@ func TestBuildMemoryExtractTranscript(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expected, buildMemoryExtractTranscript(details))
+		})
+	}
+}
+
+// opAuthorizer authorizes only the operations in allowed, and records the
+// requestor id it was handed so tests can assert userId threading.
+type opAuthorizer struct {
+	allowed         map[string]bool
+	lastRequestorId string
+}
+
+func (a *opAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
+	if id, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
+		a.lastRequestorId = id
+	}
+
+	if a.allowed[operation] {
+		return nil
+	}
+
+	return model.NewUnauthorized("test-subject", operation, target)
+}
+
+func (a *opAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	return nil
+}
+
+func TestFilterFactsByUserPerms(t *testing.T) {
+	tests := []struct {
+		name    string
+		allowed map[string]bool
+		scopes  []string
+		// surviving fact texts in order; nil means the call itself returns nil
+		expected []string
+	}{
+		{
+			name:     "no write_self drops everything",
+			allowed:  map[string]bool{},
+			scopes:   []string{"user", "global"},
+			expected: nil,
+		},
+		{
+			name:     "write_global without write_self still drops everything",
+			allowed:  map[string]bool{"write_global": true},
+			scopes:   []string{"user", "global"},
+			expected: nil,
+		},
+		{
+			name:     "write_self keeps user facts and drops global",
+			allowed:  map[string]bool{"write_self": true},
+			scopes:   []string{"user", "global", "user"},
+			expected: []string{"fact-0", "fact-2"},
+		},
+		{
+			name:     "write_self and write_global keep everything in order",
+			allowed:  map[string]bool{"write_self": true, "write_global": true},
+			scopes:   []string{"user", "global"},
+			expected: []string{"fact-0", "fact-1"},
+		},
+		{
+			name:     "global scope match is case-insensitive",
+			allowed:  map[string]bool{"write_self": true},
+			scopes:   []string{"GLOBAL", "Global", "gLoBaL"},
+			expected: []string{},
+		},
+		{
+			name:     "unknown and empty scopes are treated as user-scoped",
+			allowed:  map[string]bool{"write_self": true},
+			scopes:   []string{"", "team", "USER"},
+			expected: []string{"fact-0", "fact-1", "fact-2"},
+		},
+		{
+			name:     "all global without permission returns empty not nil",
+			allowed:  map[string]bool{"write_self": true},
+			scopes:   []string{"global"},
+			expected: []string{},
+		},
+		{
+			name:     "empty input",
+			allowed:  map[string]bool{"write_self": true},
+			scopes:   []string{},
+			expected: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			auth := &opAuthorizer{allowed: tc.allowed}
+			ac := &AssistantCoordinator{srv: &server.Server{Authorizer: auth}}
+
+			facts := make([]*model.ExtractedFact, 0, len(tc.scopes))
+			for i, scope := range tc.scopes {
+				facts = append(facts, &model.ExtractedFact{Fact: fmt.Sprintf("fact-%d", i), Scope: scope})
+			}
+
+			got := ac.filterFactsByUserPerms(facts, "user-1")
+
+			if tc.expected == nil {
+				assert.Nil(t, got)
+			} else {
+				gotTexts := make([]string, 0, len(got))
+				for _, fact := range got {
+					gotTexts = append(gotTexts, fact.Fact)
+				}
+
+				assert.NotNil(t, got)
+				assert.Equal(t, tc.expected, gotTexts)
+			}
+
+			assert.Equal(t, "user-1", auth.lastRequestorId)
 		})
 	}
 }
