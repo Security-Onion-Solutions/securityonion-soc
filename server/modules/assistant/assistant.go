@@ -86,14 +86,18 @@ type AssistantCoordinator struct {
 	// (request handlers) take RLock; a reload rebuilds the whole set under Lock.
 	agentMu           sync.RWMutex
 	DelegationLibrary map[string]Tool
-	agents            map[string]model.AgentParameters
+	agents            map[string]model.Agent
 	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
 
 	// The system-provided sets, captured at setup and never mutated after. A reload
 	// merges stored overrides onto these, so what an admin cannot edit survives a save.
-	builtinAgents       map[string]model.AgentParameters
+	builtinAgents       map[string]model.Agent
 	builtinAgentMapping map[string]string
 	builtinSkills       map[string]model.Skill
+
+	// Serializes the read-modify-write of the agent/skill settings so concurrent
+	// saves merge instead of overwriting each other.
+	configWriteMu sync.Mutex
 
 	systemPrompt         string
 	systemPromptAddendum string
@@ -128,6 +132,9 @@ const (
 	// under the assistant module's config namespace, alongside the other assistant
 	// module settings (adapters, systemPromptAddendum, ...).
 	ConfigSettingAgents = "soc.config.server.modules.assistant.agents"
+	// AgenticUpdateKind is the websocket message kind carrying agentic parameter
+	// changes to connected browsers.
+	AgenticUpdateKind = "assistant:agentic"
 	// Skill definitions, in the same structured form as the agents setting.
 	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
 	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
@@ -603,7 +610,7 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 // resolveModel. Returns ErrInvalidAgent when the agent is unknown, disabled, or
 // its mapped model is missing; callers surface this as a client error. Only
 // meaningful in agentic mode.
-func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+func (ac *AssistantCoordinator) resolveAgent(name string) (*model.Agent, *model.ModelParameters, error) {
 	ac.agentMu.RLock()
 	agent, ok := ac.agents[name]
 	modelSelector, mapped := ac.agentMapping[name]
@@ -627,7 +634,7 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameter
 // (or any string in non-agentic mode) is tried as a model selector
 // ("id@adapter" or bare id). agentParams is non-nil only when an agent
 // matched; modelParams is nil when nothing matched.
-func (ac *AssistantCoordinator) resolveSelector(selector string) (*model.AgentParameters, *model.ModelParameters) {
+func (ac *AssistantCoordinator) resolveSelector(selector string) (*model.Agent, *model.ModelParameters) {
 	if ac.isAgentic {
 		if agentParams, modelParams, err := ac.resolveAgent(selector); err == nil {
 			return agentParams, modelParams
@@ -2299,7 +2306,7 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 	}
 }
 
-func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.AgentParameters) (err error) {
+func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.Agent) (err error) {
 	logger := log.FromContext(ctx)
 
 	req.System = agent.EffectivePrompt()

@@ -9,6 +9,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -16,38 +17,10 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 
 	"github.com/apex/log"
 )
-
-// storedAgent is one agent in the "assistant.agents" setting: a JSON object per
-// line, matching the []{} uiElements convention. An entry naming a system agent is
-// an override, not a replacement (see applyBuiltinDefaults).
-type storedAgent struct {
-	Name string `json:"name"`
-	// Pointer so an absent field means enabled rather than disabled.
-	Enabled        *bool `json:"enabled,omitempty"`
-	IsOrchestrator bool  `json:"isOrchestrator"`
-	// A model selector ("id@adapter" or bare id), not a display name.
-	Model         string   `json:"model"`
-	AllowedSkills []string `json:"allowedSkills"`
-	CanDelegateTo []string `json:"canDelegateTo"`
-	Description   string   `json:"description"`
-	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
-	Persona string `json:"persona"`
-}
-
-// storedSkill is one skill in the "assistant.skills" setting, following the same
-// conventions as storedAgent.
-type storedSkill struct {
-	Name string `json:"name"`
-	// Pointer so an absent field means enabled rather than disabled.
-	Enabled *bool `json:"enabled,omitempty"`
-	// Ignored for a system skill, whose tool set is fixed by the built-in.
-	Tools []string `json:"tools"`
-	// Addendum to the built-in guidance for a system skill; all of it otherwise.
-	Persona string `json:"persona"`
-}
 
 // reloadAgentConfiguration re-reads the agentic configuration from the config
 // store and rebuilds the coordinator's in-memory agent set, mapping, delegate
@@ -137,7 +110,7 @@ func parseSkillsSetting(setting *model.Setting) (map[string]model.Skill, error) 
 		return nil, nil
 	}
 
-	var stored []storedSkill
+	var stored []model.StoredSkill
 	if strings.HasPrefix(value, "[") {
 		if err := json.Unmarshal([]byte(value), &stored); err != nil {
 			return nil, fmt.Errorf("parsing skills array: %w", err)
@@ -148,7 +121,7 @@ func parseSkillsSetting(setting *model.Setting) (map[string]model.Skill, error) 
 			if line == "" {
 				continue
 			}
-			var ss storedSkill
+			var ss model.StoredSkill
 			if err := json.Unmarshal([]byte(line), &ss); err != nil {
 				return nil, fmt.Errorf("parsing skill entry %q: %w", line, err)
 			}
@@ -207,7 +180,7 @@ func (ac *AssistantCoordinator) restoreMissingBuiltinSkills(skills map[string]mo
 // applyBuiltinDefaults restores what an admin may not change on a system agent.
 // Critically that includes the built-in prompt: it never reaches the browser, so a
 // save from the Agent Studio omits it and a straight replacement would blank it.
-func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.AgentParameters) {
+func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.Agent) {
 	for name, agent := range agents {
 		builtin, ok := ac.builtinAgents[name]
 		if !ok {
@@ -231,7 +204,7 @@ func (ac *AssistantCoordinator) applyBuiltinDefaults(agents map[string]model.Age
 
 // restoreMissingBuiltins re-adds any system agent the setting omits, with its
 // startup model mapping: they can be disabled but never deleted.
-func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.AgentParameters, mapping map[string]string) {
+func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.Agent, mapping map[string]string) {
 	for name, builtin := range ac.builtinAgents {
 		if _, ok := agents[name]; ok {
 			continue
@@ -247,7 +220,7 @@ func (ac *AssistantCoordinator) restoreMissingBuiltins(agents map[string]model.A
 
 // ensureEnabledOrchestrator keeps at least one orchestrator enabled; a grid with
 // none has no entry point for agentic chat. Backstop for a hand-edited setting.
-func (ac *AssistantCoordinator) ensureEnabledOrchestrator(ctx context.Context, agents map[string]model.AgentParameters) {
+func (ac *AssistantCoordinator) ensureEnabledOrchestrator(ctx context.Context, agents map[string]model.Agent) {
 	for _, agent := range agents {
 		if agent.IsOrchestrator && agent.Enabled {
 			return
@@ -274,7 +247,7 @@ func (ac *AssistantCoordinator) ensureEnabledOrchestrator(ctx context.Context, a
 // JSON objects (the []{} uiElements convention) or a single JSON array. Returns
 // (nil, nil, nil) when the setting is absent or empty, signaling the caller to
 // keep the current agents.
-func parseAgentsSetting(setting *model.Setting) (map[string]model.AgentParameters, map[string]string, error) {
+func parseAgentsSetting(setting *model.Setting) (map[string]model.Agent, map[string]string, error) {
 	if setting == nil {
 		return nil, nil, nil
 	}
@@ -284,7 +257,7 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.AgentParameter
 		return nil, nil, nil
 	}
 
-	var stored []storedAgent
+	var stored []model.StoredAgent
 	if strings.HasPrefix(value, "[") {
 		if err := json.Unmarshal([]byte(value), &stored); err != nil {
 			return nil, nil, fmt.Errorf("parsing agents array: %w", err)
@@ -295,7 +268,7 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.AgentParameter
 			if line == "" {
 				continue
 			}
-			var sa storedAgent
+			var sa model.StoredAgent
 			if err := json.Unmarshal([]byte(line), &sa); err != nil {
 				return nil, nil, fmt.Errorf("parsing agent entry %q: %w", line, err)
 			}
@@ -303,13 +276,13 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.AgentParameter
 		}
 	}
 
-	agents := make(map[string]model.AgentParameters, len(stored))
+	agents := make(map[string]model.Agent, len(stored))
 	mapping := make(map[string]string, len(stored))
 	for _, sa := range stored {
 		if strings.TrimSpace(sa.Name) == "" {
 			continue
 		}
-		agents[sa.Name] = model.AgentParameters{
+		agents[sa.Name] = model.Agent{
 			Name:            sa.Name,
 			IsOrchestrator:  sa.IsOrchestrator,
 			CanDelegateTo:   sa.CanDelegateTo,
@@ -360,7 +333,7 @@ var allPrompts []byte
 func (ac *AssistantCoordinator) setupAgentic() {
 	prompts := ac.unzipAndUnmarshal(allPrompts)
 
-	ac.agents = map[string]model.AgentParameters{
+	ac.agents = map[string]model.Agent{
 		"Orchestrator": {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,
@@ -431,7 +404,7 @@ func (ac *AssistantCoordinator) setupAgentic() {
 	}
 
 	// Snapshot before any reload can replace them; stored overrides merge onto these.
-	ac.builtinAgents = make(map[string]model.AgentParameters, len(ac.agents))
+	ac.builtinAgents = make(map[string]model.Agent, len(ac.agents))
 	for name, agent := range ac.agents {
 		ac.builtinAgents[name] = agent
 	}
@@ -531,10 +504,10 @@ func (ac *AssistantCoordinator) validateAgentMappings() {
 // exposeAgents publishes the agentic flag, the validated agent set, and their
 // agent->model mapping to the client parameters served at /connect/info/. The
 // client uses the mapping to resolve each agent's executing model (e.g. for
-// context-limit display). Agent prompts are not serialized
-// (AgentParameters.Prompt is json:"-"). The list is sorted by name for a
-// stable client-facing order, and the exposed mapping is limited to surviving
-// agents so it stays consistent with AvailableAgents.
+// context-limit display). Built-in prompts stay server-side: Agent.Prompt is
+// json:"-". The list is sorted by name for a stable client-facing order, and the
+// exposed mapping is limited to surviving agents so it stays consistent with
+// AvailableAgents.
 func (ac *AssistantCoordinator) exposeAgents() {
 	names := make([]string, 0, len(ac.agents))
 	for name := range ac.agents {
@@ -542,7 +515,7 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	}
 	sort.Strings(names)
 
-	agents := make([]model.AgentParameters, 0, len(names))
+	agents := make([]model.Agent, 0, len(names))
 	mapping := make(map[string]string, len(names))
 	for _, name := range names {
 		agents = append(agents, ac.agents[name])
@@ -553,27 +526,49 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
 	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
 	ac.srv.Config.ClientParams.AssistantParams.AvailableTools = ac.exposeToolCatalog()
+	ac.srv.Config.ClientParams.AssistantParams.MaxDelegationDepth = ac.getMaxDelegationDepth()
+	ac.srv.Config.ClientParams.AssistantParams.MaxSubSessionTokens = ac.getMaxSubSessionTokens()
+
+	ac.broadcastAgenticUpdate()
+}
+
+// broadcastAgenticUpdate pushes the recomputed parameters to connected browsers so
+// an edit reaches every page and user without the hourly /info refresh.
+func (ac *AssistantCoordinator) broadcastAgenticUpdate() {
+	// Host is nil during Init, when nothing is connected yet.
+	if ac.srv.Host == nil {
+		return
+	}
+
+	ac.srv.Host.Broadcast(AgenticUpdateKind, "assistant", ac.agenticUpdate())
+}
+
+// agenticUpdate is the slice of the client parameters a config change can alter.
+func (ac *AssistantCoordinator) agenticUpdate() model.AgenticUpdate {
+	params := ac.srv.Config.ClientParams.AssistantParams
+
+	return model.AgenticUpdate{
+		AvailableAgents:     params.AvailableAgents,
+		AvailableSkills:     params.AvailableSkills,
+		AvailableTools:      params.AvailableTools,
+		AgentMapping:        params.AgentMapping,
+		MaxDelegationDepth:  params.MaxDelegationDepth,
+		MaxSubSessionTokens: params.MaxSubSessionTokens,
+	}
 }
 
 // exposeSkills returns the skill catalog for the Agent Studio, sorted by name and
 // including disabled skills so they can be re-enabled.
-func (ac *AssistantCoordinator) exposeSkills() []model.SkillParameters {
+func (ac *AssistantCoordinator) exposeSkills() []model.Skill {
 	names := make([]string, 0, len(ac.SkillLibrary))
 	for name := range ac.SkillLibrary {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	skills := make([]model.SkillParameters, 0, len(names))
+	skills := make([]model.Skill, 0, len(names))
 	for _, name := range names {
-		skill := ac.SkillLibrary[name]
-		skills = append(skills, model.SkillParameters{
-			Name:            skill.Name,
-			Tools:           skill.Tools,
-			IsSystem:        skill.IsSystem,
-			Enabled:         skill.Enabled,
-			PersonaAddendum: skill.PersonaAddendum,
-		})
+		skills = append(skills, ac.SkillLibrary[name])
 	}
 
 	return skills
@@ -590,3 +585,302 @@ func (ac *AssistantCoordinator) exposeToolCatalog() []string {
 
 	return tools
 }
+
+// ErrSystemAgentImmutable is returned when a request tries to delete an agent or
+// skill that ships with the product. They can be disabled, never removed.
+var ErrSystemAgentImmutable = errors.New("ERROR_SYSTEM_AGENT_IMMUTABLE")
+
+// ErrAgentNotFound is returned when a delete names something that is not stored.
+var ErrAgentNotFound = errors.New("ERROR_AGENT_NOT_FOUND")
+
+// ErrNameConflict is returned when a rename targets a name already in use, which
+// would otherwise overwrite that entry.
+var ErrNameConflict = errors.New("ERROR_NAME_CONFLICT")
+
+// SaveAgent writes a single agent into the assistant.agents setting, leaving every
+// other entry as stored. The read-modify-write happens here rather than in the
+// browser so a page holding a stale list cannot revert someone else's edit.
+func (ac *AssistantCoordinator) SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+	if agent == nil || strings.TrimSpace(agent.Name) == "" {
+		return errors.New("ERROR_AGENT_NAME_REQUIRED")
+	}
+
+	renamed := originalName != "" && originalName != agent.Name
+
+	return ac.updateStoredAgents(ctx, func(agents []model.StoredAgent) ([]model.StoredAgent, error) {
+		if renamed && ac.agentNameTaken(agents, agent.Name) {
+			return nil, ErrNameConflict
+		}
+
+		updated := upsertByName(agents, originalName, *agent, func(a model.StoredAgent) string { return a.Name })
+		if renamed {
+			updated = renameDelegateReferences(updated, originalName, agent.Name)
+		}
+
+		return updated, nil
+	})
+}
+
+// agentNameTaken reports whether a name is already claimed by a stored entry or by
+// a built-in, which may have no stored entry of its own yet.
+func (ac *AssistantCoordinator) agentNameTaken(agents []model.StoredAgent, name string) bool {
+	ac.agentMu.RLock()
+	_, isBuiltin := ac.builtinAgents[name]
+	ac.agentMu.RUnlock()
+
+	if isBuiltin {
+		return true
+	}
+
+	for _, a := range agents {
+		if a.Name == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+// renameDelegateReferences repoints every other agent's delegation at the new name
+// so a rename does not leave a delegate that no longer resolves.
+func renameDelegateReferences(agents []model.StoredAgent, oldName, newName string) []model.StoredAgent {
+	for i := range agents {
+		for j, target := range agents[i].CanDelegateTo {
+			if target == oldName {
+				agents[i].CanDelegateTo[j] = newName
+			}
+		}
+	}
+
+	return agents
+}
+
+// DeleteAgent removes an admin-created agent. System agents are refused.
+func (ac *AssistantCoordinator) DeleteAgent(ctx context.Context, name string) error {
+	ac.agentMu.RLock()
+	_, isBuiltin := ac.builtinAgents[name]
+	ac.agentMu.RUnlock()
+
+	if isBuiltin {
+		return ErrSystemAgentImmutable
+	}
+
+	return ac.updateStoredAgents(ctx, func(agents []model.StoredAgent) ([]model.StoredAgent, error) {
+		remaining, removed := removeByName(agents, name, func(a model.StoredAgent) string { return a.Name })
+		if !removed {
+			return nil, ErrAgentNotFound
+		}
+		return remaining, nil
+	})
+}
+
+// SaveSkill writes a single skill into the assistant.skills setting.
+func (ac *AssistantCoordinator) SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error {
+	if skill == nil || strings.TrimSpace(skill.Name) == "" {
+		return errors.New("ERROR_SKILL_NAME_REQUIRED")
+	}
+
+	renamed := originalName != "" && originalName != skill.Name
+
+	err := ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
+		if renamed && ac.skillNameTaken(skills, skill.Name) {
+			return nil, ErrNameConflict
+		}
+
+		return upsertByName(skills, originalName, *skill, func(s model.StoredSkill) string { return s.Name }), nil
+	})
+	if err != nil || !renamed {
+		return err
+	}
+
+	// A renamed skill would otherwise silently stop granting its tools to every
+	// agent still holding the old name.
+	return ac.updateStoredAgents(ctx, func(agents []model.StoredAgent) ([]model.StoredAgent, error) {
+		return renameSkillReferences(agents, originalName, skill.Name), nil
+	})
+}
+
+func (ac *AssistantCoordinator) skillNameTaken(skills []model.StoredSkill, name string) bool {
+	ac.agentMu.RLock()
+	_, isBuiltin := ac.builtinSkills[name]
+	ac.agentMu.RUnlock()
+
+	if isBuiltin {
+		return true
+	}
+
+	for _, s := range skills {
+		if s.Name == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func renameSkillReferences(agents []model.StoredAgent, oldName, newName string) []model.StoredAgent {
+	for i := range agents {
+		for j, granted := range agents[i].AllowedSkills {
+			if granted == oldName {
+				agents[i].AllowedSkills[j] = newName
+			}
+		}
+	}
+
+	return agents
+}
+
+// DeleteSkill removes an admin-created skill. System skills are refused.
+func (ac *AssistantCoordinator) DeleteSkill(ctx context.Context, name string) error {
+	ac.agentMu.RLock()
+	_, isBuiltin := ac.builtinSkills[name]
+	ac.agentMu.RUnlock()
+
+	if isBuiltin {
+		return ErrSystemAgentImmutable
+	}
+
+	return ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
+		remaining, removed := removeByName(skills, name, func(s model.StoredSkill) string { return s.Name })
+		if !removed {
+			return nil, ErrAgentNotFound
+		}
+		return remaining, nil
+	})
+}
+
+// updateStoredAgents applies mutate to the stored agent list and writes it back.
+// configWriteMu serializes the read-modify-write so two concurrent requests cannot
+// each read the same list and overwrite one another.
+func (ac *AssistantCoordinator) updateStoredAgents(ctx context.Context, mutate func([]model.StoredAgent) ([]model.StoredAgent, error)) error {
+	ac.configWriteMu.Lock()
+	defer ac.configWriteMu.Unlock()
+
+	var stored []model.StoredAgent
+	if err := ac.readStoredSetting(ctx, ConfigSettingAgents, &stored); err != nil {
+		return err
+	}
+
+	updated, err := mutate(stored)
+	if err != nil {
+		return err
+	}
+
+	return ac.writeStoredSetting(ctx, ConfigSettingAgents, len(updated), func(i int) any { return updated[i] })
+}
+
+func (ac *AssistantCoordinator) updateStoredSkills(ctx context.Context, mutate func([]model.StoredSkill) ([]model.StoredSkill, error)) error {
+	ac.configWriteMu.Lock()
+	defer ac.configWriteMu.Unlock()
+
+	var stored []model.StoredSkill
+	if err := ac.readStoredSetting(ctx, ConfigSettingSkills, &stored); err != nil {
+		return err
+	}
+
+	updated, err := mutate(stored)
+	if err != nil {
+		return err
+	}
+
+	return ac.writeStoredSetting(ctx, ConfigSettingSkills, len(updated), func(i int) any { return updated[i] })
+}
+
+// readStoredSetting decodes a setting's current value into out, accepting both
+// encodings the setting may hold: newline-delimited objects or a JSON array. An
+// absent or empty setting leaves out empty.
+func (ac *AssistantCoordinator) readStoredSetting(ctx context.Context, settingID string, out any) error {
+	if ac.srv.Configstore == nil {
+		return errors.New("ERROR_CONFIGSTORE_UNAVAILABLE")
+	}
+
+	settings, err := ac.srv.Configstore.GetSettings(ctx, true)
+	if err != nil {
+		return err
+	}
+
+	value := ""
+	for _, s := range settings {
+		if s != nil && s.Id == settingID {
+			value = strings.TrimSpace(s.Value)
+			break
+		}
+	}
+
+	if value == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(value, "[") {
+		return json.Unmarshal([]byte(value), out)
+	}
+
+	// Re-wrap the newline-delimited form as an array so one decode handles both.
+	lines := []string{}
+	for _, line := range strings.Split(value, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+
+	return json.Unmarshal([]byte("["+strings.Join(lines, ",")+"]"), out)
+}
+
+// writeStoredSetting serializes entries to the newline-delimited form and saves
+// them, which fires the config callback that reloads and broadcasts the change.
+func (ac *AssistantCoordinator) writeStoredSetting(ctx context.Context, settingID string, count int, at func(int) any) error {
+	lines := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		encoded, err := json.Marshal(at(i))
+		if err != nil {
+			return err
+		}
+		lines = append(lines, string(encoded))
+	}
+
+	return ac.srv.Configstore.UpdateSetting(ctx, &model.Setting{
+		Id:    settingID,
+		Value: strings.Join(lines, "\n"),
+	}, false)
+}
+
+// upsertByName replaces the entry currently named originalName -- which lets a
+// rename land in place instead of orphaning the old entry -- or appends when there
+// is nothing to replace. Callers reject a rename onto an existing name before
+// getting here, so this never has to discard an entry.
+func upsertByName[T any](entries []T, originalName string, entry T, nameOf func(T) string) []T {
+	out := make([]T, 0, len(entries)+1)
+	replaced := false
+
+	for _, existing := range entries {
+		if nameOf(existing) == originalName {
+			out = append(out, entry)
+			replaced = true
+			continue
+		}
+		out = append(out, existing)
+	}
+
+	if !replaced {
+		out = append(out, entry)
+	}
+
+	return out
+}
+
+func removeByName[T any](entries []T, name string, nameOf func(T) string) ([]T, bool) {
+	remaining := make([]T, 0, len(entries))
+	removed := false
+	for _, entry := range entries {
+		if nameOf(entry) == name {
+			removed = true
+			continue
+		}
+		remaining = append(remaining, entry)
+	}
+
+	return remaining, removed
+}
+
+// Compile-time check that the coordinator still satisfies the manager interface.
+var _ server.AssistantManager = (*AssistantCoordinator)(nil)

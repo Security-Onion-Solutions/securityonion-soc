@@ -1435,7 +1435,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *
 		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
 	}
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{
+	ac.agents = map[string]model.Agent{
 		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Test Hunter": "test-model@MyAdapter"}
@@ -1781,7 +1781,7 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		SkillLibrary: map[string]model.Skill{
 			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, Enabled: true},
 		},
-		agents: map[string]model.AgentParameters{
+		agents: map[string]model.Agent{
 			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}, Enabled: true},
 		},
 		agentMapping: map[string]string{"Hunter": "test-model@whatever"},
@@ -1850,7 +1850,7 @@ func TestAssistantCoordinator_SetupAgent(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Hunt"},
 		CanDelegateTo: []string{"delegate_to_Hunter"},
@@ -1880,7 +1880,7 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Bogus"},
 	}
@@ -1909,7 +1909,7 @@ func TestAssistantCoordinator_SetupAgent_DisabledSkill(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Hunt", "Respond"},
 	}
@@ -1943,7 +1943,7 @@ func TestAssistantCoordinator_SetupAgent_PersonaAddendum(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:          "You are a hunting agent.",
 		PersonaAddendum: "Always cite the index you queried.",
 		AllowedSkills:   []string{"Hunt"},
@@ -1967,7 +1967,7 @@ func TestAssistantCoordinator_SetupAgent_DuplicateSkill(t *testing.T) {
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Hunt", "Hunt"},
 	}
@@ -3345,7 +3345,7 @@ func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
 		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
 	})
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator", Enabled: true}}
+	ac.agents = map[string]model.Agent{"Orchestrator": {Name: "Orchestrator", Enabled: true}}
 	ac.agentMapping = map[string]string{"Orchestrator": "sonnet"}
 
 	assert.Equal(t, "SOAIDEV", ac.resolveAdapterName("Orchestrator"))
@@ -3421,7 +3421,7 @@ func TestAssistantCoordinator_Send_AgenticFallsThroughToModelSelector(t *testing
 	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
 	ac.systemPrompt = "default prompt"
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{
+	ac.agents = map[string]model.Agent{
 		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Hunter": "test-model@MyAdapter"}
@@ -3577,7 +3577,7 @@ func TestValidateModelSelectors(t *testing.T) {
 func TestRegisterDelegateTools(t *testing.T) {
 	t.Run("registers a delegate under the agent name and tool name", func(t *testing.T) {
 		ac, _ := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{
+		ac.agents = map[string]model.Agent{
 			"Hunter": {Name: "Hunter", Description: "an event hunter", Enabled: true},
 		}
 
@@ -3593,7 +3593,7 @@ func TestRegisterDelegateTools(t *testing.T) {
 		// "A B" and "A_B" are distinct agent names but sanitize to the same
 		// tool name. Registration is sorted, so "A B" wins and "A_B" collides.
 		ac, h := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{
+		ac.agents = map[string]model.Agent{
 			"A B": {Name: "A B", Enabled: true},
 			"A_B": {Name: "A_B", Enabled: true},
 		}
@@ -3612,7 +3612,7 @@ func TestRegisterDelegateTools(t *testing.T) {
 
 	t.Run("no agents registers nothing", func(t *testing.T) {
 		ac, _ := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{}
+		ac.agents = map[string]model.Agent{}
 
 		ac.registerDelegateTools()
 

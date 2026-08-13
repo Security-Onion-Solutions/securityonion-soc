@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 )
 
 const DEFAULT_GROUP_FETCH_LIMIT = 10
@@ -192,21 +191,27 @@ type AssistantParameters struct {
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
-	AvailableAgents        []AgentParameters   `json:"availableAgents"`
-	AvailableSkills        []SkillParameters   `json:"availableSkills"`
+	AvailableAgents        []Agent             `json:"availableAgents"`
+	AvailableSkills        []Skill             `json:"availableSkills"`
 	// Tool names an admin-created skill may grant; delegate tools excluded.
 	AvailableTools []string          `json:"availableTools"`
 	AgentMapping   map[string]string `json:"agentMapping"`
+	// Delegation guardrails, surfaced so the Agent Studio can show and edit them
+	// without fetching every setting. 0 disables the limit.
+	MaxDelegationDepth  int `json:"maxDelegationDepth"`
+	MaxSubSessionTokens int `json:"maxSubSessionTokens"`
 }
 
-// SkillParameters is the client-facing view of a skill. Skill.AdditionalPrompt is
-// deliberately absent; PersonaAddendum is exposed because an admin authored it.
-type SkillParameters struct {
-	Name            string   `json:"name"`
-	Tools           []string `json:"tools"`
-	IsSystem        bool     `json:"isSystem"`
-	Enabled         bool     `json:"enabled"`
-	PersonaAddendum string   `json:"personaAddendum"`
+// AgenticUpdate is the slice of AssistantParameters that a config change can
+// alter. It is broadcast over the websocket so every logged-in browser updates
+// without re-fetching the whole (large) /info payload.
+type AgenticUpdate struct {
+	AvailableAgents     []Agent           `json:"availableAgents"`
+	AvailableSkills     []Skill           `json:"availableSkills"`
+	AvailableTools      []string          `json:"availableTools"`
+	AgentMapping        map[string]string `json:"agentMapping"`
+	MaxDelegationDepth  int               `json:"maxDelegationDepth"`
+	MaxSubSessionTokens int               `json:"maxSubSessionTokens"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,
@@ -227,37 +232,6 @@ type ModelParameters struct {
 // "id@adapter" pair.
 func (m *ModelParameters) Selector() string {
 	return m.ID + "@" + m.Adapter
-}
-
-type AgentParameters struct {
-	Name           string   `json:"name"`
-	IsOrchestrator bool     `json:"isOrchestrator"`
-	CanDelegateTo  []string `json:"canDelegateTo"`
-	AllowedSkills  []string `json:"allowedSkills"`
-	// Built-in prompt, never sent to the browser. Empty for admin-created agents.
-	Prompt      string `json:"-"`
-	Description string `json:"agentDescription"`
-	IsSystem    bool   `json:"isSystem"`
-	// A disabled agent is still published so the Agent Studio can re-enable it.
-	Enabled bool `json:"enabled"`
-	// Admin-authored persona; exposed because an admin wrote it. See EffectivePrompt.
-	PersonaAddendum string `json:"personaAddendum"`
-}
-
-// EffectivePrompt is the built-in prompt with the admin persona appended; either
-// part may be empty.
-func (a *AgentParameters) EffectivePrompt() string {
-	prompt := strings.TrimSpace(a.Prompt)
-	addendum := strings.TrimSpace(a.PersonaAddendum)
-
-	switch {
-	case prompt == "":
-		return addendum
-	case addendum == "":
-		return prompt
-	default:
-		return prompt + "\n\n" + addendum
-	}
 }
 
 type AdapterParameters struct {

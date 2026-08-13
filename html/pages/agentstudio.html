@@ -1,12 +1,111 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="agentstudio_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentstudio_screen">
+  <!-- Options dialog -->
+  <v-dialog v-model="showOptionsDialog" max-width="540" data-aid="agentstudio_options_dialog">
+    <v-card class="pa-2">
+      <v-card-title role="heading" aria-level="2">{{ i18n.options }}</v-card-title>
+      <v-card-text data-aid="agentstudio_options">
+        <v-row>
+          <v-col cols="6">
+            <v-text-field v-model.number="maxDelegationDepth" type="number" min="0" :label="i18n.agentStudioMaxDepth" prepend-inner-icon="fa-layer-group" hide-details data-aid="agentstudio_options_depth"></v-text-field>
+          </v-col>
+          <v-col cols="6">
+            <v-text-field v-model.number="maxSubSessionTokens" type="number" min="0" :label="i18n.agentStudioMaxSubTokens" prepend-inner-icon="fa-coins" hide-details data-aid="agentstudio_options_tokens"></v-text-field>
+          </v-col>
+        </v-row>
+        <div class="text-body-small mt-3" v-text="i18n.agentStudioOptionsHelp"></div>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="showOptionsDialog = false" data-aid="agentstudio_options_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" :color="optionsDirty() ? 'primary' : ''" :disabled="!optionsDirty()" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Create agent dialog -->
+  <v-dialog v-model="createAgentDialog" persistent width="900px" scrollable data-aid="agentstudio_create_agent_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-user-tie</v-icon>{{ i18n.agentStudioNewAgent }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field v-model="newAgent.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" autofocus hide-details data-aid="agentstudio_new_agent_name"></v-text-field>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-select v-model="newAgent.isOrchestrator" :items="roleItems" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" hide-details></v-select>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-select v-model="newAgent.modelSelector" :items="modelItems()" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" :hint="i18n.agentStudioModelHelp" persistent-hint></v-select>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field :model-value="providerFor(newAgent.modelSelector)" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
+          </v-col>
+          <v-col cols="12">
+            <v-select v-model="newAgent.allowedSkills" :items="skillNames" :label="i18n.agentStudioSkills" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioSkillsHelp" persistent-hint></v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-select v-model="newAgent.canDelegateTo" :items="agentNames" :label="i18n.agentStudioDelegatesTo" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegationHelp" persistent-hint></v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-select v-model="newAgent.delegators" :items="agentNames" :label="i18n.agentStudioDelegators" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegatorsHelp" persistent-hint data-aid="agentstudio_new_agent_delegators"></v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-textarea v-model="newAgent.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
+          </v-col>
+          <v-col cols="12">
+            <v-textarea v-model="newAgent.persona" :label="i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="8" auto-grow :hint="i18n.agentStudioPersonaHelp" persistent-hint></v-textarea>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="createAgentDialog = false" data-aid="agentstudio_create_agent_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" :color="newAgent.name ? 'primary' : ''" :disabled="!newAgent.name" @click="saveNewAgent()" data-aid="agentstudio_create_agent_confirm">{{ i18n.create }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Create skill dialog -->
+  <v-dialog v-model="createSkillDialog" persistent width="900px" scrollable data-aid="agentstudio_create_skill_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioNewSkill }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field v-model="newSkill.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" autofocus hide-details data-aid="agentstudio_new_skill_name"></v-text-field>
+          </v-col>
+          <v-col cols="12">
+            <v-select v-model="newSkill.tools" :items="tools" :label="i18n.agentStudioToolsUnlocked" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint></v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-textarea v-model="newSkill.persona" :label="i18n.agentStudioPromptGuidance" variant="outlined" density="comfortable" rows="8" auto-grow :hint="i18n.agentStudioSkillPersonaHelp" persistent-hint></v-textarea>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="createSkillDialog = false" data-aid="agentstudio_create_skill_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" :color="newSkill.name ? 'primary' : ''" :disabled="!newSkill.name" @click="saveNewSkill()" data-aid="agentstudio_create_skill_confirm">{{ i18n.create }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   <v-row>
     <v-col>
       <!-- Tabs (left) + shortened action toolbar (right) -->
       <div class="d-flex align-center mb-2">
         <v-tabs v-model="tab" color="primary" class="flex-grow-0" data-aid="agentstudio_tabs">
           <v-tab value="agents" data-aid="agentstudio_agents_tab">
-            <v-icon class="mr-2">fa-robot</v-icon>{{ i18n.agentStudioAgents }}
+            <v-icon class="mr-2">fa-user-tie</v-icon>{{ i18n.agentStudioAgents }}
           </v-tab>
           <v-tab value="skills" data-aid="agentstudio_skills_tab">
             <v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioSkills }}
@@ -14,6 +113,15 @@
         </v-tabs>
         <v-spacer></v-spacer>
         <v-toolbar class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable">
+          <v-btn v-if="tab === 'agents'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAgent()" data-aid="agentstudio_create_new_agent" :aria-label="i18n.agentStudioNewAgent" :title="i18n.agentStudioNewAgent">
+            <v-icon>fa-plus</v-icon>
+          </v-btn>
+          <v-btn v-else icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
+            <v-icon>fa-plus</v-icon>
+          </v-btn>
+          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.options" :title="i18n.options">
+            <v-icon>fa-gear</v-icon>
+          </v-btn>
           <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="agentstudio_docs" :aria-label="i18n.contextualDocsBtn">
             <v-icon>fa-circle-question</v-icon>
           </v-btn>
@@ -40,15 +148,16 @@
                   </tr>
                 </template>
                 <template #item="{ item, isExpanded, toggleExpand, internalItem }">
-                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true, 'agentstudio-row-disabled': !item.enabled}">
                     <td>
-                      <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_agents_expand">
+                      <v-btn icon variant="text" size="small" @click.stop="onToggleAgent(item, toggleExpand, internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_agents_expand">
                         <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
                         <v-icon v-else>fa-angle-right</v-icon>
                       </v-btn>
                     </td>
                     <td>
                       {{ item.name }}
+                      <v-chip v-if="item.isSystem" size="x-small" variant="outlined" class="ml-2" :title="i18n.agentStudioSystemAgentHelp">{{ i18n.agentStudioSystem }}</v-chip>
                     </td>
                     <td>
                       <v-chip v-if="item.isOrchestrator" size="small" color="primary" variant="tonal">{{ i18n.agentStudioOrchestrator }}</v-chip>
@@ -63,6 +172,14 @@
                       <v-chip v-for="d in item.canDelegateTo" :key="d" size="small" variant="outlined" class="mr-1 my-1">{{ d }}</v-chip>
                       <span v-if="!item.canDelegateTo.length" class="text-disabled">&mdash;</span>
                     </td>
+                    <td>
+                      <div class="d-flex align-center">
+                        <v-switch :model-value="item.enabled" @update:model-value="toggleAgentEnabled(item)" color="primary" density="compact" hide-details inset
+                          :disabled="item.enabled && !canDisableAgent(item)"
+                          :aria-label="i18n.agentStudioEnabled" :title="item.enabled && !canDisableAgent(item) ? i18n.agentStudioLastOrchestrator : i18n.agentStudioEnabled"
+                          :data-aid="'agentstudio_agent_enabled_' + item.id"></v-switch>
+                      </div>
+                    </td>
                   </tr>
                 </template>
                 <template #expanded-row="{ item }">
@@ -75,6 +192,7 @@
                             <v-tab value="model" :data-aid="'agentstudio_agent_subtab_model_' + item.id"><v-icon class="mr-2">fa-microchip</v-icon>{{ i18n.agentStudioModel }}</v-tab>
                             <v-tab value="skills" :data-aid="'agentstudio_agent_subtab_skills_' + item.id"><v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioSkills }}</v-tab>
                             <v-tab value="delegation" :data-aid="'agentstudio_agent_subtab_delegation_' + item.id"><v-icon class="mr-2">fa-sitemap</v-icon>{{ i18n.agentStudioDelegation }}</v-tab>
+                            <v-tab value="persona" :data-aid="'agentstudio_agent_subtab_persona_' + item.id"><v-icon class="mr-2">fa-masks-theater</v-icon>{{ i18n.agentStudioPersona }}</v-tab>
                           </v-tabs>
                           <v-divider></v-divider>
                           <v-card-text>
@@ -82,13 +200,16 @@
                               <v-tabs-window-item value="identity">
                                 <v-row>
                                   <v-col cols="12" md="6">
-                                    <v-text-field :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-if="item.isSystem" :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-else v-model="draftForAgent(item).name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details></v-text-field>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-if="item.isSystem" :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-select v-else v-model="draftForAgent(item).isOrchestrator" :items="roleItems" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" hide-details></v-select>
                                   </v-col>
                                   <v-col cols="12">
-                                    <v-textarea :model-value="item.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow readonly :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
+                                    <v-textarea v-if="item.isSystem" :model-value="item.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow readonly :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
+                                    <v-textarea v-else v-model="draftForAgent(item).description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
@@ -96,33 +217,57 @@
                               <v-tabs-window-item value="model">
                                 <v-row>
                                   <v-col cols="12" md="6">
-                                    <v-text-field :model-value="item.model" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioModelHelp" persistent-hint></v-text-field>
+                                    <v-select v-model="draftForAgent(item).modelSelector" :items="modelItems()" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" :hint="i18n.agentStudioModelHelp" persistent-hint :data-aid="'agentstudio_agent_model_' + item.id"></v-select>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field :model-value="item.provider" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
+                                    <v-text-field :model-value="providerFor(draftForAgent(item).modelSelector)" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="skills">
-                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioSkills }}</div>
-                                <div>
-                                  <v-chip v-for="s in item.allowedSkills" :key="s" size="small" variant="tonal" class="mr-1 my-1">{{ s }}</v-chip>
-                                  <span v-if="!item.allowedSkills.length" class="text-disabled">&mdash;</span>
-                                </div>
-                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSkillsHelp }}</div>
+                                <template v-if="item.isSystem">
+                                  <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioSkills }}</div>
+                                  <div>
+                                    <v-chip v-for="s in item.allowedSkills" :key="s" size="small" variant="tonal" class="mr-1 my-1">{{ s }}</v-chip>
+                                    <span v-if="!item.allowedSkills.length" class="text-disabled">&mdash;</span>
+                                  </div>
+                                  <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemSkillsNote }}</div>
+                                </template>
+                                <v-row v-else>
+                                  <v-col cols="12" md="8">
+                                    <v-select v-model="draftForAgent(item).allowedSkills" :items="skillNames" :label="i18n.agentStudioSkills" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioSkillsHelp" persistent-hint></v-select>
+                                  </v-col>
+                                </v-row>
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="delegation">
-                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioDelegatesTo }}</div>
-                                <div>
-                                  <v-chip v-for="d in item.canDelegateTo" :key="d" size="small" variant="outlined" class="mr-1 my-1">{{ d }}</v-chip>
-                                  <span v-if="!item.canDelegateTo.length" class="text-disabled">&mdash;</span>
-                                </div>
-                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioDelegationHelp }}</div>
+                                <v-row>
+                                  <v-col cols="12" md="8">
+                                    <v-select v-model="draftForAgent(item).canDelegateTo" :items="delegateChoices(item)" :label="i18n.agentStudioDelegatesTo" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegationHelp" persistent-hint :data-aid="'agentstudio_agent_delegation_' + item.id"></v-select>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="persona">
+                                <v-alert v-if="item.isSystem" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_agent_persona_note_' + item.id">
+                                  {{ i18n.agentStudioSystemPersonaNote }}
+                                </v-alert>
+                                <v-row>
+                                  <v-col cols="12">
+                                    <v-textarea v-model="draftForAgent(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="10" auto-grow :hint="i18n.agentStudioPersonaHelp" persistent-hint :data-aid="'agentstudio_agent_persona_' + item.id"></v-textarea>
+                                  </v-col>
+                                </v-row>
                               </v-tabs-window-item>
                             </v-tabs-window>
                           </v-card-text>
+                          <v-divider></v-divider>
+                          <v-card-actions class="px-4">
+                            <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateAgent(item)" :data-aid="'agentstudio_agent_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="removeAgent(item)" :data-aid="'agentstudio_agent_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-spacer></v-spacer>
+                            <v-btn variant="text" :color="agentDirty(item) ? 'primary' : ''" :disabled="!agentDirty(item)" @click.stop="saveAgent(item)" :data-aid="'agentstudio_agent_save_' + item.id">{{ i18n.save }}</v-btn>
+                          </v-card-actions>
                         </v-card>
                       </div>
                     </td>
@@ -152,15 +297,16 @@
                   </tr>
                 </template>
                 <template #item="{ item, isExpanded, toggleExpand, internalItem }">
-                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true, 'agentstudio-row-disabled': !item.enabled}">
                     <td>
-                      <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_skills_expand">
+                      <v-btn icon variant="text" size="small" @click.stop="onToggleSkill(item, toggleExpand, internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_skills_expand">
                         <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
                         <v-icon v-else>fa-angle-right</v-icon>
                       </v-btn>
                     </td>
                     <td>
                       {{ item.name }}
+                      <v-chip v-if="item.isSystem" size="x-small" variant="outlined" class="ml-2" :title="i18n.agentStudioSystemSkillHelp">{{ i18n.agentStudioSystem }}</v-chip>
                     </td>
                     <td>
                       <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
@@ -169,6 +315,13 @@
                     <td>
                       <v-chip v-for="a in skillUsedBy(item.name)" :key="a" size="small" variant="outlined" class="mr-1 my-1">{{ a }}</v-chip>
                       <span v-if="!skillUsedBy(item.name).length" class="text-disabled">&mdash;</span>
+                    </td>
+                    <td>
+                      <div class="d-flex align-center">
+                        <v-switch :model-value="item.enabled" @update:model-value="toggleSkillEnabled(item)" color="primary" density="compact" hide-details inset
+                          :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled"
+                          :data-aid="'agentstudio_skill_enabled_' + item.id"></v-switch>
+                      </div>
                     </td>
                   </tr>
                 </template>
@@ -180,17 +333,25 @@
                           <v-tabs v-model="skillTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentstudio_skill_subtabs_' + item.id">
                             <v-tab value="tools" :data-aid="'agentstudio_skill_subtab_tools_' + item.id"><v-icon class="mr-2">fa-screwdriver-wrench</v-icon>{{ i18n.agentStudioToolsUnlocked }}</v-tab>
                             <v-tab value="usage" :data-aid="'agentstudio_skill_subtab_usage_' + item.id"><v-icon class="mr-2">fa-users</v-icon>{{ i18n.agentStudioUsedBy }}</v-tab>
+                            <v-tab value="persona" :data-aid="'agentstudio_skill_subtab_persona_' + item.id"><v-icon class="mr-2">fa-masks-theater</v-icon>{{ i18n.agentStudioPersona }}</v-tab>
                           </v-tabs>
                           <v-divider></v-divider>
                           <v-card-text>
                             <v-tabs-window v-model="skillTabs[item.id]">
                               <v-tabs-window-item value="tools">
-                                <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioToolsUnlocked }}</div>
-                                <div>
-                                  <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
-                                  <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
-                                </div>
-                                <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioToolsUnlockedHelp }}</div>
+                                <template v-if="item.isSystem">
+                                  <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioToolsUnlocked }}</div>
+                                  <div>
+                                    <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
+                                    <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
+                                  </div>
+                                  <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemToolsNote }}</div>
+                                </template>
+                                <v-row v-else>
+                                  <v-col cols="12" md="8">
+                                    <v-select v-model="draftForSkill(item).tools" :items="tools" :label="i18n.agentStudioToolsUnlocked" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint :data-aid="'agentstudio_skill_tools_' + item.id"></v-select>
+                                  </v-col>
+                                </v-row>
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="usage">
@@ -201,8 +362,26 @@
                                 </div>
                                 <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioUsedByHelp }}</div>
                               </v-tabs-window-item>
+
+                              <v-tabs-window-item value="persona">
+                                <v-alert v-if="item.isSystem" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_skill_persona_note_' + item.id">
+                                  {{ i18n.agentStudioSystemSkillPersonaNote }}
+                                </v-alert>
+                                <v-row>
+                                  <v-col cols="12">
+                                    <v-textarea v-model="draftForSkill(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPromptGuidance" variant="outlined" density="comfortable" rows="10" auto-grow :hint="i18n.agentStudioSkillPersonaHelp" persistent-hint :data-aid="'agentstudio_skill_persona_' + item.id"></v-textarea>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
                             </v-tabs-window>
                           </v-card-text>
+                          <v-divider></v-divider>
+                          <v-card-actions class="px-4">
+                            <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateSkill(item)" :data-aid="'agentstudio_skill_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="removeSkill(item)" :data-aid="'agentstudio_skill_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-spacer></v-spacer>
+                            <v-btn variant="text" :color="skillDirty(item) ? 'primary' : ''" :disabled="!skillDirty(item)" @click.stop="saveSkill(item)" :data-aid="'agentstudio_skill_save_' + item.id">{{ i18n.save }}</v-btn>
+                          </v-card-actions>
                         </v-card>
                       </div>
                     </td>

@@ -502,17 +502,83 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
-// Skill is a bundle of tools plus the guidance that teaches an agent to use them.
+// StoredAgent is one agent as persisted in the "assistant.agents" setting (one
+// JSON object per line, the []{} uiElements convention) and as sent to the
+// per-agent save endpoint. An entry naming a system agent is an override, not a
+// replacement.
+type StoredAgent struct {
+	Name string `json:"name"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled        *bool `json:"enabled,omitempty"`
+	IsOrchestrator bool  `json:"isOrchestrator"`
+	// A model selector ("id@adapter" or bare id), not a display name.
+	Model         string   `json:"model"`
+	AllowedSkills []string `json:"allowedSkills"`
+	CanDelegateTo []string `json:"canDelegateTo"`
+	Description   string   `json:"description"`
+	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
+	Persona string `json:"persona"`
+}
+
+// StoredSkill is one skill in the "assistant.skills" setting, following the same
+// conventions as StoredAgent.
+type StoredSkill struct {
+	Name string `json:"name"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Ignored for a system skill, whose tool set is fixed by the built-in.
+	Tools []string `json:"tools"`
+	// Addendum to the built-in guidance for a system skill; all of it otherwise.
+	Persona string `json:"persona"`
+}
+
+// Agent is a persona plus the skills and delegation scope it runs with, and is
+// also what the browser receives in AssistantParameters.AvailableAgents. Agents
+// that ship with the product carry a built-in Prompt an admin may not view or
+// edit; admin-created ones define everything in PersonaAddendum.
+type Agent struct {
+	Name           string   `json:"name"`
+	IsOrchestrator bool     `json:"isOrchestrator"`
+	CanDelegateTo  []string `json:"canDelegateTo"`
+	AllowedSkills  []string `json:"allowedSkills"`
+	// Built-in prompt, never sent to the browser. Empty for admin-created agents.
+	Prompt      string `json:"-"`
+	Description string `json:"agentDescription"`
+	IsSystem    bool   `json:"isSystem"`
+	// A disabled agent is still published so the Agent Studio can re-enable it.
+	Enabled bool `json:"enabled"`
+	// Admin-authored persona; exposed because an admin wrote it.
+	PersonaAddendum string `json:"personaAddendum"`
+}
+
+// EffectivePrompt is the built-in prompt with the admin persona appended; either
+// part may be empty.
+func (a *Agent) EffectivePrompt() string {
+	prompt := strings.TrimSpace(a.Prompt)
+	addendum := strings.TrimSpace(a.PersonaAddendum)
+
+	switch {
+	case prompt == "":
+		return addendum
+	case addendum == "":
+		return prompt
+	default:
+		return prompt + "\n\n" + addendum
+	}
+}
+
+// Skill is a bundle of tools plus the guidance that teaches an agent to use them,
+// and is also what the browser receives in AssistantParameters.AvailableSkills.
 type Skill struct {
-	Name  string
-	Tools []string
+	Name  string   `json:"name"`
+	Tools []string `json:"tools"`
 	// Built-in guidance, never sent to the browser. Empty for admin-created skills.
-	AdditionalPrompt string
-	IsSystem         bool
+	AdditionalPrompt string `json:"-"`
+	IsSystem         bool   `json:"isSystem"`
 	// A disabled skill grants nothing, but is still published so it can be re-enabled.
-	Enabled bool
+	Enabled bool `json:"enabled"`
 	// Admin-authored guidance; exposed because an admin wrote it.
-	PersonaAddendum string
+	PersonaAddendum string `json:"personaAddendum"`
 }
 
 // EffectiveGuidance is the built-in guidance with the admin addendum appended;

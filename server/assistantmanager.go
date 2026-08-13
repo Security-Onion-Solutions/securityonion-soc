@@ -44,6 +44,10 @@ type AssistantManager interface {
 	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
 	Health(ctx context.Context, aiModel string) (*model.HealthResponse, error)
+	SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error
+	DeleteAgent(ctx context.Context, name string) error
+	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
+	DeleteSkill(ctx context.Context, name string) error
 }
 
 type AssistantAdapter interface {

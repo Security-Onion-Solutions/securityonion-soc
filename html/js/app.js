@@ -593,6 +593,9 @@ $(document).ready(function () {
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
                   this.customReports = response.data.customReports;
+                  // Agents/skills/tools can change after this load; the server pushes
+                  // them over the websocket (see updateAgenticParams).
+                  this.subscribe('assistant:agentic', this.updateAgenticParams);
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
@@ -604,6 +607,9 @@ $(document).ready(function () {
                     this.parameterCallback = null;
                   }
                   this.parametersLoaded = true;
+                  // These params just changed underneath any open page; this reload is
+                  // also what heals a push missed while the websocket was down.
+                  this.publish('assistant:agentic', this.parameters.assistant);
                   if (this.parameters.webSocketTimeoutMs > 0) {
                     this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
                   }
@@ -1228,6 +1234,18 @@ $(document).ready(function () {
               link.href = "css/external/prism-custom-light-v1.30.0.css";
             }
           }
+        },
+        // Merges a pushed agentic update into the cached parameters so every page
+        // sees an agent/skill edit without waiting on the next /info load.
+        updateAgenticParams(update) {
+          if (!update || !this.parameters || !this.parameters.assistant) return;
+          const assistant = this.parameters.assistant;
+          if (update.availableAgents) assistant.availableAgents = update.availableAgents;
+          if (update.availableSkills) assistant.availableSkills = update.availableSkills;
+          if (update.availableTools) assistant.availableTools = update.availableTools;
+          if (update.agentMapping) assistant.agentMapping = update.agentMapping;
+          if (update.maxDelegationDepth !== undefined) assistant.maxDelegationDepth = update.maxDelegationDepth;
+          if (update.maxSubSessionTokens !== undefined) assistant.maxSubSessionTokens = update.maxSubSessionTokens;
         },
         subscribe(kind, fn) {
           this.ensureConnected();

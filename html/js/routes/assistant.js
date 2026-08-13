@@ -79,9 +79,13 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
+    this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
+    // An agent or skill edited in the Agent Studio is pushed to every browser, so
+    // the model picker offers it without a page reload.
+    this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
   },
   watch: {
     '$route'(to, from) {

@@ -23,15 +23,27 @@ const agenticParams = () => ({
   availableSkills: [
     // additionalPrompt is intentionally never sent by the backend; include it here
     // to prove the mapping drops it.
-    { name: 'hunt', tools: ['query', 'grid'], additionalPrompt: 'should not surface' },
-    { name: 'cases', tools: ['createCase'] },
+    { name: 'hunt', tools: ['query', 'grid'], additionalPrompt: 'should not surface', isSystem: true, enabled: true, personaAddendum: 'narrow queries' },
+    { name: 'cases', tools: ['createCase'], isSystem: false, enabled: true },
   ],
   availableAgents: [
-    { name: 'Coordinator', isOrchestrator: true, allowedSkills: ['hunt'], canDelegateTo: ['Hunter'], agentDescription: 'Routes work' },
-    { name: 'Hunter', isOrchestrator: false, allowedSkills: ['hunt', 'cases'], canDelegateTo: [], agentDescription: 'Hunts' },
+    { name: 'Coordinator', isOrchestrator: true, allowedSkills: ['hunt'], canDelegateTo: ['Hunter'], agentDescription: 'Routes work', isSystem: true, enabled: true, personaAddendum: 'be brief' },
+    { name: 'Hunter', isOrchestrator: false, allowedSkills: ['hunt', 'cases'], canDelegateTo: [], agentDescription: 'Hunts', isSystem: false, enabled: true },
   ],
+  availableTools: ['query', 'grid', 'createCase'],
   agentMapping: { Coordinator: 'model-a@soai', Hunter: 'model-b' },
 });
+
+// Captures what a save wrote: the endpoint it hit and the single row it sent.
+const savedRow = (putMock, call = 0) => ({
+  url: putMock.mock.calls[call][0],
+  row: putMock.mock.calls[call][1],
+});
+
+// mockPapi reuses the same jest.fn, so later calls accumulate on one mock.
+const lastSavedRow = (putMock) => savedRow(putMock, putMock.mock.calls.length - 1);
+
+
 
 beforeEach(() => {
   originalConsole = { log: console.log, error: console.error, warn: console.warn };
@@ -43,6 +55,7 @@ beforeEach(() => {
   resetPapi();
 
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showError = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
   comp.$root.loadParameters = jest.fn();
@@ -217,12 +230,14 @@ test('agentsFromParams defaults missing fields and handles no agents', () => {
   expect(rows[0].isOrchestrator).toBe(false);
 });
 
-test('setAgents stores the rows and defaults each to the identity sub-tab', () => {
-  comp.setAgents([{ id: 'a1', name: 'A1' }, { id: 'a2', name: 'A2' }]);
+test('setAgents keys rows by name and defaults each to the identity sub-tab', () => {
+  comp.setAgents([{ id: 'stale', name: 'A1' }, { name: 'A2' }]);
 
   expect(comp.agents).toHaveLength(2);
-  expect(comp.agentTabs['a1']).toBe('identity');
-  expect(comp.agentTabs['a2']).toBe('identity');
+  // A row's id is always its name, whatever the caller passed in.
+  expect(comp.agents.map(a => a.id)).toEqual(['A1', 'A2']);
+  expect(comp.agentTabs['A1']).toBe('identity');
+  expect(comp.agentTabs['A2']).toBe('identity');
 });
 
 test('roleLabel returns the orchestrator or specialist label', () => {
@@ -318,4 +333,625 @@ test('initAssistant loads local settings when enabled, licensed, and agentic', (
   comp.initAssistant(agenticParams());
 
   expect(comp.itemsPerPage).toBe(50);
+});
+
+test('system and custom rows are distinguished, with enabled state and persona', () => {
+  comp.initAssistant(agenticParams());
+
+  const [coordinator, hunter] = comp.agents;
+  expect(coordinator.isSystem).toBe(true);
+  expect(coordinator.enabled).toBe(true);
+  expect(coordinator.persona).toBe('be brief');
+  expect(hunter.isSystem).toBe(false);
+
+  expect(comp.skills[0].isSystem).toBe(true);
+  expect(comp.skills[0].persona).toBe('narrow queries');
+  expect(comp.tools).toEqual(['query', 'grid', 'createCase']);
+});
+
+test('a system agent persists only the fields an admin may change', () => {
+  comp.initAssistant(agenticParams());
+
+  const payload = comp.agentPayload(comp.agents[0]);
+
+  // Name, role, description and skills come from the built-in definition, so
+  // writing them back could overwrite a later release's improvements.
+  expect(payload).toEqual({
+    name: 'Coordinator',
+    enabled: true,
+    model: 'model-a@soai',
+    canDelegateTo: ['Hunter'],
+    persona: 'be brief',
+  });
+});
+
+test('a custom agent persists every field', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.agentPayload(comp.agents[1])).toEqual({
+    name: 'Hunter',
+    enabled: true,
+    isOrchestrator: false,
+    model: 'model-b',
+    allowedSkills: ['hunt', 'cases'],
+    canDelegateTo: [],
+    description: 'Hunts',
+    persona: '',
+  });
+});
+
+test('a system skill persists only enabled and persona; a custom skill also its tools', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.skillPayload(comp.skills[0])).toEqual({ name: 'hunt', enabled: true, persona: 'narrow queries' });
+  expect(comp.skillPayload(comp.skills[1])).toEqual({ name: 'cases', enabled: true, tools: ['createCase'], persona: '' });
+});
+
+test('saving an agent sends only that agent, without re-fetching info', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.expandedAgents = ['Hunter'];
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { description: 'Hunts harder' });
+  await comp.saveAgent(comp.agents[1]);
+
+  const saved = savedRow(put);
+  // One row per request: the server merges it, so a stale list cannot be replayed.
+  expect(saved.url).toBe('assistant/agents/Hunter');
+  expect(saved.row.name).toBe('Hunter');
+  expect(saved.row.description).toBe('Hunts harder');
+  // Rows are refreshed by the server's websocket push, not by re-fetching /info.
+  expect(comp.$root.papi.get).toBeUndefined();
+  expect(comp.expandedAgents).toEqual([]);
+  expect(comp.agentDrafts['Hunter']).toBeUndefined();
+});
+
+test('an agentic push rebuilds the rows from the updated parameters', () => {
+  comp.initAssistant(agenticParams());
+  expect(comp.agents.map(a => a.name)).toEqual(['Coordinator', 'Hunter']);
+
+  // What app.js does when the push lands: merge into the cached parameters.
+  const pushed = agenticParams();
+  pushed.availableAgents.push({ name: 'Triage', isSystem: false, enabled: true, allowedSkills: [], canDelegateTo: [] });
+  comp.$root.parameters = { assistant: pushed };
+
+  comp.onAgenticUpdate();
+
+  expect(comp.agents.map(a => a.name)).toEqual(['Coordinator', 'Hunter', 'Triage']);
+});
+
+test('an agentic push tolerates missing parameters', () => {
+  comp.initAssistant(agenticParams());
+  comp.$root.parameters = {};
+
+  comp.onAgenticUpdate();
+
+  expect(comp.agents).toEqual([]);
+});
+
+test('a failed save leaves the row expanded and its draft intact', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', null, new Error('nope'));
+
+  comp.expandedAgents = ['Hunter'];
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { description: 'Hunts harder' });
+  await comp.saveAgent(comp.agents[1]);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.expandedAgents).toEqual(['Hunter']);
+  expect(comp.agentDrafts['Hunter'].description).toBe('Hunts harder');
+  // The table still shows the committed value.
+  expect(comp.agents[1].description).toBe('Hunts');
+});
+
+test('toggling enabled sends just that row', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  expect(put).toHaveBeenCalledTimes(1);
+  const saved = savedRow(put);
+  expect(saved.url).toBe('assistant/agents/Hunter');
+  expect(saved.row.enabled).toBe(false);
+});
+
+test('the last enabled orchestrator cannot be disabled', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  await comp.toggleAgentEnabled(comp.agents[0]);
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioLastOrchestrator);
+  expect(put).not.toHaveBeenCalled();
+});
+
+test('an orchestrator can be disabled while another stays enabled', async () => {
+  const params = agenticParams();
+  params.availableAgents[1].isOrchestrator = true;
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  expect(comp.canDisableAgent(comp.agents[0])).toBe(true);
+  await comp.toggleAgentEnabled(comp.agents[0]);
+
+  expect(savedRow(put).row.enabled).toBe(false);
+});
+
+test('duplicating a custom agent appends an editable copy with a free name', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  await comp.duplicateAgent(comp.agents[1]);
+
+  const saved = savedRow(put);
+  expect(saved.url).toBe('assistant/agents/Hunter%20(copy)');
+  expect(saved.row.name).toBe('Hunter (copy)');
+  // A copy is always custom, so every field is written and editable.
+  expect(saved.row.allowedSkills).toEqual(['hunt', 'cases']);
+  expect(saved.row.description).toBe('Hunts');
+});
+
+test('copyName avoids names already in use', () => {
+  expect(comp.copyName('A', ['A'])).toBe('A (copy)');
+  expect(comp.copyName('A', ['A', 'A (copy)'])).toBe('A (copy) 2');
+  expect(comp.copyName('A', ['A', 'A (copy)', 'A (copy) 2'])).toBe('A (copy) 3');
+});
+
+test('deleting is refused for system rows and calls the delete endpoint for custom ones', async () => {
+  comp.initAssistant(agenticParams());
+  const del = mockPapi('delete', {});
+
+  await comp.removeAgent(comp.agents[0]);
+  expect(del).not.toHaveBeenCalled();
+
+  await comp.removeAgent(comp.agents[1]);
+  expect(del).toHaveBeenCalledWith('assistant/agents/Hunter');
+  expect(comp.agents.map(a => a.name)).toEqual(['Coordinator']);
+});
+
+test('creating an agent rejects a blank or duplicate name', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.newAgent = { name: '   ' };
+  await comp.saveNewAgent();
+  expect(put).not.toHaveBeenCalled();
+
+  comp.newAgent = { name: 'hunter' };
+  await comp.saveNewAgent();
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioDuplicateName);
+  expect(put).not.toHaveBeenCalled();
+});
+
+test('creating an agent appends it and closes the dialog', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.showAddAgent();
+  expect(comp.newAgent.modelSelector).toBe('model-a@soai');
+  comp.newAgent.name = 'Triage';
+  await comp.saveNewAgent();
+
+  expect(savedRow(put).url).toBe('assistant/agents/Triage');
+  expect(comp.agents.map(a => a.name)).toEqual(['Coordinator', 'Hunter', 'Triage']);
+  expect(comp.createAgentDialog).toBe(false);
+});
+
+test('creating a skill writes to the skills setting', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.showAddSkill();
+  comp.newSkill.name = 'Triage';
+  comp.newSkill.tools = ['query'];
+  await comp.saveNewSkill();
+
+  const saved = savedRow(put);
+  expect(saved.url).toBe('assistant/skills/Triage');
+  expect(saved.row).toEqual({ name: 'Triage', enabled: true, tools: ['query'], persona: '' });
+});
+
+test('expanding snapshots a draft and collapsing discards it', () => {
+  comp.initAssistant(agenticParams());
+  const toggleExpand = jest.fn();
+
+  comp.onToggleAgent(comp.agents[1], toggleExpand, {});
+  expect(comp.agentDrafts['Hunter']).not.toBe(comp.agents[1]);
+  expect(comp.agentDrafts['Hunter'].name).toBe('Hunter');
+
+  comp.agentDrafts['Hunter'].description = 'edited';
+  expect(comp.agentDirty(comp.agents[1])).toBe(true);
+  // The table is untouched until a save succeeds.
+  expect(comp.agents[1].description).toBe('Hunts');
+
+  comp.expandedAgents = ['Hunter'];
+  comp.onToggleAgent(comp.agents[1], toggleExpand, {});
+  expect(comp.agentDrafts['Hunter']).toBeUndefined();
+});
+
+test('agentDirty and skillDirty are false without an edit', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.agentDirty(comp.agents[0])).toBe(false);
+  comp.agentDrafts['Coordinator'] = JSON.parse(JSON.stringify(comp.agents[0]));
+  expect(comp.agentDirty(comp.agents[0])).toBe(false);
+
+  comp.skillDrafts['hunt'] = JSON.parse(JSON.stringify(comp.skills[0]));
+  expect(comp.skillDirty(comp.skills[0])).toBe(false);
+  comp.skillDrafts['hunt'].persona = 'changed';
+  expect(comp.skillDirty(comp.skills[0])).toBe(true);
+});
+
+test('delegateChoices excludes the agent itself', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.delegateChoices(comp.agents[0])).toEqual(['Hunter']);
+});
+
+test('providerFor resolves the adapter of a selector', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.providerFor('model-a@soai')).toBe('soai');
+  expect(comp.providerFor('nope')).toBe('');
+});
+
+test('toggling enabled updates the row immediately, without waiting for the push', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  // The switch is bound to the row, so the row must change on save, not on the push.
+  expect(comp.agents.find(a => a.name === 'Hunter').enabled).toBe(false);
+  expect(comp.agents.find(a => a.name === 'Coordinator').enabled).toBe(true);
+});
+
+test('a failed toggle leaves the row untouched', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', null, new Error('nope'));
+
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  expect(comp.agents.find(a => a.name === 'Hunter').enabled).toBe(true);
+});
+
+test('saving, duplicating and deleting all show up in the table right away', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { description: 'Hunts harder' });
+  await comp.saveAgent(comp.agents[1]);
+  expect(comp.agents.find(a => a.name === 'Hunter').description).toBe('Hunts harder');
+
+  mockPapi('put', {});
+  await comp.duplicateAgent(comp.agents[1]);
+  expect(comp.agents.map(a => a.name)).toContain('Hunter (copy)');
+
+  mockPapi('delete', {});
+  await comp.removeAgent(comp.agents.find(a => a.name === 'Hunter (copy)'));
+  expect(comp.agents.map(a => a.name)).not.toContain('Hunter (copy)');
+});
+
+test('toggling a skill updates its row immediately', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+
+  await comp.toggleSkillEnabled(comp.skills[0]);
+
+  expect(comp.skills[0].enabled).toBe(false);
+});
+
+test('saves go to the assistant endpoints, never straight to config', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  await comp.toggleSkillEnabled(comp.skills[0]);
+
+  // Writing config/ directly would send the whole list and clobber other rows.
+  expect(put.mock.calls[0][0]).toBe('assistant/skills/hunt');
+  expect(put.mock.calls.some(c => c[0] === 'config/')).toBe(false);
+});
+
+test('renaming a custom agent addresses the row by its stored name', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { name: 'Tracker' });
+  await comp.saveAgent(comp.agents[1]);
+
+  // URL identifies the stored row; the body carries the new name, so the server
+  // replaces it in place instead of leaving an orphan behind.
+  const saved = savedRow(put);
+  expect(saved.url).toBe('assistant/agents/Hunter');
+  expect(saved.row.name).toBe('Tracker');
+});
+
+test('writes show the standard page loading overlay', async () => {
+  comp.initAssistant(agenticParams());
+  comp.$root.startLoading.mockClear();
+  comp.$root.stopLoading.mockClear();
+  mockPapi('put', {});
+
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  expect(comp.$root.startLoading).toHaveBeenCalledTimes(1);
+  expect(comp.$root.stopLoading).toHaveBeenCalledTimes(1);
+});
+
+test('the loading overlay is cleared when a write fails', async () => {
+  comp.initAssistant(agenticParams());
+  comp.$root.stopLoading.mockClear();
+  mockPapi('put', null, new Error('nope'));
+
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.$root.stopLoading).toHaveBeenCalledTimes(1);
+});
+
+test('changing a model updates the table immediately, not just the dropdown', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+  expect(comp.agents[1].model).toBe('Model B');
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { modelSelector: 'model-a@soai' });
+  await comp.saveAgent(comp.agents[1]);
+
+  // The Model column shows the resolved display name, so it has to be re-derived
+  // from the selector rather than carried over from the old row.
+  expect(comp.agents[1].modelSelector).toBe('model-a@soai');
+  expect(comp.agents[1].model).toBe('Model A');
+  expect(comp.agents[1].provider).toBe('soai');
+});
+
+test('renaming onto another row is refused before any request', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { name: 'Coordinator' });
+  await comp.saveAgent(comp.agents[1]);
+
+  // The server refuses it too; catching it here avoids a pointless 409.
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioDuplicateName);
+  expect(put).not.toHaveBeenCalled();
+  expect(comp.agents[1].name).toBe('Hunter');
+});
+
+test('renaming to an unused name is allowed', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { name: 'Tracker' });
+  await comp.saveAgent(comp.agents[1]);
+
+  expect(put).toHaveBeenCalled();
+  expect(savedRow(put).row.name).toBe('Tracker');
+});
+
+test('a save that does not rename is unaffected by the name check', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { persona: 'edited' });
+  await comp.saveAgent(comp.agents[1]);
+
+  expect(put).toHaveBeenCalled();
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+});
+
+test('renaming a skill onto another skill is refused', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.skillDrafts['cases'] = Object.assign({}, comp.skills[1], { name: 'hunt' });
+  await comp.saveSkill(comp.skills[1]);
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioDuplicateName);
+  expect(put).not.toHaveBeenCalled();
+});
+
+test('a renamed row is addressed by its new name on the next write', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+
+  comp.agentDrafts['Hunter'] = Object.assign({}, comp.agents[1], { name: 'Tracker' });
+  await comp.saveAgent(comp.agents[1]);
+
+  // The row's id is its stored name; keeping the old one made the next write look
+  // like a second rename and the server answered 409.
+  const renamed = comp.agents.find(a => a.name === 'Tracker');
+  expect(renamed.id).toBe('Tracker');
+
+  const put = mockPapi('put', {});
+  await comp.toggleAgentEnabled(renamed);
+
+  expect(lastSavedRow(put).url).toBe('assistant/agents/Tracker');
+});
+
+test('a renamed skill is addressed by its new name on the next write', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', {});
+
+  comp.skillDrafts['cases'] = Object.assign({}, comp.skills[1], { name: 'triage' });
+  await comp.saveSkill(comp.skills[1]);
+
+  const renamed = comp.skills.find(s => s.name === 'triage');
+  expect(renamed.id).toBe('triage');
+
+  const put = mockPapi('put', {});
+  await comp.toggleSkillEnabled(renamed);
+
+  expect(lastSavedRow(put).url).toBe('assistant/skills/triage');
+});
+
+test('the options dialog loads the limits from the client parameters', () => {
+  const params = agenticParams();
+  params.maxDelegationDepth = 3;
+  params.maxSubSessionTokens = 5000;
+  comp.initAssistant(params);
+
+  comp.showOptions();
+
+  // Reading them from params avoids a full config fetch just to show two numbers.
+  expect(comp.maxDelegationDepth).toBe(3);
+  expect(comp.maxSubSessionTokens).toBe(5000);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+test('options save writes only the limits that changed', async () => {
+  const params = agenticParams();
+  params.maxDelegationDepth = 3;
+  params.maxSubSessionTokens = 5000;
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  comp.showOptions();
+  comp.maxDelegationDepth = 5;
+  expect(comp.optionsDirty()).toBe(true);
+
+  await comp.persistOptions();
+
+  expect(put).toHaveBeenCalledTimes(1);
+  expect(put.mock.calls[0][0]).toBe('config/');
+  expect(put.mock.calls[0][1].id).toBe('soc.config.server.modules.assistant.maxDelegationDepth');
+  expect(put.mock.calls[0][1].value).toBe('5');
+  expect(comp.showOptionsDialog).toBe(false);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+test('a failed options save keeps the dialog open', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('put', null, new Error('nope'));
+
+  comp.showOptions();
+  comp.maxDelegationDepth = 9;
+  await comp.persistOptions();
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.showOptionsDialog).toBe(true);
+});
+
+test('a push does not overwrite limits being edited in the open dialog', () => {
+  const params = agenticParams();
+  params.maxDelegationDepth = 3;
+  comp.initAssistant(params);
+
+  comp.showOptions();
+  comp.maxDelegationDepth = 7;
+
+  const pushed = agenticParams();
+  pushed.maxDelegationDepth = 4;
+  comp.$root.parameters = { assistant: pushed };
+  comp.onAgenticUpdate();
+
+  // The admin's in-progress edit survives; the baseline still tracks the server.
+  expect(comp.maxDelegationDepth).toBe(7);
+  expect(comp.savedMaxDelegationDepth).toBe(4);
+});
+
+test('options save writes both limits when both changed', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.showOptions();
+  comp.maxDelegationDepth = 2;
+  comp.maxSubSessionTokens = 1000;
+  await comp.persistOptions();
+
+  expect(put).toHaveBeenCalledTimes(2);
+  expect(put.mock.calls.map(c => c[1].id)).toEqual([
+    'soc.config.server.modules.assistant.maxDelegationDepth',
+    'soc.config.server.modules.assistant.maxSubSessionTokens',
+  ]);
+  expect(put.mock.calls.map(c => c[1].value)).toEqual(['2', '1000']);
+});
+
+test('creating an agent with delegators updates those agents, not the new one', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.showAddAgent();
+  comp.newAgent.name = 'Triage';
+  comp.newAgent.delegators = ['Coordinator'];
+  await comp.saveNewAgent();
+
+  expect(put).toHaveBeenCalledTimes(2);
+
+  // The new agent is written first, without a delegators field of its own.
+  const created = savedRow(put, 0);
+  expect(created.url).toBe('assistant/agents/Triage');
+  expect(created.row.delegators).toBeUndefined();
+
+  // Delegation lives on the delegating agent, so Coordinator is what changes.
+  const delegator = savedRow(put, 1);
+  expect(delegator.url).toBe('assistant/agents/Coordinator');
+  expect(delegator.row.canDelegateTo).toEqual(['Hunter', 'Triage']);
+  expect(comp.createAgentDialog).toBe(false);
+});
+
+test('creating an agent without delegators writes only the new agent', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  comp.showAddAgent();
+  comp.newAgent.name = 'Triage';
+  await comp.saveNewAgent();
+
+  expect(put).toHaveBeenCalledTimes(1);
+});
+
+test('a delegator already pointing at the name is left alone', async () => {
+  const params = agenticParams();
+  params.availableAgents[0].canDelegateTo = ['Hunter', 'Triage'];
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  comp.showAddAgent();
+  comp.newAgent.name = 'Triage';
+  comp.newAgent.delegators = ['Coordinator'];
+  await comp.saveNewAgent();
+
+  // No duplicate entry, and no pointless write.
+  expect(put).toHaveBeenCalledTimes(1);
+});
+
+test('a failed delegator update still closes the dialog and names what failed', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+  put.mockReset();
+  put.mockImplementationOnce(async () => ({}));
+  put.mockImplementationOnce(async () => { throw new Error('nope'); });
+
+  comp.showAddAgent();
+  comp.newAgent.name = 'Triage';
+  comp.newAgent.delegators = ['Coordinator'];
+  await comp.saveNewAgent();
+
+  // The agent was created, so leaving the dialog open would imply it wasn't.
+  expect(comp.createAgentDialog).toBe(false);
+  const message = comp.$root.showError.mock.calls.at(-1)[0];
+  expect(message).toContain('Coordinator');
+});
+
+test('one failing delegator does not stop the others', async () => {
+  const params = agenticParams();
+  params.availableAgents[1].isOrchestrator = true;
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+  put.mockReset();
+  put.mockImplementationOnce(async () => ({}));
+  put.mockImplementationOnce(async () => { throw new Error('nope'); });
+  put.mockImplementation(async () => ({}));
+
+  comp.showAddAgent();
+  comp.newAgent.name = 'Triage';
+  comp.newAgent.delegators = ['Coordinator', 'Hunter'];
+  await comp.saveNewAgent();
+
+  // Create + both delegators attempted, and only the failure is reported.
+  expect(put).toHaveBeenCalledTimes(3);
+  const message = comp.$root.showError.mock.calls.at(-1)[0];
+  expect(message).toContain('Coordinator');
+  expect(message).not.toContain('Hunter');
 });
