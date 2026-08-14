@@ -49,6 +49,41 @@ test('formatMarkdown', () => {
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
 });
 
+test('formatMarkdownWrapsTables', () => {
+  const html = app.formatMarkdown('| a | b |\n| --- | --- |\n| 1 | 2 |');
+  expect(html).toContain('<div class="markdown-table-scroll" tabindex="0" role="region"');
+  expect(html).toContain('aria-label="Scrollable table"');
+  expect(html).toContain('<table>');
+});
+
+test('wrapScrollableTables', () => {
+  expect(app.wrapScrollableTables('')).toBe('');
+  expect(app.wrapScrollableTables(null)).toBe(null);
+  expect(app.wrapScrollableTables('<p>no tables here</p>')).toBe('<p>no tables here</p>');
+
+  const wrapped = app.wrapScrollableTables('<p>a</p><table><tbody><tr><td>1</td></tr></tbody></table><table><tbody><tr><td>2</td></tr></tbody></table>');
+  const root = document.createElement('div');
+  root.innerHTML = wrapped;
+  expect(root.querySelectorAll('.markdown-table-scroll').length).toBe(2);
+  // Tables keep their semantics; only the wrapper scrolls.
+  expect(root.querySelectorAll('.markdown-table-scroll > table').length).toBe(2);
+  const wrapper = root.querySelector('.markdown-table-scroll');
+  expect(wrapper.getAttribute('tabindex')).toBe('0');
+  expect(wrapper.getAttribute('role')).toBe('region');
+  expect(wrapper.getAttribute('aria-label')).toBe(app.i18n.ariaScrollableTable);
+
+  // Re-processing already-wrapped markup is a no-op.
+  expect(app.wrapScrollableTables(wrapped)).toBe(wrapped);
+});
+
+test('formatMarkdownSanitizesTables', () => {
+  // Wrapping happens after sanitization, so unsafe markup around a table is still stripped.
+  const html = app.formatMarkdown('| a |\n| --- |\n| 1 |\n\n<p onclick="evil()">x</p><script>evil()</script>');
+  expect(html).toContain('markdown-table-scroll');
+  expect(html).not.toContain('onclick');
+  expect(html).not.toContain('<script>');
+});
+
 test('formatHours', () => {
   expect(app.formatHours(null)).toBe("0.00");
   expect(app.formatHours(undefined)).toBe("0.00");

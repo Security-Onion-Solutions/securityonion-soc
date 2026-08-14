@@ -342,6 +342,7 @@ a#title, a#title:visited, a#title:active, a#title:hover {
   white-space: nowrap;
   opacity: 60%;
   font-size: 75%;
+  color: rgb(var(--v-theme-text));
 }
 
 .case.blocked {
@@ -1349,7 +1350,7 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p,
 .chat-container .message-item .text-body-2 ul,
 .chat-container .message-item .text-body-2 ol,
-.chat-container .message-item .text-body-2 table,
+.chat-container .message-item .text-body-2 .markdown-table-scroll,
 .chat-container .message-item .text-body-2 pre,
 .chat-container .message-item .text-body-2 hr {
   margin-top: 0;
@@ -1364,7 +1365,7 @@ ul ul ul {
 .chat-container .message-item .text-body-2 p:last-child,
 .chat-container .message-item .text-body-2 ul:last-child,
 .chat-container .message-item .text-body-2 ol:last-child,
-.chat-container .message-item .text-body-2 table:last-child,
+.chat-container .message-item .text-body-2 .markdown-table-scroll:last-child,
 .chat-container .message-item .text-body-2 pre:last-child,
 .chat-container .message-item .text-body-2 hr:last-child {
   margin-bottom: 0;
@@ -1372,7 +1373,8 @@ ul ul ul {
 
 .chat-container .message-item .text-body-2 table {
   border-collapse: collapse;
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
 }
 
 .chat-container .message-item .text-body-2 th,
@@ -1476,7 +1478,8 @@ ul ul ul {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-
+  vertical-align: middle;
+  margin: 4px 8px 4px 0;
   padding: 9px 13px;
   border-radius: 6px;
 
@@ -1485,8 +1488,8 @@ ul ul ul {
 
   line-height: 1.3;
 
-  background-color: rgba(var(--v-theme-primary), 0.08);
-  color: var(--v-theme-primary);
+  background-color: rgba(var(--v-theme-primary), 0.2);
+  color: inherit;
 
   transition:
     background-color 0.15s ease,
@@ -1495,12 +1498,12 @@ ul ul ul {
 }
 
 .assistant-choice-btn:hover {
-  background-color: rgba(var(--v-theme-primary), 0.16);
+  background-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .assistant-choice-btn:active {
   transform: translateY(1px);
-  background-color: rgba(var(--v-theme-primary), 0.22);
+  background-color: rgba(var(--v-theme-primary), 0.38);
 }
 
 .v-pagination__list>li {
@@ -1531,6 +1534,40 @@ ul ul ul {
 
 .history-entry-card {
   border-left: 4px solid rgb(var(--v-theme-primary)) !important;
+}
+
+.grab-handle {
+  cursor: grab;
+}
+
+.grab-handle:active {
+  cursor: grabbing;
+}
+
+.entry-dragging {
+  opacity: 0.5;
+}
+
+.entry-drag-above {
+  background: linear-gradient(to bottom, rgba(var(--v-theme-primary), 0.25) 0%, rgba(var(--v-theme-primary), 0) 50%) !important;
+}
+
+.entry-drag-below {
+  background: linear-gradient(to top, rgba(var(--v-theme-primary), 0.25) 0%, rgba(var(--v-theme-primary), 0) 50%) !important;
+}
+
+.entry-recently-moved,
+.entry-recently-moved .v-expansion-panel-title {
+  animation: entry-moved-gradient 1s ease-out forwards;
+}
+
+@keyframes entry-moved-gradient {
+  0% {
+    background-color: rgba(var(--v-theme-primary), 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 

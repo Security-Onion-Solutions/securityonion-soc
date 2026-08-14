@@ -270,7 +270,7 @@ func TestValidate(t *testing.T) {
 		{
 			Name:        "Invalid Direction",
 			Input:       `alert http any any <-> any any (msg:"This rule has an invalid direction";)`,
-			ExpectedErr: "invalid direction, must be '<>' or '->', got <->",
+			ExpectedErr: "invalid direction, must be '<>', '->', or '=>', got <->",
 		},
 		{
 			Name:        "Unexpected Suffix",
@@ -403,6 +403,26 @@ func TestParse(t *testing.T) {
 					Title:     "RULE B",
 					Severity:  model.SeverityUnknown,
 					Content:   FlowbitsRuleB,
+					IsEnabled: true,
+					Engine:    model.EngineNameSuricata,
+					Language:  model.SigLangSuricata,
+					Ruleset:   ruleset,
+					License:   "Unknown",
+				},
+			},
+		},
+		{
+			Name: "Transactional Rule",
+			Lines: []string{
+				`alert http any any => any any (msg:"transactional"; sid:1;)`,
+			},
+			ExpectedDetections: []*model.Detection{
+				{
+					Author:    ruleset,
+					PublicID:  "1",
+					Title:     "transactional",
+					Severity:  model.SeverityUnknown,
+					Content:   `alert http any any => any any (msg:"transactional"; sid:1;)`,
 					IsEnabled: true,
 					Engine:    model.EngineNameSuricata,
 					Language:  model.SigLangSuricata,
@@ -1678,6 +1698,122 @@ func TestApplyUserState(t *testing.T) {
 	assert.False(t, detections[0].IsEnabled)
 	// Second detection should remain unchanged
 	assert.True(t, detections[1].IsEnabled)
+}
+
+// An empty store read with a state file present must abort the sync, not
+// redeploy every rule at its vendor default.
+func TestApplyUserStateEmptyStoreGuard(t *testing.T) {
+	newParsedRules := func() []*model.Detection {
+		return []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test Rule 1"; sid:1001;)`,
+				IsEnabled: true, // vendor default
+				Ruleset:   "ETOPEN",
+			},
+		}
+	}
+
+	tests := []struct {
+		Name          string
+		StateFile     []byte
+		StateFileErr  error
+		ExpectedErr   error
+		ExpectEnabled bool
+	}{
+		{
+			Name:          "State File Present, Empty Store Aborts Sync",
+			StateFile:     []byte("1753304832"),
+			ExpectedErr:   detections.ErrStateFileNoCommunity,
+			ExpectEnabled: true, // untouched, sync aborted
+		},
+		{
+			Name:          "No State File Is A First Import",
+			StateFileErr:  os.ErrNotExist,
+			ExpectedErr:   nil,
+			ExpectEnabled: true,
+		},
+		{
+			Name:          "Unreadable State File Aborts Sync",
+			StateFileErr:  errors.New("permission denied"),
+			ExpectedErr:   detections.ErrStateFileNoCommunity,
+			ExpectEnabled: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx := context.Background()
+			detStore := servermock.NewMockDetectionstore(ctrl)
+			iom := mock.NewMockIOManager(ctrl)
+
+			eng := &SuricataEngine{
+				srv: &server.Server{
+					Detectionstore: detStore,
+					Context:        ctx,
+				},
+				IOManager: iom,
+				SyncSchedulerParams: detections.SyncSchedulerParams{
+					StateFilePath: "stateFilePath",
+				},
+				isRunning: true,
+			}
+
+			// the silently-empty read
+			detStore.EXPECT().GetAllDetections(ctx, gomock.Any()).Return(map[string]*model.Detection{}, nil)
+			iom.EXPECT().ReadFile("stateFilePath").Return(test.StateFile, test.StateFileErr)
+
+			parsed := newParsedRules()
+			err := eng.applyUserState(ctx, parsed)
+
+			assert.Equal(t, test.ExpectedErr, err)
+			assert.Equal(t, test.ExpectEnabled, parsed[0].IsEnabled)
+		})
+	}
+}
+
+// A populated store must not read the state file.
+func TestApplyUserStateGuardSkippedWhenStorePopulated(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Context:        ctx,
+		},
+		IOManager: iom,
+		SyncSchedulerParams: detections.SyncSchedulerParams{
+			StateFilePath: "stateFilePath",
+		},
+		isRunning: true,
+	}
+
+	parsed := []*model.Detection{
+		{
+			PublicID:  "1001",
+			Content:   `alert tcp any any -> any any (msg:"Test Rule 1"; sid:1001;)`,
+			IsEnabled: true,
+			Ruleset:   "ETOPEN",
+		},
+	}
+
+	detStore.EXPECT().GetAllDetections(ctx, gomock.Any()).Return(map[string]*model.Detection{
+		"1001": {PublicID: "1001", IsEnabled: false, Ruleset: "ETOPEN"},
+	}, nil)
+	// no iom.ReadFile expectation: the guard must short-circuit
+
+	err := eng.applyUserState(ctx, parsed)
+
+	assert.NoError(t, err)
+	assert.False(t, parsed[0].IsEnabled, "user's disabled state should be applied")
 }
 
 // Test writeAllRulesFile method

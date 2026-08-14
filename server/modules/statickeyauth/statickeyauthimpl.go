@@ -9,7 +9,6 @@ package statickeyauth
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 
@@ -19,10 +18,8 @@ import (
 )
 
 type StaticKeyAuthImpl struct {
-	apiKey           string
-	skipCidrCheck    bool
-	anonymousNetwork *net.IPNet
-	server           *server.Server
+	apiKey string
+	server *server.Server
 }
 
 func NewStaticKeyAuthImpl(srv *server.Server) *StaticKeyAuthImpl {
@@ -31,17 +28,9 @@ func NewStaticKeyAuthImpl(srv *server.Server) *StaticKeyAuthImpl {
 	}
 }
 
-func (auth *StaticKeyAuthImpl) Init(apiKey string, anonymousCidr string) error {
-	var err error
+func (auth *StaticKeyAuthImpl) Init(apiKey string) error {
 	auth.apiKey = apiKey
-	if anonymousCidr == "*" {
-		auth.skipCidrCheck = true
-		log.Warn("Bypassing all anonymous CIDR traffic checks. This is only intended for development use.")
-	} else {
-		auth.skipCidrCheck = false
-		_, auth.anonymousNetwork, err = net.ParseCIDR(anonymousCidr)
-	}
-	return err
+	return nil
 }
 
 func (auth *StaticKeyAuthImpl) PreprocessPriority() int {
@@ -49,31 +38,30 @@ func (auth *StaticKeyAuthImpl) PreprocessPriority() int {
 }
 
 func (auth *StaticKeyAuthImpl) Preprocess(ctx context.Context, req *http.Request) (context.Context, int, error) {
-	var statusCode int
-	var err error
+	apiKey := req.Header.Get("Authorization")
+	if len(apiKey) == 0 {
+		return ctx, http.StatusUnauthorized, errors.New("Missing authorization header")
+	}
 
 	if !auth.IsAuthorized(ctx, req) {
-		statusCode = http.StatusUnauthorized
-		err = errors.New("Access denied")
-	} else {
-		// Remote agents will assume the role of this server until the implementation
-		// is enhanced to support unique agent keys and roles.
-		ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
-		ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
+		return ctx, http.StatusUnauthorized, errors.New("Access denied")
 	}
-	return ctx, statusCode, err
+
+	// Remote agents will assume the role of this server until the implementation
+	// is enhanced to support unique agent keys and roles.
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, auth.server.Agent.Id)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
+	return ctx, 0, nil
 }
 
 func (auth *StaticKeyAuthImpl) IsAuthorized(ctx context.Context, request *http.Request) bool {
 	apiKey := request.Header.Get("Authorization")
-	remoteIp := request.RemoteAddr
-	return auth.validateAuthorization(ctx, apiKey, remoteIp)
+	return auth.validateAuthorization(ctx, apiKey)
 }
 
-func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string, ipStr string) bool {
+func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key string) bool {
 	logger := log.FromContext(ctx)
 
-	// If API key has been provided, it must match
 	if len(key) > 0 && !strings.HasPrefix(key, "Bearer ") {
 		isApiKeyAccepted := auth.validateApiKey(key)
 		logger.WithFields(log.Fields{
@@ -83,27 +71,7 @@ func (auth *StaticKeyAuthImpl) validateAuthorization(ctx context.Context, key st
 		return isApiKeyAccepted
 	}
 
-	// API Key was not provided, check for anon network access
-	if auth.skipCidrCheck {
-		return true
-	}
-
-	idx := strings.LastIndex(ipStr, ":")
-	if idx > 0 {
-		ipStr = ipStr[0:idx]
-		ipStr = strings.TrimPrefix(ipStr, "[")
-		ipStr = strings.TrimSuffix(ipStr, "]")
-	}
-	remoteIp := net.ParseIP(ipStr)
-	isAnonymousIp := auth.anonymousNetwork.Contains(remoteIp)
-	logger.WithFields(log.Fields{
-		"anonymousNetwork": auth.anonymousNetwork,
-		"remoteIp":         remoteIp,
-		"ipStr":            ipStr,
-		"isAnonymousIp":    isAnonymousIp,
-		"requestId":        ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Authorization check via remote IP")
-	return isAnonymousIp
+	return false
 }
 
 func (auth *StaticKeyAuthImpl) validateApiKey(key string) bool {

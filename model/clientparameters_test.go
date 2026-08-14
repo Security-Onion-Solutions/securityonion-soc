@@ -247,13 +247,8 @@ func TestModelParameters_UnmarshalJSON(t *testing.T) {
 
 func TestModelParameters_Selector(t *testing.T) {
 	named := &ModelParameters{ID: "gemini-3.5-flash", DisplayName: "Agent Gemini", Adapter: "Gemini"}
-	assert.Equal(t, "Agent Gemini", named.Selector())
-	assert.Equal(t, "gemini-3.5-flash@Gemini", named.LegacySelector())
+	assert.Equal(t, "gemini-3.5-flash@Gemini", named.Selector())
 
-	// DisplayName is required; a model without one has no canonical selector
-	// (validateModelSelectors disables it at startup). LegacySelector exists
-	// only for resolving old stored sessions.
 	unnamed := &ModelParameters{ID: "qwen/qwen2.5-small", Adapter: "MyOpenAIChatAdapter"}
-	assert.Equal(t, "", unnamed.Selector())
-	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.LegacySelector())
+	assert.Equal(t, "qwen/qwen2.5-small@MyOpenAIChatAdapter", unnamed.Selector())
 }

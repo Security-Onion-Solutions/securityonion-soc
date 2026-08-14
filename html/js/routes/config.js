@@ -53,7 +53,6 @@ routes.push({
         confirmRemoveEntryMessage: "",
         confirmRemoveEntryIdx: 0,
         oldGridId: null,
-        changedModules: [],
         showNoteDialog: false,
         note: "",
         pendingSave: null,
@@ -80,6 +79,11 @@ routes.push({
         appliedHistorySearch: '',
         historyFilteredTotal: 0,
         skipAdvancedReload: false,
+        draggedEntryIdx: null,
+        dragOverEntryIdx: null,
+        dragPosition: null,
+        recentlyMovedItem: null,
+        recentlyMovedTimer: null,
       }
     },
     mounted() {
@@ -1045,97 +1049,14 @@ routes.push({
     },
     notifyChangedSetting(setting) {
       this.$root.showTip(this.i18n.settingsSynchronizing, 15000);
-
-      // Module change detection for collecting list of modules that have been 
-      // modified or are affected by recent UI changes.
-
-      const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
-
-      const moduleStateMap = new Map();
-
-      // Some modules do not map directly to a similarly named salt state.
-      // These modules are mapped to a list of states that should be run to apply the changes.
-      moduleStateMap.set("advanced", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("bpf.zeek", ["zeek"]);
-      moduleStateMap.set("bpf.pcap", ["pcap"]);
-      moduleStateMap.set("bpf.suricata", ["suricata"]);
-      moduleStateMap.set("elastic_fleet_package_registry", ["elastic-fleet-package-registry"]);
-      moduleStateMap.set("global", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("host", REQUIRE_GRID_HIGHSTATE);
-      moduleStateMap.set("patch", ["patch.os"]);
-      moduleStateMap.set("vm", ["vm.user"]);
-      
-      var override = false;
-      moduleStateMap.forEach((modules, prefix) => {
-        if (setting.id.startsWith(prefix)) {
-          modules.forEach(module => this.changedModules.push(module));
-          override = true;
-        }
-      });
-
-      if (!override) {
-        const module = setting.id.split(".")[0];
-
-        if (module && !this.changedModules.includes(module)) {
-          this.changedModules.push(module);
-        }
-      }
-
-      this.changedModules = [...new Set(this.changedModules)].sort();
-
-      // If multiple modules are changed, require a full grid highstate.
-      // Otherwise, if this is a multi-node grid we need perform more checks.
-      if (this.changedModules.length == 1 && !this.isSingleNodeGrid()) {
-        // Perform second stage check to verify that the changed module is 
-        // only found on the manager node. If not, require a full grid highstate.
-        managerOnlyStates = [
-          "backup",
-          "ca",
-          "elastalert",
-          "hydra",
-          "influxdb",
-          "kibana",
-          "kratos",
-          "manager",
-          "registry",
-          "soc",
-          "telegraf"
-        ]
-
-        const mappedSetting = this.changedModules[0];
-        const mappedSettingPrefix = mappedSetting.split(".")[0];
-        if (!managerOnlyStates.includes(mappedSettingPrefix)) {
-          this.changedModules = [...REQUIRE_GRID_HIGHSTATE];
-        }
-      }
     },
     async sync() {
       this.$root.startLoading();
       try {
-        this.changedModules = [];
         await this.$root.papi.put('config/sync');
         this.$root.showTip(this.i18n.settingsSynchronized);
       } catch (error) {
          this.$root.showError(error);
-      }
-      this.$root.stopLoading();
-    },
-    async syncModule(module) {
-      tmpModules = this.changedModules;
-      this.$root.startLoading();
-      try {
-        this.changedModules = [];
-        await this.$root.papi.put('config/sync/' + module);
-        this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinished, {"module": module}));
-      } catch (error) {
-        if (error.response && error.response.data == "ERROR_SALT_ALREADY_RUNNING") {
-          this.$root.showTip(this.$root.localizeMessage(error));
-          this.changedModules = tmpModules;
-        } else if (error.response && (error.response.status >= 502 && error.response.status <= 504)) {
-          this.$root.showTip(this.$root.localizeMessage(this.i18n.settingsSynchronizeFinishedRestarting, {"module": module}));
-        } else {
-          this.$root.showError(error);
-        }
       }
       this.$root.stopLoading();
     },
@@ -1256,6 +1177,87 @@ routes.push({
         return false;
       }
       return true;
+    },
+    canDragEntry(idx) {
+      if (!this.form.entries || !this.form.entries[idx]) return false;
+      if (this.form.entries[idx]._title == "+" && idx == this.form.entries.length - 1) {
+        return false;
+      }
+      return true;
+    },
+    onEntryDragStart(evt, idx) {
+      if (!this.canDragEntry(idx)) {
+        if (evt && evt.preventDefault) evt.preventDefault();
+        return;
+      }
+      this.draggedEntryIdx = idx;
+      if (evt && evt.dataTransfer) {
+        evt.dataTransfer.effectAllowed = 'move';
+        evt.dataTransfer.setData('text/plain', idx.toString());
+      }
+    },
+    onEntryDragOver(evt, idx) {
+      if (this.draggedEntryIdx === null || this.draggedEntryIdx === idx) return;
+      if (!this.canDragEntry(idx)) return;
+      if (evt && evt.preventDefault) evt.preventDefault();
+      this.dragOverEntryIdx = idx;
+
+      if (evt && evt.currentTarget) {
+        const rect = evt.currentTarget.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        this.dragPosition = evt.clientY < midY ? 'above' : 'below';
+      }
+    },
+    onEntryDragLeave(evt, idx) {
+      if (this.dragOverEntryIdx === idx) {
+        this.dragOverEntryIdx = null;
+        this.dragPosition = null;
+      }
+    },
+    onEntryDrop(evt, targetIdx, selected) {
+      if (evt && evt.preventDefault) evt.preventDefault();
+      const fromIdx = this.draggedEntryIdx !== null ? this.draggedEntryIdx : parseInt(evt?.dataTransfer?.getData('text/plain'), 10);
+      const position = this.dragPosition;
+      this.draggedEntryIdx = null;
+      this.dragOverEntryIdx = null;
+      this.dragPosition = null;
+
+      if (isNaN(fromIdx) || fromIdx === null) return;
+      if (!this.canDragEntry(fromIdx) || !this.canDragEntry(targetIdx)) return;
+
+      let toIdx = targetIdx;
+      if (position === 'below') {
+        toIdx = fromIdx < targetIdx ? targetIdx : targetIdx + 1;
+      } else if (position === 'above') {
+        toIdx = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
+      }
+
+      if (fromIdx === toIdx || toIdx < 0) return;
+
+      this.reorderEntry(selected, fromIdx, toIdx);
+    },
+    onEntryDragEnd() {
+      this.draggedEntryIdx = null;
+      this.dragOverEntryIdx = null;
+      this.dragPosition = null;
+    },
+    reorderEntry(selected, fromIdx, toIdx) {
+      if (!this.isPendingSave(selected)) {
+        this.editNow(selected);
+      }
+      const movedItem = this.form.entries.splice(fromIdx, 1)[0];
+      this.form.entries.splice(toIdx, 0, movedItem);
+      this.regenEntryTitles();
+      this.markDirtyEntries();
+
+      if (this.recentlyMovedTimer) {
+        clearTimeout(this.recentlyMovedTimer);
+      }
+      this.recentlyMovedItem = movedItem;
+      this.recentlyMovedTimer = setTimeout(() => {
+        this.recentlyMovedItem = null;
+        this.recentlyMovedTimer = null;
+      }, 1000);
     },
     regenEntryTitles() {
       for (var idx = 0; idx < this.form.entries.length; idx++) {

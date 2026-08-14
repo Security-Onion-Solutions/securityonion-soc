@@ -141,6 +141,34 @@ html, body, * {
   justify-content: space-between;
 }
 
+.so-stat-pill-clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.so-stat-pill-clickable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.so-stat-pill-clickable:hover::before {
+  opacity: var(--v-hover-opacity, 0.04);
+}
+
+.so-stat-pill-clickable:focus-visible {
+  outline: none;
+}
+
+.so-stat-pill-clickable:focus-visible::before {
+  opacity: var(--v-focus-opacity, 0.12);
+}
+
 .so-stat-text {
   flex: 1;
   min-width: 0;
@@ -163,6 +191,10 @@ html, body, * {
   opacity: 0.4;
   font-size: 1.6rem !important;
   margin-left: 12px;
+}
+
+.so-stat-caret {
+  opacity: 0.6;
 }
 
 .no-wrap-err-icon {
@@ -282,15 +314,18 @@ html, body, * {
   background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
 }
 
-.theme-links .v-list-item:focus-within {
+.theme-links .v-list-item:focus-visible,
+.theme-links .v-list-item:has(:focus-visible) {
   background-color: rgba(var(--v-theme-text), var(--v-focus-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active) {
+.theme-links .v-list-item:has(a.router-link-active),
+.theme-links .v-list-item.nav-active {
   background-color: rgba(var(--v-theme-text), var(--v-activated-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active):hover {
+.theme-links .v-list-item:has(a.router-link-active):hover,
+.theme-links .v-list-item.nav-active:hover {
   background-color: rgba(var(--v-theme-text), calc(var(--v-activated-opacity, 0.12) + var(--v-hover-opacity, 0.04)));
 }
 
@@ -344,6 +379,10 @@ html, body, * {
   border-radius: var(--so-radius-panel) !important;
   overflow: hidden;
   border: 1px solid rgba(var(--v-theme-text), 0.06);
+}
+
+.hunt-table .v-table__wrapper:has(.expanded-row-wrapper) {
+  container-type: inline-size;
 }
 
 /* Softer row striping */
@@ -429,15 +468,29 @@ html, body, * {
 .hunt-table tr + tr > td.px-0 {
   max-width: 1px;
   overflow: visible;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
-/* Constrains expanded content to viewport width, independent of table width */
 .expanded-row-wrapper {
-  max-width: calc(100vw - var(--v-layout-left, 0px) - 48px);
+  max-width: min(calc(100cqw - 2px), calc(100vw - var(--v-layout-left, 0px) - 48px));
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  container-type: inline-size;
+  position: sticky;
+  left: 0;
+}
+
+.expanded-row-wrapper .v-window-item {
   overflow-x: auto;
 }
 
-/* 4-column attribute grid — responsive: 4 → 3 → 2 cols, then scroll */
+.expanded-row-wrapper .v-window-item > * {
+  min-width: 480px;
+}
+
 .expanded-fields-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(200px, 1fr));
@@ -447,13 +500,13 @@ html, body, * {
 
 @media (min-width: 960px) {
   .expanded-fields-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(200px, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
   .expanded-fields-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(200px, 1fr));
   }
 }
 
@@ -602,6 +655,20 @@ html, body, * {
   border-bottom: none;
 }
 
+.playbook-ai-warning {
+  height: auto;
+  min-height: 54px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-right: 24px;
+}
+
+.playbook-ai-warning > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 .v-data-table .v-expansion-panel-title {
   padding: 16px 20px;
   min-height: 48px;
@@ -611,10 +678,13 @@ html, body, * {
   padding: 4px 8px 16px;
 }
 
-/* Simple table (instant insights) */
 .simple-table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  table-layout: auto;
   border-radius: var(--so-radius-nested);
-  overflow: hidden;
   border: 1px solid rgba(var(--v-theme-text), 0.08);
   border-collapse: separate;
   border-spacing: 0;
@@ -1202,6 +1272,39 @@ dfn {
   overflow-y: auto;
 }
 
+/* Per-invocation stats (credits, output tokens) beside a delegate's agent name. */
+.delegation-child-stat {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rows inside the per-agent credit breakdown tooltip. */
+.assistant-credit-breakdown {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-container .message-item .flex-grow-1 {
+  min-width: 0;
+}
+
+.chat-container .message-item {
+  min-width: 480px;
+}
+
+.markdown-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-table-scroll:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.chat-container .message-item .text-body-2 pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Agent Studio inline editor card (inside an expanded data-table row). */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
@@ -1236,4 +1339,9 @@ dfn {
 
 .agentstudio-toolbar {
   width: fit-content;
+}
+
+#agentstudio-agents .expanded-row-wrapper .v-window-item,
+#agentstudio-skills .expanded-row-wrapper .v-window-item {
+  padding-top: 8px;
 }

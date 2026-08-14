@@ -63,7 +63,7 @@
 				<div class="my-4"></div>
 				<span data-aid="assistant_model_select">
 					<v-select
-						:disabled="$root.loading"
+						:disabled="!canSwitchModel()"
 						v-model="currentModel"
 						@update:model-value="updateModelParams(); reloadCredits()"
 						:items="groupedModels"
@@ -87,7 +87,7 @@
 		</v-card>
 	</v-dialog>
 	<v-row align="stretch" class="ga-3 flex-wrap">
-		<v-col v-if="adaptersMap.get(modelsMap.get(currentModel)?.adapter)?.protocol === 'securityonion_ai_cloud'">
+		<v-col v-if="isCreditBasedModel()">
 			<div class="so-stat-pill" data-aid="assistant_credits_remaining">
 				<div class="so-stat-text">
 					<div id="stat-label-credits-remaining" class="so-stat-label">{{ i18n.creditsRemaining }}</div>
@@ -102,13 +102,26 @@
 			</div>
 		</v-col>
 		<v-col>
-			<div class="so-stat-pill" data-aid="assistant_current_model">
-				<div class="so-stat-text">
-					<div id="stat-label-current-model" class="so-stat-label">{{ agentic ? i18n.currentAgentAndModel : i18n.currentModel }}</div>
-					<div class="so-stat-value" aria-labelledby="stat-label-current-model">{{ currentModelLabel() }}</div>
-				</div>
-				<v-icon class="so-stat-icon">fa-microchip</v-icon>
-			</div>
+			<v-menu :disabled="!canSwitchModel()" data-aid="assistant_model_menu">
+				<template v-slot:activator="{ props }">
+					<div class="so-stat-pill" :class="{ 'so-stat-pill-clickable': canSwitchModel() }" data-aid="assistant_current_model" v-bind="canSwitchModel() ? props : {}" :role="canSwitchModel() ? 'button' : null" :tabindex="canSwitchModel() ? 0 : null" :aria-label="agentic ? i18n.selectAgent : i18n.selectModel">
+						<div class="so-stat-text">
+							<div id="stat-label-current-model" class="so-stat-label">{{ agentic ? i18n.currentAgentAndModel : i18n.currentModel }}</div>
+							<div class="so-stat-value" aria-labelledby="stat-label-current-model">
+								{{ currentModelLabel() }}
+								<v-icon size="x-small" class="ml-1 so-stat-caret">fa-angle-down</v-icon>
+							</div>
+						</div>
+						<v-icon class="so-stat-icon">fa-microchip</v-icon>
+					</div>
+				</template>
+				<v-list data-aid="assistant_model_menu_list" :aria-label="agentic ? i18n.selectAgent : i18n.selectModel">
+					<template v-for="(item, idx) in groupedModels" :key="item.header || item.key || idx">
+						<v-list-subheader v-if="item.header" class="text-body-small">{{ item.header }}</v-list-subheader>
+						<v-list-item v-else :active="item.key === currentModel" @click="selectModel(item.key)" :title="item.displayName" data-aid="assistant_model_menu_item"></v-list-item>
+					</template>
+				</v-list>
+			</v-menu>
 		</v-col>
 		<v-col style="flex: 0 0 auto;">
 			<div class="so-stat-pill no-print" style="gap: 16px;">
@@ -138,7 +151,7 @@
 						fa-file-export
 					</v-icon>
 					<template v-if="currentChatId">
-						<v-icon id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" @keydown.enter.space.stop="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase" role="button" tabindex="0">fa-paperclip</v-icon>
+						<v-icon class="mr-2" id="attachToCaseBtn" :title="i18n.assistantAttachToCaseHelp" @click="caseMenuVisible = true" @keydown.enter.space.stop="caseMenuVisible = true" :aria-label="i18n.ariaAttachToCase" role="button" tabindex="0">fa-paperclip</v-icon>
 						<v-menu v-model="caseMenuVisible" target="#attachToCaseBtn" data-aid="assistant_case_attach_menu">
 							<v-list id="assistant-escalate-menu" color="secondary">
 								<v-list-item id="attachToCaseNew" density="compact" v-bind:title.attr="i18n.assistantAttachToNewCaseHelp" data-aid="assistant_attach_to_case_new" @click="attachToCase(currentChatId, null);">
@@ -165,7 +178,20 @@
 						</v-menu>
 					</template>
 					<v-spacer></v-spacer>
-					<div class="text-wrap mr-4" style="font-size: 14px;">{{ i18n.totalCredits }}: <span class="text-primary">{{ formatCount(creditsUsed) }}</span></div>
+					<div class="text-wrap mr-4 d-flex align-center" style="font-size: 14px;">
+						<v-tooltip v-if="agentic && creditBreakdown.length > 1" location="top">
+							<template #activator="{ props }">
+								<v-icon size="x-small" class="mr-1" v-bind="props" data-aid="assistant_total_credits_info" role="button" tabindex="0" :aria-label="i18n.totalCredits">fa-circle-info</v-icon>
+							</template>
+							<div class="assistant-credit-breakdown">
+								<div v-for="row in creditBreakdown" :key="row.label" class="d-flex justify-space-between">
+									<span class="mr-6">{{ row.label }}</span>
+									<span>{{ formatCount(row.credits) }}</span>
+								</div>
+							</div>
+						</v-tooltip>
+						<span>{{ i18n.totalCredits }}: <span class="text-primary" data-aid="assistant_total_credits">{{ formatCount(creditsUsed) }}</span></span>
+					</div>
 					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
 					<v-icon :color="getCompressColor()"
 						class="ml-4"

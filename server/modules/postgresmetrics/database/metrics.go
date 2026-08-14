@@ -7,29 +7,9 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
-
-type MetricPanel struct {
-	ID        string   `json:"id"`
-	Title     string   `json:"title,omitempty"`
-	TitleKey  string   `json:"titleKey,omitempty"`
-	Type      string   `json:"type"`
-	Metric    string   `json:"metric"`
-	Keys      []string `json:"keys"`
-	Labels    []string `json:"labels,omitempty"`
-	LabelKeys []string `json:"labelKeys,omitempty"`
-	Colors    []string `json:"colors"`
-	Width     int      `json:"width"`
-	Height    int      `json:"height"`
-	Units     string   `json:"units,omitempty"`
-}
-
-type MetricsDashboard struct {
-	Panels []MetricPanel `json:"panels"`
-}
 
 type MetricConfig struct {
 	Tables        []string
@@ -59,8 +39,8 @@ var defaultColors = []string{
 
 var DashboardMetricOrder = []string{
 	"cpu", "memory", "load", "swap", "io_wait", "system_uptime", "disk", "net", "net_drops", "pcap_retention",
-	"eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
-	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue", "logstash_eps",
+	"eps", "logstash_eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
+	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue",
 	"kafka_eps", "kafka_controllers", "kafka_brokers", "kafka_under_replicated",
 }
 
@@ -165,13 +145,10 @@ var MetricConfigs = map[string]MetricConfig{
 		Units:     "second",
 	},
 	"kafka_eps": {
-		Tables:    []string{"kafka_topic"},
-		Fields:    []string{"MessagesInPerSec.Count"},
-		Keys:      []string{"kafka_eps"},
-		Factor:    1.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsKafkaEps",
-		LabelKeys: []string{"metricsKafkaEps"},
+		Keys:          []string{"kafka_eps"},
+		CustomHandler: queryKafkaEpsMetric,
+		TitleKey:      "metricsKafkaEps",
+		LabelKeys:     []string{"metricsKafkaEps"},
 	},
 	"container_uptime": {
 		Keys:          []string{"container_uptime"},
@@ -213,14 +190,11 @@ var MetricConfigs = map[string]MetricConfig{
 		Units:         "percent",
 	},
 	"elastic_ingest_time": {
-		Tables:    []string{"elasticsearch_clusterstats_nodes"},
-		Fields:    []string{"ingest_processor_stats_grok_time_in_millis"},
-		Keys:      []string{"elastic_ingest_time"},
-		Factor:    1.0 / 1000.0,
-		Aggregate: "AVG",
-		TitleKey:  "metricsElasticIngestTime",
-		LabelKeys: []string{"metricsTimeMs"},
-		Units:     "seconds",
+		Keys:          []string{"elastic_ingest_time"},
+		CustomHandler: queryElasticIngestTimeMetric,
+		TitleKey:      "metricsElasticIngestTime",
+		LabelKeys:     []string{"metricsTimeMs"},
+		Units:         "ms",
 	},
 	"logstash_eps": {
 		Tables:    []string{"logstash_events"},
@@ -229,7 +203,7 @@ var MetricConfigs = map[string]MetricConfig{
 		Factor:    1.0,
 		Aggregate: "AVG",
 		TitleKey:  "metricsLogstashEps",
-		LabelKeys: []string{"metricsEps"},
+		LabelKeys: []string{"metricsEventsReceived"},
 	},
 	"kafka_under_replicated": {
 		Tables:    []string{"kafka_partition"},
@@ -302,11 +276,11 @@ var MetricConfigs = map[string]MetricConfig{
 	},
 }
 
-func GenerateDefaultMetricsDashboard() ([]byte, error) {
-	panels := make([]MetricPanel, 0, len(DashboardMetricOrder))
+func GenerateDefaultMetricsDashboard() (*model.MetricsDashboard, error) {
+	panels := make([]model.MetricPanel, 0, len(DashboardMetricOrder))
 	for _, mType := range DashboardMetricOrder {
 		if cfg, ok := MetricConfigs[mType]; ok {
-			panels = append(panels, MetricPanel{
+			panels = append(panels, model.MetricPanel{
 				ID:        mType,
 				TitleKey:  cfg.TitleKey,
 				Type:      "line_chart",
@@ -320,6 +294,5 @@ func GenerateDefaultMetricsDashboard() ([]byte, error) {
 			})
 		}
 	}
-	db := MetricsDashboard{Panels: panels}
-	return json.Marshal(db)
+	return &model.MetricsDashboard{Panels: panels}, nil
 }

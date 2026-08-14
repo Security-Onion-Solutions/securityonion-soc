@@ -2145,6 +2145,94 @@ test('moveEntryWrapWithoutPlus', () => {
   expect(comp.form.entries[2]._title).toBe('3');
 });
 
+test('canDragEntry', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  expect(comp.canDragEntry(0)).toBe(true);
+  expect(comp.canDragEntry(1)).toBe(true);
+  expect(comp.canDragEntry(2)).toBe(false);
+
+  comp.form.entries = [{_title: '1'}, {_title: '2'}];
+  expect(comp.canDragEntry(0)).toBe(true);
+  expect(comp.canDragEntry(1)).toBe(true);
+  expect(comp.canDragEntry(99)).toBe(false);
+});
+
+test('onEntryDragStart / onEntryDragOver / onEntryDragLeave / onEntryDragEnd', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '+'}];
+  const preventDefault = jest.fn();
+  const setData = jest.fn();
+  const evt = { preventDefault, dataTransfer: { effectAllowed: '', setData }, currentTarget: { getBoundingClientRect: () => ({ top: 100, height: 50 }) }, clientY: 110 };
+
+  // Cannot drag '+' entry
+  comp.onEntryDragStart(evt, 2);
+  expect(preventDefault).toHaveBeenCalled();
+  expect(comp.draggedEntryIdx).toBeNull();
+
+  // Valid drag start
+  comp.onEntryDragStart(evt, 0);
+  expect(comp.draggedEntryIdx).toBe(0);
+  expect(evt.dataTransfer.effectAllowed).toBe('move');
+  expect(setData).toHaveBeenCalledWith('text/plain', '0');
+
+  // Drag over target above midline
+  comp.onEntryDragOver(evt, 1);
+  expect(comp.dragOverEntryIdx).toBe(1);
+  expect(comp.dragPosition).toBe('above');
+
+  // Drag over target below midline
+  evt.clientY = 140;
+  comp.onEntryDragOver(evt, 1);
+  expect(comp.dragOverEntryIdx).toBe(1);
+  expect(comp.dragPosition).toBe('below');
+
+  // Drag over non-draggable target (e.g., '+')
+  comp.onEntryDragOver(evt, 2);
+  expect(comp.dragOverEntryIdx).toBe(1); // untouched
+
+  // Drag leave
+  comp.onEntryDragLeave(evt, 1);
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+
+  // Drag end
+  comp.draggedEntryIdx = 0;
+  comp.dragOverEntryIdx = 1;
+  comp.dragPosition = 'above';
+  comp.onEntryDragEnd();
+  expect(comp.draggedEntryIdx).toBeNull();
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+});
+
+test('onEntryDrop and reorderEntry above/below', () => {
+  comp.form.entries = [{_title: '1'}, {_title: '2'}, {_title: '3'}, {_title: '+'}];
+  comp.isPendingSave = jest.fn().mockReturnValue(false);
+  comp.editNow = jest.fn();
+  comp.regenEntryTitles = jest.fn();
+  comp.markDirtyEntries = jest.fn();
+
+  comp.draggedEntryIdx = 0;
+  comp.dragOverEntryIdx = 2;
+  comp.dragPosition = 'below';
+
+  const preventDefault = jest.fn();
+  const evt = { preventDefault, dataTransfer: { getData: () => '0' } };
+
+  // Dropping below item index 2 -> target insertion index becomes 2
+  comp.onEntryDrop(evt, 2, {});
+  expect(preventDefault).toHaveBeenCalled();
+  expect(comp.draggedEntryIdx).toBeNull();
+  expect(comp.dragOverEntryIdx).toBeNull();
+  expect(comp.dragPosition).toBeNull();
+  expect(comp.isPendingSave).toHaveBeenCalledWith({});
+  expect(comp.editNow).toHaveBeenCalled();
+  expect(comp.regenEntryTitles).toHaveBeenCalled();
+  expect(comp.markDirtyEntries).toHaveBeenCalled();
+
+  // Element at index 0 ('1') moved below index 2 (so position 2)
+  expect(comp.form.entries.map(e => e._title)).toEqual(['2', '3', '1', '+']);
+});
+
 test('getSettingLink', () => {
   const setting = { id: 'test.setting', advanced: true };
 
@@ -2155,149 +2243,6 @@ test('getSettingLink', () => {
   setting.advanced = false;
   const link2 = comp.getSettingLink(setting);
   expect(link2).toBe('https://example.com/#/config?s=test.setting&a=0');
-});
-
-test('notifyChangedSetting', () => {
-  // Test adding new module
-  comp.nodes = [{id: 'onlyone'}];
-  comp.changedModules = [];
-  const setting = { id: 'module1.setting1' };
-  comp.notifyChangedSetting(setting);
-  expect(comp.changedModules).toEqual(['module1']);
-
-  // Test adding another new module
-  const setting2 = { id: 'module2.setting2' };
-  comp.notifyChangedSetting(setting2);
-  expect(comp.changedModules).toEqual(['module1', 'module2']);
-
-  // Test adding duplicate module (should not add again)
-  comp.notifyChangedSetting(setting);
-  expect(comp.changedModules).toEqual(['module1', 'module2']);
-
-  // Test sorting after adding a module that comes first alphabetically
-  const setting3 = { id: 'a_module.setting' };
-  comp.notifyChangedSetting(setting3);
-  expect(comp.changedModules).toEqual(['a_module', 'module1', 'module2']);
-});
-
-test('notifyChangedSetting with moduleStateMap', () => {
-  // Test override with advanced prefix
-  comp.nodes = [{id: 'onlyone'}];
-  comp.changedModules = [];
-  const settingAdvanced = { id: 'advanced.some.setting' };
-  comp.notifyChangedSetting(settingAdvanced);
-  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
-
-  // Test override with bpf.zeek prefix
-  comp.changedModules = [];
-  const settingBpfZeek = { id: 'bpf.zeek.config' };
-  comp.notifyChangedSetting(settingBpfZeek);
-  expect(comp.changedModules).toEqual(['zeek']);
-
-  // Test override with bpf.pcap prefix
-  comp.changedModules = [];
-  const settingBpfPcap = { id: 'bpf.pcap.interface' };
-  comp.notifyChangedSetting(settingBpfPcap);
-  expect(comp.changedModules).toEqual(['pcap']);
-
-  // Test override with bpf.suricata prefix
-  comp.changedModules = [];
-  const settingBpfSuricata = { id: 'bpf.suricata.rules' };
-  comp.notifyChangedSetting(settingBpfSuricata);
-  expect(comp.changedModules).toEqual(['suricata']);
-
-  // Test override with elastic_fleet_package_registry prefix
-  comp.changedModules = [];
-  const settingElasticFleet = { id: 'elastic_fleet_package_registry.version' };
-  comp.notifyChangedSetting(settingElasticFleet);
-  expect(comp.changedModules).toEqual(['elastic-fleet-package-registry']);
-
-  // Test override with global prefix
-  comp.changedModules = [];
-  const settingGlobal = { id: 'global.timeout' };
-  comp.notifyChangedSetting(settingGlobal);
-  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
-
-  // Test override with host prefix
-  comp.changedModules = [];
-  const settingHost = { id: 'host.network' };
-  comp.notifyChangedSetting(settingHost);
-  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate']);
-
-  // Test override with patch prefix
-  comp.changedModules = [];
-  const settingPatch = { id: 'patch.schedule' };
-  comp.notifyChangedSetting(settingPatch);
-  expect(comp.changedModules).toEqual(['patch.os']);
-
-  // Test override with vm prefix
-  comp.changedModules = [];
-  const settingVm = { id: 'vm.config' };
-  comp.notifyChangedSetting(settingVm);
-  expect(comp.changedModules).toEqual(['vm.user']);
-
-  // Test no override, falls back to default logic
-  comp.changedModules = [];
-  const settingDefault = { id: 'unknown.module' };
-  comp.notifyChangedSetting(settingDefault);
-  expect(comp.changedModules).toEqual(['unknown']);
-
-  // Test multiple calls with overrides and ensure uniqueness and sorting
-  comp.changedModules = [];
-  comp.notifyChangedSetting(settingAdvanced); // adds fake1, fake2
-  comp.notifyChangedSetting(settingBpfZeek); // adds zeek
-  comp.notifyChangedSetting(settingAdvanced); // duplicate, should not add again
-  expect(comp.changedModules).toEqual(['fake1-to-trigger-highstate', 'fake2-to-trigger-highstate', 'zeek']);
-});
-
-test('notifyChangedSetting_MultiNode', () => {
-  // Setup multi-node environment
-  comp.nodes = [
-    { id: 'master', role: 'manager' },
-    { id: 'worker', role: 'sensor' }
-  ];
-  
-  // Verify isSingleNodeGrid returns false
-  expect(comp.isSingleNodeGrid()).toBe(false);
-
-  const managerOnlyStates = [
-    "backup",
-    "ca",
-    "elastalert",
-    "hydra",
-    "influxdb",
-    "kibana",
-    "kratos",
-    "manager",
-    "registry",
-    "soc",
-    "telegraf"
-  ];
-
-  // Scenario 1: Verify all manager-only states
-  managerOnlyStates.forEach(module => {
-    comp.changedModules = [];
-    const setting = { id: module + '.enabled' };
-    comp.notifyChangedSetting(setting);
-    expect(comp.changedModules).toEqual([module]);
-  });
-
-  const REQUIRE_GRID_HIGHSTATE = ["fake1-to-trigger-highstate", "fake2-to-trigger-highstate"];
-
-  // Scenario 2: Verify removed states trigger highstate
-  ["nginx", "ssl"].forEach(module => {
-    comp.changedModules = [];
-    const setting = { id: module + '.enabled' };
-    comp.notifyChangedSetting(setting);
-    expect(comp.changedModules).toEqual(REQUIRE_GRID_HIGHSTATE);
-  });
-
-  // Scenario 3: Changing a module that is NOT in managerOnlyStates (e.g., unknown)
-  comp.changedModules = [];
-  const settingUnknown = { id: 'unknown.module' };
-  comp.notifyChangedSetting(settingUnknown);
-  // Should escalate to full grid highstate
-  expect(comp.changedModules).toEqual(REQUIRE_GRID_HIGHSTATE);
 });
 
 test('saveLocalSettings', () => {

@@ -96,23 +96,24 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 		assert.Equal(t, 33.3, res["host-a"][0].Value)
 	})
 
-	t.Run("Container query filters by container", func(t *testing.T) {
+	t.Run("elasticsearch_docs handles host tag fallback and query execution", func(t *testing.T) {
 		mockDb := &MockDB{
 			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
-				// Assert that the container name was passed in the query args
-				assert.Contains(t, args, "so-redis")
+				assert.Contains(t, sql, "COALESCE(NULLIF(tag.tags->>'node_name', ''), NULLIF(tag.tags->>'node_host', ''), NULLIF(tag.tags->>'host', ''), NULLIF(tag.tags->>'es_host', ''), '')")
 				return &MockRows{
 					rows: [][]interface{}{
-						{time.Now(), "host-a", "so-redis", 12.3},
+						{time.Now(), "host-a", 1119559.0},
+						{time.Now(), "host-b", 396741.0},
 					},
 				}, nil
 			},
 		}
 		s := New(mockDb)
-		res, err := s.GetTimeSeriesMetrics(ctx, "", "so-redis", "container_cpu", startTime, endTime)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "", "elasticsearch_docs", startTime, endTime)
 		assert.NoError(t, err)
-		assert.Contains(t, res, "host-a::so-redis")
-		assert.Len(t, res["host-a::so-redis"], 1)
-		assert.Equal(t, 12.3, res["host-a::so-redis"][0].Value)
+		assert.Contains(t, res, "host-a")
+		assert.Contains(t, res, "host-b")
+		assert.Equal(t, 1119559.0, res["host-a"][0].Value)
+		assert.Equal(t, 396741.0, res["host-b"][0].Value)
 	})
 }

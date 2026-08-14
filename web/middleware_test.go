@@ -53,6 +53,11 @@ func TestValidateRequest(tester *testing.T) {
 	err = validateRequest(ctx, host, request)
 	assert.NoError(tester, err)
 
+	// Test POST, with no ContextKeyRequestCSRFExempt in context - no panic
+	request = MustRequest(tester, http.MethodPost, "somewhere", nil)
+	err = validateRequest(context.Background(), host, request)
+	assert.EqualError(tester, err, "Missing SRV token on request")
+
 	// Test DELETE - fail since missing token in req header
 	request = MustRequest(tester, http.MethodDelete, "somewhere", nil)
 	ctx = context.WithValue(context.Background(), ContextKeyRequestCSRFExempt, false)

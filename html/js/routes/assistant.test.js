@@ -425,30 +425,31 @@ test('initAssistant corrects contextLimitLarge when smaller than contextLimitSma
   
   await comp.initAssistant(mockParams);
   
-  // Check that the modelsMap was created correctly, keyed by displayName
+  // Check that the modelsMap was created correctly, keyed by the canonical
+  // id@adapter selector
   expect(comp.modelsMap.size).toBe(3);
-  expect(comp.modelsMap.has('Model 1')).toBe(true);
-  expect(comp.modelsMap.has('Model 2')).toBe(true);
-  expect(comp.modelsMap.has('Model 3')).toBe(true);
+  expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-2@SOAI')).toBe(true);
+  expect(comp.modelsMap.has('model-3@SOAI')).toBe(true);
   expect(comp.modelsMap.has('model-4@SOAI')).toBe(false); // Disabled model should not be included
 
   // Check that contextLimitLarge was corrected for model-1
-  const model1 = comp.modelsMap.get('Model 1');
+  const model1 = comp.modelsMap.get('model-1@SOAI');
   expect(model1.contextLimitSmall).toBe(200000);
   expect(model1.contextLimitLarge).toBe(200000); // Should be corrected to match contextLimitSmall
 
   // Check that contextLimitLarge was not changed for model-2 (already larger)
-  const model2 = comp.modelsMap.get('Model 2');
+  const model2 = comp.modelsMap.get('model-2@SOAI');
   expect(model2.contextLimitSmall).toBe(100000);
   expect(model2.contextLimitLarge).toBe(300000); // Should remain unchanged
 
   // Check that contextLimitLarge was not changed for model-3 (equal)
-  const model3 = comp.modelsMap.get('Model 3');
+  const model3 = comp.modelsMap.get('model-3@SOAI');
   expect(model3.contextLimitSmall).toBe(250000);
   expect(model3.contextLimitLarge).toBe(250000); // Should remain unchanged
 });
 
-test('initAssistant migrates a legacy id@adapter currentModel to the displayName key', async () => {
+test('initAssistant keeps a stored id@adapter currentModel as-is', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -466,15 +467,14 @@ test('initAssistant migrates a legacy id@adapter currentModel to the displayName
   comp.updateModelParams = jest.fn();
   comp.$root.disclaimer = false;
 
-  // As restored from localStorage by a browser that saved the old format.
   comp.currentModel = 'model-2@SOAI';
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 2');
+  expect(comp.currentModel).toBe('model-2@SOAI');
 });
 
-test('initAssistant does not migrate a legacy selector for a disabled model', async () => {
+test('initAssistant defaults a stored selector for a disabled model to the first model', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -492,16 +492,16 @@ test('initAssistant does not migrate a legacy selector for a disabled model', as
   comp.updateModelParams = jest.fn();
   comp.$root.disclaimer = false;
 
-  // Legacy saved selector pointing at a model that is now disabled: disabled
-  // models are not migrated, so selection falls back to the first model.
+  // Saved selector pointing at a model that is now disabled: disabled models
+  // are not selectable, so selection falls back to the first model.
   comp.currentModel = 'model-2@SOAI';
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 1');
+  expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
-test('initAssistant falls back to id@adapter key when displayName is absent', async () => {
+test('initAssistant always keys models by id@adapter and backfills a missing displayName', async () => {
   const mockParams = {
     enabled: true,
     availableModels: [
@@ -522,6 +522,8 @@ test('initAssistant falls back to id@adapter key when displayName is absent', as
 
   expect(comp.modelsMap.has('model-1@SOAI')).toBe(true);
   expect(comp.currentModel).toBe('model-1@SOAI');
+  // displayName is optional; the selector fills in for display.
+  expect(comp.modelsMap.get('model-1@SOAI').displayName).toBe('model-1@SOAI');
 });
 
 test('initAssistant defaults an unknown currentModel to the first model', async () => {
@@ -545,7 +547,7 @@ test('initAssistant defaults an unknown currentModel to the first model', async 
 
   await comp.initAssistant(mockParams);
 
-  expect(comp.currentModel).toBe('Model 1');
+  expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {
@@ -581,7 +583,7 @@ const agenticParams = () => ({
     { name: 'Hunter', agentDescription: 'hunts events' },
     { name: 'Orchestrator', isOrchestrator: true, agentDescription: 'coordinates' },
   ],
-  agentMapping: { Orchestrator: 'Claude Sonnet', Hunter: 'Claude Haiku' },
+  agentMapping: { Orchestrator: 'sonnet@SOAI', Hunter: 'haiku' },
   availableModels: [
     { id: 'sonnet', displayName: 'Claude Sonnet', contextLimitSmall: 200000, contextLimitLarge: 1000000, charsPerTokenEstimate: 4, lowBalanceColorAlert: 500, enabled: true, adapter: 'SOAI' },
     { id: 'haiku', displayName: 'Claude Haiku', contextLimitSmall: 100000, contextLimitLarge: 100000, charsPerTokenEstimate: 3, lowBalanceColorAlert: 100, enabled: true, adapter: 'SOAI' },
@@ -666,6 +668,131 @@ test('currentModelLabel is the plain model displayName in non-agentic mode', asy
 
   expect(comp.agentic).toBe(false);
   expect(comp.currentModelLabel()).toBe('Test Model');
+});
+
+test('currentModelLabel falls back to the id@adapter selector without a displayName', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.currentModelLabel()).toBe('test-model@SOAI');
+});
+
+test('isCreditBasedModel resolves through the mapped model adapter in agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  // Orchestrator -> Claude Sonnet -> SOAI adapter (securityonion_ai_cloud).
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.isCreditBasedModel()).toBe(true);
+});
+
+test('isCreditBasedModel is false in agentic mode when the mapped adapter is not credit-based', async () => {
+  stubInitDeps();
+
+  const params = agenticParams();
+  params.availableAdapters = [{ name: 'SOAI', protocol: 'ollama' }];
+
+  await comp.initAssistant(params);
+
+  expect(comp.isCreditBasedModel()).toBe(false);
+});
+
+test('isCreditBasedModel reflects the model adapter in non-agentic mode', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'SOAI' }
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  });
+
+  expect(comp.agentic).toBe(false);
+  expect(comp.isCreditBasedModel()).toBe(true);
+});
+
+test('isCreditBasedModel is false when the model adapter is not credit-based', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant({
+    enabled: true,
+    availableModels: [
+      { id: 'test-model', displayName: 'Test Model', enabled: true, adapter: 'Local' }
+    ],
+    availableAdapters: [{ name: 'Local', protocol: 'ollama' }],
+  });
+
+  expect(comp.isCreditBasedModel()).toBe(false);
+});
+
+test('selectModel switches the current agent and refreshes params and credits', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+
+  comp.selectModel('Hunter');
+
+  expect(comp.currentModel).toBe('Hunter');
+  expect(comp.updateModelParams).toHaveBeenCalledTimes(1);
+  expect(comp.reloadCredits).toHaveBeenCalledTimes(1);
+});
+
+test('canSwitchModel is false while loading or a turn is active', () => {
+  comp.$root.loading = false;
+  comp.isStreaming = false;
+  comp.isTyping = false;
+  expect(comp.canSwitchModel()).toBe(true);
+
+  comp.$root.loading = true;
+  expect(comp.canSwitchModel()).toBe(false);
+
+  comp.$root.loading = false;
+  comp.isStreaming = true;
+  expect(comp.canSwitchModel()).toBe(false);
+});
+
+test('selectModel is blocked while a turn is active', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+  comp.isStreaming = true; // checkForActivity() -> true
+
+  comp.selectModel('Hunter');
+
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.updateModelParams).not.toHaveBeenCalled();
+  expect(comp.reloadCredits).not.toHaveBeenCalled();
+});
+
+test('selectModel is a no-op for the already-current or an empty selection', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  expect(comp.currentModel).toBe('Orchestrator');
+
+  comp.updateModelParams = jest.fn();
+  comp.reloadCredits = jest.fn();
+
+  comp.selectModel('Orchestrator');
+  comp.selectModel('');
+
+  expect(comp.currentModel).toBe('Orchestrator');
+  expect(comp.updateModelParams).not.toHaveBeenCalled();
+  expect(comp.reloadCredits).not.toHaveBeenCalled();
 });
 
 test('handleRouteSessionId returns early when assistantEnabled is false', async () => {
@@ -6064,27 +6191,144 @@ test('focusChatInput focuses the chat input textarea', () => {
 });
 
 // Credits tracking tests
-test('updateCreditsUsed updates total credits used', () => {
-  comp.creditsUsed = 100;
-  const usage1 = { credits: 50 };
-  const usage2 = { credits: 25 };
-  
-  comp.updateCreditsUsed(usage1);
-  expect(comp.creditsUsed).toBe(150);
-  
-  comp.updateCreditsUsed(usage2);
-  expect(comp.creditsUsed).toBe(175);
-  
-  comp.updateCreditsUsed(null);
-  expect(comp.creditsUsed).toBe(175);
+test('accrueCredits adds to the running total and the producing agent\'s bucket', () => {
+  comp.creditsUsed = 0;
+  comp.creditsByAgent = {};
+
+  comp.accrueCredits({ credits: 500 }, 'Orchestrator');
+  comp.accrueCredits({ credits: 240 }, 'Investigator');
+  comp.accrueCredits({ credits: 80 }, 'Investigator'); // same agent, second turn
+  comp.accrueCredits({ credits: 100 }, 'Detection Engineer');
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 500, Investigator: 320, 'Detection Engineer': 100 });
+  // partition invariant: the buckets sum to the headline total
+  const sum = Object.values(comp.creditsByAgent).reduce((a, b) => a + b, 0);
+  expect(sum).toBe(comp.creditsUsed);
+  expect(comp.creditsUsed).toBe(920);
 });
 
-test('updateCreditsUsed handles missing credits field', () => {
+test('accrueCredits ignores usage with no credits and never creates an empty-name bucket', () => {
   comp.creditsUsed = 100;
-  const usage = { input_tokens: 10, output_tokens: 20 };
-  
-  comp.updateCreditsUsed(usage);
+  comp.creditsByAgent = {};
+  comp.accrueCredits({ input_tokens: 10, output_tokens: 20 }, 'Orchestrator');
+  comp.accrueCredits(null, 'Orchestrator');
   expect(comp.creditsUsed).toBe(100);
+  expect(comp.creditsByAgent).toEqual({});
+  // A missing agent name falls back to the generic sub-agent label rather than "".
+  comp.accrueCredits({ credits: 5 }, '');
+  expect(comp.creditsByAgent[comp.i18n.assistantDelegateAgent]).toBe(5);
+});
+
+test('recomputeCreditsFromHistory rebuilds totals from stored per-message agent names', () => {
+  comp.creditsUsed = 999;
+  comp.creditsByAgent = { stale: 1 };
+
+  const data = {
+    session: { sessionId: 'root', model: 'Orchestrator' },
+    history: [
+      { model: 'Orchestrator', message: { role: 'assistant', usage: { credits: 300 } } },
+      { model: 'Orchestrator', message: { role: 'user', contentStr: 'hi' } }, // no usage
+      { model: 'Orchestrator', message: { role: 'assistant', usage: { credits: 200 } } },
+    ],
+    subSessions: [
+      { session: { sessionId: 'c1', delegateAgent: 'Investigator' }, history: [
+        { model: 'Investigator', message: { role: 'assistant', usage: { credits: 150 } } },
+      ] },
+      { session: { sessionId: 'c2', delegateAgent: 'Investigator' }, history: [
+        { model: 'Investigator', message: { role: 'assistant', usage: { credits: 50 } } },
+      ] },
+    ],
+  };
+
+  comp.recomputeCreditsFromHistory(data);
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 500, Investigator: 200 });
+  expect(comp.creditsUsed).toBe(700);
+});
+
+test('recomputeCreditsFromHistory falls back to the session/delegate agent for legacy messages', () => {
+  const data = {
+    session: { sessionId: 'root', model: 'Orchestrator' },
+    history: [
+      { message: { role: 'assistant', usage: { credits: 10 } } }, // legacy: no msg.model
+    ],
+    subSessions: [
+      { session: { sessionId: 'c1', delegateAgent: 'Investigator' }, history: [
+        { message: { role: 'assistant', usage: { credits: 20 } } }, // legacy child
+      ] },
+    ],
+  };
+
+  comp.recomputeCreditsFromHistory(data);
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 10, Investigator: 20 });
+});
+
+test('creditBreakdown lists agents by credits descending and drops empty buckets', () => {
+  comp.creditsByAgent = { Orchestrator: 500, Investigator: 320, Idle: 0, 'Detection Engineer': 100 };
+  const rows = comp.creditBreakdown();
+  expect(rows.map(r => r.label)).toEqual(['Orchestrator', 'Investigator', 'Detection Engineer']);
+  expect(rows.map(r => r.credits)).toEqual([500, 320, 100]);
+});
+
+test('loadNewChatScreen resets the per-agent credit buckets', async () => {
+  comp.creditsByAgent = { Orchestrator: 50, Investigator: 20 };
+  comp.creditsUsed = 70;
+  await comp.loadNewChatScreen();
+  expect(comp.creditsByAgent).toEqual({});
+  expect(comp.creditsUsed).toBe(0);
+});
+
+test('delegateOwnCredits sums only the delegate\'s own direct child messages', () => {
+  const delegate = { childSession: { messages: [
+    { usage: { credits: 30 } },
+    { usage: { credits: 12 } },
+    { /* no usage */ },
+    { usage: { input_tokens: 5 } }, // no credits field
+  ] } };
+  expect(comp.delegateOwnCredits(delegate)).toBe(42);
+});
+
+test('delegateOwnCredits excludes grandchild delegations', () => {
+  // A grandchild delegation renders in its OWN nested card with its own messages, so
+  // it is not part of this delegate's childSession.messages and must not be summed here.
+  const delegate = { childSession: { messages: [
+    { usage: { credits: 100 }, toolUses: [
+      { name: 'delegate_to_reviewer', childSession: { messages: [{ usage: { credits: 999 } }] } },
+    ] },
+  ] } };
+  expect(comp.delegateOwnCredits(delegate)).toBe(100);
+});
+
+test('delegateOwnCredits returns 0 when there is no child session', () => {
+  expect(comp.delegateOwnCredits(null)).toBe(0);
+  expect(comp.delegateOwnCredits({})).toBe(0);
+  expect(comp.delegateOwnCredits({ childSession: {} })).toBe(0);
+});
+
+test('delegateOwnOutputTokens sums only the delegate\'s own direct child messages', () => {
+  const delegate = { childSession: { messages: [
+    { usage: { output_tokens: 300, input_tokens: 9000, credits: 5 } },
+    { usage: { output_tokens: 120 } },
+    { /* no usage */ },
+    { usage: { credits: 2 } }, // no output_tokens field
+  ] } };
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(420);
+});
+
+test('delegateOwnOutputTokens excludes grandchild delegations', () => {
+  const delegate = { childSession: { messages: [
+    { usage: { output_tokens: 100 }, toolUses: [
+      { name: 'delegate_to_reviewer', childSession: { messages: [{ usage: { output_tokens: 999 } }] } },
+    ] },
+  ] } };
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(100);
+});
+
+test('delegateOwnOutputTokens returns 0 when there is no child session', () => {
+  expect(comp.delegateOwnOutputTokens(null)).toBe(0);
+  expect(comp.delegateOwnOutputTokens({})).toBe(0);
+  expect(comp.delegateOwnOutputTokens({ childSession: {} })).toBe(0);
 });
 
 // Floating tool tests

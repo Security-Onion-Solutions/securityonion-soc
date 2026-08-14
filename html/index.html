@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="css/external/all-7.2.0.min.css">
     <link rel="stylesheet" href="css/external/daterangepicker-3.1.css">
     <link rel="stylesheet" href="css/external/vue-prism-editor-v2.0.0-alpha.2.min.css">
-    <link rel="stylesheet" href="css/external/prism-custom-dark-v1.29.0.css">
+    <link rel="stylesheet" href="css/external/prism-custom-dark-v1.30.0.css">
     <link rel="stylesheet" href="css/app.css?v=VERSION_PLACEHOLDER">
     <link rel="stylesheet" href="css/modern.css?v=VERSION_PLACEHOLDER">
     <title>Security Onion</title>
@@ -254,7 +254,7 @@
                 <v-list-item-title v-text="i18n.home"></v-list-item-title>
               </router-link>
             </v-list-item>
-            <v-list-item data-aid="nav_assistant">
+            <v-list-item data-aid="nav_assistant" :class="{ 'nav-active': $route.name === 'assistant' }">
               <template #prepend>
                 <router-link to="/assistant" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                   <v-icon>fa-microchip</v-icon>
@@ -435,7 +435,7 @@
                   <v-list-item-title v-text="i18n.licenseKey"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')">
+              <v-list-item data-aid="nav_admin_aimetrics" v-if="$root.isUserAdmin() && isLicensed('oai')" :class="{ 'nav-active': $route.name === 'aimetrics' }">
                 <template #prepend>
                   <router-link to="/aimetrics" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                     <v-icon>fa-microchip</v-icon>
@@ -489,14 +489,14 @@
     <script type="module" src="js/external/vue-chartjs-5.3.3.min.js"></script>
     <script src="js/external/daterangepicker-3.1.0.min.js"></script>
     <script src="js/external/marked-18.0.2.min.js"></script>
-    <script src="js/external/dompurify-3.4.12.min.js"></script>
-    <script src="js/external/mermaid-11.15.0.min.js"></script>
+    <script src="js/external/dompurify-3.4.13.min.js"></script>
+    <script src="js/external/mermaid-11.16.1.min.js"></script>
     <script src="js/external/chartjs-chart-sankey-0.14.0.min.js"></script>
     <script src="js/external/chartjs-adapter-moment-1.0.1.min.js"></script>
-    <script src="js/external/js-yaml.4.3.0.min.js"></script>
+    <script src="js/external/js-yaml.5.2.3.min.js"></script>
     <script src="js/external/lz-string.1.5.0.min.js"></script>
     <script type="module" src="js/external/vue-prism-editor-v2.0.0-alpha.2.umd.production.min.js"></script>
-    <script src="js/external/prism-custom-v1.29.0.js"></script>
+    <script src="js/external/prism-custom-v1.30.0.js"></script>
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/graphing.js?v=VERSION_PLACEHOLDER"></script>

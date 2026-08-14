@@ -43,6 +43,21 @@ func NewClient(url string, verifyCert bool) *Client {
 	return client
 }
 
+func (client *Client) HostUrl() string {
+	return client.hostUrl
+}
+
+func (client *Client) Do(req *http.Request) (*http.Response, error) {
+	if client.mock {
+		resp := client.mockResponses[0]
+		client.mockResponses = client.mockResponses[1:]
+		err := client.mockErrors[0]
+		client.mockErrors = client.mockErrors[1:]
+		return resp, err
+	}
+	return client.impl.Do(req)
+}
+
 func (client *Client) MockStringResponse(body string, statusCode int, mockError error) {
 	mockResp := &http.Response{
 		Body:          io.NopCloser(bytes.NewBufferString(body)),

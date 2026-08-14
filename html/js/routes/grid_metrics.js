@@ -106,7 +106,9 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
           (this.metricPanels || []).forEach(panel => {
             if (panel.metric === mType) {
               if (panel.type === 'line_chart') {
-                this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors);
+                const i18n = this.$root.i18n || {};
+                const labels = panel.labelKeys ? panel.labelKeys.map(k => i18n[k] || k) : (panel.labels || panel.keys);
+                this.populateMetricsChart(panel.chartData, mData, panel.keys, panel.colors, labels);
               } else if (panel.type === 'single_stat') {
                 const series = mData ? mData[panel.key] : null;
                 if (series && series.length > 0) {
@@ -132,7 +134,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         });
       }
     },
-    populateMetricsChart(chart, responseData, keys, colors) {
+    populateMetricsChart(chart, responseData, keys, colors, labels) {
       chart.key++;
       const zone = this.zone || 'UTC';
       const primaryColor = this.$root.getColor ? this.$root.getColor("primary") : "#123456";
@@ -159,14 +161,22 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
           };
         });
       } else {
-        keys.forEach((k, idx) => {
-          const dataset = chart.datasets[idx];
-          if (dataset) {
-            dataset.data = (responseData && responseData[k]) ? responseData[k].map(item => ({
+        chart.datasets = (keys || []).map((k, idx) => {
+          const color = lineColors[idx % lineColors.length];
+          const label = (labels && labels[idx]) ? labels[idx] : k;
+          return {
+            label: label,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.1,
+            data: (responseData && responseData[k]) ? responseData[k].map(item => ({
               x: new Date(moment.utc(item.timestamp).tz(zone).format('YYYY-MM-DDTHH:mm:ss')),
               y: item.value
-            })) : [];
-          }
+            })) : []
+          };
         });
       }
     },
