@@ -9,23 +9,24 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/tidwall/gjson"
 )
 
-func getEventstoreHealth(srv *Server) *httptest.ResponseRecorder {
-	h := &EventstoreHandler{server: srv}
+func getEventsHealth(srv *Server) *httptest.ResponseRecorder {
+	h := &EventHandler{server: srv}
 
-	req := httptest.NewRequest("GET", "/eventstore/health", nil)
+	req := httptest.NewRequest("GET", "/events/health", nil)
 	ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
@@ -34,14 +35,14 @@ func getEventstoreHealth(srv *Server) *httptest.ResponseRecorder {
 	return w
 }
 
-func TestGetEventstoreHealthHandlerNoEventstore(t *testing.T) {
+func TestGetEventsHealthHandlerNoEventstore(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Eventstore = nil
 
 	r := chi.NewRouter()
-	RegisterEventstoreRoutes(srv, r, "/eventstore")
+	RegisterEventRoutes(srv, r, "/events")
 
-	req := httptest.NewRequest("GET", "/eventstore/health", nil)
+	req := httptest.NewRequest("GET", "/events/health", nil)
 	ctx := context.WithValue(req.Context(), web.ContextKeyRequestId, "test-request")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	req = req.WithContext(ctx)
@@ -52,48 +53,65 @@ func TestGetEventstoreHealthHandlerNoEventstore(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
-func TestGetEventstoreHealthHandlerUnauthorized(t *testing.T) {
+func TestGetEventsHealthHandlerUnauthorized(t *testing.T) {
 	srv := NewFakeUnauthorizedServer()
 	srv.Eventstore = NewFakeEventstore()
 
-	w := getEventstoreHealth(srv)
+	w := getEventsHealth(srv)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-func TestGetEventstoreHealthHandlerOk(t *testing.T) {
+func TestGetEventsHealthHandlerOk(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	store := NewFakeEventstore()
-	store.HealthReportJson = `{"status":"green","indicators":{"shards_availability":{"status":"green"}}}`
-	store.ClusterSettingsJson = `{"persistent":{},"transient":{}}`
-	store.NodesJson = `[{"name":"node-1"}]`
+	store.EventsHealth = &model.EventsHealth{
+		Status:     "green",
+		Indicators: []model.HealthIndicator{{Id: "shards_availability", Status: "green"}},
+	}
 	srv.Eventstore = store
 
-	w := getEventstoreHealth(srv)
+	w := getEventsHealth(srv)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var health model.EventstoreHealth
+	var health model.EventsHealth
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &health))
-	assert.Equal(t, "green", gjson.GetBytes(health.HealthReport, "status").String())
+	assert.Equal(t, "green", health.Status)
+	if assert.Len(t, health.Indicators, 1) {
+		assert.Equal(t, "shards_availability", health.Indicators[0].Id)
+	}
 	assert.Nil(t, health.UnassignedShards)
 
-	// Every store call is bounded by the endpoint's fail-fast deadline
+	// The store call is bounded by the endpoint's fail-fast deadline
 	for _, ctx := range store.InputContexts {
 		deadline, ok := ctx.Deadline()
 		if assert.True(t, ok) {
-			assert.LessOrEqual(t, time.Until(deadline), EVENTSTORE_HEALTH_TIMEOUT)
+			assert.LessOrEqual(t, time.Until(deadline), time.Duration(config.DEFAULT_EVENTS_HEALTH_TIMEOUT_MS)*time.Millisecond)
 		}
 	}
 }
 
-func TestGetEventstoreHealthHandlerError(t *testing.T) {
+func TestGetEventsHealthHandlerClientAborted(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	store := NewFakeEventstore()
-	store.HealthReportErr = errors.New("no master")
+	store.EventsHealthErr = fmt.Errorf("transport: %w", context.Canceled)
 	srv.Eventstore = store
 
-	w := getEventstoreHealth(srv)
+	w := getEventsHealth(srv)
+
+	// Not an error: the client aborts health requests when the dialog closes
+	assert.NotEqual(t, http.StatusInternalServerError, w.Code)
+	assert.Empty(t, w.Body.String())
+}
+
+func TestGetEventsHealthHandlerError(t *testing.T) {
+	srv := NewFakeAuthorizedServer(nil)
+	store := NewFakeEventstore()
+	store.EventsHealthErr = errors.New("no master")
+	srv.Eventstore = store
+
+	w := getEventsHealth(srv)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }

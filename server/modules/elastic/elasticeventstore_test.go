@@ -1781,7 +1781,7 @@ func TestClusterHealthReport(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(200, `{"status":"green"}`), nil)
 
-	json, err := store.ClusterHealthReport(context.Background())
+	json, err := store.clusterHealthReport(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, `{"status":"green"}`, json)
@@ -1796,7 +1796,7 @@ func TestClusterHealthReportError(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(500, `{"error":{"type":"master_not_discovered_exception","reason":"no master"}}`), nil)
 
-	_, err := store.ClusterHealthReport(context.Background())
+	_, err := store.clusterHealthReport(context.Background())
 
 	assert.Error(t, err)
 }
@@ -1805,7 +1805,7 @@ func TestClusterSettings(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(200, `{"persistent":{},"transient":{}}`), nil)
 
-	json, err := store.ClusterSettings(context.Background())
+	json, err := store.clusterSettings(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, `{"persistent":{},"transient":{}}`, json)
@@ -1820,7 +1820,7 @@ func TestListNodes(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(200, `[{"name":"node-1"}]`), nil)
 
-	json, err := store.ListNodes(context.Background())
+	json, err := store.listNodes(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, `[{"name":"node-1"}]`, json)
@@ -1838,7 +1838,7 @@ func TestListShards(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(200, `[{"index":"so-logs"}]`), nil)
 
-	json, err := store.ListShards(context.Background())
+	json, err := store.listShards(context.Background())
 
 	assert.NoError(t, err)
 	assert.Equal(t, `[{"index":"so-logs"}]`, json)
@@ -1854,7 +1854,7 @@ func TestExplainAllocation(t *testing.T) {
 	store, transport := newHealthTestStore(t)
 	transport.AddResponse(healthResponse(200, `{"can_allocate":"no"}`), nil)
 
-	json, err := store.ExplainAllocation(context.Background(), "so-logs", 2, true)
+	json, err := store.explainAllocation(context.Background(), "so-logs", 2, true)
 
 	assert.NoError(t, err)
 	assert.Equal(t, `{"can_allocate":"no"}`, json)
@@ -1863,5 +1863,5 @@ func TestExplainAllocation(t *testing.T) {
 	assert.Len(t, requests, 1)
 	assert.Equal(t, "/_cluster/allocation/explain", requests[0].URL.Path)
 	body, _ := io.ReadAll(requests[0].Body)
-	assert.Equal(t, `{"index":"so-logs","shard":2,"primary":true}`, string(body))
+	assert.JSONEq(t, `{"index":"so-logs","shard":2,"primary":true}`, string(body))
 }

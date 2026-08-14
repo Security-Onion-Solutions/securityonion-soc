@@ -7,12 +7,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -30,6 +35,18 @@ func RegisterEventRoutes(srv *Server, r chi.Router, prefix string) {
 
 		r.Get("/", h.getEvent)
 		r.Post("/ack", h.postAck)
+		r.Get("/health", h.getHealth)
+	})
+}
+
+func (s *Server) eventstoreEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.Eventstore == nil {
+			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Method not supported"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -112,4 +129,50 @@ func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.Respond(w, r, http.StatusOK, results)
+}
+
+// @Summary      Get Events Health
+// @Description  Retrieves a point-in-time diagnostic snapshot of the event datastore: overall status, health
+// @Description  indicators, node listing, and non-default settings. When shard availability is degraded, the
+// @Description  unassigned shards are inventoried and one sampled shard per group is explained. Diagnosed
+// @Description  problems are reported as findings on the indicator they affect, ranked by severity.
+// @Tags         Query
+// @Security     bearer[nodes/read]
+// @Produce      json
+// @Success      200  {object}  model.EventsHealth  "The events health snapshot"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      403         "Insufficient permissions for this request"
+// @Failure      405         "The event module is not loaded on the server"
+// @Failure      500         "Events health could not be retrieved; review SOC logs"
+// @Router       /connect/events/health [get]
+func (h *EventHandler) getHealth(w http.ResponseWriter, r *http.Request) {
+	timeoutMs := h.server.Config.EventsHealthTimeoutMs
+	// Verify() defaults this; guard for configs that bypassed it
+	if timeoutMs <= 0 {
+		timeoutMs = config.DEFAULT_EVENTS_HEALTH_TIMEOUT_MS
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	// nodes/read, not events/read: this reveals infrastructure, not event data,
+	// and gates the same audience as the grid page hosting the link
+	if err := h.server.CheckAuthorized(ctx, "read", "nodes"); err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	health, err := h.server.Eventstore.GetEventsHealth(ctx)
+	if err != nil {
+		// The client aborts in-flight requests when the dialog closes; not a failure
+		if errors.Is(err, context.Canceled) {
+			log.FromContext(ctx).Debug("events health request canceled by client")
+			return
+		}
+
+		log.FromContext(ctx).WithError(err).Error("unable to retrieve events health")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, health)
 }

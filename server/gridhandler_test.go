@@ -90,6 +90,44 @@ func TestGetNodes(t *testing.T) {
 	assert.Equal(t, "original-grid-id", originalNode.GridId)
 }
 
+func TestGetNodesEventsHealthAvailable(t *testing.T) {
+	nodes := []*model.Node{
+		{Id: "node-1", Role: "so-manager"},
+		{Id: "node-2", Role: model.NodeRoleHeavyNode},
+	}
+
+	srv := &Server{
+		Datastore:  &FakeDatastore{nodes: nodes},
+		Eventstore: NewFakeEventstore(),
+	}
+	h := &GridHandler{server: srv}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.getNodes(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var responseNodes []model.Node
+	err := json.Unmarshal(w.Body.Bytes(), &responseNodes)
+	assert.NoError(t, err)
+
+	assert.Len(t, responseNodes, 2)
+	// A node running its own unreachable eventstore is not described by grid-wide events health
+	assert.True(t, responseNodes[0].EventsHealthAvailable)
+	assert.False(t, responseNodes[1].EventsHealthAvailable)
+
+	// No eventstore module loaded: never advertise health
+	srv.Eventstore = nil
+	w = httptest.NewRecorder()
+	h.getNodes(w, req)
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &responseNodes))
+	assert.False(t, responseNodes[0].EventsHealthAvailable)
+}
+
 type MockMetrics struct {
 	GetGridEpsFunc           func(ctx context.Context) int
 	UpdateNodeMetricsFunc    func(ctx context.Context, node *model.Node) bool

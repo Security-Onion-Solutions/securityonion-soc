@@ -15,36 +15,50 @@ beforeEach(() => {
 
 function buildEsHealth() {
   return {
-    healthReport: {
-      status: 'red',
-      cluster_name: 'securityonion',
-      indicators: {
-        master_is_stable: { status: 'green', symptom: 'The cluster has a stable master node' },
-        shards_availability: {
-          status: 'red',
-          symptom: 'This cluster has 17 unavailable primary shards, 6 unavailable replica shards.',
-          diagnosis: [{
-            cause: 'A node has recently left the cluster.',
-            action: 'Restart the node.',
-            affected_resources: {
-              nodes: [{ id: 'abc', name: 'mgr' }],
-              indices: ['so-logs', 'so-case'],
-            },
-          }],
-        },
-        disk: {
-          status: 'yellow',
-          symptom: 'Disk usage exceeds the low watermark.',
-          details: { indices_with_readonly_block: 2 },
-          diagnosis: [{}],
-        },
+    status: 'red',
+    // The server ranks indicators and their findings before responding
+    indicators: [
+      {
+        id: 'shards_availability',
+        status: 'red',
+        symptom: 'This cluster has 17 unavailable primary shards, 6 unavailable replica shards.',
+        causes: [{
+          cause: 'A node has recently left the cluster.',
+          nodes: ['mgr'],
+          indices: ['so-logs', 'so-case'],
+        }],
+        findings: [
+          {
+            severity: 'critical', condition: 'no_valid_shard_copy',
+            scope: { reason: 'CLUSTER_RECOVERED', count: 17, primary: true },
+          },
+          {
+            severity: 'warning', condition: 'disk_threshold',
+            scope: { reason: 'CLUSTER_RECOVERED', count: 6, primary: false },
+            detail: 'the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]',
+            nodes: ['sa-tshoot-jb'],
+          },
+          {
+            severity: 'info', condition: 'same_shard',
+            scope: { reason: 'CLUSTER_RECOVERED', count: 6, primary: false },
+            detail: 'a copy of this shard is already allocated to this node [[so-case][0], node[ZMxh271FT32], [P], s[STARTED], a[id=BiFvj57ZQi], failed_attempts[0]]',
+            nodes: ['sa-tshoot-jb'],
+          },
+        ],
       },
-    },
-    clusterSettings: { persistent: { 'cluster.routing.allocation.enable': 'all' }, transient: {} },
-    catNodes: [{
-      name: 'node-1', ip: '10.0.0.5', 'node.role': 'dhimrt', master: '*', version: '9.3.3',
-      'heap.percent': '49', 'ram.percent': '97', cpu: '2', load_1m: '1.68',
-      'disk.total': '124.5gb', 'disk.used_percent': '85.57', uptime: '1.6h',
+      {
+        id: 'disk',
+        status: 'yellow',
+        symptom: 'Disk usage exceeds the low watermark.',
+        findings: [{ severity: 'critical', condition: 'indices_readonly', count: 2 }],
+      },
+      { id: 'master_is_stable', status: 'green', symptom: 'The cluster has a stable master node' },
+    ],
+    settings: { persistent: { 'cluster.routing.allocation.enable': 'all' }, transient: {} },
+    nodes: [{
+      name: 'node-1', ip: '10.0.0.5', roles: 'dhimrt', master: '*', version: '9.3.3',
+      heapPercent: '49', ramPercent: '97', cpu: '2', load1m: '1.68',
+      diskTotal: '124.5gb', diskUsedPercent: '85.57', uptime: '1.6h',
     }],
     unassignedShards: {
       total: 23,
@@ -53,37 +67,17 @@ function buildEsHealth() {
       groups: [
         {
           reason: 'CLUSTER_RECOVERED', primary: true, count: 17,
+          sampleStatus: 'explained', sampleIndex: 'so-logs', sampleShard: 0, since: '2026-07-06T16:15:02.915Z',
           canAllocate: 'no_valid_shard_copy',
-          explanation: {
-            index: 'so-logs',
-            shard: 0,
-            primary: true,
-            can_allocate: 'no_valid_shard_copy',
-            unassigned_info: { reason: 'CLUSTER_RECOVERED', at: '2026-07-06T16:15:02.915Z' },
-          },
         },
         {
           reason: 'CLUSTER_RECOVERED', primary: false, count: 6,
+          sampleStatus: 'explained', sampleIndex: 'so-case', sampleShard: 0,
           canAllocate: 'no',
           deciders: [
             { name: 'same_shard', explanation: 'a copy of this shard is already allocated to this node [[so-case][0], node[ZMxh271FT32], [P], s[STARTED], a[id=BiFvj57ZQi], failed_attempts[0]]', nodes: ['sa-tshoot-jb'] },
             { name: 'disk_threshold', explanation: 'the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]', nodes: ['sa-tshoot-jb'] },
           ],
-          explanation: {
-            index: 'so-case',
-            shard: 0,
-            primary: false,
-            can_allocate: 'no',
-            unassigned_info: { reason: 'CLUSTER_RECOVERED' },
-            node_allocation_decisions: [{
-              node_name: 'sa-tshoot-jb',
-              node_decision: 'no',
-              deciders: [
-                { decider: 'same_shard', decision: 'NO', explanation: 'a copy of this shard is already allocated to this node [[so-case][0], node[ZMxh271FT32], [P], s[STARTED], a[id=BiFvj57ZQi], failed_attempts[0]]' },
-                { decider: 'disk_threshold', decision: 'NO', explanation: 'the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]' },
-              ],
-            }],
-          },
         },
       ],
     },
@@ -94,12 +88,11 @@ test('loadEsHealth', async () => {
   const mock = mockPapi("get", { data: buildEsHealth() });
   comp.esHealthExpanded = { disk: true };
   await comp.loadEsHealth('subgrid1');
-  expect(mock).toHaveBeenCalledWith('eventstore/health', expect.objectContaining({ params: { gridId: 'subgrid1' } }));
-  expect(comp.esHealth.healthReport.status).toBe('red');
+  expect(mock).toHaveBeenCalledWith('events/health', expect.objectContaining({ params: { gridId: 'subgrid1' } }));
+  expect(comp.esHealth.status).toBe('red');
   expect(comp.esHealthExpanded).toEqual({});
   expect(comp.esHealthLoading).toBe(false);
-  // View data is derived once per load
-  expect(comp.esHealthIssues.map(i => i.id)).toEqual(['shards_availability', 'disk']);
+  expect(comp.esHealthIssues().map(i => i.id)).toEqual(['shards_availability', 'disk']);
 });
 
 test('loadEsHealthSupersededRequestAborted', async () => {
@@ -115,7 +108,7 @@ test('loadEsHealthSupersededRequestAborted', async () => {
   // The newer request aborts the superseded one (cancelling its backend work)
   expect(slowSignal.aborted).toBe(true);
   await fastLoad;
-  expect(comp.esHealth.healthReport.status).toBe('red');
+  expect(comp.esHealth.status).toBe('red');
   expect(comp.esHealthLoading).toBe(false);
 
   // Axios rejects aborted requests; the late rejection must not clear the
@@ -123,7 +116,7 @@ test('loadEsHealthSupersededRequestAborted', async () => {
   const showErrorMock = mockShowError();
   rejectSlow({ name: 'CanceledError', message: 'canceled' });
   await slowLoad;
-  expect(comp.esHealth.healthReport.status).toBe('red');
+  expect(comp.esHealth.status).toBe('red');
   expect(comp.esHealthLoading).toBe(false);
   expect(showErrorMock).not.toHaveBeenCalled();
 });
@@ -132,19 +125,17 @@ test('loadEsHealthError', async () => {
   mockPapi("get", null, new Error("something bad"));
   const showErrorMock = mockShowError();
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
   await comp.loadEsHealth();
   expect(comp.esHealth).toBe(null);
-  expect(comp.esHealthIndicators).toEqual([]);
+  expect(comp.esHealthIndicators()).toEqual([]);
   expect(comp.esHealthLoading).toBe(false);
   // The dialog renders its own unavailable message; no global error popup
   expect(showErrorMock).not.toHaveBeenCalled();
 });
 
 test('canShowEsHealth', () => {
-  expect(comp.canShowEsHealth({ role: 'so-manager' })).toBe(true);
-  expect(comp.canShowEsHealth({ role: 'so-standalone' })).toBe(true);
-  expect(comp.canShowEsHealth({ role: 'so-heavynode' })).toBe(false);
+  expect(comp.canShowEsHealth({ eventsHealthAvailable: true })).toBe(true);
+  expect(comp.canShowEsHealth({ eventsHealthAvailable: false })).toBe(false);
 });
 
 test('showHideEsHealth', () => {
@@ -198,15 +189,13 @@ test('formatEsIndicatorName', () => {
 
 test('esHealthIndicators', () => {
   comp.esHealth = null;
-  comp.digestEsHealth();
-  expect(comp.esHealthIndicators).toEqual([]);
+  expect(comp.esHealthIndicators()).toEqual([]);
 
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
-  const indicators = comp.esHealthIndicators;
+  const indicators = comp.esHealthIndicators();
   expect(indicators.length).toBe(3);
 
-  // Sorted worst-first: red, yellow, green
+  // Server-ranked order is preserved: red, yellow, green
   expect(indicators[0].id).toBe('shards_availability');
   expect(indicators[0].name).toBe('Shards availability');
   expect(indicators[0].status).toBe('red');
@@ -223,14 +212,12 @@ test('esHealthIndicators', () => {
 
 test('esHealthIssuesAndHealthy', () => {
   comp.esHealth = null;
-  comp.digestEsHealth();
-  expect(comp.esHealthIssues).toEqual([]);
-  expect(comp.esHealthHealthy).toEqual([]);
+  expect(comp.esHealthIssues()).toEqual([]);
+  expect(comp.esHealthHealthy()).toEqual([]);
 
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
-  expect(comp.esHealthIssues.map(i => i.id)).toEqual(['shards_availability', 'disk']);
-  expect(comp.esHealthHealthy.map(i => i.id)).toEqual(['master_is_stable']);
+  expect(comp.esHealthIssues().map(i => i.id)).toEqual(['shards_availability', 'disk']);
+  expect(comp.esHealthHealthy().map(i => i.id)).toEqual(['master_is_stable']);
 });
 
 test('toggleEsHealthDetails', () => {
@@ -244,90 +231,71 @@ test('toggleEsHealthDetails', () => {
 
 test('hasEsHealthDetails', () => {
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
   const byId = {};
-  comp.esHealthIndicators.forEach(i => byId[i.id] = i);
+  comp.esHealthIndicators().forEach(i => byId[i.id] = i);
 
-  // Blocking reasons and causes
+  // Findings and causes
   expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(true);
-  // Disk findings
+  // Findings only
   expect(comp.hasEsHealthDetails(byId.disk)).toBe(true);
   // No details of any kind
   expect(comp.hasEsHealthDetails(byId.master_is_stable)).toBe(false);
 
-  // Shards indicator with no blocking reasons, causes remain as details
-  delete comp.esHealth.unassignedShards;
-  comp.digestEsHealth();
+  // Causes alone remain details
+  byId.shards_availability.findings = [];
   expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(true);
   byId.shards_availability.causes = [];
   expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(false);
 });
 
-test('esAllocationLines', () => {
-  expect(comp.esAllocationLines(null)).toEqual([]);
-  expect(comp.esAllocationLines(buildEsHealth().unassignedShards.groups[0].explanation)).toEqual([
-    'Shard: so-logs[0] (primary)',
-    'Unassigned reason: CLUSTER_RECOVERED, since 2026-07-06T16:15:02.915Z',
-    'Can allocate: no_valid_shard_copy',
-  ]);
-  expect(comp.esAllocationLines(buildEsHealth().unassignedShards.groups[1].explanation)).toEqual([
-    'Shard: so-case[0] (replica)',
-    'Unassigned reason: CLUSTER_RECOVERED',
-    'Can allocate: no',
-    '  * Node sa-tshoot-jb: no',
-    '    - same_shard: a copy of this shard is already allocated to this node [[so-case][0], node[ZMxh271FT32], [P], s[STARTED], a[id=BiFvj57ZQi], failed_attempts[0]]',
-    '    - disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]',
-  ]);
-});
-
-test('esShardVerdicts', () => {
-  comp.esHealth = null;
-  comp.digestEsHealth();
-  expect(comp.esShardVerdicts).toEqual([]);
-
+test('formatEsFinding', () => {
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
-  const verdicts = comp.esShardVerdicts;
-  expect(verdicts.length).toBe(3);
+  const byId = {};
+  comp.esHealthIndicators().forEach(i => byId[i.id] = i);
+  const findings = byId.shards_availability.findings;
+  expect(findings.length).toBe(3);
 
-  // Severity order: lost primaries, then actionable deciders, then expected conditions
-  expect(verdicts[0].scope).toBe('17 primary (CLUSTER_RECOVERED)');
-  expect(verdicts[0].summary).toBe(comp.i18n.esHealthVerdictNoValidShardCopy);
-  expect(verdicts[0].decider).toBe(null);
-  expect(verdicts[0].color).toBe('error');
-  expect(verdicts[0].icon).toBe('fa-triangle-exclamation');
+  // Severity drives the icon and color; the condition drives the explanation
+  expect(findings[0].scope).toBe('17 primary (CLUSTER_RECOVERED)');
+  expect(findings[0].summary).toBe(comp.i18n.esHealthVerdictNoValidShardCopy);
+  expect(findings[0].detail).toBe('');
+  expect(findings[0].color).toBe('error');
+  expect(findings[0].icon).toBe('fa-triangle-exclamation');
 
-  expect(verdicts[1].scope).toBe('6 replica (CLUSTER_RECOVERED)');
-  expect(verdicts[1].decider).toBe('disk_threshold');
-  expect(verdicts[1].summary).toBe(comp.i18n.esHealthVerdictDiskThreshold);
-  expect(verdicts[1].detail).toBe('the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
-  expect(verdicts[1].nodes).toEqual(['sa-tshoot-jb']);
-  expect(verdicts[1].color).toBe('warning');
+  expect(findings[1].scope).toBe('6 replica (CLUSTER_RECOVERED)');
+  expect(findings[1].summary).toBe(comp.i18n.esHealthVerdictDiskThreshold);
+  expect(findings[1].detail).toBe('disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
+  expect(findings[1].nodes).toEqual(['sa-tshoot-jb']);
+  expect(findings[1].color).toBe('warning');
 
-  expect(verdicts[2].decider).toBe('same_shard');
-  expect(verdicts[2].summary).toBe(comp.i18n.esHealthVerdictSameShard);
-  expect(verdicts[2].color).toBe('info');
-  expect(verdicts[2].icon).toBe('fa-circle-info');
+  expect(findings[2].summary).toBe(comp.i18n.esHealthVerdictSameShard);
+  expect(findings[2].color).toBe('info');
+  expect(findings[2].icon).toBe('fa-circle-info');
 
-  // Unknown deciders surface ES's explanation verbatim at warning severity
-  comp.esHealth.unassignedShards.groups[1].deciders.push({ name: 'awareness', explanation: 'too many copies of the shard allocated to nodes with attribute [zone]', nodes: [] });
-  comp.digestEsHealth();
-  const withUnknown = comp.esShardVerdicts;
-  expect(withUnknown.length).toBe(4);
-  const unknown = withUnknown.find(v => v.decider == 'awareness');
+  // Unscoped findings interpolate their own count
+  expect(byId.disk.findings[0].summary).toBe('Write-blocked (read-only) indices: 2. Writes to these indices are rejected; Elasticsearch typically applies this block when disk usage exceeds the flood stage watermark.');
+  expect(byId.disk.findings[0].scope).toBe('');
+
+  // Unknown conditions surface the datastore's explanation verbatim
+  const unknown = comp.formatEsFinding({
+    severity: 'warning', condition: 'awareness',
+    detail: 'too many copies of the shard allocated to nodes with attribute [zone]',
+  });
   expect(unknown.summary).toBe('awareness: too many copies of the shard allocated to nodes with attribute [zone]');
-  expect(unknown.detail).toBe(null);
+  expect(unknown.detail).toBe('');
   expect(unknown.color).toBe('warning');
 
-  // Groups with a transient outcome and no NO deciders still get a verdict row
-  comp.esHealth.unassignedShards.groups[1].deciders = [];
-  comp.esHealth.unassignedShards.groups[1].canAllocate = 'throttled';
-  comp.digestEsHealth();
-  const fallback = comp.esShardVerdicts;
-  expect(fallback.length).toBe(2);
-  expect(fallback[1].scope).toBe('6 replica (CLUSTER_RECOVERED)');
-  expect(fallback[1].summary).toBe('Elasticsearch reports no blocking deciders for this group; allocation outcome: throttled.');
-  expect(fallback[1].color).toBe('info');
+  // Absent detail and unrecognized severity degrade gracefully
+  const bare = comp.formatEsFinding({ severity: 'catastrophic', condition: 'awareness' });
+  expect(bare.summary).toBe('awareness');
+  expect(bare.icon).toBe('fa-circle-exclamation');
+  expect(bare.color).toBe('warning');
+
+  // A group with a transient outcome interpolates it rather than repeating it
+  const unexplained = comp.formatEsFinding({ severity: 'info', condition: 'unexplained', detail: 'throttled' });
+  expect(unexplained.summary).toBe('Elasticsearch reports no blocking deciders for this group; allocation outcome: throttled.');
+  expect(unexplained.detail).toBe('');
+  expect(unexplained.color).toBe('info');
 });
 
 test('formatEsReportList', () => {
@@ -337,31 +305,16 @@ test('formatEsReportList', () => {
       .toBe('Affected indices (14): idx-0, idx-1, idx-2, idx-3, idx-4, idx-5, idx-6, idx-7, idx-8, idx-9, ... (+4 more)');
 });
 
-test('esDiskFindings', () => {
-  comp.esHealth = null;
-  comp.digestEsHealth();
-  expect(comp.esDiskFindings).toEqual([]);
-
-  comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
-  expect(comp.esDiskFindings).toEqual(['Write-blocked (read-only) indices: 2. Writes to these indices are rejected; Elasticsearch typically applies this block when disk usage exceeds the flood stage watermark.']);
-
-  comp.esHealth.healthReport.indicators.disk.status = 'green';
-  comp.digestEsHealth();
-  expect(comp.esDiskFindings).toEqual([]);
-});
-
 test('buildEsHealthReport', () => {
   comp.esHealth = null;
-  comp.digestEsHealth();
   expect(comp.buildEsHealthReport()).toBe('');
 
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
   comp.$root.version = '2.4.999';
   const report = comp.buildEsHealthReport();
   expect(report).toContain('ELASTICSEARCH HEALTH REPORT');
   expect(report).toContain('Security Onion: 2.4.999');
+  expect(report).toContain('Overall status: red');
 
   // Sections are ordered: nodes, cluster settings, indicators, unassigned shards
   const sections = ['--- Nodes', '--- Cluster Settings', '--- Indicators', '--- Unassigned Shards'];
@@ -384,7 +337,10 @@ test('buildEsHealthReport', () => {
   expect(report).toContain('  Unassigned reason: CLUSTER_RECOVERED, since 2026-07-06T16:15:02.915Z');
   expect(report).toContain('  Can allocate: no_valid_shard_copy');
   expect(report).toContain('Sampled shard for 6 replica (CLUSTER_RECOVERED):');
-  expect(report).toContain('      - disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
+  expect(report).toContain('  Shard: so-case[0] (replica)');
+  expect(report).toContain('  Unassigned reason: CLUSTER_RECOVERED\n');
+  expect(report).toContain('    - disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
+  expect(report).toContain('      Affected nodes (1): sa-tshoot-jb');
   expect(report).toContain('--- Cluster Settings (_cluster/settings) ---');
   expect(report).toContain('  cluster.routing.allocation.enable: "all"');
   expect(report).toContain('transient: (none)');
@@ -393,24 +349,33 @@ test('buildEsHealthReport', () => {
   // No raw JSON dumps in the report
   expect(report).not.toContain('{');
 
-  // Unexplained groups (explain failed or beyond the sampling cap) are disclosed
-  delete comp.esHealth.unassignedShards.groups[1].explanation;
-  expect(comp.buildEsHealthReport()).toContain('No allocation explanation sampled for 6 replica (CLUSTER_RECOVERED)');
+  comp.esHealth.unassignedShards.groups[0].details = 'failed shard on node [abc]: shard failure';
+  expect(comp.buildEsHealthReport()).toContain('  Failure details: failed shard on node [abc]: shard failure');
 
-  // Optional sections are omitted when the backend could not collect them
+  // A group left unexplained by the cap is distinguished from one whose
+  // explain call failed
+  comp.esHealth.unassignedShards.groups[1].sampleStatus = 'capped';
+  expect(comp.buildEsHealthReport()).toContain('No allocation explanation sampled for 6 replica (CLUSTER_RECOVERED)');
+  comp.esHealth.unassignedShards.groups[1].sampleStatus = 'failed';
+  expect(comp.buildEsHealthReport()).toContain('Allocation explanation could not be retrieved for 6 replica (CLUSTER_RECOVERED)');
+
+  // Failed collections omit their section and are disclosed with their reason
   delete comp.esHealth.unassignedShards;
-  delete comp.esHealth.clusterSettings;
-  delete comp.esHealth.catNodes;
+  delete comp.esHealth.settings;
+  delete comp.esHealth.nodes;
+  comp.esHealth.errors = { nodes: 'connection refused', settings: 'denied', unassignedShards: 'timeout' };
   const minimalReport = comp.buildEsHealthReport();
   expect(minimalReport).toContain('--- Indicators (_health_report) ---');
   expect(minimalReport).not.toContain('_cat/shards');
   expect(minimalReport).not.toContain('_cluster/settings');
   expect(minimalReport).not.toContain('_cat/nodes');
+  expect(minimalReport).toContain('Collection failed: nodes: connection refused');
+  expect(minimalReport).toContain('Collection failed: settings: denied');
+  expect(minimalReport).toContain('Collection failed: unassignedShards: timeout');
 });
 
 test('copyEsHealthReport', () => {
   comp.esHealth = buildEsHealth();
-  comp.digestEsHealth();
   comp.$root.copyToClipboard = jest.fn();
   comp.$root.showTip = jest.fn();
   comp.copyEsHealthReport();

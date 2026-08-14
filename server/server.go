@@ -107,7 +107,6 @@ func (server *Server) Start() {
 
 		RegisterCaseRoutes(server, server.ApiRouter, "/api/case")
 		RegisterEventRoutes(server, server.ApiRouter, "/api/events")
-		RegisterEventstoreRoutes(server, server.ApiRouter, "/api/eventstore")
 		RegisterInfoRoutes(server, server.ApiRouter, "/api/info")
 		RegisterJobRoutes(server, server.ApiRouter, "/api/job")
 		RegisterJobsRoutes(server, server.ApiRouter, "/api/jobs")
@@ -180,6 +179,12 @@ func (server *Server) TryGetUser(ctx context.Context) (*model.User, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+// Derived, not stored: restamp on every node sent to clients, including
+// "node" broadcasts, or a stale false will hide the events health link.
+func (server *Server) MarkEventsHealthAvailable(node *model.Node) {
+	node.EventsHealthAvailable = server.Eventstore != nil && !node.HasLocalEventstore()
 }
 
 func (server *Server) GetTimezones() []string {

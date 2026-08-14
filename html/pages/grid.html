@@ -601,24 +601,22 @@
 								<template v-if="hasEsHealthDetails(indicator)">
 									<v-btn variant="text" size="small" class="mt-1 ml-n2" :append-icon="esHealthExpanded[indicator.id] ? 'fa-chevron-up' : 'fa-chevron-down'" @click="toggleEsHealthDetails(indicator.id)" :aria-expanded="!!esHealthExpanded[indicator.id]" data-aid="grid_eshealth_details_toggle">{{ esHealthExpanded[indicator.id] ? i18n.esHealthLessDetails : i18n.esHealthMoreDetails }}</v-btn>
 									<template v-if="esHealthExpanded[indicator.id]">
-										<template v-if="indicator.id == 'disk'">
-											<div v-for="(finding, idx) in esDiskFindings" :key="'disk' + idx" class="mt-1" data-aid="grid_eshealth_disk_finding">&#8226; {{ finding }}</div>
-										</template>
 										<div v-for="(cause, idx) in indicator.causes" :key="idx" class="text-medium-emphasis mt-1" data-aid="grid_eshealth_cause">
 											<div>&#8226; {{ cause.cause }}</div>
 											<div v-if="cause.nodes.length" class="text-caption ml-3">{{ formatEsReportList(i18n.esHealthAffectedNodes, cause.nodes) }}</div>
 											<div v-if="cause.indices.length" class="text-caption ml-3">{{ formatEsReportList(i18n.esHealthAffectedIndices, cause.indices) }}</div>
 										</div>
-										<template v-if="indicator.id == 'shards_availability' && esShardVerdicts.length">
-											<div class="font-weight-bold mt-3">{{ i18n.esHealthBlockingReasons }}</div>
-											<div class="text-caption text-medium-emphasis">{{ i18n.esHealthBlockingReasonsHelp }}</div>
-											<div v-for="(verdict, idx) in esShardVerdicts" :key="idx" class="mt-1" data-aid="grid_eshealth_verdict">
+										<template v-if="indicator.findings.length">
+											<div class="font-weight-bold mt-3">{{ i18n.esHealthFindings }}</div>
+											<div v-if="indicator.findings[0].scope" class="text-caption text-medium-emphasis">{{ i18n.esHealthFindingsShardHelp }}</div>
+											<div v-for="(finding, idx) in indicator.findings" :key="idx" class="mt-1" data-aid="grid_eshealth_finding">
 												<div>
-													<v-icon size="small" :color="verdict.color">{{ verdict.icon }}</v-icon>
-													<span class="font-weight-bold ml-1">{{ verdict.scope }}</span> &mdash; {{ verdict.summary }}
+													<v-icon size="small" :color="finding.color">{{ finding.icon }}</v-icon>
+													<span v-if="finding.scope" class="font-weight-bold ml-1">{{ finding.scope }}</span>
+													<span v-if="finding.scope"> &mdash; </span>{{ finding.summary }}
 												</div>
-												<div v-if="verdict.detail" class="text-caption text-medium-emphasis ml-6">{{ verdict.decider }}: {{ verdict.detail }}</div>
-												<div v-if="verdict.nodes.length" class="text-caption text-medium-emphasis ml-6">{{ i18n.esHealthAffectedNodes }}: {{ verdict.nodes.join(', ') }}</div>
+												<div v-if="finding.detail" class="text-caption text-medium-emphasis ml-6">{{ finding.detail }}</div>
+												<div v-if="finding.nodes.length" class="text-caption text-medium-emphasis ml-6">{{ i18n.esHealthAffectedNodes }}: {{ finding.nodes.join(', ') }}</div>
 											</div>
 										</template>
 									</template>
