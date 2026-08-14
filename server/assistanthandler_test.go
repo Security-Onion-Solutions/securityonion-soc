@@ -3485,7 +3485,13 @@ var (
 func agentConfigRouter(t *testing.T) (*chi.Mux, *mock.MockAssistantManager) {
 	t.Helper()
 
-	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	return agentConfigRouterAuthorized(t, true)
+}
+
+func agentConfigRouterAuthorized(t *testing.T, authorized bool) (*chi.Mux, *mock.MockAssistantManager) {
+	t.Helper()
+
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: authorized}}
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -3627,6 +3633,33 @@ func TestGetBalanceDecodesSelectorFromPath(t *testing.T) {
 			require.Equal(t, http.StatusOK, w.Code)
 			assert.Equal(t, selector, gotHealth)
 			assert.Equal(t, selector, gotBalance)
+		})
+	}
+}
+
+// The mock manager has no EXPECT calls, so reaching it fails the test: a denied
+// request must not mutate configuration.
+func TestAgentConfigRoutesRequireConfigWrite(t *testing.T) {
+	cases := []struct {
+		method string
+		target string
+		body   any
+	}{
+		{http.MethodPut, "/assistant/agents/Hunter", model.StoredAgent{Name: "Hunter"}},
+		{http.MethodDelete, "/assistant/agents/Hunter", nil},
+		{http.MethodPut, "/assistant/skills/Hunting", model.StoredSkill{Name: "Hunting"}},
+		{http.MethodDelete, "/assistant/skills/Hunting", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.method+" "+c.target, func(t *testing.T) {
+			r, _ := agentConfigRouterAuthorized(t, false)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, c.body))
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Contains(t, w.Body.String(), "ERROR_PERMISSION_DENIED")
 		})
 	}
 }
