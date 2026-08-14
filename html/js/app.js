@@ -1237,17 +1237,9 @@ $(document).ready(function () {
             }
           }
         },
-        // Merges a pushed agentic update into the cached parameters so every page
-        // sees an agent/skill edit without waiting on the next /info load.
         updateAgenticParams(update) {
-          if (!update || !this.parameters || !this.parameters.assistant) return;
-          const assistant = this.parameters.assistant;
-          if (update.availableAgents) assistant.availableAgents = update.availableAgents;
-          if (update.availableSkills) assistant.availableSkills = update.availableSkills;
-          if (update.availableTools) assistant.availableTools = update.availableTools;
-          if (update.agentMapping) assistant.agentMapping = update.agentMapping;
-          if (update.maxDelegationDepth !== undefined) assistant.maxDelegationDepth = update.maxDelegationDepth;
-          if (update.maxSubSessionTokens !== undefined) assistant.maxSubSessionTokens = update.maxSubSessionTokens;
+          if (!update || !this.parameters) return;
+          this.parameters.assistant = update;
         },
         subscribe(kind, fn) {
           this.ensureConnected();

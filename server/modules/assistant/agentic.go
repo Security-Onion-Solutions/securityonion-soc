@@ -532,29 +532,15 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.broadcastAgenticUpdate()
 }
 
-// broadcastAgenticUpdate pushes the recomputed parameters to connected browsers so
-// an edit reaches every page and user without the hourly /info refresh.
+// broadcastAgenticUpdate pushes the recomputed parameters to connected browsers so an edit
+// reaches every page and user without the hourly /info refresh. The whole block is sent.
 func (ac *AssistantCoordinator) broadcastAgenticUpdate() {
 	// Host is nil during Init, when nothing is connected yet.
 	if ac.srv.Host == nil {
 		return
 	}
 
-	ac.srv.Host.Broadcast(AgenticUpdateKind, "assistant", ac.agenticUpdate())
-}
-
-// agenticUpdate is the slice of the client parameters a config change can alter.
-func (ac *AssistantCoordinator) agenticUpdate() model.AgenticUpdate {
-	params := ac.srv.Config.ClientParams.AssistantParams
-
-	return model.AgenticUpdate{
-		AvailableAgents:     params.AvailableAgents,
-		AvailableSkills:     params.AvailableSkills,
-		AvailableTools:      params.AvailableTools,
-		AgentMapping:        params.AgentMapping,
-		MaxDelegationDepth:  params.MaxDelegationDepth,
-		MaxSubSessionTokens: params.MaxSubSessionTokens,
-	}
+	ac.srv.Host.Broadcast(AgenticUpdateKind, "assistant", ac.srv.Config.ClientParams.AssistantParams)
 }
 
 // exposeSkills returns the skill catalog for the Agent Studio, sorted by name and

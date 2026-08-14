@@ -574,31 +574,20 @@ func TestApplyBuiltinSkillDefaults(t *testing.T) {
 	})
 }
 
-func TestAgenticUpdate(t *testing.T) {
+func TestBroadcastPayloadIsTheWholeAssistantBlock(t *testing.T) {
 	ac, _ := builtinMergeCoordinator()
 	params := &ac.srv.Config.ClientParams.AssistantParams
 	params.AvailableAgents = []model.Agent{{Name: "Hunter", Prompt: "secret", Enabled: true}}
-	params.AvailableSkills = []model.Skill{{Name: "Hunt"}}
-	params.AvailableTools = []string{"query_events"}
-	params.AgentMapping = map[string]string{"Hunter": "m@a"}
+	params.AvailableSkills = []model.Skill{{Name: "Hunt", AdditionalPrompt: "also secret"}}
 	params.MaxDelegationDepth = 3
-	params.MaxSubSessionTokens = 5000
-	params.InvestigationPrompt = "not pushed"
+	params.InvestigationPrompt = "carried too"
 
-	update := ac.agenticUpdate()
-
-	assert.Equal(t, params.AvailableAgents, update.AvailableAgents)
-	assert.Equal(t, params.AvailableSkills, update.AvailableSkills)
-	assert.Equal(t, []string{"query_events"}, update.AvailableTools)
-	assert.Equal(t, map[string]string{"Hunter": "m@a"}, update.AgentMapping)
-	// The Agent Studio's Options dialog reads these from the push.
-	assert.Equal(t, 3, update.MaxDelegationDepth)
-	assert.Equal(t, 5000, update.MaxSubSessionTokens)
-
-	// Only the agentic slice travels, and the built-in prompt stays server-side.
-	raw, err := json.Marshal(update)
+	raw, err := json.Marshal(*params)
 	require.NoError(t, err)
-	assert.NotContains(t, string(raw), "not pushed")
+
+	assert.Contains(t, string(raw), `"maxDelegationDepth":3`)
+	assert.Contains(t, string(raw), "carried too")
+	// Built-in prompts still cannot travel: both are json:"-".
 	assert.NotContains(t, string(raw), "secret")
 }
 

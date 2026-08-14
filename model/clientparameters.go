@@ -202,18 +202,6 @@ type AssistantParameters struct {
 	MaxSubSessionTokens int `json:"maxSubSessionTokens"`
 }
 
-// AgenticUpdate is the slice of AssistantParameters that a config change can
-// alter. It is broadcast over the websocket so every logged-in browser updates
-// without re-fetching the whole (large) /info payload.
-type AgenticUpdate struct {
-	AvailableAgents     []Agent           `json:"availableAgents"`
-	AvailableSkills     []Skill           `json:"availableSkills"`
-	AvailableTools      []string          `json:"availableTools"`
-	AgentMapping        map[string]string `json:"agentMapping"`
-	MaxDelegationDepth  int               `json:"maxDelegationDepth"`
-	MaxSubSessionTokens int               `json:"maxSubSessionTokens"`
-}
-
 // ModelParameters describes a configured model. DisplayName is optional,
 // display-only metadata; resolution uses Selector().
 type ModelParameters struct {

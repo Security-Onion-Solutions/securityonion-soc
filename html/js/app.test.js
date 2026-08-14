@@ -1602,24 +1602,22 @@ test('validator: matches factory', () => {
   expect(v('secret')).toBe(true);
 });
 
-test('updateAgenticParams merges a pushed update into the cached assistant params', () => {
-  app.parameters = { assistant: { enabled: true, availableAgents: [{ name: 'Old' }], agentMapping: { Old: 'm@a' }, availableModels: ['keep'] } };
+test('updateAgenticParams replaces the cached assistant params with the pushed block', () => {
+  app.parameters = { assistant: { enabled: true, availableAgents: [{ name: 'Old' }] }, docsUrl: 'keep' };
 
   app.updateAgenticParams({
+    enabled: true,
     availableAgents: [{ name: 'New' }],
     availableSkills: [{ name: 'hunt' }],
-    availableTools: ['query'],
-    agentMapping: { New: 'm2@a' },
+    somethingAddedLater: 42,
   });
 
   const assistant = app.parameters.assistant;
   expect(assistant.availableAgents).toEqual([{ name: 'New' }]);
   expect(assistant.availableSkills).toEqual([{ name: 'hunt' }]);
-  expect(assistant.availableTools).toEqual(['query']);
-  expect(assistant.agentMapping).toEqual({ New: 'm2@a' });
-  // Fields the push does not carry are left alone.
-  expect(assistant.availableModels).toEqual(['keep']);
-  expect(assistant.enabled).toBe(true);
+  expect(assistant.somethingAddedLater).toBe(42);
+  // Only the assistant block is replaced.
+  expect(app.parameters.docsUrl).toBe('keep');
 });
 
 test('updateAgenticParams ignores a push that arrives before parameters load', () => {
