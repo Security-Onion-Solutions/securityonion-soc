@@ -593,8 +593,10 @@ $(document).ready(function () {
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
                   this.customReports = response.data.customReports;
-                  // Agents/skills/tools can change after this load; the server pushes
-                  // them over the websocket (see updateAgenticParams).
+                  // We have to subscribe to this websocket event in order to update the client Params initially provided
+                  // by the /api/info response. This is unique to agentic params because agentic params can change on
+                  // the fly via the AgentStudio, whereas other config changes currently require a SOC restart to take effect.
+                  // If we didn't do this then navigating to Grid and back to OnionAI, for example, would revert to showing the old models.
                   this.subscribe('assistant:agentic', this.updateAgenticParams);
 
                   this.user = await this.getUserById(response.data.userId);

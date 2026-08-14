@@ -83,8 +83,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
-    // An agent or skill edited in the Agent Studio is pushed to every browser, so
-    // the model picker offers it without a page reload.
     this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
   },
   watch: {

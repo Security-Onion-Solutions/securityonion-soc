@@ -303,7 +303,7 @@ const i18n = {
       agentStudioNewSkill: 'New Skill',
       agentStudioCopySuffix: '(copy)',
       agentStudioDuplicateName: 'Enter a name that is not already in use.',
-      agentStudioLastOrchestrator: 'At least one orchestrator must stay enabled.',
+      agentStudioLastOrchestrator: 'At least one orchestrator must remain enabled.',
       agentStudioSystem: 'System',
       agentStudioSystemAgentHelp: 'Provided by Security Onion. It can be enabled or disabled, retargeted to another model, and given a persona addendum.',
       agentStudioSystemSkillHelp: 'Provided by Security Onion. It can be enabled or disabled and given a persona addendum.',
