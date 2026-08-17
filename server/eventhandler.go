@@ -154,8 +154,7 @@ func (h *EventHandler) getHealth(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	// nodes/read, not events/read: this reveals infrastructure, not event data,
-	// and gates the same audience as the grid page hosting the link
+	// nodes/read, not events/read: this reveals infrastructure, not event data.
 	if err := h.server.CheckAuthorized(ctx, "read", "nodes"); err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
 		return

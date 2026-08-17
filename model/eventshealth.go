@@ -23,8 +23,7 @@ type EventsHealth struct {
 	Errors           map[string]string     `json:"errors,omitempty" example:"nodes:unavailable"`
 }
 
-// HealthIndicator is one health dimension of the event datastore. Ids are an
-// open set; clients should tolerate unknown ids.
+// Ids are an open set; clients must tolerate unknown ids.
 type HealthIndicator struct {
 	Id      string                 `json:"id" example:"shards_availability"`
 	Status  string                 `json:"status" example:"red"`
@@ -42,9 +41,8 @@ const (
 	FINDING_SEVERITY_INFO     = "info"
 )
 
-// Conditions reported by HealthFinding.Condition. Decider names and allocation
-// verdicts come from the datastore and are an open set; clients should tolerate
-// unknown conditions and fall back to Detail.
+// Decider names and allocation verdicts come from the datastore and are an open
+// set; clients fall back to Detail for unknown conditions.
 const (
 	FINDING_NO_VALID_SHARD_COPY = "no_valid_shard_copy"
 	FINDING_DISK_THRESHOLD      = "disk_threshold"
@@ -54,8 +52,8 @@ const (
 	FINDING_INDICES_READONLY    = "indices_readonly"
 )
 
-// HealthFinding is one diagnosed problem, ranked for triage. Detail carries the
-// datastore's own prose, the only description available for unknown conditions.
+// Detail carries the datastore's own prose, the only description available for
+// unknown conditions.
 type HealthFinding struct {
 	Severity  string        `json:"severity" example:"critical"`
 	Condition string        `json:"condition" example:"disk_threshold"`
@@ -65,8 +63,7 @@ type HealthFinding struct {
 	Nodes     []string      `json:"nodes,omitempty" example:"so-node-01"`
 }
 
-// FindingScope identifies the group of unassigned shards a finding applies to.
-// Its fields mirror UnassignedShardGroup so clients can label both the same way.
+// Mirrors UnassignedShardGroup so clients can label both the same way.
 type FindingScope struct {
 	Reason  string `json:"reason" example:"NODE_LEFT"`
 	Count   int    `json:"count" example:"2"`
@@ -95,14 +92,12 @@ type EventsHealthNode struct {
 	Uptime          string `json:"uptime" example:"42d"`
 }
 
-// EventsHealthSettings are the datastore settings overridden from defaults,
-// keyed by flattened setting name; values are opaque display data.
+// Settings overridden from defaults, keyed by flattened name; values are opaque.
 type EventsHealthSettings struct {
 	Persistent map[string]interface{} `json:"persistent"`
 	Transient  map[string]interface{} `json:"transient"`
 }
 
-// UnassignedShards groups unassigned shards by primary/replica and reason.
 type UnassignedShards struct {
 	Total     int                    `json:"total" example:"14"`
 	Primaries int                    `json:"primaries" example:"2"`
@@ -110,16 +105,14 @@ type UnassignedShards struct {
 	Groups    []UnassignedShardGroup `json:"groups"`
 }
 
-// Sampling outcomes reported by UnassignedShardGroup.SampleStatus. Only an
-// explained group carries sample and allocation details.
+// Only an explained group carries sample and allocation details.
 const (
 	SAMPLE_STATUS_EXPLAINED = "explained"
 	SAMPLE_STATUS_CAPPED    = "capped"
 	SAMPLE_STATUS_FAILED    = "failed"
 )
 
-// UnassignedShardGroup is one group of unassigned shards. One shard per group
-// is sampled for an allocation explanation; SampleStatus reports the outcome.
+// One shard per group is sampled for an allocation explanation.
 type UnassignedShardGroup struct {
 	Reason       string `json:"reason" example:"NODE_LEFT"`
 	Primary      bool   `json:"primary" example:"true"`
@@ -135,8 +128,6 @@ type UnassignedShardGroup struct {
 	Deciders       []AllocationDecider `json:"deciders,omitempty"`
 }
 
-// AllocationDecider is one allocation rule that blocked the sampled shard,
-// with the nodes it rejected.
 type AllocationDecider struct {
 	Name        string   `json:"name" example:"disk_threshold"`
 	Explanation string   `json:"explanation" example:"the node is above the low watermark cluster setting"`

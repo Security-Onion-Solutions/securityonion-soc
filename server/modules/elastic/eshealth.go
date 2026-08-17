@@ -33,7 +33,6 @@ func (store *ElasticEventstore) GetEventsHealth(ctx context.Context) (*model.Eve
 	return getEventsHealth(ctx, store)
 }
 
-// Wraps an esapi call, draining the response into its JSON body
 func readJsonFromCall(res *esapi.Response, err error) (string, error) {
 	if err != nil {
 		return "", err
@@ -85,8 +84,8 @@ func (store *ElasticEventstore) explainAllocation(ctx context.Context, index str
 	))
 }
 
-// Shards typically fail in groups for the same reason, so only one shard is
-// explained per group, capped at this many backend calls.
+// Shards fail in groups for the same reason, so one shard is explained per
+// group, capped at this many backend calls.
 const MAX_ALLOCATION_EXPLAINS = 5
 
 // Health report indicators SOC diagnoses beyond reporting their status.
@@ -97,7 +96,6 @@ const (
 
 var healthStatusRank = map[string]int{"red": 0, "yellow": 1, "unknown": 2, "green": 3}
 
-// Orders findings most severe first.
 var findingSeverityRank = map[string]int{
 	model.FINDING_SEVERITY_CRITICAL: 0,
 	model.FINDING_SEVERITY_WARNING:  1,
@@ -116,9 +114,8 @@ var canAllocateSeverity = map[string]string{
 	model.FINDING_NO_VALID_SHARD_COPY: model.FINDING_SEVERITY_CRITICAL,
 }
 
-// getEventsHealth aggregates live event datastore diagnostics. The health
-// report is required; remaining sections are best-effort, failures recorded
-// in Errors.
+// The health report is required; remaining sections are best-effort, with
+// failures recorded in Errors.
 func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsHealth, error) {
 	logger := log.FromContext(ctx)
 
@@ -193,7 +190,6 @@ func sortHealthIndicators(indicators []model.HealthIndicator) {
 	})
 }
 
-// The allocation diagnosis hangs off the indicator reporting the symptom it explains.
 func attachShardFindings(health *model.EventsHealth) {
 	findings := buildShardFindings(health.UnassignedShards)
 	if len(findings) == 0 {
@@ -269,8 +265,7 @@ func buildShardFindings(unassigned *model.UnassignedShards) []model.HealthFindin
 	return findings
 }
 
-// Problems visible in the indicator itself; shard findings need the shard
-// inventory and are attached later.
+// Shard findings need the shard inventory and are attached later.
 func buildIndicatorFindings(converted model.HealthIndicator, indicator gjson.Result) []model.HealthFinding {
 	findings := make([]model.HealthFinding, 0)
 
@@ -369,8 +364,7 @@ type unassignedGroup struct {
 	sample shardSample
 }
 
-// buildUnassignedShards inventories unassigned shards; a nil result with no
-// error means none were found.
+// A nil result with no error means no unassigned shards were found.
 func buildUnassignedShards(ctx context.Context, store esHealthFetcher) (*model.UnassignedShards, error) {
 	logger := log.FromContext(ctx)
 
@@ -418,7 +412,6 @@ func buildUnassignedShards(ctx context.Context, store esHealthFetcher) (*model.U
 		return nil, nil
 	}
 
-	// Explain the largest groups first, primaries before replicas.
 	sort.SliceStable(groups, func(i, j int) bool {
 		a, b := groups[i].group, groups[j].group
 		if a.Primary != b.Primary {
@@ -450,10 +443,8 @@ func buildUnassignedShards(ctx context.Context, store esHealthFetcher) (*model.U
 	return unassigned, nil
 }
 
-// digestExplanation extracts the sampled shard's allocation verdict and its
-// distinct blocking (NO) and throttling (THROTTLE) deciders. Same-named
-// deciders with different explanations stay separate so no node is attributed
-// another node's details.
+// Only NO and THROTTLE decisions are reported. Same-named deciders with
+// different explanations stay separate so no node gets another node's details.
 func digestExplanation(group *model.UnassignedShardGroup, explain string) {
 	group.CanAllocate = gjson.Get(explain, "can_allocate").String()
 	group.Since = gjson.Get(explain, "unassigned_info.at").String()

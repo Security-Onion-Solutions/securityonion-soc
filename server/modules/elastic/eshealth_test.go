@@ -143,7 +143,6 @@ func TestGetEventsHealthUnassignedShards(t *testing.T) {
 		assert.Equal(t, 2, health.UnassignedShards.Primaries)
 		assert.Equal(t, 1, health.UnassignedShards.Replicas)
 		if assert.Len(t, health.UnassignedShards.Groups, 2) {
-			// Primaries sort ahead of replicas
 			group := health.UnassignedShards.Groups[0]
 			assert.Equal(t, "NODE_LEFT", group.Reason)
 			assert.True(t, group.Primary)
@@ -291,7 +290,6 @@ func TestGetEventsHealthThrottledGroupAttributed(t *testing.T) {
 }
 
 func TestGetEventsHealthUnknownDeciderDetailFallback(t *testing.T) {
-	// Unknown conditions promise Detail as the client's fallback text
 	store := newFakeHealthFetcher()
 	store.HealthReportJson = `{"status":"yellow","indicators":{"shards_availability":{"status":"yellow"}}}`
 	store.ClusterSettingsJson = `{"persistent":{},"transient":{}}`

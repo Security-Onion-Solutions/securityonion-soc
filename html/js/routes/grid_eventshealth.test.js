@@ -129,7 +129,6 @@ test('loadEventsHealthError', async () => {
   expect(comp.eventsHealth).toBe(null);
   expect(comp.digestEventsHealthIndicators()).toEqual([]);
   expect(comp.eventsHealthLoading).toBe(false);
-  // The dialog renders its own unavailable message; no global error popup
   expect(showErrorMock).not.toHaveBeenCalled();
 });
 
@@ -150,8 +149,6 @@ test('showHideEventsHealth', () => {
 });
 
 test('eventsHealthDialogCloseAborts', () => {
-  // Every close path (Close button, ESC, outside-click) funnels through the
-  // v-model watcher, which aborts any in-flight request
   const abort = { abort: jest.fn() };
   comp.eventsHealthAbort = abort;
   comp.onEventsHealthDialogChanged(false);
@@ -234,11 +231,8 @@ test('hasEventsHealthDetails', () => {
   const byId = {};
   comp.digestEventsHealthIndicators().forEach(i => byId[i.id] = i);
 
-  // Findings and causes
   expect(comp.hasEventsHealthDetails(byId.shards_availability)).toBe(true);
-  // Findings only
   expect(comp.hasEventsHealthDetails(byId.disk)).toBe(true);
-  // No details of any kind
   expect(comp.hasEventsHealthDetails(byId.master_is_stable)).toBe(false);
 
   // Causes alone remain details

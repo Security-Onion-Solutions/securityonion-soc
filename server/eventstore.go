@@ -63,8 +63,7 @@ type Eventstore interface {
 	GetActiveQueries(context context.Context, filter bool) ([]*model.QueryTask, error)
 	CancelQuery(context context.Context, queryId string) error
 
-	// GetEventsHealth diagnoses the backend's own datastore and reports it in
-	// the shared model: indicators and findings ranked most severe first,
-	// optional sections best-effort with failures recorded in Errors.
+	// Indicators and findings are ranked most severe first; optional sections
+	// are best-effort, with failures recorded in Errors.
 	GetEventsHealth(ctx context.Context) (*model.EventsHealth, error)
 }

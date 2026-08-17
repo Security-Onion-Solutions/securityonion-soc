@@ -246,8 +246,7 @@ func (node *Node) IsProcessRunning(match string) bool {
 	return false
 }
 
-// HasLocalEventstore reports whether this node runs its own event datastore,
-// unreachable from the grid's eventstore connection.
+// A heavy node's own datastore is unreachable from the grid's eventstore connection.
 func (node *Node) HasLocalEventstore() bool {
 	return node.Role == NodeRoleHeavyNode
 }

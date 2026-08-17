@@ -3,9 +3,8 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-// Explanations for the conditions SOC recognizes; anything missing falls back to
-// the datastore's own prose. Inline entries interpolate that prose into the
-// explanation rather than showing it on a separate line.
+// Unrecognized conditions fall back to the datastore's own prose. Inline entries
+// interpolate that prose instead of showing it on a separate line.
 const FINDING_SUMMARY = {
   no_valid_shard_copy: { key: 'eventsHealthConditionNoValidShardCopy' },
   disk_threshold:      { key: 'eventsHealthConditionDiskThreshold' },
