@@ -13,7 +13,6 @@ import (
 )
 
 const NodeRoleDesktop = "so-desktop"
-const NodeRoleHeavyNode = "so-heavynode"
 const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
@@ -75,8 +74,6 @@ type Node struct {
 	HistoricalMetricsEnabled bool `json:"historicalMetricsEnabled" example:"true"`
 	// Indicates whether this node is a non-critical node of the overall grid. An examples of a non-critical nodes is a desktop node
 	NonCriticalNode bool `json:"nonCriticalNode" example:"false"`
-	// Indicates whether the grid's events health details describe this node's event datastore
-	EventsHealthAvailable bool `json:"eventsHealthAvailable" example:"true"`
 	// Total size, in gigabytes, of the root operating system disk/partition
 	DiskTotalRootGB float64 `json:"diskTotalRootGB" example:"314.41920000000005"`
 	// Percentage usage of the root system disk/partition
@@ -244,11 +241,6 @@ func (node *Node) IsProcessRunning(match string) bool {
 		}
 	}
 	return false
-}
-
-// A heavy node's own datastore is unreachable from the grid's eventstore connection.
-func (node *Node) HasLocalEventstore() bool {
-	return node.Role == NodeRoleHeavyNode
 }
 
 func (node *Node) IsManager() bool {

@@ -91,19 +91,20 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := &model.Info{
-		Version:        h.server.Host.Version,
-		License:        "Elastic License 2.0 (ELv2)",
-		LicenseKey:     licensing.GetLicenseKey().LicenseKey,
-		LicenseStatus:  licensing.GetStatus(),
-		Parameters:     params,
-		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-		UserId:         userId,
-		Timezones:      h.timezones,
-		SrvToken:       srvToken,
-		ForceUserOtp:   forceUserOtp,
-		MgmtMac:        mgmtMac,
-		Subgrids:       subgrids,
-		CustomReports:  h.getCustomReports(h.server.Config.CustomReportsPath),
+		Version:           h.server.Host.Version,
+		License:           "Elastic License 2.0 (ELv2)",
+		LicenseKey:        licensing.GetLicenseKey().LicenseKey,
+		LicenseStatus:     licensing.GetStatus(),
+		Parameters:        params,
+		ElasticVersion:    os.Getenv("ELASTIC_VERSION"),
+		EventstoreEnabled: h.server.Eventstore != nil,
+		UserId:            userId,
+		Timezones:         h.timezones,
+		SrvToken:          srvToken,
+		ForceUserOtp:      forceUserOtp,
+		MgmtMac:           mgmtMac,
+		Subgrids:          subgrids,
+		CustomReports:     h.getCustomReports(h.server.Config.CustomReportsPath),
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

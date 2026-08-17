@@ -217,17 +217,6 @@ func TestUpdateNodeStatusPending(tester *testing.T) {
 	testStatus(tester, true, NodeStatusPending, NodeStatusFault, NodeStatusOk, NodeStatusOk, NodeStatusOk, 1, NodeStatusFault)
 }
 
-func TestHasLocalEventstore(tester *testing.T) {
-	node := NewNode("")
-	assert.False(tester, node.HasLocalEventstore())
-	node.Role = "so-manager"
-	assert.False(tester, node.HasLocalEventstore())
-	node.Role = "so-standalone"
-	assert.False(tester, node.HasLocalEventstore())
-	node.Role = NodeRoleHeavyNode
-	assert.True(tester, node.HasLocalEventstore())
-}
-
 func TestIsProcessRunning(tester *testing.T) {
 	node := NewNode("")
 	assert.False(tester, node.IsProcessRunning("so-test"))

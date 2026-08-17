@@ -181,12 +181,6 @@ func (server *Server) TryGetUser(ctx context.Context) (*model.User, error) {
 	return user, nil
 }
 
-// Derived, not stored: restamp on every node sent to clients, including
-// "node" broadcasts, or a stale false will hide the events health link.
-func (server *Server) MarkEventsHealthAvailable(node *model.Node) {
-	node.EventsHealthAvailable = server.Eventstore != nil && !node.HasLocalEventstore()
-}
-
 func (server *Server) GetTimezones() []string {
 	var zones []string = make([]string, 0, 0)
 	bytes, err := exec.Command(server.Config.TimezoneScript).Output()

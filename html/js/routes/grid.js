@@ -14,7 +14,7 @@ const NodeStatusRestart = "restart";
 const UNREALISTIC_AGE = 1700000000; // About 54 years
 const STALENESS_CHECK_INTERVAL_MS = 30000
 
-const ROLES_WITH_EVENTSTORE_STATUS = ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'];
+const ROLES_WITH_EVENTSTORE_HEALTH = ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'];
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
   data() { return {
@@ -486,8 +486,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
     hasEventstore(item) {
       return this.hasContainer(item, 'so-elasticsearch');
     },
-    hasEventstoreStatus(item) {
-      return ROLES_WITH_EVENTSTORE_STATUS.indexOf(item.role) != -1;
+    hasEventstoreHealth(item) {
+      return ROLES_WITH_EVENTSTORE_HEALTH.indexOf(item.role) != -1;
     },
     hasMetricstore(item) {
       return this.hasContainer(item, 'so-influxdb');

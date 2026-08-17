@@ -147,7 +147,6 @@ func (h *EventHandler) postAck(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/events/health [get]
 func (h *EventHandler) getHealth(w http.ResponseWriter, r *http.Request) {
 	timeoutMs := h.server.Config.EventsHealthTimeoutMs
-	// Verify() defaults this; guard for configs that bypassed it
 	if timeoutMs <= 0 {
 		timeoutMs = config.DEFAULT_EVENTS_HEALTH_TIMEOUT_MS
 	}

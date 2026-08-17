@@ -14,6 +14,8 @@ const FINDING_SUMMARY = {
   indices_readonly:    { key: 'eventsHealthConditionIndicesReadonly', inline: true },
 };
 
+const NODE_ROLE_HEAVYNODE = 'so-heavynode';
+
 const FINDING_DISPLAY = {
   critical: { icon: 'fa-triangle-exclamation', color: 'error' },
   warning:  { icon: 'fa-circle-exclamation', color: 'warning' },
@@ -40,7 +42,9 @@ if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
   });
   Object.assign(gridRouteForEventsHealth.component.methods, {
     canShowEventsHealth(node) {
-      return node.eventsHealthAvailable;
+      // A heavy node's own datastore is unreachable from the grid's eventstore connection
+      const info = this.$root.gridInfo[node.gridId];
+      return !!(info && info.eventstoreEnabled) && node.role != NODE_ROLE_HEAVYNODE;
     },
     showEventsHealth(node) {
       this.eventsHealthDialog = true;
@@ -160,7 +164,6 @@ if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
 
       const nodes = this.eventsHealth.nodes;
       if (nodes && nodes.length) {
-        // Unavailable stats are empty strings
         const stat = function(value) { return value ? value : '-'; };
         lines.push('');
         lines.push(this.i18n.eventsHealthReportSectionNodes);

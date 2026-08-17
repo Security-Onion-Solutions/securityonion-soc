@@ -41,8 +41,7 @@ const (
 	FINDING_SEVERITY_INFO     = "info"
 )
 
-// Decider names and allocation verdicts come from the datastore and are an open
-// set; clients fall back to Detail for unknown conditions.
+// Decider names and allocation verdicts come from the datastore; the set is open.
 const (
 	FINDING_NO_VALID_SHARD_COPY = "no_valid_shard_copy"
 	FINDING_DISK_THRESHOLD      = "disk_threshold"

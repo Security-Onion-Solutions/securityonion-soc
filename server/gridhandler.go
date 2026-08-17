@@ -89,7 +89,6 @@ func (h *GridHandler) getNodes(w http.ResponseWriter, r *http.Request) {
 		}).Debug("assigning grid id to node")
 		nodeCopy := *node
 		nodeCopy.GridId = assignedGridId
-		h.server.MarkEventsHealthAvailable(&nodeCopy)
 		newNodes = append(newNodes, nodeCopy)
 	}
 

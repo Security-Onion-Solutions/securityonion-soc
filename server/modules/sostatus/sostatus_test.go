@@ -110,30 +110,3 @@ func TestCheckDetectionEngineStatus(tester *testing.T) {
 	good := &model.EngineState{}
 	assert.Equal(tester, bad, status.checkDetectionEngineStatus("foo", good, bad))
 }
-
-type updatedMetrics struct{}
-
-func (m *updatedMetrics) GetGridEps(ctx context.Context) int { return 0 }
-func (m *updatedMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
-	return true
-}
-func (m *updatedMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {
-	return nil, nil
-}
-
-func TestRefreshGrid_BroadcastStampsEventsHealth(t *testing.T) {
-	status, _ := NewTestStatus()
-	status.server.Metrics = &updatedMetrics{}
-	status.server.Eventstore = server.NewFakeEventstore()
-
-	status.refreshGrid(context.Background())
-
-	// Broadcast nodes must carry the derived flag (regression: rows replaced
-	// by broadcasts hid the events health link)
-	nodes := status.server.Datastore.GetNodes(context.Background())
-	if assert.NotEmpty(t, nodes) {
-		for _, node := range nodes {
-			assert.Equal(t, !node.HasLocalEventstore(), node.EventsHealthAvailable, node.Id)
-		}
-	}
-}

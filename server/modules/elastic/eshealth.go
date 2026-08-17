@@ -88,7 +88,6 @@ func (store *ElasticEventstore) explainAllocation(ctx context.Context, index str
 // group, capped at this many backend calls.
 const MAX_ALLOCATION_EXPLAINS = 5
 
-// Health report indicators SOC diagnoses beyond reporting their status.
 const (
 	HEALTH_INDICATOR_DISK   = "disk"
 	HEALTH_INDICATOR_SHARDS = "shards_availability"
@@ -102,7 +101,6 @@ var findingSeverityRank = map[string]int{
 	model.FINDING_SEVERITY_INFO:     2,
 }
 
-// Deciders are an open set; unrecognized ones are treated as warnings.
 var shardDeciderSeverity = map[string]string{
 	model.FINDING_DISK_THRESHOLD: model.FINDING_SEVERITY_WARNING,
 	model.FINDING_SAME_SHARD:     model.FINDING_SEVERITY_INFO,
@@ -114,8 +112,6 @@ var canAllocateSeverity = map[string]string{
 	model.FINDING_NO_VALID_SHARD_COPY: model.FINDING_SEVERITY_CRITICAL,
 }
 
-// The health report is required; remaining sections are best-effort, with
-// failures recorded in Errors.
 func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsHealth, error) {
 	logger := log.FromContext(ctx)
 
@@ -173,7 +169,6 @@ func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsH
 	return health, nil
 }
 
-// Ties break on id so the ordering is stable across collections.
 func sortHealthIndicators(indicators []model.HealthIndicator) {
 	rank := func(status string) int {
 		if rank, known := healthStatusRank[status]; known {
@@ -204,7 +199,6 @@ func attachShardFindings(health *model.EventsHealth) {
 	}
 }
 
-// One finding per conclusive verdict and per blocking decider.
 func buildShardFindings(unassigned *model.UnassignedShards) []model.HealthFinding {
 	findings := make([]model.HealthFinding, 0)
 	if unassigned == nil {

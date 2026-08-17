@@ -134,7 +134,6 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 			}).Debug("Node Status")
 
 			if updated {
-				status.server.MarkEventsHealthAvailable(node)
 				status.server.Host.Broadcast("node", "nodes", node)
 			}
 
