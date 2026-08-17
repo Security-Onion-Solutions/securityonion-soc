@@ -79,9 +79,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
+    this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
+    this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
   },
   watch: {
     '$route'(to, from) {

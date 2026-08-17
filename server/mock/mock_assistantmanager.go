@@ -89,6 +89,34 @@ func (mr *MockAssistantManagerMockRecorder) ChatStreamInSession(ctx, incMsg, ent
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ChatStreamInSession), ctx, incMsg, entityType, entityId)
 }
 
+// DeleteAgent mocks base method.
+func (m *MockAssistantManager) DeleteAgent(ctx context.Context, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAgent", ctx, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAgent indicates an expected call of DeleteAgent.
+func (mr *MockAssistantManagerMockRecorder) DeleteAgent(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAgent", reflect.TypeOf((*MockAssistantManager)(nil).DeleteAgent), ctx, name)
+}
+
+// DeleteSkill mocks base method.
+func (m *MockAssistantManager) DeleteSkill(ctx context.Context, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSkill", ctx, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSkill indicates an expected call of DeleteSkill.
+func (mr *MockAssistantManagerMockRecorder) DeleteSkill(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSkill", reflect.TypeOf((*MockAssistantManager)(nil).DeleteSkill), ctx, name)
+}
+
 // ExecuteTool mocks base method.
 func (m *MockAssistantManager) ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error) {
 	m.ctrl.T.Helper()
@@ -132,6 +160,34 @@ func (m *MockAssistantManager) ResolveDelegationStream(ctx context.Context, chil
 func (mr *MockAssistantManagerMockRecorder) ResolveDelegationStream(ctx, childSession, childFinalText any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveDelegationStream", reflect.TypeOf((*MockAssistantManager)(nil).ResolveDelegationStream), ctx, childSession, childFinalText)
+}
+
+// SaveAgent mocks base method.
+func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveAgent", ctx, originalName, agent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveAgent indicates an expected call of SaveAgent.
+func (mr *MockAssistantManagerMockRecorder) SaveAgent(ctx, originalName, agent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveAgent", reflect.TypeOf((*MockAssistantManager)(nil).SaveAgent), ctx, originalName, agent)
+}
+
+// SaveSkill mocks base method.
+func (m *MockAssistantManager) SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveSkill", ctx, originalName, skill)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveSkill indicates an expected call of SaveSkill.
+func (mr *MockAssistantManagerMockRecorder) SaveSkill(ctx, originalName, skill any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveSkill", reflect.TypeOf((*MockAssistantManager)(nil).SaveSkill), ctx, originalName, skill)
 }
 
 // Send mocks base method.

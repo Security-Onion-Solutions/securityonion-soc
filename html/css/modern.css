@@ -1345,3 +1345,16 @@ dfn {
 #agentstudio-skills .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
 }
+
+/* A disabled agent/skill still lists, but reads as inactive. */
+.agentstudio-row-disabled td {
+  opacity: 0.55;
+}
+
+.agentstudio-row-disabled td:last-child {
+  opacity: 1;
+}
+
+.agentstudio-dialog-body {
+  max-height: 70vh;
+}

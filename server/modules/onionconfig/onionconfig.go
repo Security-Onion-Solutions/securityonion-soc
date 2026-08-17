@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -28,6 +29,11 @@ type OnionConfig struct {
 	annotations   map[string]map[string]interface{}
 	store         storeProvider
 	ready         chan struct{}
+
+	// callbacks maps a setting ID to the handlers registered for it. Guarded by
+	// callbacksMu. Handlers are invoked after a setting update is persisted.
+	callbacks   map[string][]server.ConfigSettingCallbackHandler
+	callbacksMu sync.RWMutex
 }
 
 // storeProvider abstracts all database operations for onionconfig.
@@ -41,9 +47,53 @@ type storeProvider interface {
 }
 
 func NewOnionConfig(server *server.Server) *OnionConfig {
+	// callbacks is created lazily on first registration (see
+	// RegisterConfigSettingCallback) to avoid referencing the server package here,
+	// where the "server" parameter name shadows the package identifier.
 	return &OnionConfig{
 		server: server,
 		ready:  make(chan struct{}),
+	}
+}
+
+// RegisterConfigSettingCallback registers handler to be notified whenever the
+// setting with the given settingID is updated. Implements
+// server.ConfigSettingCallbackRegistrar.
+func (c *OnionConfig) RegisterConfigSettingCallback(settingID string, handler server.ConfigSettingCallbackHandler) {
+	if handler == nil || settingID == "" {
+		return
+	}
+
+	c.callbacksMu.Lock()
+	defer c.callbacksMu.Unlock()
+
+	if c.callbacks == nil {
+		c.callbacks = map[string][]server.ConfigSettingCallbackHandler{}
+	}
+	c.callbacks[settingID] = append(c.callbacks[settingID], handler)
+}
+
+// notifyConfigSettingCallbacks invokes every handler registered for the given
+// setting's ID. Each handler is called inline (config updates are infrequent),
+// but a panicking handler is recovered so it cannot break the config write path.
+func (c *OnionConfig) notifyConfigSettingCallbacks(ctx context.Context, setting *model.Setting, removed bool) {
+	if setting == nil {
+		return
+	}
+
+	c.callbacksMu.RLock()
+	handlers := c.callbacks[setting.Id]
+	c.callbacksMu.RUnlock()
+
+	for _, handler := range handlers {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.FromContext(ctx).WithField("setting", setting.Id).Errorf("config setting callback panicked: %v", r)
+				}
+			}()
+			handler.OnConfigSettingUpdated(ctx, setting, removed)
+		}()
 	}
 }
 
@@ -164,7 +214,14 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		}
 	}
 
-	return c.routeUpdate(ctx, setting, oldValue, remove, logger)
+	if err := c.routeUpdate(ctx, setting, oldValue, remove, logger); err != nil {
+		return err
+	}
+
+	// Notify any registered listeners now that the change has been persisted.
+	c.notifyConfigSettingCallbacks(ctx, setting, remove)
+
+	return nil
 }
 
 func (c *OnionConfig) routeUpdate(ctx context.Context, setting *model.Setting, oldValue string, remove bool, logger log.Interface) error {

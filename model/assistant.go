@@ -8,6 +8,7 @@ package model
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -501,8 +502,97 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// StoredAgent is one agent as persisted in the "assistant.agents" setting (one
+// JSON object per line, the []{} uiElements convention) and as sent to the
+// per-agent save endpoint. An entry naming a system agent is an override, not a
+// replacement.
+type StoredAgent struct {
+	Name string `json:"name" example:"Malware Analyst"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled        *bool `json:"enabled,omitempty" example:"true"`
+	IsOrchestrator bool  `json:"isOrchestrator" example:"false"`
+	// A model selector ("id@adapter" or bare id), not a display name.
+	Model         string   `json:"model" example:"claude-sonnet-4.5@SOAI"`
+	AllowedSkills []string `json:"allowedSkills" example:"Hunt,Respond"`
+	CanDelegateTo []string `json:"canDelegateTo" example:"Log Analyst"`
+	Description   string   `json:"description" example:"Analyzes suspicious binaries and scripts"`
+	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
+	Persona string `json:"persona" example:"Prefer static analysis before detonating a sample."`
+}
+
+// StoredSkill is one skill in the "assistant.skills" setting, following the same
+// conventions as StoredAgent.
+type StoredSkill struct {
+	Name string `json:"name" example:"Threat Intel Lookup"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled *bool `json:"enabled,omitempty" example:"true"`
+	// Ignored for a system skill, whose tool set is fixed by the built-in.
+	Tools []string `json:"tools" example:"query_events,query_cases"`
+	// Addendum to the built-in guidance for a system skill; all of it otherwise.
+	Persona string `json:"persona" example:"Always cite the source of an indicator."`
+}
+
+// Agent is a persona plus the skills and delegation scope it runs with, and is
+// also what the browser receives in AssistantParameters.AvailableAgents. Agents
+// that ship with the product carry a built-in Prompt an admin may not view or
+// edit; admin-created ones define everything in PersonaAddendum.
+type Agent struct {
+	Name           string   `json:"name" example:"Malware Analyst"`
+	IsOrchestrator bool     `json:"isOrchestrator" example:"false"`
+	CanDelegateTo  []string `json:"canDelegateTo" example:"Log Analyst"`
+	AllowedSkills  []string `json:"allowedSkills" example:"Hunt,Respond"`
+	// Built-in prompt, never sent to the browser. Empty for admin-created agents.
+	Prompt      string `json:"-"`
+	Description string `json:"agentDescription" example:"Analyzes suspicious binaries and scripts"`
+	IsSystem    bool   `json:"isSystem" example:"true"`
+	// A disabled agent is still published so the Agent Studio can re-enable it.
+	Enabled bool `json:"enabled" example:"true"`
+	// Admin-authored persona; exposed because an admin wrote it.
+	PersonaAddendum string `json:"personaAddendum" example:"Prefer static analysis before detonating a sample."`
+}
+
+// EffectivePrompt is the built-in prompt with the admin persona appended; either
+// part may be empty.
+func (a *Agent) EffectivePrompt() string {
+	prompt := strings.TrimSpace(a.Prompt)
+	addendum := strings.TrimSpace(a.PersonaAddendum)
+
+	switch {
+	case prompt == "":
+		return addendum
+	case addendum == "":
+		return prompt
+	default:
+		return prompt + "\n\n" + addendum
+	}
+}
+
+// Skill is a bundle of tools plus the guidance that teaches an agent to use them,
+// and is also what the browser receives in AssistantParameters.AvailableSkills.
 type Skill struct {
-	Name             string
-	Tools            []string
-	AdditionalPrompt string
+	Name  string   `json:"name" example:"Threat Intel Lookup"`
+	Tools []string `json:"tools" example:"query_events,query_cases"`
+	// Built-in guidance, never sent to the browser. Empty for admin-created skills.
+	AdditionalPrompt string `json:"-"`
+	IsSystem         bool   `json:"isSystem" example:"true"`
+	// A disabled skill grants nothing, but is still published so it can be re-enabled.
+	Enabled bool `json:"enabled" example:"true"`
+	// Admin-authored guidance; exposed because an admin wrote it.
+	PersonaAddendum string `json:"personaAddendum" example:"Always cite the source of an indicator."`
+}
+
+// EffectiveGuidance is the built-in guidance with the admin addendum appended;
+// either part may be empty.
+func (s *Skill) EffectiveGuidance() string {
+	guidance := strings.TrimSpace(s.AdditionalPrompt)
+	addendum := strings.TrimSpace(s.PersonaAddendum)
+
+	switch {
+	case guidance == "":
+		return addendum
+	case addendum == "":
+		return guidance
+	default:
+		return guidance + "\n\n" + addendum
+	}
 }

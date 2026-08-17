@@ -7925,3 +7925,70 @@ test('isToolAlreadyResolvedError is false when the streamed body cannot be read'
   };
   expect(await comp.isToolAlreadyResolvedError({ response: { status: 400, data: failingReader } })).toBe(false);
 });
+
+test('an agentic push refreshes the agent picker without a page reload', async () => {
+  comp.agentic = true;
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.parameters = {
+    assistant: {
+      enabled: true,
+      agentic: true,
+      availableAgents: [{ name: 'Coordinator' }, { name: 'Triage' }],
+      agentMapping: { Coordinator: 'model-a@soai', Triage: 'model-a@soai' },
+      availableModels: [{ id: 'model-a', displayName: 'Model A', adapter: 'soai', enabled: true }],
+      availableAdapters: [],
+    },
+  };
+
+  await comp.onAgenticUpdate();
+
+  // The agent added elsewhere is now selectable here.
+  expect(comp.availableAgents.map(a => a.name)).toEqual(['Coordinator', 'Triage']);
+  expect(comp.availableModels.map(m => m.key)).toEqual(['Coordinator', 'Triage']);
+});
+
+test('an agentic push is ignored when not in agentic mode', async () => {
+  comp.agentic = false;
+  comp.availableAgents = [];
+  comp.$root.parameters = { assistant: { availableAgents: [{ name: 'Triage' }] } };
+
+  await comp.onAgenticUpdate();
+
+  expect(comp.availableAgents).toEqual([]);
+});
+
+test('a disabled agent is left out of the model picker', async () => {
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+
+  await comp.initAssistant({
+    enabled: true,
+    agentic: true,
+    availableAgents: [
+      { name: 'Coordinator', enabled: true },
+      { name: 'Retired', enabled: false },
+    ],
+    agentMapping: { Coordinator: 'model-a@soai', Retired: 'model-a@soai' },
+    availableModels: [{ id: 'model-a', displayName: 'Model A', adapter: 'soai', enabled: true }],
+    availableAdapters: [],
+  });
+
+  // A disabled agent is still published so the Agent Studio can re-enable it, but
+  // resolveAgent refuses it, so offering it here would only produce errors.
+  expect(comp.availableAgents.map(a => a.name)).toEqual(['Coordinator']);
+  expect(comp.availableModels.map(m => m.key)).toEqual(['Coordinator']);
+});
+
+test('agents from a backend that predates the enabled flag are still offered', async () => {
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+
+  await comp.initAssistant({
+    enabled: true,
+    agentic: true,
+    availableAgents: [{ name: 'Coordinator' }],
+    agentMapping: { Coordinator: 'model-a@soai' },
+    availableModels: [{ id: 'model-a', displayName: 'Model A', adapter: 'soai', enabled: true }],
+    availableAdapters: [],
+  });
+
+  expect(comp.availableAgents.map(a => a.name)).toEqual(['Coordinator']);
+});

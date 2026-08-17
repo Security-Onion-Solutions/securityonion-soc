@@ -593,6 +593,11 @@ $(document).ready(function () {
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
                   this.customReports = response.data.customReports;
+                  // We have to subscribe to this websocket event in order to update the client Params initially provided
+                  // by the /api/info response. This is unique to agentic params because agentic params can change on
+                  // the fly via the AgentStudio, whereas other config changes currently require a SOC restart to take effect.
+                  // If we didn't do this then navigating to Grid and back to OnionAI, for example, would revert to showing the old models.
+                  this.subscribe('assistant:agentic', this.updateAgenticParams);
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
@@ -604,6 +609,9 @@ $(document).ready(function () {
                     this.parameterCallback = null;
                   }
                   this.parametersLoaded = true;
+                  // These params just changed underneath any open page; this reload is
+                  // also what heals a push missed while the websocket was down.
+                  this.publish('assistant:agentic', this.parameters.assistant);
                   if (this.parameters.webSocketTimeoutMs > 0) {
                     this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
                   }
@@ -1228,6 +1236,10 @@ $(document).ready(function () {
               link.href = "css/external/prism-custom-light-v1.30.0.css";
             }
           }
+        },
+        updateAgenticParams(update) {
+          if (!update || !this.parameters) return;
+          this.parameters.assistant = update;
         },
         subscribe(kind, fn) {
           this.ensureConnected();

@@ -191,17 +191,15 @@ type AssistantParameters struct {
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
-	AvailableAgents        []AgentParameters   `json:"availableAgents"`
-	AvailableSkills        []SkillParameters   `json:"availableSkills"`
-	AgentMapping           map[string]string   `json:"agentMapping"`
-}
-
-// SkillParameters is the client-facing view of an agent skill: its name and the
-// tools it unlocks. The skill's prompt guidance (AdditionalPrompt) is
-// intentionally not exposed to the browser, matching the agent persona.
-type SkillParameters struct {
-	Name  string   `json:"name"`
-	Tools []string `json:"tools"`
+	AvailableAgents        []Agent             `json:"availableAgents"`
+	AvailableSkills        []Skill             `json:"availableSkills"`
+	// Tool names an admin-created skill may grant; delegate tools excluded.
+	AvailableTools []string          `json:"availableTools" example:"query_events,query_cases"`
+	AgentMapping   map[string]string `json:"agentMapping" example:"Malware Analyst:claude-sonnet-4.5@SOAI"`
+	// Delegation guardrails, surfaced so the Agent Studio can show and edit them
+	// without fetching every setting. 0 disables the limit.
+	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
+	MaxSubSessionTokens int `json:"maxSubSessionTokens" example:"100000"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,
@@ -222,16 +220,6 @@ type ModelParameters struct {
 // "id@adapter" pair.
 func (m *ModelParameters) Selector() string {
 	return m.ID + "@" + m.Adapter
-}
-
-type AgentParameters struct {
-	Name           string   `json:"name"`
-	IsOrchestrator bool     `json:"isOrchestrator"`
-	CanDelegateTo  []string `json:"canDelegateTo"`
-	AllowedSkills  []string `json:"allowedSkills"`
-	// Prompt is the agent's system prompt; never serialized to the browser.
-	Prompt      string `json:"-"`
-	Description string `json:"agentDescription"`
 }
 
 type AdapterParameters struct {

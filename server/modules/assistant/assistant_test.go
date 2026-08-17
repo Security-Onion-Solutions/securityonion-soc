@@ -1435,8 +1435,8 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *
 		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
 	}
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{
-		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}},
+	ac.agents = map[string]model.Agent{
+		"Test Hunter": {Name: "Test Hunter", Prompt: "hunt things", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Test Hunter": "test-model@MyAdapter"}
 
@@ -1779,10 +1779,10 @@ func TestAssistantCoordinator_SendStream_Agentic(t *testing.T) {
 		isAgentic:       true,
 		FunctionLibrary: map[string]Tool{"query_events": &mockTool{name: "query_events", description: "events"}},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, Enabled: true},
 		},
-		agents: map[string]model.AgentParameters{
-			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}},
+		agents: map[string]model.Agent{
+			"Hunter": {Name: "Hunter", Prompt: "You are a hunting agent.", AllowedSkills: []string{"Hunt"}, Enabled: true},
 		},
 		agentMapping: map[string]string{"Hunter": "test-model@whatever"},
 		adapters: map[string]server.AssistantAdapter{
@@ -1845,12 +1845,12 @@ func TestAssistantCoordinator_SetupAgent(t *testing.T) {
 			"delegate_to_Hunter": &mockTool{name: "delegate_to_Hunter", description: "hunter"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Hunt"},
 		CanDelegateTo: []string{"delegate_to_Hunter"},
@@ -1875,12 +1875,12 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 			"query_events": &mockTool{name: "query_events", description: "events"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Bogus"},
 	}
@@ -1896,18 +1896,78 @@ func TestAssistantCoordinator_SetupAgent_UnknownSkill(t *testing.T) {
 	assert.Len(t, tc.Tools, 0)
 }
 
+func TestAssistantCoordinator_SetupAgent_DisabledSkill(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+			"query_cases":  &mockTool{name: "query_cases", description: "cases"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt":    {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
+			"Respond": {Name: "Respond", Tools: []string{"query_cases"}, AdditionalPrompt: "Respond skill prompt.", Enabled: false},
+		},
+	}
+
+	req := &model.ChatRequest{}
+	agentParams := &model.Agent{
+		Prompt:        "You are a hunting agent.",
+		AllowedSkills: []string{"Hunt", "Respond"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+
+	// The disabled skill grants neither guidance nor tools; the enabled one is unaffected.
+	assert.Equal(t, "Hunt skill prompt.", req.SystemAppend)
+
+	var tc model.ToolConfig
+	assert.NoError(t, json.Unmarshal(req.ToolConfig, &tc))
+	assert.Len(t, tc.Tools, 1)
+	assert.Equal(t, "query_events", tc.Tools[0].Spec.Name)
+}
+
+func TestAssistantCoordinator_SetupAgent_PersonaAddendum(t *testing.T) {
+	ac := &AssistantCoordinator{
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events", description: "events"},
+		},
+		SkillLibrary: map[string]model.Skill{
+			"Hunt": {
+				Name:             "Hunt",
+				Tools:            []string{"query_events"},
+				AdditionalPrompt: "Hunt skill prompt.",
+				PersonaAddendum:  "Prefer narrow time ranges.",
+				Enabled:          true,
+			},
+		},
+	}
+
+	req := &model.ChatRequest{}
+	agentParams := &model.Agent{
+		Prompt:          "You are a hunting agent.",
+		PersonaAddendum: "Always cite the index you queried.",
+		AllowedSkills:   []string{"Hunt"},
+	}
+
+	err := ac.setupAgent(context.Background(), req, agentParams)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "You are a hunting agent.\n\nAlways cite the index you queried.", req.System)
+	assert.Equal(t, "Hunt skill prompt.\n\nPrefer narrow time ranges.", req.SystemAppend)
+}
+
 func TestAssistantCoordinator_SetupAgent_DuplicateSkill(t *testing.T) {
 	ac := &AssistantCoordinator{
 		FunctionLibrary: map[string]Tool{
 			"query_events": &mockTool{name: "query_events", description: "events"},
 		},
 		SkillLibrary: map[string]model.Skill{
-			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt."},
+			"Hunt": {Name: "Hunt", Tools: []string{"query_events"}, AdditionalPrompt: "Hunt skill prompt.", Enabled: true},
 		},
 	}
 
 	req := &model.ChatRequest{SystemAppend: "leftover"}
-	agentParams := &model.AgentParameters{
+	agentParams := &model.Agent{
 		Prompt:        "You are a hunting agent.",
 		AllowedSkills: []string{"Hunt", "Hunt"},
 	}
@@ -3285,7 +3345,7 @@ func TestResolveAdapterNameAgenticHonorsModelAdapter(t *testing.T) {
 		{ID: "sonnet", DisplayName: "Claude Sonnet", Adapter: "SOAIDEV", Enabled: true},
 	})
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{"Orchestrator": {Name: "Orchestrator"}}
+	ac.agents = map[string]model.Agent{"Orchestrator": {Name: "Orchestrator", Enabled: true}}
 	ac.agentMapping = map[string]string{"Orchestrator": "sonnet"}
 
 	assert.Equal(t, "SOAIDEV", ac.resolveAdapterName("Orchestrator"))
@@ -3361,8 +3421,8 @@ func TestAssistantCoordinator_Send_AgenticFallsThroughToModelSelector(t *testing
 	ac.toolConfig = []byte(`{"tools": [], "tool_choice": {"auto": {}}}`)
 	ac.systemPrompt = "default prompt"
 	ac.isAgentic = true
-	ac.agents = map[string]model.AgentParameters{
-		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}},
+	ac.agents = map[string]model.Agent{
+		"Hunter": {Name: "Hunter", Prompt: "agent prompt", AllowedSkills: []string{}, Enabled: true},
 	}
 	ac.agentMapping = map[string]string{"Hunter": "test-model@MyAdapter"}
 
@@ -3517,8 +3577,8 @@ func TestValidateModelSelectors(t *testing.T) {
 func TestRegisterDelegateTools(t *testing.T) {
 	t.Run("registers a delegate under the agent name and tool name", func(t *testing.T) {
 		ac, _ := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{
-			"Hunter": {Name: "Hunter", Description: "an event hunter"},
+		ac.agents = map[string]model.Agent{
+			"Hunter": {Name: "Hunter", Description: "an event hunter", Enabled: true},
 		}
 
 		ac.registerDelegateTools()
@@ -3533,9 +3593,9 @@ func TestRegisterDelegateTools(t *testing.T) {
 		// "A B" and "A_B" are distinct agent names but sanitize to the same
 		// tool name. Registration is sorted, so "A B" wins and "A_B" collides.
 		ac, h := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{
-			"A B": {Name: "A B"},
-			"A_B": {Name: "A_B"},
+		ac.agents = map[string]model.Agent{
+			"A B": {Name: "A B", Enabled: true},
+			"A_B": {Name: "A_B", Enabled: true},
 		}
 
 		ac.registerDelegateTools()
@@ -3552,7 +3612,7 @@ func TestRegisterDelegateTools(t *testing.T) {
 
 	t.Run("no agents registers nothing", func(t *testing.T) {
 		ac, _ := newSelectorLogCoordinator(nil)
-		ac.agents = map[string]model.AgentParameters{}
+		ac.agents = map[string]model.Agent{}
 
 		ac.registerDelegateTools()
 
@@ -3745,9 +3805,9 @@ func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
 				}).Times(1)
 
 			ac := &AssistantCoordinator{
-				srv:                 &server.Server{Assistantstore: mockAssistantstore},
-				maxSubSessionTokens: tc.maxSubSession,
+				srv: &server.Server{Assistantstore: mockAssistantstore},
 			}
+			ac.maxSubSessionTokens.Store(int64(tc.maxSubSession))
 
 			sess := ac.loadTurnSession(context.Background(), "sess-1")
 			assert.NotNil(t, sess)
@@ -3816,7 +3876,8 @@ func TestAssistantCoordinator_subSessionOutputBudget(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ac := &AssistantCoordinator{maxSubSessionTokens: tc.maxSubSession}
+			ac := &AssistantCoordinator{}
+			ac.maxSubSessionTokens.Store(int64(tc.maxSubSession))
 
 			isSub, remaining := ac.subSessionOutputBudget(tc.sess)
 
@@ -3842,9 +3903,9 @@ func TestAssistantCoordinator_continueWithToolResultSync_HardStop(t *testing.T) 
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 
 	ac := &AssistantCoordinator{
-		srv:                 &server.Server{Assistantstore: mockAssistantstore},
-		maxSubSessionTokens: 500,
+		srv: &server.Server{Assistantstore: mockAssistantstore},
 	}
+	ac.maxSubSessionTokens.Store(500)
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 	toolMsg := buildToolResultMessage("tu_1", &model.ToolResponse{ToolName: "x", Result: "r"}, nil)
@@ -3910,9 +3971,9 @@ func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
 			}
 
 			ac := &AssistantCoordinator{
-				srv:                &server.Server{Assistantstore: mockAssistantstore},
-				maxDelegationDepth: tc.maxDepth,
+				srv: &server.Server{Assistantstore: mockAssistantstore},
 			}
+			ac.maxDelegationDepth.Store(int64(tc.maxDepth))
 
 			refusal := ac.delegationDepthRefusal(context.Background(), &model.ToolRequest{SessionId: "s", ToolUseId: "tu"})
 

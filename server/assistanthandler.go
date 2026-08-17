@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -47,6 +48,11 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+
+		r.Put("/agents/{name}", h.SaveAgent)
+		r.Delete("/agents/{name}", h.DeleteAgent)
+		r.Put("/skills/{name}", h.SaveSkill)
+		r.Delete("/skills/{name}", h.DeleteSkill)
 
 		r.Get("/admin/stats", h.GetUsage)
 		r.Get("/admin/sessions", h.getAllSessions)
@@ -433,7 +439,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	model := chi.URLParam(r, "*")
+	model := decodePathValue(chi.URLParam(r, "*"))
 
 	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {
@@ -1537,4 +1543,160 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 	}).Info("Successfully cleared investigation_session_id from alert")
 
 	return nil
+}
+
+// @Summary      Save an Assistant Agent
+// @Description  Create or update a single agent definition. The server merges it into the stored set, so a stale client cannot revert other agents.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name     path  string             true  "Agent name"
+// @Param        request  body  model.StoredAgent  true  "Agent definition"
+// @Produce      json
+// @Success      200           "Agent saved"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/agents/{name} [put]
+func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
+	agent := &model.StoredAgent{}
+	if !h.decodeConfigRequest(w, r, agent) {
+		return
+	}
+
+	originalName := urlParamName(r)
+	if strings.TrimSpace(agent.Name) == "" {
+		agent.Name = originalName
+	}
+	h.respondConfigWrite(w, r, h.server.AssistantManager.SaveAgent(r.Context(), originalName, agent))
+}
+
+// @Summary      Delete an Assistant Agent
+// @Description  Remove an admin-created agent. System agents can only be disabled.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name  path  string  true  "Agent name"
+// @Produce      json
+// @Success      200           "Agent deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions, or the agent is system-provided"
+// @Failure      404           "Agent not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/agents/{name} [delete]
+func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(r.Context(), urlParamName(r)))
+}
+
+// @Summary      Save an Assistant Skill
+// @Description  Create or update a single skill definition, merged into the stored set by the server.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name     path  string             true  "Skill name"
+// @Param        request  body  model.StoredSkill  true  "Skill definition"
+// @Produce      json
+// @Success      200           "Skill saved"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/skills/{name} [put]
+func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
+	skill := &model.StoredSkill{}
+	if !h.decodeConfigRequest(w, r, skill) {
+		return
+	}
+
+	originalName := urlParamName(r)
+	if strings.TrimSpace(skill.Name) == "" {
+		skill.Name = originalName
+	}
+	h.respondConfigWrite(w, r, h.server.AssistantManager.SaveSkill(r.Context(), originalName, skill))
+}
+
+// @Summary      Delete an Assistant Skill
+// @Description  Remove an admin-created skill. System skills can only be disabled.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name  path  string  true  "Skill name"
+// @Produce      json
+// @Success      200           "Skill deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions, or the skill is system-provided"
+// @Failure      404           "Skill not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/skills/{name} [delete]
+func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(r.Context(), urlParamName(r)))
+}
+
+// decodePathValue undoes the percent-encoding a client applies to a path segment.
+// chi leaves the segment encoded for some values ("Hunter (copy)") while decoding
+// others ("My Agent"), so decode explicitly; a value that is not valid escaping is
+// used as-is.
+func decodePathValue(raw string) string {
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+
+	return raw
+}
+
+func urlParamName(r *http.Request) string {
+	return decodePathValue(chi.URLParam(r, "name"))
+}
+
+// checkConfigWriteAuthorized gates the agent/skill endpoints on the same
+// permission a direct config write needs.
+func (h *AssistantHandler) checkConfigWriteAuthorized(w http.ResponseWriter, r *http.Request) bool {
+	if err := h.server.CheckAuthorized(r.Context(), "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return false
+	}
+
+	return h.checkAssistantAvailable(r.Context(), w, r)
+}
+
+func (h *AssistantHandler) decodeConfigRequest(w http.ResponseWriter, r *http.Request, out any) bool {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return false
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
+		log.FromContext(r.Context()).WithError(err).Error("unable to decode agent configuration request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return false
+	}
+
+	return true
+}
+
+// respondConfigWrite maps the manager's errors onto status codes.
+func (h *AssistantHandler) respondConfigWrite(w http.ResponseWriter, r *http.Request, err error) {
+	if err == nil {
+		web.Respond(w, r, http.StatusOK, nil)
+		return
+	}
+
+	logger := log.FromContext(r.Context())
+	switch {
+	case strings.Contains(err.Error(), "ERROR_SYSTEM_AGENT_IMMUTABLE"):
+		web.Respond(w, r, http.StatusForbidden, err)
+	case strings.Contains(err.Error(), "ERROR_AGENT_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_NAME_CONFLICT"):
+		web.Respond(w, r, http.StatusConflict, err)
+	case strings.Contains(err.Error(), "NAME_REQUIRED"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	default:
+		logger.WithError(err).Error("unable to save assistant configuration")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
 }

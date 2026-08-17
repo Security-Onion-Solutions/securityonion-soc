@@ -29,6 +29,7 @@ import (
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -3471,4 +3472,206 @@ func TestRespondToolTurnError(t *testing.T) {
 			assert.Equal(t, tc.wantCode, w.Code)
 		})
 	}
+}
+
+// The handler maps the manager's errors by message; the assistant module owns the
+// real values, which the server package cannot import.
+var (
+	errSystemImmutableStub = errors.New("ERROR_SYSTEM_AGENT_IMMUTABLE")
+	errNotFoundStub        = errors.New("ERROR_AGENT_NOT_FOUND")
+)
+
+// agentConfigRouter wires the real routes so tests exercise chi's path handling.
+func agentConfigRouter(t *testing.T) (*chi.Mux, *mock.MockAssistantManager) {
+	t.Helper()
+
+	return agentConfigRouterAuthorized(t, true)
+}
+
+func agentConfigRouterAuthorized(t *testing.T, authorized bool) (*chi.Mux, *mock.MockAssistantManager) {
+	t.Helper()
+
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: authorized}}
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	manager := mock.NewMockAssistantManager(ctrl)
+	srv.AssistantManager = manager
+
+	r := chi.NewRouter()
+	RegisterAssistantRoutes(srv, r, "/assistant")
+
+	return r, manager
+}
+
+func agentConfigRequest(method, target string, body any) *http.Request {
+	var buf bytes.Buffer
+	if body != nil {
+		_ = json.NewEncoder(&buf).Encode(body)
+	}
+
+	req := httptest.NewRequest(method, target, &buf)
+	req.Header.Set("Content-Type", "application/json")
+
+	return req.WithContext(agentConfigContext(req.Context()))
+}
+
+// web.Respond reads the request start time and id from the context.
+func agentConfigContext(ctx context.Context) context.Context {
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "test-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	return context.WithValue(ctx, web.ContextKeyRequestId, "test-request")
+}
+
+func TestSaveAgentDecodesNameFromPath(t *testing.T) {
+	// chi hands back the raw segment for some of these and the decoded form for
+	// others, so the handler has to normalize it: "Hunter (copy)" is the name the
+	// Agent Studio's Duplicate button generates.
+	names := []string{"Hunter (copy)", "My Agent", "a+b", "café", "a/b", "50%"}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+
+			var gotOriginal string
+			var gotAgent *model.StoredAgent
+			manager.EXPECT().SaveAgent(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+					gotOriginal = originalName
+					gotAgent = agent
+					return nil
+				})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/agents/"+url.PathEscape(name), model.StoredAgent{Name: name}))
+
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, name, gotOriginal)
+			assert.Equal(t, name, gotAgent.Name)
+		})
+	}
+}
+
+func TestSaveAgentFallsBackToPathName(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var gotAgent *model.StoredAgent
+	manager.EXPECT().SaveAgent(gomock.Any(), "Hunter", gomock.Any()).DoAndReturn(
+		func(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+			gotAgent = agent
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/agents/Hunter", model.StoredAgent{}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hunter", gotAgent.Name, "a body without a name keeps the one in the path")
+}
+
+func TestDeleteAgentDecodesNameAndMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "deleted", err: nil, wantStatus: http.StatusOK},
+		{name: "system", err: errSystemImmutableStub, wantStatus: http.StatusForbidden},
+		{name: "missing", err: errNotFoundStub, wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().DeleteAgent(gomock.Any(), "My Agent").Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/agents/My%20Agent", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestSaveSkillDecodesNameFromPath(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	manager.EXPECT().SaveSkill(gomock.Any(), "Threat Hunting", gomock.Any()).Return(nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/skills/"+url.PathEscape("Threat Hunting"), model.StoredSkill{Name: "Threat Hunting"}))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGetBalanceDecodesSelectorFromPath(t *testing.T) {
+	// The picker sends encodeURIComponent(selector), so an agent or duplicated model
+	// named "test test123 (copy)" reached Health still percent-encoded and matched no
+	// adapter.
+	selectors := []string{"test test123 (copy)", "Model A", "google/gemini", "sonnet-4.5@SOAI"}
+
+	for _, selector := range selectors {
+		t.Run(selector, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+
+			var gotHealth, gotBalance string
+			manager.EXPECT().Health(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, m string) (*model.HealthResponse, error) {
+					gotHealth = m
+					return &model.HealthResponse{Status: "ok"}, nil
+				})
+			manager.EXPECT().Balance(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, m string) (*model.BalanceResponse, error) {
+					gotBalance = m
+					return &model.BalanceResponse{}, nil
+				})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/balance/"+url.PathEscape(selector), nil))
+
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, selector, gotHealth)
+			assert.Equal(t, selector, gotBalance)
+		})
+	}
+}
+
+// The mock manager has no EXPECT calls, so reaching it fails the test: a denied
+// request must not mutate configuration.
+func TestAgentConfigRoutesRequireConfigWrite(t *testing.T) {
+	cases := []struct {
+		method string
+		target string
+		body   any
+	}{
+		{http.MethodPut, "/assistant/agents/Hunter", model.StoredAgent{Name: "Hunter"}},
+		{http.MethodDelete, "/assistant/agents/Hunter", nil},
+		{http.MethodPut, "/assistant/skills/Hunting", model.StoredSkill{Name: "Hunting"}},
+		{http.MethodDelete, "/assistant/skills/Hunting", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.method+" "+c.target, func(t *testing.T) {
+			r, _ := agentConfigRouterAuthorized(t, false)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, c.body))
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Contains(t, w.Body.String(), "ERROR_PERMISSION_DENIED")
+		})
+	}
+}
+
+func TestSaveAgentRejectsBadBody(t *testing.T) {
+	r, _ := agentConfigRouter(t)
+
+	req := httptest.NewRequest(http.MethodPut, "/assistant/agents/Hunter", bytes.NewBufferString("{not json"))
+	req = req.WithContext(agentConfigContext(req.Context()))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

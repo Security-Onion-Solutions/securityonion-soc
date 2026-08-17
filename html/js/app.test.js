@@ -1601,3 +1601,43 @@ test('validator: matches factory', () => {
   expect(v('wrong')).toBe(_i18n.passwordMustMatch);
   expect(v('secret')).toBe(true);
 });
+
+test('updateAgenticParams replaces the cached assistant params with the pushed block', () => {
+  app.parameters = { assistant: { enabled: true, availableAgents: [{ name: 'Old' }] }, docsUrl: 'keep' };
+
+  app.updateAgenticParams({
+    enabled: true,
+    availableAgents: [{ name: 'New' }],
+    availableSkills: [{ name: 'hunt' }],
+    somethingAddedLater: 42,
+  });
+
+  const assistant = app.parameters.assistant;
+  expect(assistant.availableAgents).toEqual([{ name: 'New' }]);
+  expect(assistant.availableSkills).toEqual([{ name: 'hunt' }]);
+  expect(assistant.somethingAddedLater).toBe(42);
+  // Only the assistant block is replaced.
+  expect(app.parameters.docsUrl).toBe('keep');
+});
+
+test('updateAgenticParams ignores a push that arrives before parameters load', () => {
+  app.parameters = null;
+  expect(() => app.updateAgenticParams({ availableAgents: [] })).not.toThrow();
+
+  app.parameters = { assistant: { availableAgents: [{ name: 'Old' }] } };
+  app.updateAgenticParams(null);
+  expect(app.parameters.assistant.availableAgents).toEqual([{ name: 'Old' }]);
+});
+
+test('a server settings reload republishes the assistant params so open pages re-derive', () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.parameters = { assistant: { availableAgents: [{ name: 'Triage' }] } };
+
+  // What loadServerSettings does once it has refreshed the parameters.
+  app.publish('assistant:agentic', app.parameters.assistant);
+
+  expect(handler).toHaveBeenCalledWith(app.parameters.assistant);
+});

@@ -13,6 +13,10 @@ globalThis.MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 
 globalThis.AssistantSessions = (function() {
   return {
+    onAgenticUpdate() {
+      if (!this.agentic) return;
+      this.initAssistant((this.$root.parameters || {}).assistant || {});
+    },
     async initAssistant(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
@@ -25,8 +29,9 @@ globalThis.AssistantSessions = (function() {
       this.agentic = params["agentic"] || false;
       this.availableAdapters = params["availableAdapters"];
       if (this.agentic) {
-        // in agentic mode, use agent names rather than model names
-        this.availableAgents = params["availableAgents"] || [];
+        // in agentic mode, use agent names rather than model names. Disabled agents
+        // are published so the Agent Studio can re-enable them, but they cannot run.
+        this.availableAgents = (params["availableAgents"] || []).filter(a => a.enabled !== false);
         this.agentMapping = params["agentMapping"] || {};
         const allModels = params["availableModels"] || [];
         this.availableModels = this.availableAgents.map(a => {
