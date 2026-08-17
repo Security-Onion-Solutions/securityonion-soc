@@ -198,7 +198,7 @@
 															<span v-if="item.nonCriticalNode" id="node_connectionStatusNonCritical">({{i18n.nonCriticalNode}})</span>
 														</dd>
 
-														<template v-if="item.metricsEnabled && hasEventstoreHealth(item)">
+														<template v-if="item.metricsEnabled && hasEventstoreStatus(item)">
 															<dt class="filter label">{{ i18n.eventstoreStatus }}:</dt>
 															<dd id="node_eventstoreStatus" style="overflow: visible;" :class="areMetricsCurrent(item) ? 'filter value text-' + colorNodeStatus(item.eventstoreStatus) : 'filter value stale'">
 																{{ $root.localizeMessage(item.eventstoreStatus) }}

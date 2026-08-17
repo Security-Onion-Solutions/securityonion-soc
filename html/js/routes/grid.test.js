@@ -6,7 +6,7 @@
 
 require('../test_common.js');
 require('./grid.js');
-require('./grid_health.js');
+require('./grid_eventshealth.js');
 require('./grid_metrics.js');
 
 const comp = getComponent("grid");

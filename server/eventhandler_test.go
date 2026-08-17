@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getEventsHealth(srv *Server) *httptest.ResponseRecorder {
+func recordGetHealth(srv *Server) *httptest.ResponseRecorder {
 	h := &EventHandler{server: srv}
 
 	req := httptest.NewRequest("GET", "/events/health", nil)
@@ -57,7 +57,7 @@ func TestGetEventsHealthHandlerUnauthorized(t *testing.T) {
 	srv := NewFakeUnauthorizedServer()
 	srv.Eventstore = NewFakeEventstore()
 
-	w := getEventsHealth(srv)
+	w := recordGetHealth(srv)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
@@ -71,7 +71,7 @@ func TestGetEventsHealthHandlerOk(t *testing.T) {
 	}
 	srv.Eventstore = store
 
-	w := getEventsHealth(srv)
+	w := recordGetHealth(srv)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -98,7 +98,7 @@ func TestGetEventsHealthHandlerClientAborted(t *testing.T) {
 	store.EventsHealthErr = fmt.Errorf("transport: %w", context.Canceled)
 	srv.Eventstore = store
 
-	w := getEventsHealth(srv)
+	w := recordGetHealth(srv)
 
 	// Not an error: the client aborts health requests when the dialog closes
 	assert.NotEqual(t, http.StatusInternalServerError, w.Code)
@@ -111,7 +111,7 @@ func TestGetEventsHealthHandlerError(t *testing.T) {
 	store.EventsHealthErr = errors.New("no master")
 	srv.Eventstore = store
 
-	w := getEventsHealth(srv)
+	w := recordGetHealth(srv)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }

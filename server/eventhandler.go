@@ -39,9 +39,9 @@ func RegisterEventRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
-func (s *Server) eventstoreEnabled(next http.Handler) http.Handler {
+func (server *Server) eventstoreEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.Eventstore == nil {
+		if server.Eventstore == nil {
 			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Method not supported"))
 			return
 		}

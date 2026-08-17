@@ -7,12 +7,12 @@
 // the datastore's own prose. Inline entries interpolate that prose into the
 // explanation rather than showing it on a separate line.
 const FINDING_SUMMARY = {
-  no_valid_shard_copy: { key: 'eventsHealthVerdictNoValidShardCopy' },
-  disk_threshold:      { key: 'eventsHealthVerdictDiskThreshold' },
-  same_shard:          { key: 'eventsHealthVerdictSameShard' },
-  throttling:          { key: 'eventsHealthVerdictThrottling' },
-  unexplained:         { key: 'eventsHealthVerdictUnexplained', inline: true },
-  indices_readonly:    { key: 'eventsHealthDiskReadonly', inline: true },
+  no_valid_shard_copy: { key: 'eventsHealthConditionNoValidShardCopy' },
+  disk_threshold:      { key: 'eventsHealthConditionDiskThreshold' },
+  same_shard:          { key: 'eventsHealthConditionSameShard' },
+  throttling:          { key: 'eventsHealthConditionThrottling' },
+  unexplained:         { key: 'eventsHealthConditionUnexplained', inline: true },
+  indices_readonly:    { key: 'eventsHealthConditionIndicesReadonly', inline: true },
 };
 
 const FINDING_DISPLAY = {
@@ -224,8 +224,8 @@ if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
           lines.push(route.$root.localizeMessage('eventsHealthReportSampledShard', { value: route.eventsHealthShardGroupLabel(group) }));
           lines.push('  ' + route.i18n.eventsHealthReportShard + ': ' + group.sampleIndex + '[' + group.sampleShard + '] (' + (group.primary ? route.i18n.eventsHealthPrimary : route.i18n.eventsHealthReplica) + ')');
           lines.push('  ' + route.i18n.eventsHealthReportUnassignedReason + ': ' + group.reason + (group.since ? route.$root.localizeMessage('eventsHealthReportSince', { value: group.since }) : ''));
-          if (group.details) {
-            lines.push('  ' + route.i18n.eventsHealthReportDetails + ': ' + group.details);
+          if (group.failureDetails) {
+            lines.push('  ' + route.i18n.eventsHealthReportFailureDetails + ': ' + group.failureDetails);
           }
           if (group.canAllocate) {
             lines.push('  ' + route.i18n.eventsHealthReportCanAllocate + ': ' + group.canAllocate);

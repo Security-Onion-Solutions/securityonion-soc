@@ -152,7 +152,7 @@ func TestGetEventsHealthUnassignedShards(t *testing.T) {
 			assert.Equal(t, "so-logs", group.SampleIndex)
 			assert.Equal(t, int64(0), group.SampleShard)
 			assert.Equal(t, "2026-07-21T20:48:02.943Z", group.Since)
-			assert.Equal(t, "node_left [abc]", group.Details)
+			assert.Equal(t, "node_left [abc]", group.FailureDetails)
 			// Lost primary: allocation verdict digested, no deciders to report
 			assert.Equal(t, "no_valid_shard_copy", group.CanAllocate)
 			assert.Empty(t, group.Deciders)

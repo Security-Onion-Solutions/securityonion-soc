@@ -457,7 +457,7 @@ func buildUnassignedShards(ctx context.Context, store esHealthFetcher) (*model.U
 func digestExplanation(group *model.UnassignedShardGroup, explain string) {
 	group.CanAllocate = gjson.Get(explain, "can_allocate").String()
 	group.Since = gjson.Get(explain, "unassigned_info.at").String()
-	group.Details = gjson.Get(explain, "unassigned_info.details").String()
+	group.FailureDetails = gjson.Get(explain, "unassigned_info.details").String()
 
 	deciders := make([]model.AllocationDecider, 0)
 	indexByKey := make(map[string]int)

@@ -5,7 +5,7 @@
 
 require('../test_common.js');
 require('./grid.js');
-require('./grid_health.js');
+require('./grid_eventshealth.js');
 
 const comp = getComponent("grid");
 
@@ -257,18 +257,18 @@ test('formatEventsHealthFinding', () => {
 
   // Severity drives the icon and color; the condition drives the explanation
   expect(findings[0].scope).toBe('17 primary (CLUSTER_RECOVERED)');
-  expect(findings[0].summary).toBe(comp.i18n.eventsHealthVerdictNoValidShardCopy);
+  expect(findings[0].summary).toBe(comp.i18n.eventsHealthConditionNoValidShardCopy);
   expect(findings[0].detail).toBe('');
   expect(findings[0].color).toBe('error');
   expect(findings[0].icon).toBe('fa-triangle-exclamation');
 
   expect(findings[1].scope).toBe('6 replica (CLUSTER_RECOVERED)');
-  expect(findings[1].summary).toBe(comp.i18n.eventsHealthVerdictDiskThreshold);
+  expect(findings[1].summary).toBe(comp.i18n.eventsHealthConditionDiskThreshold);
   expect(findings[1].detail).toBe('disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
   expect(findings[1].nodes).toEqual(['sa-tshoot-jb']);
   expect(findings[1].color).toBe('warning');
 
-  expect(findings[2].summary).toBe(comp.i18n.eventsHealthVerdictSameShard);
+  expect(findings[2].summary).toBe(comp.i18n.eventsHealthConditionSameShard);
   expect(findings[2].color).toBe('info');
   expect(findings[2].icon).toBe('fa-circle-info');
 
@@ -331,7 +331,7 @@ test('buildEventsHealthReport', () => {
   expect(report).toContain('--- Unassigned Shards (_cat/shards, _cluster/allocation/explain) ---');
   expect(report).toContain('Total: 23 unassigned (17 primary, 6 replica)');
   // The curated verdicts are dialog-only; the report carries the full sampled-shard dumps
-  expect(report).not.toContain(comp.i18n.eventsHealthVerdictNoValidShardCopy);
+  expect(report).not.toContain(comp.i18n.eventsHealthConditionNoValidShardCopy);
   expect(report).toContain('Sampled shard for 17 primary (CLUSTER_RECOVERED):');
   expect(report).toContain('  Shard: so-logs[0] (primary)');
   expect(report).toContain('  Unassigned reason: CLUSTER_RECOVERED, since 2026-07-06T16:15:02.915Z');
@@ -349,7 +349,7 @@ test('buildEventsHealthReport', () => {
   // No raw JSON dumps in the report
   expect(report).not.toContain('{');
 
-  comp.eventsHealth.unassignedShards.groups[0].details = 'failed shard on node [abc]: shard failure';
+  comp.eventsHealth.unassignedShards.groups[0].failureDetails = 'failed shard on node [abc]: shard failure';
   expect(comp.buildEventsHealthReport()).toContain('  Failure details: failed shard on node [abc]: shard failure');
 
   // A group left unexplained by the cap is distinguished from one whose

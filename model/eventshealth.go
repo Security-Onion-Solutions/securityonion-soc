@@ -130,9 +130,9 @@ type UnassignedShardGroup struct {
 	Since        string `json:"since,omitempty" example:"2026-07-21T20:48:02.943Z"`
 
 	// Present when the sampled shard became unassigned due to an allocation failure.
-	Details     string              `json:"details,omitempty" example:"failed shard on node [abc]: shard failure, reason [corrupt file]"`
-	CanAllocate string              `json:"canAllocate,omitempty" example:"no"`
-	Deciders    []AllocationDecider `json:"deciders,omitempty"`
+	FailureDetails string              `json:"failureDetails,omitempty" example:"failed shard on node [abc]: shard failure, reason [corrupt file]"`
+	CanAllocate    string              `json:"canAllocate,omitempty" example:"no"`
+	Deciders       []AllocationDecider `json:"deciders,omitempty"`
 }
 
 // AllocationDecider is one allocation rule that blocked the sampled shard,
