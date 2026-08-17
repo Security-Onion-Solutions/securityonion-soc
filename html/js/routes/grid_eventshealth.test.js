@@ -133,15 +133,9 @@ test('loadEventsHealthError', async () => {
 });
 
 test('canShowEventsHealth', () => {
-  comp.$root.gridInfo = { '': { eventstoreEnabled: true }, 'subgrid1': { eventstoreEnabled: false } };
-
-  expect(comp.canShowEventsHealth({ gridId: '', role: 'so-manager' })).toBe(true);
+  expect(comp.canShowEventsHealth({ role: 'so-manager' })).toBe(true);
   // Heavy nodes run their own datastore, which grid-wide health does not describe
-  expect(comp.canShowEventsHealth({ gridId: '', role: 'so-heavynode' })).toBe(false);
-  // Each grid answers for itself; a subgrid without an eventstore module offers no link
-  expect(comp.canShowEventsHealth({ gridId: 'subgrid1', role: 'so-manager' })).toBe(false);
-  // Unknown grid: no info cached yet
-  expect(comp.canShowEventsHealth({ gridId: 'nope', role: 'so-manager' })).toBe(false);
+  expect(comp.canShowEventsHealth({ role: 'so-heavynode' })).toBe(false);
 });
 
 test('showHideEventsHealth', () => {

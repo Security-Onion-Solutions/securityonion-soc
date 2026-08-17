@@ -19,8 +19,6 @@ type Info struct {
 	Parameters *ClientParameters `json:"parameters"`
 	// The version of the Elasticsearch cluster
 	ElasticVersion string `json:"elasticVersion" example:"8.14.3"`
-	// Whether an event datastore module is loaded for this grid
-	EventstoreEnabled bool `json:"eventstoreEnabled" example:"true"`
 	// The authenticated API client ID
 	UserId string `json:"userId" example:"socl_my_so_api_client"`
 	// The timezones that are configured for this server.

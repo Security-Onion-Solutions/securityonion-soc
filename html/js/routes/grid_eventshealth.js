@@ -43,8 +43,7 @@ if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
   Object.assign(gridRouteForEventsHealth.component.methods, {
     canShowEventsHealth(node) {
       // A heavy node's own datastore is unreachable from the grid's eventstore connection
-      const info = this.$root.gridInfo[node.gridId];
-      return !!(info && info.eventstoreEnabled) && node.role != NODE_ROLE_HEAVYNODE;
+      return node.role != NODE_ROLE_HEAVYNODE;
     },
     showEventsHealth(node) {
       this.eventsHealthDialog = true;

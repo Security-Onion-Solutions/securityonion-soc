@@ -1,50 +1,13 @@
 package server
 
 import (
-	"context"
-	"encoding/json"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
-
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
-	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func getInfoResponse(srv *Server) *model.Info {
-	h := &InfoHandler{server: srv}
-
-	req := httptest.NewRequest("GET", "/info", nil)
-	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "user-id-1")
-	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, true)
-	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
-	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	h.getInfo(w, req)
-
-	info := &model.Info{}
-	json.Unmarshal(w.Body.Bytes(), info)
-	return info
-}
-
-// The client derives the events health link from this per-grid flag
-func TestInfoHandler_EventstoreEnabled(t *testing.T) {
-	licensing.Test("foo", 0, 0, "", "")
-
-	srv := NewFakeAuthorizedServer(nil)
-	srv.Eventstore = NewFakeEventstore()
-	assert.True(t, getInfoResponse(srv).EventstoreEnabled)
-
-	srv.Eventstore = nil
-	assert.False(t, getInfoResponse(srv).EventstoreEnabled)
-}
 
 func TestInfoHandler_getCustomReports(t *testing.T) {
 	tests := []struct {
