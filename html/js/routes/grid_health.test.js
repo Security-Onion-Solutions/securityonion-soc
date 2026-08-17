@@ -13,7 +13,7 @@ beforeEach(() => {
   resetPapi();
 });
 
-function buildEsHealth() {
+function buildEventsHealth() {
   return {
     status: 'red',
     // The server ranks indicators and their findings before responding
@@ -84,115 +84,115 @@ function buildEsHealth() {
   };
 }
 
-test('loadEsHealth', async () => {
-  const mock = mockPapi("get", { data: buildEsHealth() });
-  comp.esHealthExpanded = { disk: true };
-  await comp.loadEsHealth('subgrid1');
+test('loadEventsHealth', async () => {
+  const mock = mockPapi("get", { data: buildEventsHealth() });
+  comp.eventsHealthExpanded = { disk: true };
+  await comp.loadEventsHealth('subgrid1');
   expect(mock).toHaveBeenCalledWith('events/health', expect.objectContaining({ params: { gridId: 'subgrid1' } }));
-  expect(comp.esHealth.status).toBe('red');
-  expect(comp.esHealthExpanded).toEqual({});
-  expect(comp.esHealthLoading).toBe(false);
-  expect(comp.esHealthIssues().map(i => i.id)).toEqual(['shards_availability', 'disk']);
+  expect(comp.eventsHealth.status).toBe('red');
+  expect(comp.eventsHealthExpanded).toEqual({});
+  expect(comp.eventsHealthLoading).toBe(false);
+  expect(comp.eventsHealthIssueIndicators().map(i => i.id)).toEqual(['shards_availability', 'disk']);
 });
 
-test('loadEsHealthSupersededRequestAborted', async () => {
+test('loadEventsHealthSupersededRequestAborted', async () => {
   let rejectSlow;
   const slow = new Promise(function(resolve, reject) { rejectSlow = reject; });
   const mock = mockPapi("get", slow);
-  mock.mockReturnValueOnce({ data: buildEsHealth() });
+  mock.mockReturnValueOnce({ data: buildEventsHealth() });
 
-  const slowLoad = comp.loadEsHealth();
+  const slowLoad = comp.loadEventsHealth();
   const slowSignal = mock.mock.calls[0][1].signal;
-  const fastLoad = comp.loadEsHealth();
+  const fastLoad = comp.loadEventsHealth();
 
   // The newer request aborts the superseded one (cancelling its backend work)
   expect(slowSignal.aborted).toBe(true);
   await fastLoad;
-  expect(comp.esHealth.status).toBe('red');
-  expect(comp.esHealthLoading).toBe(false);
+  expect(comp.eventsHealth.status).toBe('red');
+  expect(comp.eventsHealthLoading).toBe(false);
 
   // Axios rejects aborted requests; the late rejection must not clear the
   // newer request's data or show an error
   const showErrorMock = mockShowError();
   rejectSlow({ name: 'CanceledError', message: 'canceled' });
   await slowLoad;
-  expect(comp.esHealth.status).toBe('red');
-  expect(comp.esHealthLoading).toBe(false);
+  expect(comp.eventsHealth.status).toBe('red');
+  expect(comp.eventsHealthLoading).toBe(false);
   expect(showErrorMock).not.toHaveBeenCalled();
 });
 
-test('loadEsHealthError', async () => {
+test('loadEventsHealthError', async () => {
   mockPapi("get", null, new Error("something bad"));
   const showErrorMock = mockShowError();
-  comp.esHealth = buildEsHealth();
-  await comp.loadEsHealth();
-  expect(comp.esHealth).toBe(null);
-  expect(comp.esHealthIndicators()).toEqual([]);
-  expect(comp.esHealthLoading).toBe(false);
+  comp.eventsHealth = buildEventsHealth();
+  await comp.loadEventsHealth();
+  expect(comp.eventsHealth).toBe(null);
+  expect(comp.digestEventsHealthIndicators()).toEqual([]);
+  expect(comp.eventsHealthLoading).toBe(false);
   // The dialog renders its own unavailable message; no global error popup
   expect(showErrorMock).not.toHaveBeenCalled();
 });
 
-test('canShowEsHealth', () => {
-  expect(comp.canShowEsHealth({ eventsHealthAvailable: true })).toBe(true);
-  expect(comp.canShowEsHealth({ eventsHealthAvailable: false })).toBe(false);
+test('canShowEventsHealth', () => {
+  expect(comp.canShowEventsHealth({ eventsHealthAvailable: true })).toBe(true);
+  expect(comp.canShowEventsHealth({ eventsHealthAvailable: false })).toBe(false);
 });
 
-test('showHideEsHealth', () => {
-  const loadSpy = jest.spyOn(comp, 'loadEsHealth').mockImplementation(() => {});
-  comp.showEsHealth({ id: 'mgr', gridId: 'subgrid1' });
-  expect(comp.esHealthDialog).toBe(true);
+test('showHideEventsHealth', () => {
+  const loadSpy = jest.spyOn(comp, 'loadEventsHealth').mockImplementation(() => {});
+  comp.showEventsHealth({ id: 'mgr', gridId: 'subgrid1' });
+  expect(comp.eventsHealthDialog).toBe(true);
   expect(loadSpy).toHaveBeenCalledWith('subgrid1');
 
-  comp.hideEsHealth();
-  expect(comp.esHealthDialog).toBe(false);
+  comp.hideEventsHealth();
+  expect(comp.eventsHealthDialog).toBe(false);
   loadSpy.mockRestore();
 });
 
-test('esHealthDialogCloseAborts', () => {
+test('eventsHealthDialogCloseAborts', () => {
   // Every close path (Close button, ESC, outside-click) funnels through the
   // v-model watcher, which aborts any in-flight request
   const abort = { abort: jest.fn() };
-  comp.esHealthAbort = abort;
-  comp.onEsHealthDialogChanged(false);
+  comp.eventsHealthAbort = abort;
+  comp.onEventsHealthDialogChanged(false);
   expect(abort.abort).toHaveBeenCalled();
-  expect(comp.esHealthAbort).toBe(null);
+  expect(comp.eventsHealthAbort).toBe(null);
 
-  // Opening must not abort the load that showEsHealth just started
+  // Opening must not abort the load that showEventsHealth just started
   const abort2 = { abort: jest.fn() };
-  comp.esHealthAbort = abort2;
-  comp.onEsHealthDialogChanged(true);
+  comp.eventsHealthAbort = abort2;
+  comp.onEventsHealthDialogChanged(true);
   expect(abort2.abort).not.toHaveBeenCalled();
-  comp.esHealthAbort = null;
+  comp.eventsHealthAbort = null;
 });
 
-test('colorEsHealthStatus', () => {
-  expect(comp.colorEsHealthStatus('green')).toBe('success');
-  expect(comp.colorEsHealthStatus('yellow')).toBe('warning');
-  expect(comp.colorEsHealthStatus('red')).toBe('error');
-  expect(comp.colorEsHealthStatus('unknown')).toBe('secondary');
+test('colorEventsHealthStatus', () => {
+  expect(comp.colorEventsHealthStatus('green')).toBe('success');
+  expect(comp.colorEventsHealthStatus('yellow')).toBe('warning');
+  expect(comp.colorEventsHealthStatus('red')).toBe('error');
+  expect(comp.colorEventsHealthStatus('unknown')).toBe('secondary');
 });
 
-test('iconEsHealthStatus', () => {
-  expect(comp.iconEsHealthStatus('green')).toBe('fa-circle-check');
-  expect(comp.iconEsHealthStatus('yellow')).toBe('fa-circle-exclamation');
-  expect(comp.iconEsHealthStatus('red')).toBe('fa-triangle-exclamation');
-  expect(comp.iconEsHealthStatus('unknown')).toBe('fa-circle-question');
+test('iconEventsHealthStatus', () => {
+  expect(comp.iconEventsHealthStatus('green')).toBe('fa-circle-check');
+  expect(comp.iconEventsHealthStatus('yellow')).toBe('fa-circle-exclamation');
+  expect(comp.iconEventsHealthStatus('red')).toBe('fa-triangle-exclamation');
+  expect(comp.iconEventsHealthStatus('unknown')).toBe('fa-circle-question');
 });
 
-test('formatEsIndicatorName', () => {
-  expect(comp.formatEsIndicatorName('shards_availability')).toBe('Shards availability');
-  expect(comp.formatEsIndicatorName('disk')).toBe('Disk');
-  expect(comp.formatEsIndicatorName('ilm')).toBe('ILM');
-  expect(comp.formatEsIndicatorName('slm')).toBe('SLM');
+test('formatEventsHealthIndicatorName', () => {
+  expect(comp.formatEventsHealthIndicatorName('shards_availability')).toBe('Shards availability');
+  expect(comp.formatEventsHealthIndicatorName('disk')).toBe('Disk');
+  expect(comp.formatEventsHealthIndicatorName('ilm')).toBe('ILM');
+  expect(comp.formatEventsHealthIndicatorName('slm')).toBe('SLM');
 });
 
-test('esHealthIndicators', () => {
-  comp.esHealth = null;
-  expect(comp.esHealthIndicators()).toEqual([]);
+test('digestEventsHealthIndicators', () => {
+  comp.eventsHealth = null;
+  expect(comp.digestEventsHealthIndicators()).toEqual([]);
 
-  comp.esHealth = buildEsHealth();
-  const indicators = comp.esHealthIndicators();
+  comp.eventsHealth = buildEventsHealth();
+  const indicators = comp.digestEventsHealthIndicators();
   expect(indicators.length).toBe(3);
 
   // Server-ranked order is preserved: red, yellow, green
@@ -210,65 +210,65 @@ test('esHealthIndicators', () => {
   expect(indicators[2].id).toBe('master_is_stable');
 });
 
-test('esHealthIssuesAndHealthy', () => {
-  comp.esHealth = null;
-  expect(comp.esHealthIssues()).toEqual([]);
-  expect(comp.esHealthHealthy()).toEqual([]);
+test('eventsHealthIssueAndHealthyIndicators', () => {
+  comp.eventsHealth = null;
+  expect(comp.eventsHealthIssueIndicators()).toEqual([]);
+  expect(comp.eventsHealthHealthyIndicators()).toEqual([]);
 
-  comp.esHealth = buildEsHealth();
-  expect(comp.esHealthIssues().map(i => i.id)).toEqual(['shards_availability', 'disk']);
-  expect(comp.esHealthHealthy().map(i => i.id)).toEqual(['master_is_stable']);
+  comp.eventsHealth = buildEventsHealth();
+  expect(comp.eventsHealthIssueIndicators().map(i => i.id)).toEqual(['shards_availability', 'disk']);
+  expect(comp.eventsHealthHealthyIndicators().map(i => i.id)).toEqual(['master_is_stable']);
 });
 
-test('toggleEsHealthDetails', () => {
-  comp.esHealthExpanded = { disk: true };
-  comp.toggleEsHealthDetails('shards_availability');
-  expect(comp.esHealthExpanded.shards_availability).toBe(true);
-  comp.toggleEsHealthDetails('shards_availability');
-  expect(comp.esHealthExpanded.shards_availability).toBe(false);
-  expect(comp.esHealthExpanded.disk).toBe(true);
+test('toggleEventsHealthDetails', () => {
+  comp.eventsHealthExpanded = { disk: true };
+  comp.toggleEventsHealthDetails('shards_availability');
+  expect(comp.eventsHealthExpanded.shards_availability).toBe(true);
+  comp.toggleEventsHealthDetails('shards_availability');
+  expect(comp.eventsHealthExpanded.shards_availability).toBe(false);
+  expect(comp.eventsHealthExpanded.disk).toBe(true);
 });
 
-test('hasEsHealthDetails', () => {
-  comp.esHealth = buildEsHealth();
+test('hasEventsHealthDetails', () => {
+  comp.eventsHealth = buildEventsHealth();
   const byId = {};
-  comp.esHealthIndicators().forEach(i => byId[i.id] = i);
+  comp.digestEventsHealthIndicators().forEach(i => byId[i.id] = i);
 
   // Findings and causes
-  expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(true);
+  expect(comp.hasEventsHealthDetails(byId.shards_availability)).toBe(true);
   // Findings only
-  expect(comp.hasEsHealthDetails(byId.disk)).toBe(true);
+  expect(comp.hasEventsHealthDetails(byId.disk)).toBe(true);
   // No details of any kind
-  expect(comp.hasEsHealthDetails(byId.master_is_stable)).toBe(false);
+  expect(comp.hasEventsHealthDetails(byId.master_is_stable)).toBe(false);
 
   // Causes alone remain details
   byId.shards_availability.findings = [];
-  expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(true);
+  expect(comp.hasEventsHealthDetails(byId.shards_availability)).toBe(true);
   byId.shards_availability.causes = [];
-  expect(comp.hasEsHealthDetails(byId.shards_availability)).toBe(false);
+  expect(comp.hasEventsHealthDetails(byId.shards_availability)).toBe(false);
 });
 
-test('formatEsFinding', () => {
-  comp.esHealth = buildEsHealth();
+test('formatEventsHealthFinding', () => {
+  comp.eventsHealth = buildEventsHealth();
   const byId = {};
-  comp.esHealthIndicators().forEach(i => byId[i.id] = i);
+  comp.digestEventsHealthIndicators().forEach(i => byId[i.id] = i);
   const findings = byId.shards_availability.findings;
   expect(findings.length).toBe(3);
 
   // Severity drives the icon and color; the condition drives the explanation
   expect(findings[0].scope).toBe('17 primary (CLUSTER_RECOVERED)');
-  expect(findings[0].summary).toBe(comp.i18n.esHealthVerdictNoValidShardCopy);
+  expect(findings[0].summary).toBe(comp.i18n.eventsHealthVerdictNoValidShardCopy);
   expect(findings[0].detail).toBe('');
   expect(findings[0].color).toBe('error');
   expect(findings[0].icon).toBe('fa-triangle-exclamation');
 
   expect(findings[1].scope).toBe('6 replica (CLUSTER_RECOVERED)');
-  expect(findings[1].summary).toBe(comp.i18n.esHealthVerdictDiskThreshold);
+  expect(findings[1].summary).toBe(comp.i18n.eventsHealthVerdictDiskThreshold);
   expect(findings[1].detail).toBe('disk_threshold: the node is above the low watermark cluster setting [cluster.routing.allocation.disk.watermark.low=80%]');
   expect(findings[1].nodes).toEqual(['sa-tshoot-jb']);
   expect(findings[1].color).toBe('warning');
 
-  expect(findings[2].summary).toBe(comp.i18n.esHealthVerdictSameShard);
+  expect(findings[2].summary).toBe(comp.i18n.eventsHealthVerdictSameShard);
   expect(findings[2].color).toBe('info');
   expect(findings[2].icon).toBe('fa-circle-info');
 
@@ -277,7 +277,7 @@ test('formatEsFinding', () => {
   expect(byId.disk.findings[0].scope).toBe('');
 
   // Unknown conditions surface the datastore's explanation verbatim
-  const unknown = comp.formatEsFinding({
+  const unknown = comp.formatEventsHealthFinding({
     severity: 'warning', condition: 'awareness',
     detail: 'too many copies of the shard allocated to nodes with attribute [zone]',
   });
@@ -286,32 +286,32 @@ test('formatEsFinding', () => {
   expect(unknown.color).toBe('warning');
 
   // Absent detail and unrecognized severity degrade gracefully
-  const bare = comp.formatEsFinding({ severity: 'catastrophic', condition: 'awareness' });
+  const bare = comp.formatEventsHealthFinding({ severity: 'catastrophic', condition: 'awareness' });
   expect(bare.summary).toBe('awareness');
   expect(bare.icon).toBe('fa-circle-exclamation');
   expect(bare.color).toBe('warning');
 
   // A group with a transient outcome interpolates it rather than repeating it
-  const unexplained = comp.formatEsFinding({ severity: 'info', condition: 'unexplained', detail: 'throttled' });
+  const unexplained = comp.formatEventsHealthFinding({ severity: 'info', condition: 'unexplained', detail: 'throttled' });
   expect(unexplained.summary).toBe('Elasticsearch reports no blocking deciders for this group; allocation outcome: throttled.');
   expect(unexplained.detail).toBe('');
   expect(unexplained.color).toBe('info');
 });
 
-test('formatEsReportList', () => {
-  expect(comp.formatEsReportList('Affected indices', ['a', 'b'])).toBe('Affected indices (2): a, b');
+test('formatEventsHealthReportList', () => {
+  expect(comp.formatEventsHealthReportList('Affected indices', ['a', 'b'])).toBe('Affected indices (2): a, b');
   const many = Array.from({ length: 14 }, (x, i) => 'idx-' + i);
-  expect(comp.formatEsReportList('Affected indices', many))
+  expect(comp.formatEventsHealthReportList('Affected indices', many))
       .toBe('Affected indices (14): idx-0, idx-1, idx-2, idx-3, idx-4, idx-5, idx-6, idx-7, idx-8, idx-9, ... (+4 more)');
 });
 
-test('buildEsHealthReport', () => {
-  comp.esHealth = null;
-  expect(comp.buildEsHealthReport()).toBe('');
+test('buildEventsHealthReport', () => {
+  comp.eventsHealth = null;
+  expect(comp.buildEventsHealthReport()).toBe('');
 
-  comp.esHealth = buildEsHealth();
+  comp.eventsHealth = buildEventsHealth();
   comp.$root.version = '2.4.999';
-  const report = comp.buildEsHealthReport();
+  const report = comp.buildEventsHealthReport();
   expect(report).toContain('ELASTICSEARCH HEALTH REPORT');
   expect(report).toContain('Security Onion: 2.4.999');
   expect(report).toContain('Overall status: red');
@@ -331,7 +331,7 @@ test('buildEsHealthReport', () => {
   expect(report).toContain('--- Unassigned Shards (_cat/shards, _cluster/allocation/explain) ---');
   expect(report).toContain('Total: 23 unassigned (17 primary, 6 replica)');
   // The curated verdicts are dialog-only; the report carries the full sampled-shard dumps
-  expect(report).not.toContain(comp.i18n.esHealthVerdictNoValidShardCopy);
+  expect(report).not.toContain(comp.i18n.eventsHealthVerdictNoValidShardCopy);
   expect(report).toContain('Sampled shard for 17 primary (CLUSTER_RECOVERED):');
   expect(report).toContain('  Shard: so-logs[0] (primary)');
   expect(report).toContain('  Unassigned reason: CLUSTER_RECOVERED, since 2026-07-06T16:15:02.915Z');
@@ -349,22 +349,22 @@ test('buildEsHealthReport', () => {
   // No raw JSON dumps in the report
   expect(report).not.toContain('{');
 
-  comp.esHealth.unassignedShards.groups[0].details = 'failed shard on node [abc]: shard failure';
-  expect(comp.buildEsHealthReport()).toContain('  Failure details: failed shard on node [abc]: shard failure');
+  comp.eventsHealth.unassignedShards.groups[0].details = 'failed shard on node [abc]: shard failure';
+  expect(comp.buildEventsHealthReport()).toContain('  Failure details: failed shard on node [abc]: shard failure');
 
   // A group left unexplained by the cap is distinguished from one whose
   // explain call failed
-  comp.esHealth.unassignedShards.groups[1].sampleStatus = 'capped';
-  expect(comp.buildEsHealthReport()).toContain('No allocation explanation sampled for 6 replica (CLUSTER_RECOVERED)');
-  comp.esHealth.unassignedShards.groups[1].sampleStatus = 'failed';
-  expect(comp.buildEsHealthReport()).toContain('Allocation explanation could not be retrieved for 6 replica (CLUSTER_RECOVERED)');
+  comp.eventsHealth.unassignedShards.groups[1].sampleStatus = 'capped';
+  expect(comp.buildEventsHealthReport()).toContain('No allocation explanation sampled for 6 replica (CLUSTER_RECOVERED)');
+  comp.eventsHealth.unassignedShards.groups[1].sampleStatus = 'failed';
+  expect(comp.buildEventsHealthReport()).toContain('Allocation explanation could not be retrieved for 6 replica (CLUSTER_RECOVERED)');
 
   // Failed collections omit their section and are disclosed with their reason
-  delete comp.esHealth.unassignedShards;
-  delete comp.esHealth.settings;
-  delete comp.esHealth.nodes;
-  comp.esHealth.errors = { nodes: 'connection refused', settings: 'denied', unassignedShards: 'timeout' };
-  const minimalReport = comp.buildEsHealthReport();
+  delete comp.eventsHealth.unassignedShards;
+  delete comp.eventsHealth.settings;
+  delete comp.eventsHealth.nodes;
+  comp.eventsHealth.errors = { nodes: 'connection refused', settings: 'denied', unassignedShards: 'timeout' };
+  const minimalReport = comp.buildEventsHealthReport();
   expect(minimalReport).toContain('--- Indicators (_health_report) ---');
   expect(minimalReport).not.toContain('_cat/shards');
   expect(minimalReport).not.toContain('_cluster/settings');
@@ -374,11 +374,11 @@ test('buildEsHealthReport', () => {
   expect(minimalReport).toContain('Collection failed: unassignedShards: timeout');
 });
 
-test('copyEsHealthReport', () => {
-  comp.esHealth = buildEsHealth();
+test('copyEventsHealthReport', () => {
+  comp.eventsHealth = buildEventsHealth();
   comp.$root.copyToClipboard = jest.fn();
   comp.$root.showTip = jest.fn();
-  comp.copyEsHealthReport();
-  expect(comp.$root.copyToClipboard).toHaveBeenCalledWith(comp.buildEsHealthReport());
-  expect(comp.$root.showTip).toHaveBeenCalledWith(comp.i18n.esHealthCopied);
+  comp.copyEventsHealthReport();
+  expect(comp.$root.copyToClipboard).toHaveBeenCalledWith(comp.buildEventsHealthReport());
+  expect(comp.$root.showTip).toHaveBeenCalledWith(comp.i18n.eventsHealthCopied);
 });

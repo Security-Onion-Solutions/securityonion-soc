@@ -7,12 +7,12 @@
 // the datastore's own prose. Inline entries interpolate that prose into the
 // explanation rather than showing it on a separate line.
 const FINDING_SUMMARY = {
-  no_valid_shard_copy: { key: 'esHealthVerdictNoValidShardCopy' },
-  disk_threshold:      { key: 'esHealthVerdictDiskThreshold' },
-  same_shard:          { key: 'esHealthVerdictSameShard' },
-  throttling:          { key: 'esHealthVerdictThrottling' },
-  unexplained:         { key: 'esHealthVerdictUnexplained', inline: true },
-  indices_readonly:    { key: 'esHealthDiskReadonly', inline: true },
+  no_valid_shard_copy: { key: 'eventsHealthVerdictNoValidShardCopy' },
+  disk_threshold:      { key: 'eventsHealthVerdictDiskThreshold' },
+  same_shard:          { key: 'eventsHealthVerdictSameShard' },
+  throttling:          { key: 'eventsHealthVerdictThrottling' },
+  unexplained:         { key: 'eventsHealthVerdictUnexplained', inline: true },
+  indices_readonly:    { key: 'eventsHealthDiskReadonly', inline: true },
 };
 
 const FINDING_DISPLAY = {
@@ -28,100 +28,97 @@ const STATUS_DISPLAY = {
   unknown: { icon: 'fa-circle-question', color: 'secondary' },
 };
 
-const gridRouteForEsHealth = routes.find(r => r.name === 'grid');
-if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
-  gridRouteForEsHealth.component.computed = gridRouteForEsHealth.component.computed || {};
-  Object.assign(gridRouteForEsHealth.component.computed, {
-    esHealthIndicators() {
-      return this.digestEsIndicators();
+const gridRouteForEventsHealth = routes.find(r => r.name === 'grid');
+if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
+  gridRouteForEventsHealth.component.computed = gridRouteForEventsHealth.component.computed || {};
+  Object.assign(gridRouteForEventsHealth.component.computed, {
+    eventsHealthIssueIndicators() {
+      return this.digestEventsHealthIndicators().filter(function(indicator) { return indicator.status != 'green'; });
     },
-    esHealthIssues() {
-      return this.digestEsIndicators().filter(function(indicator) { return indicator.status != 'green'; });
-    },
-    esHealthHealthy() {
-      return this.digestEsIndicators().filter(function(indicator) { return indicator.status == 'green'; });
+    eventsHealthHealthyIndicators() {
+      return this.digestEventsHealthIndicators().filter(function(indicator) { return indicator.status == 'green'; });
     },
   });
-  Object.assign(gridRouteForEsHealth.component.methods, {
-    canShowEsHealth(node) {
+  Object.assign(gridRouteForEventsHealth.component.methods, {
+    canShowEventsHealth(node) {
       return node.eventsHealthAvailable;
     },
-    showEsHealth(node) {
-      this.esHealthDialog = true;
-      this.loadEsHealth(node.gridId);
+    showEventsHealth(node) {
+      this.eventsHealthDialog = true;
+      this.loadEventsHealth(node.gridId);
     },
-    hideEsHealth() {
-      this.esHealthDialog = false;
+    hideEventsHealth() {
+      this.eventsHealthDialog = false;
     },
-    abortEsHealth() {
-      if (this.esHealthAbort) {
-        this.esHealthAbort.abort();
-        this.esHealthAbort = null;
+    abortEventsHealth() {
+      if (this.eventsHealthAbort) {
+        this.eventsHealthAbort.abort();
+        this.eventsHealthAbort = null;
       }
     },
-    onEsHealthDialogChanged(open) {
+    onEventsHealthDialogChanged(open) {
       // Every close path (Close button, ESC, outside-click) lands here via v-model
-      if (!open) this.abortEsHealth();
+      if (!open) this.abortEventsHealth();
     },
-    async loadEsHealth(gridId) {
+    async loadEventsHealth(gridId) {
       // Aborting a superseded request also cancels its ES diagnostic calls server-side
-      if (this.esHealthAbort) this.esHealthAbort.abort();
+      if (this.eventsHealthAbort) this.eventsHealthAbort.abort();
       const abort = new AbortController();
-      this.esHealthAbort = abort;
-      this.esHealthLoading = true;
-      this.esHealth = null;
-      this.esHealthExpanded = {};
+      this.eventsHealthAbort = abort;
+      this.eventsHealthLoading = true;
+      this.eventsHealth = null;
+      this.eventsHealthExpanded = {};
       try {
         // Pin to the clicked node's grid; the papi interceptor would otherwise inject the globally selected grid
         const response = await this.$root.papi.get('events/health', { params: { gridId: gridId }, signal: abort.signal });
-        if (this.esHealthAbort != abort) return;
-        this.esHealth = response.data;
+        if (this.eventsHealthAbort != abort) return;
+        this.eventsHealth = response.data;
       } catch (error) {
         // No global error popup: the dialog shows its own unavailable message
       } finally {
         // A superseded request leaves the indicator to the request that replaced it
-        if (this.esHealthAbort == abort) {
-          this.esHealthAbort = null;
-          this.esHealthLoading = false;
+        if (this.eventsHealthAbort == abort) {
+          this.eventsHealthAbort = null;
+          this.eventsHealthLoading = false;
         }
       }
     },
-    colorEsHealthStatus(status) {
+    colorEventsHealthStatus(status) {
       return (STATUS_DISPLAY[status] || STATUS_DISPLAY.unknown).color;
     },
-    iconEsHealthStatus(status) {
+    iconEventsHealthStatus(status) {
       return (STATUS_DISPLAY[status] || STATUS_DISPLAY.unknown).icon;
     },
-    formatEsIndicatorName(id) {
+    formatEventsHealthIndicatorName(id) {
       const cased = this.$root.correctCasing(id);
       if (cased != id) return cased;
       const name = id.replace(/_/g, ' ');
       return name.charAt(0).toUpperCase() + name.slice(1);
     },
     // Indicators and their findings arrive ranked by the server
-    digestEsIndicators() {
-      if (!this.esHealth || !this.esHealth.indicators) return [];
+    digestEventsHealthIndicators() {
+      if (!this.eventsHealth || !this.eventsHealth.indicators) return [];
       const route = this;
-      return this.esHealth.indicators.map(function(indicator) {
+      return this.eventsHealth.indicators.map(function(indicator) {
         return {
           id: indicator.id,
-          name: route.formatEsIndicatorName(indicator.id),
+          name: route.formatEventsHealthIndicatorName(indicator.id),
           status: indicator.status,
           symptom: indicator.symptom,
           causes: indicator.causes || [],
           findings: (indicator.findings || []).map(function(finding) {
-            return route.formatEsFinding(finding);
+            return route.formatEventsHealthFinding(finding);
           }),
         };
       });
     },
-    formatEsFinding(finding) {
+    formatEventsHealthFinding(finding) {
       const known = FINDING_SUMMARY[finding.condition];
       const display = FINDING_DISPLAY[finding.severity] || FINDING_DISPLAY.warning;
       return {
         icon: display.icon,
         color: display.color,
-        scope: finding.scope ? this.esShardGroupLabel(finding.scope) : '',
+        scope: finding.scope ? this.eventsHealthShardGroupLabel(finding.scope) : '',
         summary: known
             ? this.$root.localizeMessage(known.key, { value: finding.detail, count: finding.count })
             : finding.condition + (finding.detail ? ': ' + finding.detail : ''),
@@ -129,45 +126,45 @@ if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
         nodes: finding.nodes || [],
       };
     },
-    toggleEsHealthDetails(id) {
-      this.esHealthExpanded[id] = !this.esHealthExpanded[id];
+    toggleEventsHealthDetails(id) {
+      this.eventsHealthExpanded[id] = !this.eventsHealthExpanded[id];
     },
-    hasEsHealthDetails(indicator) {
+    hasEventsHealthDetails(indicator) {
       return indicator.causes.length > 0 || indicator.findings.length > 0;
     },
-    esShardGroupLabel(group) {
-      return group.count + ' ' + (group.primary ? this.i18n.esHealthPrimary : this.i18n.esHealthReplica) + ' (' + group.reason + ')';
+    eventsHealthShardGroupLabel(group) {
+      return group.count + ' ' + (group.primary ? this.i18n.eventsHealthPrimary : this.i18n.eventsHealthReplica) + ' (' + group.reason + ')';
     },
-    formatEsReportList(label, items) {
+    formatEventsHealthReportList(label, items) {
       const max = 10;
       var display = items.slice(0, max).join(', ');
       if (items.length > max) {
-        display += this.$root.localizeMessage('esHealthMoreItems', { count: items.length - max });
+        display += this.$root.localizeMessage('eventsHealthMoreItems', { count: items.length - max });
       }
       return label + ' (' + items.length + '): ' + display;
     },
-    buildEsHealthReport() {
-      if (!this.esHealth) return '';
+    buildEventsHealthReport() {
+      if (!this.eventsHealth) return '';
       const route = this;
       const lines = [];
 
-      lines.push(this.i18n.esHealthReportTitle);
-      lines.push(this.i18n.esHealthReportGenerated + ': ' + moment().format());
+      lines.push(this.i18n.eventsHealthReportTitle);
+      lines.push(this.i18n.eventsHealthReportGenerated + ': ' + moment().format());
       if (this.$root.version) {
         lines.push(this.i18n.product + ': ' + this.$root.version);
       }
-      lines.push(this.i18n.esHealthReportStatus + ': ' + this.esHealth.status);
-      const errors = this.esHealth.errors || {};
+      lines.push(this.i18n.eventsHealthReportStatus + ': ' + this.eventsHealth.status);
+      const errors = this.eventsHealth.errors || {};
       Object.keys(errors).sort().forEach(function(section) {
-        lines.push(route.$root.localizeMessage('esHealthReportUnavailable', { value: section }) + ': ' + errors[section]);
+        lines.push(route.$root.localizeMessage('eventsHealthReportUnavailable', { value: section }) + ': ' + errors[section]);
       });
 
-      const nodes = this.esHealth.nodes;
+      const nodes = this.eventsHealth.nodes;
       if (nodes && nodes.length) {
         // Unavailable stats are empty strings
         const stat = function(value) { return value ? value : '-'; };
         lines.push('');
-        lines.push(this.i18n.esHealthReportSectionNodes);
+        lines.push(this.i18n.eventsHealthReportSectionNodes);
         nodes.forEach(function(node) {
           lines.push('  * ' + stat(node.name) + ' (' + stat(node.ip) + ') roles=' + stat(node.roles) + ' master=' + stat(node.master) +
               ' version=' + stat(node.version) + ' heap=' + stat(node.heapPercent) + '% ram=' + stat(node.ramPercent) + '%' +
@@ -176,14 +173,14 @@ if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
         });
       }
 
-      const settings = this.esHealth.settings;
+      const settings = this.eventsHealth.settings;
       if (settings) {
         lines.push('');
-        lines.push(this.i18n.esHealthReportSectionSettings);
+        lines.push(this.i18n.eventsHealthReportSectionSettings);
         ['persistent', 'transient'].forEach(function(scope) {
           const keys = Object.keys(settings[scope] || {});
           if (!keys.length) {
-            lines.push(scope + ': ' + route.i18n.esHealthReportNone);
+            lines.push(scope + ': ' + route.i18n.eventsHealthReportNone);
           } else {
             lines.push(scope + ':');
             keys.sort().forEach(function(key) {
@@ -194,8 +191,8 @@ if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
       }
 
       lines.push('');
-      lines.push(this.i18n.esHealthReportSectionIndicators);
-      this.digestEsIndicators().forEach(function(indicator) {
+      lines.push(this.i18n.eventsHealthReportSectionIndicators);
+      this.digestEventsHealthIndicators().forEach(function(indicator) {
         lines.push('[' + (indicator.status || 'unknown').toUpperCase() + '] ' + indicator.name + (indicator.symptom ? ' - ' + indicator.symptom : ''));
         indicator.findings.forEach(function(finding) {
           // Scoped findings are already covered by the unassigned shards section
@@ -205,38 +202,38 @@ if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
         indicator.causes.forEach(function(cause) {
           lines.push('  * ' + cause.cause);
           if (cause.nodes.length) {
-            lines.push('    ' + route.formatEsReportList(route.i18n.esHealthAffectedNodes, cause.nodes));
+            lines.push('    ' + route.formatEventsHealthReportList(route.i18n.eventsHealthAffectedNodes, cause.nodes));
           }
           if (cause.indices.length) {
-            lines.push('    ' + route.formatEsReportList(route.i18n.esHealthAffectedIndices, cause.indices));
+            lines.push('    ' + route.formatEventsHealthReportList(route.i18n.eventsHealthAffectedIndices, cause.indices));
           }
         });
       });
 
-      const unassigned = this.esHealth.unassignedShards;
+      const unassigned = this.eventsHealth.unassignedShards;
       if (unassigned) {
         lines.push('');
-        lines.push(this.i18n.esHealthReportSectionShards);
-        lines.push(this.$root.localizeMessage('esHealthReportTotals', { total: unassigned.total, primaries: unassigned.primaries, replicas: unassigned.replicas }));
+        lines.push(this.i18n.eventsHealthReportSectionShards);
+        lines.push(this.$root.localizeMessage('eventsHealthReportTotals', { total: unassigned.total, primaries: unassigned.primaries, replicas: unassigned.replicas }));
         (unassigned.groups || []).forEach(function(group) {
           if (group.sampleStatus != 'explained') {
-            const reason = group.sampleStatus == 'failed' ? 'esHealthReportSampleFailed' : 'esHealthReportNoSample';
-            lines.push(route.$root.localizeMessage(reason, { value: route.esShardGroupLabel(group) }));
+            const reason = group.sampleStatus == 'failed' ? 'eventsHealthReportSampleFailed' : 'eventsHealthReportNoSample';
+            lines.push(route.$root.localizeMessage(reason, { value: route.eventsHealthShardGroupLabel(group) }));
             return;
           }
-          lines.push(route.$root.localizeMessage('esHealthReportSampledShard', { value: route.esShardGroupLabel(group) }));
-          lines.push('  ' + route.i18n.esHealthReportShard + ': ' + group.sampleIndex + '[' + group.sampleShard + '] (' + (group.primary ? route.i18n.esHealthPrimary : route.i18n.esHealthReplica) + ')');
-          lines.push('  ' + route.i18n.esHealthReportUnassignedReason + ': ' + group.reason + (group.since ? route.$root.localizeMessage('esHealthReportSince', { value: group.since }) : ''));
+          lines.push(route.$root.localizeMessage('eventsHealthReportSampledShard', { value: route.eventsHealthShardGroupLabel(group) }));
+          lines.push('  ' + route.i18n.eventsHealthReportShard + ': ' + group.sampleIndex + '[' + group.sampleShard + '] (' + (group.primary ? route.i18n.eventsHealthPrimary : route.i18n.eventsHealthReplica) + ')');
+          lines.push('  ' + route.i18n.eventsHealthReportUnassignedReason + ': ' + group.reason + (group.since ? route.$root.localizeMessage('eventsHealthReportSince', { value: group.since }) : ''));
           if (group.details) {
-            lines.push('  ' + route.i18n.esHealthReportDetails + ': ' + group.details);
+            lines.push('  ' + route.i18n.eventsHealthReportDetails + ': ' + group.details);
           }
           if (group.canAllocate) {
-            lines.push('  ' + route.i18n.esHealthReportCanAllocate + ': ' + group.canAllocate);
+            lines.push('  ' + route.i18n.eventsHealthReportCanAllocate + ': ' + group.canAllocate);
           }
           (group.deciders || []).forEach(function(decider) {
             lines.push('    - ' + decider.name + ': ' + decider.explanation);
             if (decider.nodes && decider.nodes.length) {
-              lines.push('      ' + route.formatEsReportList(route.i18n.esHealthAffectedNodes, decider.nodes));
+              lines.push('      ' + route.formatEventsHealthReportList(route.i18n.eventsHealthAffectedNodes, decider.nodes));
             }
           });
         });
@@ -244,9 +241,9 @@ if (gridRouteForEsHealth && gridRouteForEsHealth.component) {
 
       return lines.join('\n');
     },
-    copyEsHealthReport() {
-      this.$root.copyToClipboard(this.buildEsHealthReport());
-      this.$root.showTip(this.i18n.esHealthCopied);
+    copyEventsHealthReport() {
+      this.$root.copyToClipboard(this.buildEventsHealthReport());
+      this.$root.showTip(this.i18n.eventsHealthCopied);
     },
   });
 }

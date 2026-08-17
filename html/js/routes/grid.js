@@ -59,11 +59,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridMemberTestConfirmDialog: false,
     gridMemberRestartConfirmDialog: false,
     gridMemberUploadConfirmDialog: false,
-    esHealthDialog: false,
-    esHealthLoading: false,
-    esHealth: null,
-    esHealthAbort: null,
-    esHealthExpanded: {},
+    eventsHealthDialog: false,
+    eventsHealthLoading: false,
+    eventsHealth: null,
+    eventsHealthAbort: null,
+    eventsHealthExpanded: {},
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
     staleMetricsMs: 120000,
@@ -118,7 +118,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
     clearInterval(this.stalenessInterval);
-    this.abortEsHealth();
+    this.abortEventsHealth();
     if (this.metricsRefreshInterval) {
       clearInterval(this.metricsRefreshInterval);
     }
@@ -141,7 +141,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'moreColumns': 'saveLocalSettings',
-    'esHealthDialog': 'onEsHealthDialogChanged',
+    'eventsHealthDialog': 'onEventsHealthDialogChanged',
     'zone'(val) {
       this.saveTimezone();
       if (this.activeTab === 'metrics') {
