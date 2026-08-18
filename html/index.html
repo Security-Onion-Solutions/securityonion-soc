@@ -277,6 +277,16 @@
                 <v-list-item-title v-text="i18n.alerts"></v-list-item-title>
               </router-link>
             </v-list-item>
+            <v-list-item data-aid="nav_simple_alerts" v-if="showSimpleAlerts">
+              <template #prepend>
+                <router-link to="/simple-alerts" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                  <v-icon>fa-bell-concierge</v-icon>
+                </router-link>
+              </template>
+              <router-link to="/simple-alerts" class="text-decoration-none d-block">
+                <v-list-item-title v-text="i18n.simpleAlerts"></v-list-item-title>
+              </router-link>
+            </v-list-item>
             <v-list-item data-aid="nav_dashboards">
               <template #prepend>
                 <router-link to="/dashboards" class="text-decoration-none" aria-hidden="true" tabindex="-1">
@@ -521,6 +531,7 @@
     <script src="js/routes/assistant.utils.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/assistant.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/hunt.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/simplealerts.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/jobs.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/job.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/settings.js?v=VERSION_PLACEHOLDER"></script>

@@ -228,6 +228,9 @@ $(document).ready(function () {
           warningTimeout: 30000,
           errorTimeout: 120000,
           toolbar: null,
+          // Simple Alerts is an in-progress alternate triage view; it stays hidden
+          // until opted into via ?simple-alerts=true, which persists to localStorage.
+          showSimpleAlerts: false,
           wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
           apiUrl: location.origin + location.pathname + 'api/',
           authUrl: '/auth/self-service/',
@@ -1214,9 +1217,13 @@ $(document).ready(function () {
         saveTheme() {
           localStorage['settings.app.dark'] = this.$vuetify.theme.current.dark;
         },
+        saveSimpleAlerts() {
+          localStorage['settings.app.showSimpleAlerts'] = this.showSimpleAlerts;
+        },
         saveLocalSettings() {
           this.saveTheme();
           this.saveToolbar();
+          this.saveSimpleAlerts();
         },
         loadLocalSettings() {
           if (localStorage['settings.app.dark'] != undefined) {
@@ -1225,6 +1232,16 @@ $(document).ready(function () {
           }
           if (localStorage['settings.app.navbar'] != undefined) {
             this.toolbar = localStorage['settings.app.navbar'] == "true";
+          }
+          if (localStorage['settings.app.showSimpleAlerts'] != undefined) {
+            this.showSimpleAlerts = localStorage['settings.app.showSimpleAlerts'] == "true";
+          }
+          // An explicit ?simple-alerts= param wins over the stored value, and is itself
+          // stored, so the opt-in survives navigation away from the parameterized URL.
+          const param = this.getSearchParam('simple-alerts');
+          if (param != null) {
+            this.showSimpleAlerts = param == "true";
+            this.saveSimpleAlerts();
           }
         },
         updateEditorTheme() {

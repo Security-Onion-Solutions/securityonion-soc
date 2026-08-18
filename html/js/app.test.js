@@ -348,6 +348,52 @@ test('localSettings', () => {
 	expect(app.toolbar).toBe(true);
 });
 
+test('localSettingsSimpleAlerts', () => {
+	const original = app.getSearchParam;
+	app.getSearchParam = () => null;
+	try {
+		app.showSimpleAlerts = true;
+		app.saveLocalSettings();
+		app.showSimpleAlerts = false;
+		app.loadLocalSettings();
+		expect(app.showSimpleAlerts).toBe(true);
+
+		app.showSimpleAlerts = false;
+		app.saveLocalSettings();
+		app.showSimpleAlerts = true;
+		app.loadLocalSettings();
+		expect(app.showSimpleAlerts).toBe(false);
+	} finally {
+		app.getSearchParam = original;
+	}
+});
+
+test('localSettingsSimpleAlertsSearchParamOverridesAndPersists', () => {
+	const original = app.getSearchParam;
+	try {
+		// stored value is false, but the param opts in and is itself persisted
+		app.showSimpleAlerts = false;
+		app.saveLocalSettings();
+
+		app.getSearchParam = (param) => param === 'simple-alerts' ? 'true' : null;
+		app.loadLocalSettings();
+		expect(app.showSimpleAlerts).toBe(true);
+
+		// the opt-in survives a later load with no param present
+		app.getSearchParam = () => null;
+		app.showSimpleAlerts = false;
+		app.loadLocalSettings();
+		expect(app.showSimpleAlerts).toBe(true);
+
+		// and the param can opt back out
+		app.getSearchParam = (param) => param === 'simple-alerts' ? 'false' : null;
+		app.loadLocalSettings();
+		expect(app.showSimpleAlerts).toBe(false);
+	} finally {
+		app.getSearchParam = original;
+	}
+});
+
 test('maximize', () => {
 	const element = document.createElement('div');
 	element.style.width = '12px';
