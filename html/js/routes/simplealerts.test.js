@@ -1355,3 +1355,14 @@ test('questionPresentationHelpers', () => {
   expect(comp.questionRowValue(answer, 'missing')).toBe('');
   expect(comp.questionRowValue(null, 'x')).toBe('');
 });
+
+test('sourceDestGroupKeysAreReadableAndUnique', () => {
+  const groups = comp.parseSourceDestGroups([
+    { value: 2, keys: ['10.0.0.1', '8.8.8.8'] },
+    { value: 1, keys: ['10.0.0.2', '8.8.8.8'] },
+  ]);
+
+  // a plain separator: no control characters, which would make the source file binary
+  expect(groups.map(g => g.key)).toEqual(['10.0.0.1 8.8.8.8', '10.0.0.2 8.8.8.8']);
+  groups.forEach(g => expect(/[\x00-\x1f]/.test(g.key)).toBe(false));
+});
