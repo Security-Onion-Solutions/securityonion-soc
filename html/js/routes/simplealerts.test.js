@@ -7,6 +7,7 @@
 require('../test_common.js');
 // Method packs must load before simplealerts.js, which merges them into the component.
 require('./simplealerts.data.js');
+require('./simplealerts.grouping.js');
 require('./simplealerts.js');
 
 let comp;
@@ -176,6 +177,7 @@ test('loadAlerts', async () => {
   comp.filterStatus = 'all';
   comp.filterSeverity = 'all';
   comp.filterTimeRange = '24h';
+  comp.groupAlerts = false;
   await comp.loadAlerts();
 
   expect(mock).toHaveBeenCalled();
@@ -198,12 +200,29 @@ test('loadAlertsRequestsSeverityAggregation', async () => {
   const mock = mockPapi("get", { data: { events: [], totalEvents: 0, metrics: {} } });
   comp.filterStatus = 'all';
   comp.filterSeverity = 'all';
+  comp.groupAlerts = false;
 
   await comp.loadAlerts();
 
   // the aggregation rides along with the event page rather than costing extra requests
   expect(mock.mock.calls[0][1].params.query).toBe('tags:alert | groupby event.severity_label');
   expect(mock).toHaveBeenCalledTimes(1);
+});
+
+test('loadAlertsRaisesMetricLimitWhenGrouped', async () => {
+  const mock = mockPapi("get", { data: { events: [], totalEvents: 0, metrics: {} } });
+
+  comp.groupAlerts = false;
+  await comp.loadAlerts();
+  expect(mock.mock.calls[0][1].params.metricLimit).toBe(comp.metricLimit);
+
+  resetPapi();
+  const grouped = mockPapi("get", { data: { events: [], totalEvents: 0, metrics: {} } });
+  comp.groupAlerts = true;
+  comp.groupingMode = 'rule';
+  await comp.loadAlerts();
+  // the aggregation has to cover the groups the page shows, not just severity buckets
+  expect(grouped.mock.calls[0][1].params.metricLimit).toBe(comp.groupLimit);
 });
 
 test('parseSeverityTotals', () => {
@@ -305,4 +324,304 @@ test('severityCountsRenderCompactAggregateTotals', () => {
   expect(comp.highSeverityCount()).toBe('3.6K');
   expect(comp.mediumSeverityCount()).toBe('2.9K');
   expect(comp.lowSeverityCount()).toBe('1.9K');
+});
+
+// --- grouping ---------------------------------------------------------------
+
+const RULE_METRIC_KEY = 'groupby_1|rule.name|event.severity_label|rule.uuid';
+const SD_METRIC_KEY = 'groupby_1|source.ip|destination.ip';
+
+test('buildFullQueryIncludesActiveGrouping', () => {
+  comp.filterStatus = 'all';
+  comp.filterSeverity = 'all';
+
+  comp.groupAlerts = true;
+  comp.groupingMode = 'rule';
+  expect(comp.buildFullQuery()).toBe(
+    'tags:alert | groupby event.severity_label | groupby rule.name event.severity_label rule.uuid');
+
+  comp.groupingMode = 'source-dest';
+  expect(comp.buildFullQuery()).toBe(
+    'tags:alert | groupby event.severity_label | groupby source.ip destination.ip');
+
+  comp.groupAlerts = false;
+  expect(comp.buildFullQuery()).toBe('tags:alert | groupby event.severity_label');
+});
+
+test('parseRuleGroupsFoldsSeveritiesAndSumsExactCounts', () => {
+  const groups = comp.parseRuleGroups([
+    { value: 10, keys: ['ET MALWARE One', 'medium', 'uuid-1'] },
+    { value: 5, keys: ['ET MALWARE One', 'high', 'uuid-1'] },
+    { value: 40, keys: ['GPL ATTACK_RESPONSE Two', 'low', 'uuid-2'] },
+  ]);
+
+  // sorted by count desc
+  expect(groups.map(g => g.ruleName)).toEqual(['GPL ATTACK_RESPONSE Two', 'ET MALWARE One']);
+
+  const one = groups.find(g => g.ruleName === 'ET MALWARE One');
+  // counts are summed, not extrapolated from a sampled ratio
+  expect(one.count).toBe(15);
+  // a rule spanning severities takes its highest
+  expect(one.severityLabel).toBe('high');
+  expect(one.ruleUuid).toBe('uuid-1');
+  expect(one['rule.category']).toBe('MALWARE');
+  expect(one.alertsLoaded).toBe(false);
+});
+
+test('parseRuleGroupsHandlesMissingSentinels', () => {
+  const groups = comp.parseRuleGroups([
+    { value: 3, keys: ['__missing__', '__missing__', '__missing__'] },
+  ]);
+
+  expect(groups[0].ruleName).toBe('Unknown Rule');
+  expect(groups[0].severityLabel).toBe('unknown');
+  // the sentinel must not leak through as a usable uuid
+  expect(groups[0].ruleUuid).toBeNull();
+});
+
+test('parseSourceDestGroupsDropsPairlessRows', () => {
+  const groups = comp.parseSourceDestGroups([
+    { value: 7, keys: ['10.0.0.1', '8.8.8.8'] },
+    { value: 99, keys: ['__missing__', '__missing__'] },
+    { value: 20, keys: ['10.0.0.2', '1.1.1.1'] },
+  ]);
+
+  // host-based alerts have no pair and would otherwise form one meaningless group
+  expect(groups.length).toBe(2);
+  expect(groups[0].count).toBe(20);
+  expect(groups[0].sourceIp).toBe('10.0.0.2');
+});
+
+test('applyGroupMetricsRoutesByMode', () => {
+  const metrics = {
+    [RULE_METRIC_KEY]: [{ value: 4, keys: ['ET MALWARE One', 'high', 'u1'] }],
+    [SD_METRIC_KEY]: [{ value: 9, keys: ['10.0.0.1', '8.8.8.8'] }],
+  };
+
+  comp.groupAlerts = true;
+  comp.groupingMode = 'rule';
+  comp.applyGroupMetrics(metrics);
+  expect(comp.alertGroups.length).toBe(1);
+  expect(comp.sourceDestGroups.length).toBe(0);
+
+  comp.groupingMode = 'source-dest';
+  comp.applyGroupMetrics(metrics);
+  expect(comp.sourceDestGroups.length).toBe(1);
+  expect(comp.alertGroups.length).toBe(0);
+
+  comp.groupAlerts = false;
+  comp.applyGroupMetrics(metrics);
+  expect(comp.alertGroups.length).toBe(0);
+  expect(comp.sourceDestGroups.length).toBe(0);
+});
+
+test('applyGroupMetricsToleratesAbsentAggregation', () => {
+  comp.groupAlerts = true;
+  comp.groupingMode = 'rule';
+  comp.applyGroupMetrics({});
+  expect(comp.alertGroups).toEqual([]);
+});
+
+test('toggleGroupExpandsAndLazyLoadsOnce', async () => {
+  const group = comp.newGroup('rule', 'ET MALWARE One', { ruleName: 'ET MALWARE One', count: 3 });
+  comp.loadGroupAlerts = jest.fn();
+
+  expect(comp.isGroupExpanded(group)).toBe(false);
+
+  comp.toggleGroup(group);
+  expect(comp.isGroupExpanded(group)).toBe(true);
+  expect(comp.loadGroupAlerts).toHaveBeenCalledTimes(1);
+
+  comp.toggleGroup(group);
+  expect(comp.isGroupExpanded(group)).toBe(false);
+
+  // collapsing and re-expanding must not refetch
+  group.alertsLoaded = true;
+  comp.toggleGroup(group);
+  expect(comp.loadGroupAlerts).toHaveBeenCalledTimes(1);
+});
+
+test('groupTerms', () => {
+  expect(comp.groupTerms({ kind: 'rule', ruleName: 'ET MALWARE One' }))
+    .toEqual([{ field: 'rule.name', value: 'ET MALWARE One' }]);
+
+  expect(comp.groupTerms({ kind: 'source-dest', sourceIp: '10.0.0.1', destIp: '8.8.8.8' }))
+    .toEqual([
+      { field: 'source.ip', value: '10.0.0.1' },
+      { field: 'destination.ip', value: '8.8.8.8' },
+    ]);
+
+  // a pair missing one side only contributes the side it has
+  expect(comp.groupTerms({ kind: 'source-dest', sourceIp: '10.0.0.1', destIp: null }))
+    .toEqual([{ field: 'source.ip', value: '10.0.0.1' }]);
+});
+
+test('narrowQueryDelegatesEscapingToServer', async () => {
+  const mock = mockPapi("get", { data: 'tags:alert AND rule.name:"ET MALWARE One"' });
+
+  const result = await comp.narrowQuery('tags:alert', [{ field: 'rule.name', value: 'ET MALWARE One' }]);
+
+  expect(mock).toHaveBeenCalledWith('query/filtered', { params: {
+    query: 'tags:alert',
+    field: 'rule.name',
+    value: 'ET MALWARE One',
+    scalar: false,
+    mode: 'INCLUDE',
+  }});
+  expect(result).toBe('tags:alert AND rule.name:"ET MALWARE One"');
+});
+
+test('loadGroupAlertsFetchesNarrowedEvents', async () => {
+  const group = comp.newGroup('rule', 'ET MALWARE One', { ruleName: 'ET MALWARE One', count: 900 });
+  comp.narrowQuery = jest.fn().mockResolvedValue('narrowed-query');
+  const mock = mockPapi("get", { data: { events: [
+    { payload: { 'soc_id': 'a', 'rule.name': 'ET MALWARE One' } },
+  ], totalEvents: 900 } });
+
+  await comp.loadGroupAlerts(group);
+
+  expect(mock.mock.calls[0][1].params.query).toBe('narrowed-query');
+  expect(mock.mock.calls[0][1].params.eventLimit).toBe(comp.groupAlertLimit);
+  expect(group.alerts.length).toBe(1);
+  expect(group.alertsLoaded).toBe(true);
+  expect(group.alertsLoading).toBe(false);
+  // the exact total came from the aggregation; the fetched sample fell short of it
+  expect(group.alertsTruncated).toBe(true);
+});
+
+test('loadGroupAlertsHandlesError', async () => {
+  const group = comp.newGroup('rule', 'r', { ruleName: 'r' });
+  comp.narrowQuery = jest.fn().mockRejectedValue(new Error('boom'));
+  const showError = mockShowError();
+
+  await comp.loadGroupAlerts(group);
+
+  expect(showError).toHaveBeenCalled();
+  expect(group.alertsLoading).toBe(false);
+  expect(group.alertsLoaded).toBe(false);
+});
+
+test('displayLimitAndLoadMore', () => {
+  const group = comp.newGroup('rule', 'r', { ruleName: 'r' });
+  group.alerts = Array.from({ length: 120 }, (_, i) => ({ id: String(i) }));
+  comp.subGroupDisplayLimit = 50;
+
+  expect(comp.getDisplayedAlerts(group).length).toBe(50);
+  expect(comp.shouldShowLoadMore(group)).toBe(true);
+  expect(comp.getLoadMoreText(group)).toBe('Show all 120');
+
+  comp.toggleLoadMore(group);
+  expect(comp.getDisplayedAlerts(group).length).toBe(120);
+  expect(comp.getLoadMoreText(group)).toBe('Show fewer');
+
+  group.alerts = group.alerts.slice(0, 10);
+  group.showAll = false;
+  expect(comp.shouldShowLoadMore(group)).toBe(false);
+  expect(comp.getDisplayedAlerts(group).length).toBe(10);
+});
+
+test('getGroupSummary', () => {
+  const group = comp.newGroup('rule', 'r', { ruleName: 'r', severityLabel: 'high', count: 1500 });
+  expect(comp.getGroupSummary(group)).toBe('1.5K alerts · high');
+
+  group.alertsTruncated = true;
+  group.alerts = Array.from({ length: 500 }, () => ({}));
+  expect(comp.getGroupSummary(group)).toBe('1.5K alerts · high · showing first 500');
+
+  const sd = comp.newGroup('source-dest', 'k', { sourceIp: '10.0.0.1', destIp: '8.8.8.8', count: 12 });
+  expect(comp.getGroupSummary(sd)).toBe('12 alerts');
+});
+
+test('groupHeadersVaryByGroupKind', () => {
+  expect(comp.groupHeaders({ kind: 'rule' }).map(h => h.value)).toEqual(['timestamp', 'sourceIp', 'destIp']);
+  expect(comp.groupHeaders({ kind: 'source-dest' }).map(h => h.value)).toEqual(['timestamp', 'ruleName']);
+});
+
+test('setGroupingModeResetsExpansionAndReloads', () => {
+  comp.loadAlerts = jest.fn();
+  comp.expandedGroups = ['stale-key'];
+
+  comp.setGroupingMode('source-dest');
+  expect(comp.groupingMode).toBe('source-dest');
+  expect(comp.groupAlerts).toBe(true);
+  expect(comp.expandedGroups).toEqual([]);
+  expect(comp.loadAlerts).toHaveBeenCalled();
+
+  comp.setGroupingMode('none');
+  expect(comp.groupAlerts).toBe(false);
+});
+
+test('visibleGroupsAppliesCategoryFilterOnlyWhereMeaningful', () => {
+  comp.groupingMode = 'rule';
+  comp.alertGroups = [
+    { key: 'a', 'rule.category': 'MALWARE' },
+    { key: 'b', 'rule.category': 'POLICY' },
+  ];
+  comp.filterCategory = 'MALWARE';
+  expect(comp.categoryFilterEnabled()).toBe(true);
+  expect(comp.visibleGroups().map(g => g.key)).toEqual(['a']);
+
+  // source/destination groups carry no rule dimension, so the filter cannot apply
+  comp.groupingMode = 'source-dest';
+  comp.sourceDestGroups = [{ key: 'x' }, { key: 'y' }];
+  expect(comp.categoryFilterEnabled()).toBe(false);
+  expect(comp.visibleGroups().length).toBe(2);
+});
+
+test('localSettingsRoundTrip', () => {
+  Object.keys(localStorage).filter(k => k.startsWith('settings.simplealerts.')).forEach(k => localStorage.removeItem(k));
+
+  comp.groupingMode = 'source-dest';
+  comp.filterStatus = 'acknowledged';
+  comp.filterSeverity = 'high';
+  comp.filterTimeRange = '7d';
+  comp.saveLocalSettings();
+
+  comp.groupingMode = 'rule';
+  comp.groupAlerts = true;
+  comp.filterStatus = 'active';
+  comp.filterSeverity = 'all';
+  comp.filterTimeRange = '24h';
+  comp.loadLocalSettings();
+
+  expect(comp.groupingMode).toBe('source-dest');
+  expect(comp.groupAlerts).toBe(true);
+  expect(comp.filterStatus).toBe('acknowledged');
+  expect(comp.filterSeverity).toBe('high');
+  expect(comp.filterTimeRange).toBe('7d');
+});
+
+test('localSettingsOmitsDefaults', () => {
+  Object.keys(localStorage).filter(k => k.startsWith('settings.simplealerts.')).forEach(k => localStorage.removeItem(k));
+
+  comp.groupingMode = 'rule';
+  comp.filterStatus = 'active';
+  comp.filterSeverity = 'all';
+  comp.filterTimeRange = '24h';
+  comp.saveLocalSettings();
+
+  // defaults are not persisted, so a later change to the default survives an upgrade
+  expect(localStorage['settings.simplealerts.groupingMode']).toBeUndefined();
+  expect(localStorage['settings.simplealerts.filterStatus']).toBeUndefined();
+});
+
+test('localSettingsRestoresUngroupedMode', () => {
+  localStorage['settings.simplealerts.groupingMode'] = 'none';
+  comp.groupAlerts = true;
+
+  comp.loadLocalSettings();
+
+  expect(comp.groupingMode).toBe('none');
+  expect(comp.groupAlerts).toBe(false);
+  localStorage.removeItem('settings.simplealerts.groupingMode');
+});
+
+test('onFilterChangedPersistsAndReloads', () => {
+  comp.loadAlerts = jest.fn();
+  comp.saveLocalSettings = jest.fn();
+
+  comp.onFilterChanged();
+
+  expect(comp.saveLocalSettings).toHaveBeenCalled();
+  expect(comp.loadAlerts).toHaveBeenCalled();
 });

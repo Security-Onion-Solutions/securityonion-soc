@@ -4,13 +4,15 @@
       <v-row>
         <v-toolbar class="so-toolbar elevation-0" fixed>
           <v-select v-model="filterStatus" :items="statusOptions" :label="i18n.status" hide-details
-            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_status"></v-select>
+            class="mx-2 simplealerts-filter" @update:model-value="onFilterChanged" data-aid="simplealerts_filter_status"></v-select>
           <v-select v-model="filterSeverity" :items="severityOptions" :label="i18n.severity" hide-details
-            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_severity"></v-select>
+            class="mx-2 simplealerts-filter" @update:model-value="onFilterChanged" data-aid="simplealerts_filter_severity"></v-select>
           <v-select v-model="filterTimeRange" :items="timeRangeOptions" :label="i18n.simpleAlertsTimeRange" hide-details
-            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_range"></v-select>
+            class="mx-2 simplealerts-filter" @update:model-value="onFilterChanged" data-aid="simplealerts_filter_range"></v-select>
           <v-select v-model="filterCategory" :items="categoryOptions" :label="i18n.simpleAlertsCategory" hide-details
-            class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
+            :disabled="!categoryFilterEnabled" class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
+          <v-select :model-value="groupingMode" :items="groupingOptions" :label="i18n.simpleAlertsGroupBy" hide-details
+            class="mx-2 simplealerts-filter" @update:model-value="setGroupingMode" data-aid="simplealerts_filter_grouping"></v-select>
           <v-spacer></v-spacer>
           <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadAlerts()" data-aid="simplealerts_refresh" :aria-label="i18n.ariaReloadData">
             <v-icon>fa-sync</v-icon>
@@ -47,7 +49,74 @@
           <v-icon class="so-stat-icon">fa-circle-info</v-icon>
         </div>
       </v-row>
-      <v-row>
+      <v-row v-if="groupAlerts">
+        <div class="section-panel w-100" data-aid="simplealerts_groups">
+          <v-list v-if="visibleGroups.length" density="compact" class="pa-0">
+            <template v-for="group in visibleGroups" :key="group.key">
+              <v-list-item class="simplealerts-group-header" :data-aid="'simplealerts_group'"
+                @click="toggleGroup(group)" role="button" :aria-expanded="isGroupExpanded(group) ? 'true' : 'false'">
+                <template #prepend>
+                  <v-icon class="mr-2">{{ isGroupExpanded(group) ? 'fa-angle-down' : 'fa-angle-right' }}</v-icon>
+                  <v-chip size="small" variant="tonal" :color="severityColor(group)" class="mr-3"
+                    v-if="group.kind === 'rule'" data-aid="simplealerts_group_severity">
+                    {{ group.severityLabel }}
+                  </v-chip>
+                </template>
+                <v-list-item-title class="simplealerts-group-title" data-aid="simplealerts_group_title">
+                  <span v-if="group.kind === 'rule'">{{ group.ruleName }}</span>
+                  <span v-else>
+                    {{ group.sourceIp || i18n.simpleAlertsStatUnavailable }}
+                    <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                    {{ group.destIp || i18n.simpleAlertsStatUnavailable }}
+                  </span>
+                </v-list-item-title>
+                <template #append>
+                  <span class="so-stat-label mr-3" data-aid="simplealerts_group_summary">{{ getGroupSummary(group) }}</span>
+                </template>
+              </v-list-item>
+
+              <div v-if="isGroupExpanded(group)" class="simplealerts-group-body" data-aid="simplealerts_group_body">
+                <div v-if="group.alertsLoading" class="pa-4">
+                  <v-progress-linear indeterminate color="primary"></v-progress-linear>
+                </div>
+                <div v-else-if="!group.alerts.length" class="pa-4 text-body-2" data-aid="simplealerts_group_empty">
+                  {{ i18n.simpleAlertsGroupEmpty }}
+                </div>
+                <template v-else>
+                  <v-data-table :headers="groupHeaders(group)" :items="getDisplayedAlerts(group)" density="compact"
+                    :items-per-page="-1" hide-default-footer class="simplealerts-table" data-aid="simplealerts_group_table">
+                    <template #item="{ item }">
+                      <tr data-aid="simplealerts_row">
+                        <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
+                        <td v-if="group.kind !== 'rule'" class="simplealerts-rule-cell">{{ item.ruleName }}</td>
+                        <td v-if="group.kind === 'rule'">
+                          <span v-if="item.sourceIp">{{ item.sourceIp }}<span v-if="item.sourcePort">:{{ item.sourcePort }}</span></span>
+                          <span v-else class="text-disabled">&mdash;</span>
+                        </td>
+                        <td v-if="group.kind === 'rule'">
+                          <span v-if="item.destIp">{{ item.destIp }}<span v-if="item.destPort">:{{ item.destPort }}</span></span>
+                          <span v-else class="text-disabled">&mdash;</span>
+                        </td>
+                      </tr>
+                    </template>
+                  </v-data-table>
+                  <div v-if="shouldShowLoadMore(group)" class="pa-2">
+                    <v-btn variant="text" size="small" color="primary" @click.stop="toggleLoadMore(group)"
+                      data-aid="simplealerts_group_more">{{ getLoadMoreText(group) }}</v-btn>
+                  </div>
+                </template>
+              </div>
+              <v-divider></v-divider>
+            </template>
+          </v-list>
+          <div v-else-if="!loading" class="pa-4 text-body-2" data-aid="simplealerts_groups_empty">
+            {{ i18n.simpleAlertsNoAlerts }}
+          </div>
+          <v-progress-linear v-if="loading" indeterminate color="primary"></v-progress-linear>
+        </div>
+      </v-row>
+
+      <v-row v-else>
         <div class="section-panel w-100">
           <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val"
             :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort density="compact"

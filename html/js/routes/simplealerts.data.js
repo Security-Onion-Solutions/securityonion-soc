@@ -53,17 +53,29 @@ globalThis.SimpleAlertsData = (function() {
       return start.format(this.i18n.timePickerFormat) + ' - ' + end.format(this.i18n.timePickerFormat);
     },
 
+    // Severity always aggregates as groupby_0; the active grouped view, when there is
+    // one, adds groupby_1. One request therefore returns the event page, the stat pill
+    // totals and the group counts together.
+    buildFullQuery() {
+      let query = this.buildQuery() + ' | groupby ' + SEVERITY_FIELD;
+      const groupFields = this.groupByFields();
+      if (groupFields) {
+        query += ' | groupby ' + groupFields.join(' ');
+      }
+      return query;
+    },
+
     async loadAlerts() {
       this.loading = true;
       try {
         const params = {
-          // A single request returns both the event page and the aggregation, so the
-          // severity totals below cost no extra round trip.
-          query: this.buildQuery() + ' | groupby ' + SEVERITY_FIELD,
+          query: this.buildFullQuery(),
           range: this.getDateRange(),
           format: this.i18n.timePickerSample,
           zone: this.zone,
-          metricLimit: this.metricLimit,
+          // Groups come from the aggregation, so the limit has to cover the groups the
+          // page intends to show, not just the severity buckets.
+          metricLimit: this.groupAlerts ? this.groupLimit : this.metricLimit,
           eventLimit: this.eventLimit,
         };
 
@@ -73,6 +85,7 @@ globalThis.SimpleAlertsData = (function() {
           this.totalAlerts = response.data.totalEvents || 0;
           this.hasMore = this.totalAlerts > this.alerts.length;
           this.severityTotals = this.parseSeverityTotals(response.data.metrics);
+          this.applyGroupMetrics(response.data.metrics);
           this.lookupHostnames(this.alerts);
         }
       } catch (error) {
@@ -132,12 +145,8 @@ globalThis.SimpleAlertsData = (function() {
         }
 
         const ruleName = data['rule.name'] || this.i18n.simpleAlertsUnknownRule;
-        let ruleCategory = '';
-        const match = ruleName.match(RULE_CATEGORY_REGEX);
-        if (match) {
-          ruleCategory = match[1];
-          categories.add(ruleCategory);
-        }
+        const ruleCategory = this.ruleCategory(ruleName);
+        if (ruleCategory) categories.add(ruleCategory);
 
         const sourceIp = data['source.ip'];
         const destIp = data['destination.ip'];
@@ -171,6 +180,13 @@ globalThis.SimpleAlertsData = (function() {
         .concat(Array.from(categories).sort().map(cat => ({ value: cat, title: cat })));
 
       return alerts;
+    },
+
+    // Rule names carry their ruleset and category as a prefix, e.g. "ET MALWARE ..." or
+    // "GPL ATTACK_RESPONSE ...". Returns '' for rules that follow no such convention.
+    ruleCategory(ruleName) {
+      const match = (ruleName || '').match(RULE_CATEGORY_REGEX);
+      return match ? match[1] : '';
     },
 
     // Collapses the backend's severity labels onto the three buckets the UI colors by.

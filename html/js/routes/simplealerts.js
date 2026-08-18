@@ -33,6 +33,19 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     filterTimeRange: '24h',
     filterCategory: 'all',
 
+    // 'rule' groups by detection, 'source-dest' by network pair, 'none' is the flat list.
+    groupingMode: 'rule',
+    groupAlerts: true,
+    alertGroups: [],
+    sourceDestGroups: [],
+    expandedGroups: [],
+    // Aggregation buckets to request, i.e. the maximum number of groups shown.
+    groupLimit: 50,
+    // Alerts fetched when a group is first expanded.
+    groupAlertLimit: 500,
+    // Of those, how many render before the user asks for the rest.
+    subGroupDisplayLimit: 50,
+
     severityOptions: [
       { value: 'all', title: this.$root.i18n.simpleAlertsAllSeverities },
       { value: 'high', title: this.$root.i18n.simpleAlertsSeverityHigh },
@@ -52,6 +65,11 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
       { value: '30d', title: this.$root.i18n.simpleAlertsRangeMonth },
     ],
     categoryOptions: [],
+    groupingOptions: [
+      { value: 'rule', title: this.$root.i18n.simpleAlertsGroupByRule },
+      { value: 'source-dest', title: this.$root.i18n.simpleAlertsGroupBySourceDest },
+      { value: 'none', title: this.$root.i18n.simpleAlertsGroupByNone },
+    ],
 
     sortBy: [{ key: 'timestamp', order: 'desc' }],
     itemsPerPage: 25,
@@ -83,6 +101,16 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     lowSeverityCount() {
       return this.severityTotals ? this.formatCompactNumber(this.severityTotals.low) : this.i18n.simpleAlertsStatUnavailable;
     },
+    // Category is parsed from the rule name, so it can only filter the rule-grouped
+    // view. The select is disabled elsewhere rather than silently doing nothing.
+    categoryFilterEnabled() {
+      return this.groupingMode !== 'source-dest';
+    },
+    visibleGroups() {
+      const groups = this.groupingMode === 'source-dest' ? this.sourceDestGroups : this.alertGroups;
+      if (this.filterCategory === 'all' || !this.categoryFilterEnabled()) return groups;
+      return groups.filter(g => g['rule.category'] === this.filterCategory);
+    },
     // Mirrors the active status filter so the headline number is never ambiguous.
     totalAlertsLabel() {
       const option = this.statusOptions.find(o => o.value === this.filterStatus);
@@ -90,10 +118,12 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     },
   },
   created() {
+    this.loadLocalSettings();
     this.loadAlerts();
   },
   methods: Object.assign({},
     SimpleAlertsData,
+    SimpleAlertsGrouping,
     {
     }
   ),

@@ -1378,3 +1378,23 @@ dfn {
   white-space: normal;
   min-width: 20rem;
 }
+
+.simplealerts-group-header {
+  min-height: 52px;
+  cursor: pointer;
+}
+
+.simplealerts-group-header:hover {
+  background: rgb(var(--v-theme-row_hover));
+}
+
+.simplealerts-group-title {
+  font-weight: 600;
+}
+
+/* An expanded group's rows read as belonging to it, not as peers of the headers. */
+.simplealerts-group-body {
+  background: rgb(var(--v-theme-background));
+  border-left: 3px solid rgb(var(--v-theme-primary));
+  margin-left: 12px;
+}
