@@ -41,15 +41,8 @@ const (
 	FINDING_SEVERITY_INFO     = "info"
 )
 
-// Decider names and allocation verdicts come from the datastore; the set is open.
-const (
-	FINDING_NO_VALID_SHARD_COPY = "no_valid_shard_copy"
-	FINDING_DISK_THRESHOLD      = "disk_threshold"
-	FINDING_SAME_SHARD          = "same_shard"
-	FINDING_THROTTLING          = "throttling"
-	FINDING_UNEXPLAINED         = "unexplained"
-	FINDING_INDICES_READONLY    = "indices_readonly"
-)
+// Conditions are an open set minted by each backend; this one is backend-neutral.
+const FINDING_UNEXPLAINED = "unexplained"
 
 // Detail carries the datastore's own prose, the only description available for
 // unknown conditions.

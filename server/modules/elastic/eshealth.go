@@ -93,6 +93,16 @@ const (
 	HEALTH_INDICATOR_SHARDS = "shards_availability"
 )
 
+// Curated client wording is keyed off these in grid_eventshealth.js and i18n.js;
+// anything unrecognized there falls back to the finding's detail.
+const (
+	FINDING_NO_VALID_SHARD_COPY = "no_valid_shard_copy"
+	FINDING_DISK_THRESHOLD      = "disk_threshold"
+	FINDING_SAME_SHARD          = "same_shard"
+	FINDING_THROTTLING          = "throttling"
+	FINDING_INDICES_READONLY    = "indices_readonly"
+)
+
 var healthStatusRank = map[string]int{"red": 0, "yellow": 1, "unknown": 2, "green": 3}
 
 var findingSeverityRank = map[string]int{
@@ -102,14 +112,14 @@ var findingSeverityRank = map[string]int{
 }
 
 var shardDeciderSeverity = map[string]string{
-	model.FINDING_DISK_THRESHOLD: model.FINDING_SEVERITY_WARNING,
-	model.FINDING_SAME_SHARD:     model.FINDING_SEVERITY_INFO,
-	model.FINDING_THROTTLING:     model.FINDING_SEVERITY_INFO,
+	FINDING_DISK_THRESHOLD: model.FINDING_SEVERITY_WARNING,
+	FINDING_SAME_SHARD:     model.FINDING_SEVERITY_INFO,
+	FINDING_THROTTLING:     model.FINDING_SEVERITY_INFO,
 }
 
 // Verdicts conclusive on their own, with no decider having rejected a node.
 var canAllocateSeverity = map[string]string{
-	model.FINDING_NO_VALID_SHARD_COPY: model.FINDING_SEVERITY_CRITICAL,
+	FINDING_NO_VALID_SHARD_COPY: model.FINDING_SEVERITY_CRITICAL,
 }
 
 func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsHealth, error) {
@@ -130,6 +140,9 @@ func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsH
 	if health.Status == "" {
 		health.Status = "unknown"
 	}
+	if len(health.Indicators) == 0 {
+		logger.Warn("eventstore health report contained no indicators")
+	}
 	sectionErrors := make(map[string]string)
 
 	if settings, err := store.clusterSettings(ctx); err == nil {
@@ -148,8 +161,14 @@ func getEventsHealth(ctx context.Context, store esHealthFetcher) (*model.EventsH
 
 	// Only yellow/red: during master elections the status is "unknown" and the
 	// shard listing would block on master discovery.
-	shardStatus := gjson.Get(report, "indicators."+HEALTH_INDICATOR_SHARDS+".status").String()
-	if shardStatus == "yellow" || shardStatus == "red" {
+	shardIndicator := gjson.Get(report, "indicators."+HEALTH_INDICATOR_SHARDS)
+	switch shardStatus := shardIndicator.Get("status").String(); {
+	case !shardIndicator.Exists():
+		// An omitted section reads as "no unassigned shards"; report the gap.
+		err := fmt.Errorf("health report omitted the %s indicator", HEALTH_INDICATOR_SHARDS)
+		logger.WithError(err).Warn("unable to determine eventstore shard availability")
+		sectionErrors[model.HEALTH_SECTION_UNASSIGNED_SHARDS] = err.Error()
+	case shardStatus == "yellow", shardStatus == "red":
 		unassigned, err := buildUnassignedShards(ctx, store)
 		if err != nil {
 			logger.WithError(err).Warn("unable to retrieve eventstore shard listing")
@@ -268,7 +287,7 @@ func buildIndicatorFindings(converted model.HealthIndicator, indicator gjson.Res
 		if readonly := int(indicator.Get("details.indices_with_readonly_block").Int()); readonly > 0 {
 			findings = append(findings, model.HealthFinding{
 				Severity:  model.FINDING_SEVERITY_CRITICAL,
-				Condition: model.FINDING_INDICES_READONLY,
+				Condition: FINDING_INDICES_READONLY,
 				Count:     readonly,
 			})
 		}

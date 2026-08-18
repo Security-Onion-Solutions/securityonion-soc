@@ -75,7 +75,7 @@ func TestGetEventsHealthIndicatorCauses(t *testing.T) {
 		disk := health.Indicators[0]
 		assert.Equal(t, "disk", disk.Id)
 		if assert.Len(t, disk.Findings, 1) {
-			assert.Equal(t, model.FINDING_INDICES_READONLY, disk.Findings[0].Condition)
+			assert.Equal(t, FINDING_INDICES_READONLY, disk.Findings[0].Condition)
 			assert.Equal(t, model.FINDING_SEVERITY_CRITICAL, disk.Findings[0].Severity)
 			assert.Equal(t, 3, disk.Findings[0].Count)
 		}
@@ -219,11 +219,11 @@ func TestGetEventsHealthShardFindingsRanked(t *testing.T) {
 	if assert.Len(t, shards.Findings, 4) {
 		// Ranked most severe first: lost primary, then blocking deciders,
 		// then the expected single-node replica placement
-		assert.Equal(t, model.FINDING_NO_VALID_SHARD_COPY, shards.Findings[0].Condition)
+		assert.Equal(t, FINDING_NO_VALID_SHARD_COPY, shards.Findings[0].Condition)
 		assert.Equal(t, model.FINDING_SEVERITY_CRITICAL, shards.Findings[0].Severity)
 		assert.Equal(t, &model.FindingScope{Reason: "NODE_LEFT", Count: 2, Primary: true}, shards.Findings[0].Scope)
 
-		assert.Equal(t, model.FINDING_DISK_THRESHOLD, shards.Findings[1].Condition)
+		assert.Equal(t, FINDING_DISK_THRESHOLD, shards.Findings[1].Condition)
 		assert.Equal(t, model.FINDING_SEVERITY_WARNING, shards.Findings[1].Severity)
 		assert.Equal(t, "the node is above the low watermark cluster setting", shards.Findings[1].Detail)
 		assert.Equal(t, []string{"node-1"}, shards.Findings[1].Nodes)
@@ -233,7 +233,7 @@ func TestGetEventsHealthShardFindingsRanked(t *testing.T) {
 		assert.Equal(t, model.FINDING_SEVERITY_WARNING, shards.Findings[2].Severity)
 		assert.Equal(t, "an unrecognized decider", shards.Findings[2].Detail)
 
-		assert.Equal(t, model.FINDING_SAME_SHARD, shards.Findings[3].Condition)
+		assert.Equal(t, FINDING_SAME_SHARD, shards.Findings[3].Condition)
 		assert.Equal(t, model.FINDING_SEVERITY_INFO, shards.Findings[3].Severity)
 	}
 }
@@ -282,7 +282,7 @@ func TestGetEventsHealthThrottledGroupAttributed(t *testing.T) {
 	assert.NoError(t, err)
 	if assert.Len(t, health.Indicators[0].Findings, 1) {
 		finding := health.Indicators[0].Findings[0]
-		assert.Equal(t, model.FINDING_THROTTLING, finding.Condition)
+		assert.Equal(t, FINDING_THROTTLING, finding.Condition)
 		assert.Equal(t, model.FINDING_SEVERITY_INFO, finding.Severity)
 		assert.Equal(t, "reached the limit of concurrent incoming shard recoveries", finding.Detail)
 		assert.Equal(t, []string{"node-1"}, finding.Nodes)
@@ -475,6 +475,54 @@ func TestGetEventsHealthUnknownShardStatusSkipsInventory(t *testing.T) {
 
 	// report + settings + nodes only; no shard listing
 	assert.Len(t, store.InputContexts, 3)
+}
+
+func TestGetEventsHealthMissingShardIndicatorReported(t *testing.T) {
+	// An omitted indicator must not read as "no unassigned shards"
+	store := newFakeHealthFetcher()
+	store.HealthReportJson = `{"status":"red","indicators":{"disk":{"status":"red"}}}`
+	store.ClusterSettingsJson = `{"persistent":{},"transient":{}}`
+	store.NodesJson = `[{"name":"node-1"}]`
+
+	health, err := getEventsHealth(context.Background(), store)
+
+	assert.NoError(t, err)
+	assert.Nil(t, health.UnassignedShards)
+	if assert.Contains(t, health.Errors, model.HEALTH_SECTION_UNASSIGNED_SHARDS) {
+		assert.Contains(t, health.Errors[model.HEALTH_SECTION_UNASSIGNED_SHARDS], HEALTH_INDICATOR_SHARDS)
+	}
+
+	// report + settings + nodes only; the shard listing is not attempted
+	assert.Len(t, store.InputContexts, 3)
+}
+
+func TestGetEventsHealthGreenShardIndicatorIsNotAnError(t *testing.T) {
+	store := newFakeHealthFetcher()
+	store.HealthReportJson = `{"status":"green","indicators":{"shards_availability":{"status":"green"}}}`
+	store.ClusterSettingsJson = `{"persistent":{},"transient":{}}`
+	store.NodesJson = `[{"name":"node-1"}]`
+
+	health, err := getEventsHealth(context.Background(), store)
+
+	assert.NoError(t, err)
+	assert.Nil(t, health.UnassignedShards)
+	assert.Nil(t, health.Errors)
+}
+
+func TestGetEventsHealthNoIndicatorsStillSucceeds(t *testing.T) {
+	store := newFakeHealthFetcher()
+	store.HealthReportJson = `{"status":"yellow","indicators":{}}`
+	store.ClusterSettingsJson = `{"persistent":{},"transient":{}}`
+	store.NodesJson = `[{"name":"node-1"}]`
+
+	health, err := getEventsHealth(context.Background(), store)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "yellow", health.Status)
+	assert.Empty(t, health.Indicators)
+	if assert.Contains(t, health.Errors, model.HEALTH_SECTION_UNASSIGNED_SHARDS) {
+		assert.Contains(t, health.Errors[model.HEALTH_SECTION_UNASSIGNED_SHARDS], HEALTH_INDICATOR_SHARDS)
+	}
 }
 
 func TestGetEventsHealthNoUnassignedShardsFound(t *testing.T) {
