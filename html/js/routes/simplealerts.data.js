@@ -14,6 +14,8 @@ globalThis.SimpleAlertsData = (function() {
   // The category drives the client-side category filter.
   const RULE_CATEGORY_REGEX = /^(?:ET|GPL|SURICATA)\s+([A-Z_]+)/;
 
+  const SEVERITY_FIELD = 'event.severity_label';
+
   return {
     // The status and severity filters are pushed down to the backend as query terms;
     // the category filter is applied client-side in the processedAlerts computed,
@@ -55,7 +57,9 @@ globalThis.SimpleAlertsData = (function() {
       this.loading = true;
       try {
         const params = {
-          query: this.buildQuery(),
+          // A single request returns both the event page and the aggregation, so the
+          // severity totals below cost no extra round trip.
+          query: this.buildQuery() + ' | groupby ' + SEVERITY_FIELD,
           range: this.getDateRange(),
           format: this.i18n.timePickerSample,
           zone: this.zone,
@@ -68,6 +72,7 @@ globalThis.SimpleAlertsData = (function() {
           this.alerts = this.processAlerts(response.data.events || []);
           this.totalAlerts = response.data.totalEvents || 0;
           this.hasMore = this.totalAlerts > this.alerts.length;
+          this.severityTotals = this.parseSeverityTotals(response.data.metrics);
           this.lookupHostnames(this.alerts);
         }
       } catch (error) {
@@ -75,6 +80,22 @@ globalThis.SimpleAlertsData = (function() {
       } finally {
         this.loading = false;
       }
+    },
+
+    // Folds the severity_label aggregation into the same three buckets the UI colors by,
+    // so the stat pills describe every matching alert rather than only the loaded page.
+    // Returns null when the backend returned no aggregation, which the pills render as
+    // "unavailable" instead of silently showing zero.
+    parseSeverityTotals(metrics) {
+      const rows = metrics && metrics['groupby_0|' + SEVERITY_FIELD];
+      if (!rows) return null;
+
+      const totals = { high: 0, medium: 0, low: 0 };
+      rows.forEach(row => {
+        const level = this.getSeverityLevel({ severityLabel: row.keys && row.keys[0] });
+        totals[level] += row.value || 0;
+      });
+      return totals;
     },
 
     // Reverse DNS is opt-in at the app level; batchLookup is a no-op collector that

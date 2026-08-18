@@ -181,7 +181,7 @@ test('loadAlerts', async () => {
   expect(mock).toHaveBeenCalled();
   const [route, options] = mock.mock.calls[0];
   expect(route).toBe('events/');
-  expect(options.params.query).toBe('tags:alert');
+  expect(options.params.query).toBe('tags:alert | groupby event.severity_label');
   expect(options.params.format).toBe(comp.i18n.timePickerSample);
   expect(options.params.eventLimit).toBe(100);
   expect(options.params.metricLimit).toBe(10);
@@ -192,6 +192,60 @@ test('loadAlerts', async () => {
   expect(comp.totalAlerts).toBe(5);
   expect(comp.hasMore).toBe(true);
   expect(comp.loading).toBe(false);
+});
+
+test('loadAlertsRequestsSeverityAggregation', async () => {
+  const mock = mockPapi("get", { data: { events: [], totalEvents: 0, metrics: {} } });
+  comp.filterStatus = 'all';
+  comp.filterSeverity = 'all';
+
+  await comp.loadAlerts();
+
+  // the aggregation rides along with the event page rather than costing extra requests
+  expect(mock.mock.calls[0][1].params.query).toBe('tags:alert | groupby event.severity_label');
+  expect(mock).toHaveBeenCalledTimes(1);
+});
+
+test('parseSeverityTotals', () => {
+  const totals = comp.parseSeverityTotals({ 'groupby_0|event.severity_label': [
+    { value: 10, keys: ['high'] },
+    { value: 5, keys: ['critical'] },
+    { value: 20, keys: ['medium'] },
+    { value: 30, keys: ['low'] },
+    { value: 1, keys: ['something-unmapped'] },
+  ]});
+
+  // critical folds into high, and anything unrecognized falls to low
+  expect(totals).toEqual({ high: 15, medium: 20, low: 31 });
+});
+
+test('parseSeverityTotalsMissingAggregation', () => {
+  expect(comp.parseSeverityTotals(undefined)).toBeNull();
+  expect(comp.parseSeverityTotals({})).toBeNull();
+  expect(comp.parseSeverityTotals({ 'groupby_0|other.field': [] })).toBeNull();
+  expect(comp.parseSeverityTotals({ 'groupby_0|event.severity_label': [] })).toEqual({ high: 0, medium: 0, low: 0 });
+});
+
+test('severityCountsFallBackWhenAggregationMissing', async () => {
+  mockPapi("get", { data: { events: [], totalEvents: 0, metrics: {} } });
+  await comp.loadAlerts();
+
+  expect(comp.severityTotals).toBeNull();
+  // a dash, not a zero that would read as "none matched"
+  expect(comp.highSeverityCount()).toBe('—');
+  expect(comp.mediumSeverityCount()).toBe('—');
+  expect(comp.lowSeverityCount()).toBe('—');
+});
+
+test('totalAlertsLabelTracksStatusFilter', () => {
+  comp.filterStatus = 'active';
+  expect(comp.totalAlertsLabel()).toBe('Active');
+  comp.filterStatus = 'acknowledged';
+  expect(comp.totalAlertsLabel()).toBe('Acknowledged');
+  comp.filterStatus = 'escalated';
+  expect(comp.totalAlertsLabel()).toBe('Escalated');
+  comp.filterStatus = 'all';
+  expect(comp.totalAlertsLabel()).toBe('All Statuses');
 });
 
 test('loadAlertsHandlesError', async () => {
@@ -244,16 +298,11 @@ test('processedAlertsFiltersByCategory', () => {
   expect(comp.processedAlerts().length).toBe(0);
 });
 
-test('severityCounts', () => {
-  comp.alerts = [
-    { severityLabel: 'high', acknowledged: false, escalated: false },
-    { severityLabel: 'critical', acknowledged: true, escalated: false },
-    { severityLabel: 'medium', acknowledged: false, escalated: true },
-    { severityLabel: 'low', acknowledged: false, escalated: false },
-  ];
+test('severityCountsRenderCompactAggregateTotals', () => {
+  // these describe every matching alert, not just the loaded page
+  comp.severityTotals = { high: 3623, medium: 2900, low: 1900 };
 
-  expect(comp.highSeverityCount()).toBe(2);
-  expect(comp.mediumSeverityCount()).toBe(1);
-  expect(comp.lowSeverityCount()).toBe(1);
-  expect(comp.activeAlertCount()).toBe(2);
+  expect(comp.highSeverityCount()).toBe('3.6K');
+  expect(comp.mediumSeverityCount()).toBe('2.9K');
+  expect(comp.lowSeverityCount()).toBe('1.9K');
 });

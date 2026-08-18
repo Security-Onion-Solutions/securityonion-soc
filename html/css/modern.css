@@ -1358,3 +1358,23 @@ dfn {
 .agentstudio-dialog-body {
   max-height: 70vh;
 }
+
+/* Simple Alerts ------------------------------------------------------------- */
+
+/* The filter selects share the toolbar's flex row and would otherwise stretch to
+   fill it; cap them so the row keeps its shape as filters are added. */
+.simplealerts-filter {
+  min-width: 130px;
+  max-width: 210px;
+}
+
+/* Alert counts are the point of the table, so let the rule column take the slack
+   and keep the network columns from wrapping mid-address. */
+.simplealerts-table td {
+  white-space: nowrap;
+}
+
+.simplealerts-table td.simplealerts-rule-cell {
+  white-space: normal;
+  min-width: 20rem;
+}

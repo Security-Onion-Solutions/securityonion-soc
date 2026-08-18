@@ -21,6 +21,9 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     loading: false,
     totalAlerts: 0,
     hasMore: false,
+    // {high, medium, low} across every matching alert, from the groupby aggregation
+    // that rides along with the events request; null when the backend sent none.
+    severityTotals: null,
     eventLimit: 100,
     metricLimit: 10,
     zone: moment.tz.guess(),
@@ -68,17 +71,22 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
       if (this.filterCategory === 'all') return this.alerts;
       return this.alerts.filter(alert => alert['rule.category'] === this.filterCategory);
     },
-    activeAlertCount() {
-      return this.alerts.filter(a => !a.acknowledged && !a.escalated).length;
-    },
+    // The stat pills describe the whole result set, not the loaded page, so they read
+    // from the aggregation. A dash is shown when no aggregation came back, rather than
+    // a zero that would read as "none matched".
     highSeverityCount() {
-      return this.alerts.filter(a => this.getSeverityLevel(a) === 'high').length;
+      return this.severityTotals ? this.formatCompactNumber(this.severityTotals.high) : this.i18n.simpleAlertsStatUnavailable;
     },
     mediumSeverityCount() {
-      return this.alerts.filter(a => this.getSeverityLevel(a) === 'medium').length;
+      return this.severityTotals ? this.formatCompactNumber(this.severityTotals.medium) : this.i18n.simpleAlertsStatUnavailable;
     },
     lowSeverityCount() {
-      return this.alerts.filter(a => this.getSeverityLevel(a) === 'low').length;
+      return this.severityTotals ? this.formatCompactNumber(this.severityTotals.low) : this.i18n.simpleAlertsStatUnavailable;
+    },
+    // Mirrors the active status filter so the headline number is never ambiguous.
+    totalAlertsLabel() {
+      const option = this.statusOptions.find(o => o.value === this.filterStatus);
+      return option ? option.title : this.i18n.simpleAlertsAllStatuses;
     },
   },
   created() {

@@ -3,20 +3,56 @@
     <v-col>
       <v-row>
         <v-toolbar class="so-toolbar elevation-0" fixed>
-          <h4 class="ml-2 my-0" data-aid="simplealerts_summary" role="heading" aria-level="2">
-            {{ i18n.simpleAlerts }} {{ formatCompactNumber(totalAlerts) }}
-          </h4>
+          <v-select v-model="filterStatus" :items="statusOptions" :label="i18n.status" hide-details
+            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_status"></v-select>
+          <v-select v-model="filterSeverity" :items="severityOptions" :label="i18n.severity" hide-details
+            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_severity"></v-select>
+          <v-select v-model="filterTimeRange" :items="timeRangeOptions" :label="i18n.simpleAlertsTimeRange" hide-details
+            class="mx-2 simplealerts-filter" @update:model-value="loadAlerts" data-aid="simplealerts_filter_range"></v-select>
+          <v-select v-model="filterCategory" :items="categoryOptions" :label="i18n.simpleAlertsCategory" hide-details
+            class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
           <v-spacer></v-spacer>
           <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadAlerts()" data-aid="simplealerts_refresh" :aria-label="i18n.ariaReloadData">
             <v-icon>fa-sync</v-icon>
           </v-btn>
         </v-toolbar>
       </v-row>
+      <v-row class="ga-3 my-1">
+        <div class="so-stat-pill" data-aid="simplealerts_stat_total">
+          <div class="so-stat-text">
+            <div class="so-stat-label" id="simplealerts-stat-label-total">{{ totalAlertsLabel }}</div>
+            <div class="so-stat-value" aria-labelledby="simplealerts-stat-label-total">{{ formatCompactNumber(totalAlerts) }}</div>
+          </div>
+          <v-icon class="so-stat-icon">fa-bell</v-icon>
+        </div>
+        <div class="so-stat-pill" data-aid="simplealerts_stat_high">
+          <div class="so-stat-text">
+            <div class="so-stat-label" id="simplealerts-stat-label-high">{{ i18n.simpleAlertsStatHigh }}</div>
+            <div class="so-stat-value text-error" aria-labelledby="simplealerts-stat-label-high">{{ highSeverityCount }}</div>
+          </div>
+          <v-icon class="so-stat-icon">fa-triangle-exclamation</v-icon>
+        </div>
+        <div class="so-stat-pill" data-aid="simplealerts_stat_medium">
+          <div class="so-stat-text">
+            <div class="so-stat-label" id="simplealerts-stat-label-medium">{{ i18n.simpleAlertsStatMedium }}</div>
+            <div class="so-stat-value text-warning" aria-labelledby="simplealerts-stat-label-medium">{{ mediumSeverityCount }}</div>
+          </div>
+          <v-icon class="so-stat-icon">fa-circle-exclamation</v-icon>
+        </div>
+        <div class="so-stat-pill" data-aid="simplealerts_stat_low">
+          <div class="so-stat-text">
+            <div class="so-stat-label" id="simplealerts-stat-label-low">{{ i18n.simpleAlertsStatLow }}</div>
+            <div class="so-stat-value text-info" aria-labelledby="simplealerts-stat-label-low">{{ lowSeverityCount }}</div>
+          </div>
+          <v-icon class="so-stat-icon">fa-circle-info</v-icon>
+        </div>
+      </v-row>
       <v-row>
         <div class="section-panel w-100">
           <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val"
             :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort density="compact"
-            :headers="headers" :items="processedAlerts" :loading="loading" item-value="id" data-aid="simplealerts_table">
+            :headers="headers" :items="processedAlerts" :loading="loading" item-value="id"
+            class="simplealerts-table" data-aid="simplealerts_table">
             <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
               <tr>
                 <template v-for="header in columns" :key="header.key">
@@ -39,7 +75,7 @@
                     {{ item.severityLabel }}
                   </v-chip>
                 </td>
-                <td>{{ item.ruleName }}</td>
+                <td class="simplealerts-rule-cell">{{ item.ruleName }}</td>
                 <td>
                   <span v-if="item.sourceIp">{{ item.sourceIp }}<span v-if="item.sourcePort">:{{ item.sourcePort }}</span></span>
                   <span v-else class="text-disabled">&mdash;</span>
