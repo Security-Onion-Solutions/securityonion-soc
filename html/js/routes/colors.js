@@ -77,7 +77,7 @@ routes.push({ path: '/colors', name: 'colors', component: {
     // segment matches anything: 'chip:purple/outlined' excepts one chip, 'chip:purple'
     // all purple chips, 'chip:*/outlined' all outlined chips.
     surfaces: [
-      { name: 'background',        text: ['semantic'],            icons: ['actions'],    chips: ['license', 'tlp', 'hunt'], buttons: true, alerts: true, links: true, labelChip: true, primaryButtonIcon: true,
+      { name: 'background',        text: ['semantic'],            icons: ['actions'],    chips: ['license', 'tlp', 'hunt', 'status'], buttons: true, alerts: true, links: true, labelChip: true, primaryButtonIcon: true,
         exceptions: [
           // Flat chips here would be license chips, but flat license chips only render
           // in the footer (index.html) — the nav_background section covers them.
@@ -86,6 +86,10 @@ routes.push({ path: '/colors', name: 'colors', component: {
           // assistant context stoplight (getContextColor) and the hunt detection engine
           // status (getDetectionEngineStatusClass).
           'text:success',
+          // Simple Alerts renders severity, status and playbook chips on this surface
+          // (severityColor()/questionStatusColor()), but only ever tonal, and never the
+          // 'gray' that colorNodeStatus() returns for grid nodes.
+          'chip:gray',
         ] },
       { name: 'nav_background',    text: ['nav'],                                        chips: ['license'],                links: true, linkColor: 'nav_background_link', gridSelector: true,
         exceptions: [

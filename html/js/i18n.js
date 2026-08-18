@@ -1470,6 +1470,7 @@ const i18n = {
       simpleAlertsNoFields: 'This alert carries no additional fields.',
       simpleAlertsShowAll: 'Show all {count}',
       simpleAlertsShowFewer: 'Show fewer',
+      simpleAlertsOpenAlert: 'Open alert details',
       simpleAlertsPcap: 'PCAP',
       simpleAlertsPcapFailed: 'The packet capture request could not be created.',
       simpleAlertsPcapUnavailable: 'A packet capture needs both endpoints and the sensor that observed them.',
