@@ -7,13 +7,11 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/util"
+	"github.com/apex/log"
 )
 
 const (
@@ -329,12 +327,19 @@ type ChatConfig struct {
 	AutoExecuteTools bool
 	// MaxTokens, when > 0, caps the number of output tokens the model may generate
 	// for this request. Used to enforce a per-sub-session output-token budget.
-	MaxTokens int
+	MaxTokens       int
+	IncludeMemories bool
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	return func(config *ChatConfig) {
 		config.AutoExecuteTools = autoExecute
+	}
+}
+
+func WithMemories() ChatOpt {
+	return func(config *ChatConfig) {
+		config.IncludeMemories = true
 	}
 }
 
@@ -646,6 +651,7 @@ type Memory struct {
 	Embedding    []float32
 	ModelID      string
 	TargetUserId *string
+	UserDefined  bool
 }
 
 type NearbyMemory struct {
@@ -670,10 +676,11 @@ type ReconcileCandidate struct {
 }
 
 type MemoryNeighbor struct {
-	Id         string  `json:"id"`
-	Content    string  `json:"content"`
-	Scope      string  `json:"scope"`
-	Similarity float64 `json:"similarity"`
+	Id          string  `json:"id"`
+	Content     string  `json:"content"`
+	Scope       string  `json:"scope"`
+	Similarity  float64 `json:"similarity"`
+	UserDefined bool    `json:"userDefined"`
 }
 
 type MemoryOp struct {
@@ -688,83 +695,82 @@ type MemoryOperations struct {
 	Operations []*MemoryOp `json:"operations"`
 }
 
-func (memOps *MemoryOperations) Validate(neighbors []MemoryNeighbor) (err error) {
-	allowedOps := []string{"ADD", "UPDATE", "DELETE", "NOOP"}
-	adds, updates, noops := 0, 0, 0
-
-	type counter struct {
-		totalRefs int
-		deletes   int
-	}
-
-	ids := map[string]*counter{}
+// RemoveInvalid removes improper operations from the set, logging each removal,
+// so the remaining valid operations can still be applied. An operation is
+// removed when its op is not ADD/UPDATE/DELETE/NOOP, an ADD carries a TargetId,
+// an UPDATE/DELETE does not target a supplied non-user-defined neighbor, a
+// prior operation already referenced the same TargetId, or an ADD/UPDATE/NOOP
+// was already kept (at most one of those three per reconciliation).
+func (memOps *MemoryOperations) RemoveInvalid(neighbors []MemoryNeighbor) {
+	userDefined := map[string]bool{}
 	for _, n := range neighbors {
-		ids[n.Id] = &counter{}
+		userDefined[n.Id] = n.UserDefined
 	}
+
+	primarySeen := false
+	usedIds := map[string]bool{}
+	kept := make([]*MemoryOp, 0, len(memOps.Operations))
 
 	for _, op := range memOps.Operations {
 		oper := strings.ToUpper(op.Op)
-		if !slices.Contains(allowedOps, oper) {
-			return fmt.Errorf("invalid op: %s", oper)
-		}
+
+		reason := ""
 
 		switch oper {
 		case "ADD":
-			if op.TargetId != nil {
-				return fmt.Errorf("ADD with TargetId")
+			switch {
+			case op.TargetId != nil:
+				reason = "ADD with TargetId"
+			case primarySeen:
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
 			}
-
-			adds++
-		case "UPDATE":
+		case "UPDATE", "DELETE":
 			if op.TargetId == nil {
-				return fmt.Errorf("UPDATE without TargetId")
+				reason = oper + " without TargetId"
+				break
 			}
 
-			_, ok := ids[*op.TargetId]
-			if !ok {
-				return fmt.Errorf("UPDATE with non-existing TargetId")
-			}
+			ud, ok := userDefined[*op.TargetId]
 
-			ids[*op.TargetId].totalRefs = ids[*op.TargetId].totalRefs + 1
-
-			updates++
-		case "DELETE":
-			if op.TargetId == nil {
-				return fmt.Errorf("DELETE without TargetId")
-			}
-
-			_, ok := ids[*op.TargetId]
-			if !ok {
-				return fmt.Errorf("DELETE with non-existing TargetId")
+			switch {
+			case !ok:
+				reason = oper + " with non-existing TargetId"
+			case ud:
+				reason = "cannot " + oper + " user defined memories"
+			case usedIds[*op.TargetId]:
+				reason = "another operation already references this TargetId"
+			case oper == "UPDATE" && primarySeen:
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
 			}
 		case "NOOP":
-			noops++
-		}
-	}
-
-	if adds+updates+noops > 1 {
-		return fmt.Errorf("expected at most 1 ADD, UPDATE, and/or NOOP operation, got ADD: %d, UPDATE: %d, NOOP: %d", adds, updates, noops)
-	}
-
-	tooManyOps := map[string]int{}
-	tooManyDeletes := map[string]int{}
-	for id, count := range ids {
-		if count.totalRefs > 1 {
-			tooManyOps[id] = count.totalRefs
+			if primarySeen {
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
+			}
+		default:
+			reason = "invalid op"
 		}
 
-		if count.deletes > 1 {
-			tooManyDeletes[id] = count.deletes
+		if reason != "" {
+			fields := log.Fields{"op": op.Op, "reason": reason}
+			if op.TargetId != nil {
+				fields["targetId"] = *op.TargetId
+			}
+
+			log.WithFields(fields).Warn("removing invalid memory operation")
+
+			continue
 		}
+
+		if oper != "DELETE" {
+			primarySeen = true
+		}
+
+		if op.TargetId != nil {
+			usedIds[*op.TargetId] = true
+		}
+
+		kept = append(kept, op)
 	}
 
-	if len(tooManyOps) != 0 {
-		return fmt.Errorf("expected at most one operation per TargetId, got: %v", util.TruncateMap(tooManyOps, 5))
-	}
-
-	if len(tooManyDeletes) != 0 {
-		return fmt.Errorf("expected at most one DELETE operation for any one memory, got: %v", util.TruncateMap(tooManyDeletes, 5))
-	}
-
-	return nil
+	memOps.Operations = kept
 }

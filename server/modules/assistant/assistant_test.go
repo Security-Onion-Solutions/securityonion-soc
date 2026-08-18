@@ -4451,3 +4451,48 @@ func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testin
 		})
 	}
 }
+
+func TestEmbed(t *testing.T) {
+	adapter := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}, {0.2}}}, nil
+	}}
+
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "embed-model", Adapter: "EmbedAdapter", Enabled: true},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{"EmbedAdapter": adapter}
+
+	resp, err := ac.Embed(context.Background(), "embed-model@EmbedAdapter", []string{"a", "b"})
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, resp) {
+		assert.Equal(t, "embed-model", resp.Model)
+		assert.Len(t, resp.Embeddings, 2)
+	}
+	// the adapter must receive the bare model id and the inputs verbatim
+	if assert.NotNil(t, adapter.lastEmbedReq) {
+		assert.Equal(t, "embed-model", adapter.lastEmbedReq.Model)
+		assert.Equal(t, []string{"a", "b"}, adapter.lastEmbedReq.Input)
+	}
+}
+
+func TestEmbedUnknownModel(t *testing.T) {
+	ac := newResolveTestCoordinator(nil)
+	ac.adapters = map[string]server.AssistantAdapter{}
+
+	_, err := ac.Embed(context.Background(), "missing-model", []string{"a"})
+
+	assert.ErrorIs(t, err, ErrInvalidModel)
+}
+
+func TestEmbedUnknownAdapter(t *testing.T) {
+	ac := newResolveTestCoordinator([]model.ModelParameters{
+		{ID: "embed-model", Adapter: "EmbedAdapter", Enabled: true},
+	})
+	ac.adapters = map[string]server.AssistantAdapter{}
+
+	_, err := ac.Embed(context.Background(), "embed-model@EmbedAdapter", []string{"a"})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "assistant adapter not found")
+}

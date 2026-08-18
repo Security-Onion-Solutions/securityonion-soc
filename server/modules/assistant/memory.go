@@ -10,7 +10,9 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,7 +31,7 @@ import (
 // worker: Memory extracts facts from session transcripts, Embed names the
 // embedding model, and Reconcile merges new facts against stored memories.
 func (ac *AssistantCoordinator) setupMemoryAgents(prompts map[string]string) {
-	ac.memoryAgents = map[string]model.AgentParameters{
+	ac.memoryAgents = map[string]model.Agent{
 		"Memory": {
 			Name:          "Memory",
 			AllowedSkills: []string{},
@@ -137,10 +139,12 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			continue
 		}
 
+		sesOwnerCtx := context.WithValue(ctx, web.ContextKeyRequestorId, sessionDetails.Session.UserId)
+
 		before := len(facts)
 
 		// filter facts by user permissions
-		facts = ac.filterFactsByUserPerms(facts, sessionDetails.Session.UserId)
+		facts = ac.filterFactsByUserPerms(sesOwnerCtx, facts)
 
 		filteredFacts := len(facts) - before
 
@@ -197,7 +201,7 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			logger.Info("reconciling against existing memories")
 
 			// Reconcile
-			memChanges, err := ac.reconcileMemories(ctx, mems)
+			memChanges, err := ac.reconcileMemories(sesOwnerCtx, mems)
 			if err != nil {
 				logger.WithError(err).Error("unable to reconcile memories")
 				continue
@@ -268,24 +272,29 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 	}
 }
 
-// filterFactsByUserPerms filters out candidate facts that the user is not allowed to write.
-func (ac *AssistantCoordinator) filterFactsByUserPerms(facts []*model.ExtractedFact, userId string) (filtered []*model.ExtractedFact) {
-	filtered = make([]*model.ExtractedFact, 0, len(facts))
-
-	userCtx := context.WithValue(context.Background(), web.ContextKeyRequestorId, userId)
-
-	// check if user can write to memory at all
-	err := ac.srv.CheckAuthorized(userCtx, "write_self", "memory")
-	if err != nil {
-		return nil
+// memoryPerms reports whether the requestor may act on their own memories and
+// on global memories for the given verb ("read" or "write"). The self-scoped
+// permission names are asymmetric (read_authored vs write_self), so the
+// mapping lives here rather than at each call site.
+func (ac *AssistantCoordinator) memoryPerms(ctx context.Context, verb string) (self bool, global bool) {
+	selfOp := verb + "_self"
+	if verb == "read" {
+		selfOp = "read_authored"
 	}
 
-	canWriteGlobal := false
+	self = ac.srv.CheckAuthorized(ctx, selfOp, "memory") == nil
+	global = ac.srv.CheckAuthorized(ctx, verb+"_global", "memory") == nil
 
-	// check if user can write to global memory
-	err = ac.srv.CheckAuthorized(userCtx, "write_global", "memory")
-	if err == nil {
-		canWriteGlobal = true
+	return self, global
+}
+
+// filterFactsByUserPerms filters out candidate facts that the user is not allowed to write.
+func (ac *AssistantCoordinator) filterFactsByUserPerms(ctx context.Context, facts []*model.ExtractedFact) (filtered []*model.ExtractedFact) {
+	filtered = make([]*model.ExtractedFact, 0, len(facts))
+
+	canWriteSelf, canWriteGlobal := ac.memoryPerms(ctx, "write")
+	if !canWriteSelf {
+		return nil
 	}
 
 	// the memory scanner cannot result in a fact written by one user being applied
@@ -304,7 +313,7 @@ func (ac *AssistantCoordinator) filterFactsByUserPerms(facts []*model.ExtractedF
 	return filtered
 }
 
-func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.AgentParameters, memoryModel *model.ModelParameters) ([]*model.ExtractedFact, error) {
+func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.Agent, memoryModel *model.ModelParameters) ([]*model.ExtractedFact, error) {
 	logger := log.FromContext(ctx)
 	ts := buildMemoryExtractTranscript(details)
 
@@ -380,14 +389,40 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 		return nil, fmt.Errorf("unknown adapter for memory model")
 	}
 
+	canWriteSelf, canWriteGlobal := ac.memoryPerms(ctx, "write")
+
 	ops = make([]*model.ReconciledMemory, 0, len(mems))
 
 	for _, mem := range mems {
-		// find similar memories
-		nearby, err := ac.FindNearbyMemories(ctx, mem.Embedding, mem.TargetUserId, mem.ModelID, ac.memoryProximityThreshold, -1)
-		if err != nil {
-			return nil, err
+		// filter out candidates whose scope the session owner cannot write
+		if (mem.TargetUserId == nil && !canWriteGlobal) || (mem.TargetUserId != nil && !canWriteSelf) {
+			continue
 		}
+
+		// find similar memories, limited to scopes the session owner is allowed
+		// to modify: their own memories, plus global memories only if they can
+		// write global, one scope per query
+		var nearby []*model.NearbyMemory
+
+		if canWriteGlobal && ac.maxGlobalMemoriesToReconcile > 0 {
+			nearby, err = ac.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, GlobalMemories(), WithMinSimilarity(ac.mem2memProximityThreshold), WithLimit(ac.maxGlobalMemoriesToReconcile))
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if mem.TargetUserId != nil && ac.maxUserMemoriesToReconcile > 0 {
+			userNearby, err := ac.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, UserMemories(*mem.TargetUserId), WithMinSimilarity(ac.mem2memProximityThreshold), WithLimit(ac.maxUserMemoriesToReconcile))
+			if err != nil {
+				return nil, err
+			}
+
+			nearby = append(nearby, userNearby...)
+		}
+
+		sort.Slice(nearby, func(i, j int) bool {
+			return nearby[i].Similarity > nearby[j].Similarity
+		})
 
 		if len(nearby) == 0 {
 			// there are no similar memories, add this memory
@@ -415,6 +450,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 			Neighbors: make([]model.MemoryNeighbor, 0, len(nearby)),
 		}
 
+		nearbyById := map[string]*model.NearbyMemory{}
 		for _, near := range nearby {
 			nearbyScope := "global"
 			if near.Memory.TargetUserId != nil {
@@ -422,11 +458,14 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 			}
 
 			body.Neighbors = append(body.Neighbors, model.MemoryNeighbor{
-				Id:         near.Memory.Id,
-				Content:    near.Memory.MemoryText,
-				Scope:      nearbyScope,
-				Similarity: near.Similarity,
+				Id:          near.Memory.Id,
+				Content:     near.Memory.MemoryText,
+				Scope:       nearbyScope,
+				Similarity:  near.Similarity,
+				UserDefined: near.Memory.UserDefined,
 			})
+
+			nearbyById[near.Memory.Id] = near
 		}
 
 		rawBody, err := json.Marshal(body)
@@ -478,11 +517,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 			return nil, err
 		}
 
-		err = changes.Validate(body.Neighbors)
-		if err != nil {
-			logger.WithError(err).Error("invalid reconciliation of memory")
-			return nil, err
-		}
+		changes.RemoveInvalid(body.Neighbors)
 
 		for _, op := range changes.Operations {
 			action := strings.ToUpper(op.Op)
@@ -499,15 +534,27 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 					mem.MemoryText = *op.Content
 					reembed = true
 				}
+
 				if op.TargetId != nil {
 					mem.Auditable.Id = *op.TargetId
+
+					// match scope with target
+					other, ok := nearbyById[*op.TargetId]
+					if ok {
+						if other.Memory.TargetUserId == nil {
+							mem.TargetUserId = nil
+						} else {
+							mem.TargetUserId = new(*other.Memory.TargetUserId)
+						}
+					}
 				}
+
 			case "NOOP":
 				continue
 			}
 
 			if action == "DELETE" {
-				// changes.Validate() ensured op.TargetId is not null
+				// changes.RemoveInvalid() ensured op.TargetId is not null
 				ops = append(ops, &model.ReconciledMemory{
 					Action: action,
 					Memory: &model.Memory{
@@ -529,32 +576,101 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 	return ops, nil
 }
 
-func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embedding []float32, userId *string, modelID string, minSimilarity float64, limit int) ([]*model.NearbyMemory, error) {
+type memoryScopeKind int
+
+const (
+	scopeNone memoryScopeKind = iota // zero value: no scope specified — fail closed
+	scopeUser
+	scopeGlobal
+	scopeAllUsers
+)
+
+// MemoryScope determines whose memories FindNearbyMemories searches. Build one
+// with UserMemories, GlobalMemories, or AllMemories; the zero value is invalid
+// and matches nothing. Each scope returns only its exact kind of memory —
+// callers wanting both a user's memories and global memories make two calls.
+type MemoryScope struct {
+	kind         memoryScopeKind
+	targetUserId string
+}
+
+// UserMemories scopes the search to memories targeting the given user.
+func UserMemories(userId string) MemoryScope {
+	return MemoryScope{kind: scopeUser, targetUserId: userId}
+}
+
+// GlobalMemories scopes the search to memories with no target user.
+func GlobalMemories() MemoryScope {
+	return MemoryScope{kind: scopeGlobal}
+}
+
+// AllMemories searches every memory regardless of target user, including other
+// users' memories; reserved for superusers.
+func AllMemories() MemoryScope {
+	return MemoryScope{kind: scopeAllUsers}
+}
+
+type findNearbyMemoriesOpts struct {
+	minSimilarity *float64 // nil = no similarity filter
+	limit         *int     // nil = unlimited
+}
+
+type FindNearbyMemoriesOpt func(*findNearbyMemoriesOpts)
+
+// WithMinSimilarity only returns memories at least this similar to the query
+// embedding.
+func WithMinSimilarity(threshold float64) FindNearbyMemoriesOpt {
+	return func(opts *findNearbyMemoriesOpts) {
+		opts.minSimilarity = &threshold
+	}
+}
+
+// WithLimit caps the number of memories returned.
+func WithLimit(limit int) FindNearbyMemoriesOpt {
+	return func(opts *findNearbyMemoriesOpts) {
+		opts.limit = &limit
+	}
+}
+
+func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embedding []float32, modelID string, scope MemoryScope, opts ...FindNearbyMemoriesOpt) ([]*model.NearbyMemory, error) {
 	if ac.srv.DB == nil {
 		return nil, ErrNoDatabase
 	}
 
-	var lim any // "... LIMIT NULL" means no limit
-	if limit > 0 {
-		lim = limit
+	options := &findNearbyMemoriesOpts{}
+	for _, opt := range opts {
+		opt(options)
 	}
 
-	args := []any{pgvector.NewVector(embedding), modelID, minSimilarity, lim}
+	args := []any{pgvector.NewVector(embedding), modelID}
 
-	stmt := `SELECT id, created_at, updated_at, user_id, memory_text, session_id, embedding, model_id, target_user_id, 1 - (embedding <=> $1) AS similarity
+	stmt := `SELECT id, created_at, updated_at, user_id, memory_text, session_id, embedding, model_id, target_user_id, 1 - (embedding <=> $1) AS similarity, user_defined
 		FROM memories
 		WHERE model_id = $2`
 
-	if userId != nil {
-		stmt += ` AND (target_user_id = $5 OR target_user_id IS NULL)`
-		args = append(args, *userId)
-	} else {
+	switch scope.kind {
+	case scopeUser:
+		args = append(args, scope.targetUserId)
+		stmt += fmt.Sprintf(` AND target_user_id = $%d`, len(args))
+	case scopeGlobal:
 		stmt += ` AND target_user_id IS NULL`
+	case scopeAllUsers:
+		// no target clause
+	default:
+		return nil, ErrInvalidMemoryScope
 	}
 
-	stmt += ` AND 1 - (embedding <=> $1) >= $3
-		ORDER BY embedding <=> $1
-		LIMIT $4`
+	if options.minSimilarity != nil {
+		args = append(args, *options.minSimilarity)
+		stmt += fmt.Sprintf(` AND 1 - (embedding <=> $1) >= $%d`, len(args))
+	}
+
+	stmt += ` ORDER BY embedding <=> $1`
+
+	if options.limit != nil {
+		args = append(args, *options.limit)
+		stmt += fmt.Sprintf(` LIMIT $%d`, len(args))
+	}
 
 	var rows db.Rows
 	var err error
@@ -579,7 +695,7 @@ func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embeddin
 		var vec pgvector.Vector
 		var similarity float64
 
-		err = rows.Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.UserId, &mem.MemoryText, &sessionId, &vec, &mem.ModelID, &mem.TargetUserId, &similarity)
+		err = rows.Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.UserId, &mem.MemoryText, &sessionId, &vec, &mem.ModelID, &mem.TargetUserId, &similarity, &mem.UserDefined)
 		if err != nil {
 			return nil, err
 		}
@@ -614,10 +730,10 @@ func (ac *AssistantCoordinator) AddMemory(ctx context.Context, mem *model.Memory
 	}
 
 	return ac.srv.DB.QueryRow(ctx, `
-		INSERT INTO memories (user_id, memory_text, session_id, embedding, model_id, target_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO memories (user_id, memory_text, session_id, embedding, model_id, target_user_id, user_defined)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at`,
-		mem.UserId, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId).
+		mem.UserId, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId, mem.UserDefined).
 		Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime)
 }
 
@@ -729,4 +845,68 @@ func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string
 	}
 
 	return strings.Join(lines, "\n\n")
+}
+
+func (ac *AssistantCoordinator) fetchMemoriesForPrompt(ctx context.Context, content string) (user []*model.NearbyMemory, global []*model.NearbyMemory, err error) {
+	logger := log.FromContext(ctx)
+
+	userId, ok := ctx.Value(web.ContextKeyRequestorId).(string)
+	if !ok {
+		err := errors.New("context is missing RequestorId")
+		logger.WithError(err).Error("invalid context")
+
+		return nil, nil, err
+	}
+
+	canReadSelf, canReadGlobal := ac.memoryPerms(ctx, "read")
+
+	if !canReadSelf {
+		return nil, nil, nil
+	}
+
+	_, embedModel, err := ac.resolveMemoryAgent("Embed")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := ac.Embed(ctx, embedModel.Selector(), []string{content})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(resp.Embeddings) != 1 {
+		err := fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))
+		return nil, nil, err
+	}
+
+	emb := resp.Embeddings[0]
+	modelUsed := resp.Model
+
+	if ac.maxUserMemoriesToInclude > 0 {
+		user, err = ac.FindNearbyMemories(ctx, emb, modelUsed, UserMemories(userId), WithMinSimilarity(ac.mem2msgProximityThreshold), WithLimit(ac.maxUserMemoriesToInclude))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if canReadGlobal && ac.maxGlobalMemoriesToInclude > 0 {
+		global, err = ac.FindNearbyMemories(ctx, emb, modelUsed, GlobalMemories(), WithMinSimilarity(ac.mem2msgProximityThreshold), WithLimit(ac.maxGlobalMemoriesToInclude))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return user, global, nil
+}
+
+func (ac *AssistantCoordinator) countMemoryUsage(ctx context.Context, ids []string) error {
+	if ac.srv.DB == nil {
+		return ErrNoDatabase
+	}
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	return ac.srv.DB.Exec(ctx, `UPDATE memories SET usage_count = usage_count + 1 WHERE id = ANY($1)`, ids)
 }

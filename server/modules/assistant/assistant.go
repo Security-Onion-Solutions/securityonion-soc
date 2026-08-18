@@ -41,11 +41,12 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 var protocols = map[string]ProtocolConstructor{}
 
 var (
-	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
-	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
-	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
-	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
-	ErrNoDatabase      = errors.New("no database configured")
+	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrRequestTooLarge    = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
+	ErrInvalidModel       = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
+	ErrInvalidAgent       = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase         = errors.New("no database configured")
+	ErrInvalidMemoryScope = errors.New("memory scope not specified")
 )
 
 const (
@@ -68,7 +69,17 @@ const (
 	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
 	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
 
-	DEFAULT_MEMORY_PROXIMITY_THRESHOLD = 0.8
+	DEFAULT_USE_MEMORY_SCANNER           = true
+	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
+
+	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
+	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE   = 5
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE = 5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
 )
 
 //go:embed SOSystemPrompt.bin
@@ -123,12 +134,18 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
-	useMemory                bool
-	terminateMemory          context.CancelCauseFunc
-	memoryScanInterval       time.Duration
-	memoryProximityThreshold float64
-	memoryAgents             map[string]model.AgentParameters // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
-	memoryMapping            map[string]string                // map[roleName]modelSelector from the memoryModel/embedModel/reconcileModel config keys
+	useMemory                    bool
+	useMemoryScanner             bool
+	maxUserMemoriesToInclude     int
+	maxGlobalMemoriesToInclude   int
+	maxUserMemoriesToReconcile   int
+	maxGlobalMemoriesToReconcile int
+	terminateMemory              context.CancelCauseFunc
+	memoryScanInterval           time.Duration
+	mem2memProximityThreshold    float64
+	mem2msgProximityThreshold    float64
+	memoryAgents                 map[string]model.Agent // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
+	memoryMapping                map[string]string      // map[roleName]modelSelector from the memoryModel/embedModel/reconcileModel config keys
 
 	detections.IOManager
 }
@@ -194,21 +211,17 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
-	ac.memoryProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_PROXIMITY_THRESHOLD)
+	ac.mem2memProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD)
+	ac.mem2msgProximityThreshold = module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD)
 
-	// small value for testing, real value will probably be more like 5-15 mins
-	ac.memoryScanInterval = time.Second * 30
+	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
+	ac.memoryScanInterval = time.Second * time.Duration(memScanInterval)
 
 	ac.loadAdapters(config)
 
 	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
 	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
-    
-	if ac.isAgentic {
-		
-	}
-
 
 	ac.validateModelSelectors()
 
@@ -219,10 +232,10 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 			ac.setupAgentic(prompts)
 			ac.agentMapping = ac.loadAgentMapping(config)
 
-            ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
-		    for name, selector := range ac.agentMapping {
-		    	ac.builtinAgentMapping[name] = selector
-            }
+			ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+			for name, selector := range ac.agentMapping {
+				ac.builtinAgentMapping[name] = selector
+			}
 
 			ac.validateAgentMappings()
 			ac.registerDelegateTools()
@@ -230,6 +243,11 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		}
 
 		if ac.useMemory {
+			ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
+			ac.maxUserMemoriesToInclude = module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE)
+			ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
+			ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
+			ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
 			ac.setupMemoryAgents(prompts)
 			ac.memoryMapping = map[string]string{
 				"Memory":    module.GetStringDefault(config, "memoryModel", ""),
@@ -501,7 +519,7 @@ func (ac *AssistantCoordinator) Start() error {
 		ac.reloadAgentConfiguration(ac.srv.Context)
 	}
 
-	if ac.useMemory {
+	if ac.useMemoryScanner {
 		var memCtx context.Context
 		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
 
@@ -679,7 +697,7 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.Agent, *model.
 // resolveMemoryAgent resolves an internal memory role (Memory, Embed,
 // Reconcile) to its prompt-holding definition and the model that executes it,
 // configured via the memoryModel/embedModel/reconcileModel module config keys.
-func (ac *AssistantCoordinator) resolveMemoryAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+func (ac *AssistantCoordinator) resolveMemoryAgent(name string) (*model.Agent, *model.ModelParameters, error) {
 	agent, ok := ac.memoryAgents[name]
 	if !ok {
 		return nil, nil, ErrInvalidAgent
@@ -772,17 +790,14 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, ErrInvalidModel
 	}
 
+	clean := cleanupMessages(messages)
+
 	req := &model.ChatRequest{
-		Messages:  cleanupMessages(messages),
+		Messages:  clean,
 		Stream:    stream,
 		UserId:    userID,
 		Model:     modelParams.ID,
 		MaxTokens: config.MaxTokens,
-	}
-
-	if err := ac.checkRequestSize(req, modelParams); err != nil {
-		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
-		return nil, nil, err
 	}
 
 	adapter, ok := ac.adapters[modelParams.Adapter]
@@ -805,7 +820,68 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		req.SystemAppend = ac.systemPromptAddendum
 	}
 
+	if ac.useMemory && config.IncludeMemories && len(clean) != 0 {
+		latest := clean[len(clean)-1]
+		if strings.EqualFold(latest.Role, "user") {
+			content := messageText(latest)
+			if content != "" {
+				ac.addMemoriesToPrompt(ctx, req, content)
+			}
+		}
+	}
+
+	if err := ac.checkRequestSize(req, modelParams); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, nil, err
+	}
+
 	return req, adapter, nil
+}
+
+func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *model.ChatRequest, content string) {
+	logger := log.FromContext(ctx)
+
+	user, global, err := ac.fetchMemoriesForPrompt(ctx, content)
+	if err != nil {
+		// log error but send request with memories
+		logger.WithError(err).Warnf("failed to fetch memories for prompt, sending without memories")
+		return
+	}
+
+	memPrompt := strings.Builder{}
+	ids := make([]string, 0, len(user)+len(global))
+
+	if len(user) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this user:")
+		for _, m := range user {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	if len(global) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this SOC installation:")
+		for _, m := range global {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	go func() {
+		noCancelCtx := context.WithoutCancel(ctx)
+
+		err := ac.countMemoryUsage(noCancelCtx, ids)
+		if err != nil {
+			logger.WithError(err).WithField("memoryIds", ids).Error("unable to update usage count for memories")
+		}
+	}()
+
+	logger.WithFields(log.Fields{
+		"userMemoriesAdded":   len(user),
+		"globalMemoriesAdded": len(global),
+	}).Info("adding memories to message")
+
+	req.SystemAppend += memPrompt.String()
 }
 
 func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {

@@ -328,7 +328,7 @@ var allPrompts []byte
 // setupAgentic defines the fixed set of chat-orchestration agents and the
 // skill library the coordinator exposes when agentic mode is enabled.
 func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
-	ac.agents = map[string]model.AgentParameters{
+	ac.agents = map[string]model.Agent{
 		"Orchestrator": {
 			Name:           "Orchestrator",
 			IsOrchestrator: true,

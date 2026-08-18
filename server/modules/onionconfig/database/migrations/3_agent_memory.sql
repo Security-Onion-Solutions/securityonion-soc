@@ -7,11 +7,12 @@ CREATE TABLE IF NOT EXISTS memories (
     user_id            text        NOT NULL,  -- user ID
     memory_text        text        NOT NULL,
     session_id         text,                  -- originating session (NULL for seeded/system memories)
-    embedding          vector,
+    embedding          vector      NOT NULL,
     model_id           text        NOT NULL,  -- embedding model that produced `embedding`
-    target_user_id     text                   -- NULL = global scope; value = owning user only
+    target_user_id     text,                  -- NULL = global scope; value = owning user only
+    user_defined       boolean     NOT NULL DEFAULT FALSE,
+    usage_count        int         NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_memories_user_id
     ON memories (user_id);
-

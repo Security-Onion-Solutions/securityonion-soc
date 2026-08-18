@@ -18,12 +18,15 @@ import (
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	pgvector "github.com/pgvector/pgvector-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func sqlContains(substr string) any {
@@ -70,14 +73,15 @@ type nearbyRowFixture struct {
 	sessionId, targetUserId         *string
 	embedding                       []float32
 	similarity                      float64
+	userDefined                     bool
 }
 
-// expectNearbyRow scripts one Scan call on mRows, filling the ten out-params
+// expectNearbyRow scripts one Scan call on mRows, filling the eleven out-params
 // FindNearbyMemories reads per row. Uses Once so successive rows are consumed
 // in order; pair each with an .On("Next").Return(true).Once().
 func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			*(args.Get(0).(*string)) = row.id
 			*(args.Get(3).(*string)) = row.userId
@@ -87,6 +91,7 @@ func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 			*(args.Get(7).(*string)) = row.modelId
 			*(args.Get(8).(**string)) = row.targetUserId
 			*(args.Get(9).(*float64)) = row.similarity
+			*(args.Get(10).(*bool)) = row.userDefined
 		}).Return(nil).Once()
 }
 
@@ -96,17 +101,20 @@ func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAdapter) *AssistantCoordinator {
 	return &AssistantCoordinator{
 		srv: &server.Server{
-			DB: mDB,
+			DB:         mDB,
+			Authorizer: &opAuthorizer{allowed: map[string]bool{"write_self": true, "write_global": true}},
 			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
 				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{
 					{ID: "rec-model", Adapter: "TestAdapter", Enabled: true},
 				}},
 			}},
 		},
-		adapters:                 map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memoryAgents:             map[string]model.AgentParameters{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
-		memoryMapping:            map[string]string{"Reconcile": "rec-model@TestAdapter"},
-		memoryProximityThreshold: 0.8,
+		adapters:                     map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memoryAgents:                 map[string]model.Agent{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
+		memoryMapping:                map[string]string{"Reconcile": "rec-model@TestAdapter"},
+		mem2memProximityThreshold:    0.8,
+		maxUserMemoriesToReconcile:   20,
+		maxGlobalMemoriesToReconcile: 20,
 	}
 }
 
@@ -115,10 +123,11 @@ func TestAddMemory(t *testing.T) {
 	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
 
 	mem := &model.Memory{
-		MemoryText: "the user prefers dark mode",
-		SessionId:  "session-1",
-		Embedding:  []float32{0.1, 0.2},
-		ModelID:    "embed-model",
+		MemoryText:  "the user prefers dark mode",
+		SessionId:   "session-1",
+		Embedding:   []float32{0.1, 0.2},
+		ModelID:     "embed-model",
+		UserDefined: true,
 	}
 	mem.UserId = "user-1"
 
@@ -131,8 +140,8 @@ func TestAddMemory(t *testing.T) {
 		*(args.Get(2).(**time.Time)) = &created
 	}).Return(nil)
 
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
-		"user-1", "the user prefers dark mode", stringPtrTo("session-1"), mock.Anything, "embed-model", nilStringPtr()).
+	mDB.On("QueryRow", mock.Anything, sqlContains("$7"),
+		"user-1", "the user prefers dark mode", stringPtrTo("session-1"), mock.Anything, "embed-model", nilStringPtr(), true).
 		Return(mRow)
 
 	err := ac.AddMemory(context.Background(), mem)
@@ -159,7 +168,7 @@ func TestAddMemoryEmptySessionId(t *testing.T) {
 	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
-		mock.Anything, mock.Anything, nilStringPtr(), mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, nilStringPtr(), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(mRow)
 
 	err := ac.AddMemory(context.Background(), mem)
@@ -265,14 +274,50 @@ func TestDeleteMemoryExecError(t *testing.T) {
 	assert.ErrorIs(t, err, execErr)
 }
 
+func TestCountMemoryUsage(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET usage_count = usage_count + 1"), []string{"mem-1", "mem-2"}).Return(nil)
+
+	err := ac.countMemoryUsage(context.Background(), []string{"mem-1", "mem-2"})
+
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestCountMemoryUsageEmptyIds(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	err := ac.countMemoryUsage(context.Background(), []string{})
+
+	assert.NoError(t, err)
+	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestCountMemoryUsageExecError(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	execErr := errors.New("connection lost")
+
+	mDB.On("Exec", mock.Anything, mock.Anything, mock.Anything).Return(execErr)
+
+	err := ac.countMemoryUsage(context.Background(), []string{"mem-1"})
+
+	assert.ErrorIs(t, err, execErr)
+}
+
 func TestMemoryNoDB(t *testing.T) {
 	ac := &AssistantCoordinator{srv: &server.Server{}}
 
 	assert.ErrorIs(t, ac.AddMemory(context.Background(), &model.Memory{}), ErrNoDatabase)
 	assert.ErrorIs(t, ac.UpdateMemory(context.Background(), &model.Memory{}), ErrNoDatabase)
 	assert.ErrorIs(t, ac.DeleteMemory(context.Background(), "mem-1"), ErrNoDatabase)
+	assert.ErrorIs(t, ac.countMemoryUsage(context.Background(), []string{"mem-1"}), ErrNoDatabase)
 
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.1}, nil, "embed-model", 0.8, 5)
+	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.1}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	_, err = ac.reconcileMemories(context.Background(), []*model.Memory{{}})
@@ -286,7 +331,7 @@ func TestApplyMemories(t *testing.T) {
 	addRow := &mockdb.MockRow{}
 	addRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(addRow)
 
 	updateRow := &mockdb.MockRow{}
@@ -331,7 +376,7 @@ func TestApplyMemoriesCollectsErrors(t *testing.T) {
 	addRow := &mockdb.MockRow{}
 	addRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(addRow)
 
 	updateErr := errors.New("update failed")
@@ -574,7 +619,9 @@ func TestFilterFactsByUserPerms(t *testing.T) {
 				facts = append(facts, &model.ExtractedFact{Fact: fmt.Sprintf("fact-%d", i), Scope: scope})
 			}
 
-			got := ac.filterFactsByUserPerms(facts, "user-1")
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+
+			got := ac.filterFactsByUserPerms(ctx, facts)
 
 			if tc.expected == nil {
 				assert.Nil(t, got)
@@ -603,7 +650,7 @@ func TestFindNearbyMemoriesUserScoped(t *testing.T) {
 	expectNearbyRow(mRows, nearbyRowFixture{
 		id: "mem-1", userId: "system", memoryText: "likes tea", modelId: "embed-model",
 		sessionId: util.Ptr("sess-1"), targetUserId: util.Ptr("user-1"),
-		embedding: []float32{0.5, 0.6}, similarity: 0.91,
+		embedding: []float32{0.5, 0.6}, similarity: 0.91, userDefined: true,
 	})
 	expectNearbyRow(mRows, nearbyRowFixture{
 		id: "mem-2", userId: "system", memoryText: "drinks coffee", modelId: "embed-model",
@@ -612,12 +659,16 @@ func TestFindNearbyMemoriesUserScoped(t *testing.T) {
 	mRows.On("Err").Return(nil)
 	mRows.On("Close").Return()
 
-	// the userId arg must come last, after the limit
-	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $5"),
-		mock.Anything, "embed-model", 0.8, 5, "user-1").
+	// args are appended in clause order: scope user, then similarity, then limit
+	userOnly := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "target_user_id = $3") &&
+			!strings.Contains(sql, "target_user_id IS NULL")
+	})
+	mDB.On("Query", mock.Anything, userOnly,
+		mock.Anything, "embed-model", "user-1", 0.8, 5).
 		Return(mRows, nil)
 
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5, 0.6}, util.Ptr("user-1"), "embed-model", 0.8, 5)
+	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5, 0.6}, "embed-model", UserMemories("user-1"), WithMinSimilarity(0.8), WithLimit(5))
 
 	assert.NoError(t, err)
 	assert.Len(t, got, 2)
@@ -629,10 +680,12 @@ func TestFindNearbyMemoriesUserScoped(t *testing.T) {
 	assert.Equal(t, "sess-1", got[0].Memory.SessionId)
 	assert.Equal(t, []float32{0.5, 0.6}, got[0].Memory.Embedding)
 	assert.Equal(t, util.Ptr("user-1"), got[0].Memory.TargetUserId)
+	assert.True(t, got[0].Memory.UserDefined)
 
 	// NULL session_id stays empty
 	assert.Equal(t, "", got[1].Memory.SessionId)
 	assert.Nil(t, got[1].Memory.TargetUserId)
+	assert.False(t, got[1].Memory.UserDefined)
 
 	mDB.AssertExpectations(t)
 	mRows.AssertExpectations(t)
@@ -647,17 +700,81 @@ func TestFindNearbyMemoriesGlobalScopeNoLimit(t *testing.T) {
 	mRows.On("Err").Return(nil)
 	mRows.On("Close").Return()
 
-	// nil userId scopes to global rows, non-positive limit becomes LIMIT NULL
+	// global scope only queries untargeted rows; no WithLimit means no LIMIT arg
 	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
-		mock.Anything, "embed-model", 0.8, nil).
+		mock.Anything, "embed-model", 0.8).
 		Return(mRows, nil)
 
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, nil, "embed-model", 0.8, -1)
+	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, got)
 	assert.Empty(t, got)
 	mDB.AssertExpectations(t)
+}
+
+func TestFindNearbyMemoriesUserOnlyScope(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	// user-only scope must not pull in global rows
+	userOnly := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "target_user_id = $3") &&
+			!strings.Contains(sql, "target_user_id IS NULL")
+	})
+	mDB.On("Query", mock.Anything, userOnly,
+		mock.Anything, "embed-model", "user-1", 2).
+		Return(mRows, nil)
+
+	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", UserMemories("user-1"), WithLimit(2))
+
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+	mDB.AssertExpectations(t)
+}
+
+func TestFindNearbyMemoriesAllUsersNoFilters(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	// all-users scope has no target clause; no options means no similarity or LIMIT clauses
+	unfiltered := mock.MatchedBy(func(sql string) bool {
+		return !strings.Contains(sql, "target_user_id =") &&
+			!strings.Contains(sql, "target_user_id IS NULL") &&
+			!strings.Contains(sql, ">=") &&
+			!strings.Contains(sql, "LIMIT")
+	})
+	mDB.On("Query", mock.Anything, unfiltered,
+		mock.Anything, "embed-model").
+		Return(mRows, nil)
+
+	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", AllMemories())
+
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+	mDB.AssertExpectations(t)
+}
+
+func TestFindNearbyMemoriesUnspecifiedScope(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+
+	// the zero-value scope fails closed: no query, no results
+	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", MemoryScope{})
+
+	assert.ErrorIs(t, err, ErrInvalidMemoryScope)
+	assert.Nil(t, got)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestFindNearbyMemoriesQueryError(t *testing.T) {
@@ -669,7 +786,7 @@ func TestFindNearbyMemoriesQueryError(t *testing.T) {
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(&mockdb.MockRows{}, queryErr)
 
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, nil, "embed-model", 0.8, 5)
+	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
 
 	assert.ErrorIs(t, err, queryErr)
 }
@@ -683,14 +800,14 @@ func TestFindNearbyMemoriesScanError(t *testing.T) {
 	mRows := &mockdb.MockRows{}
 	mRows.On("Next").Return(true)
 	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(scanErr)
 	mRows.On("Close").Return()
 
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(mRows, nil)
 
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, nil, "embed-model", 0.8, 5)
+	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
 
 	assert.ErrorIs(t, err, scanErr)
 	mRows.AssertCalled(t, "Close")
@@ -711,19 +828,19 @@ func TestFindNearbyMemoriesRowsErr(t *testing.T) {
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(mRows, nil)
 
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, nil, "embed-model", 0.8, 5)
+	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
 
 	assert.ErrorIs(t, err, rowsErr)
 }
 
-func extractTestFixtures() (*model.AssistantSessionDetails, *model.AgentParameters, *model.ModelParameters) {
+func extractTestFixtures() (*model.AssistantSessionDetails, *model.Agent, *model.ModelParameters) {
 	details := &model.AssistantSessionDetails{
 		Session: &model.AssistantSession{},
 		History: []*model.StoredMessage{
 			storedText("user", "I prefer dark mode"),
 		},
 	}
-	memoryAgent := &model.AgentParameters{Name: "Memory", Prompt: "memory prompt"}
+	memoryAgent := &model.Agent{Name: "Memory", Prompt: "memory prompt"}
 	memoryModel := &model.ModelParameters{ID: "mem-model", Adapter: "TestAdapter"}
 
 	return details, memoryAgent, memoryModel
@@ -847,12 +964,13 @@ func reconcileTestMem() *model.Memory {
 	}
 }
 
-// expectReconcileQuery scripts the FindNearbyMemories lookup reconcileMemories
-// performs per candidate: global scope, the coordinator's proximity threshold,
-// and no limit.
+// expectReconcileQuery scripts the global-scope FindNearbyMemories lookup
+// reconcileMemories performs per candidate when the session owner can write
+// global memories (user-scoped candidates issue a second, user-scoped query):
+// the coordinator's proximity threshold and reconcile neighbor limit.
 func expectReconcileQuery(mDB *mockdb.MockDB, mRows *mockdb.MockRows) {
 	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
-		mock.Anything, "embed-model", 0.8, nil).
+		mock.Anything, "embed-model", 0.8, 20).
 		Return(mRows, nil)
 }
 
@@ -1090,9 +1208,16 @@ func TestReconcileMemoriesUserScoped(t *testing.T) {
 	}}
 	ac := newReconcileTestCoordinator(mDB, adapter)
 
-	// a user-scoped candidate queries user-scoped rows and reports scope "user"
-	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $5"),
-		mock.Anything, "embed-model", 0.8, nil, "user-1").
+	// a user-scoped candidate issues two queries — global scope and user scope —
+	// and the merged neighbors are sorted by similarity descending
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20).
+		Return(neighborRows(nearbyRowFixture{
+			id: "n2", memoryText: "everyone likes tea", modelId: "embed-model",
+			similarity: 0.9,
+		}), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
 		Return(neighborRows(nearbyRowFixture{
 			id: "n1", memoryText: "user likes tea", modelId: "embed-model",
 			targetUserId: util.Ptr("user-1"), similarity: 0.99,
@@ -1109,27 +1234,180 @@ func TestReconcileMemoriesUserScoped(t *testing.T) {
 	var body model.ReconcileMemoryBody
 	assert.NoError(t, json.Unmarshal([]byte(adapter.lastReq.Messages[0].ContentBlocks[0].Text), &body))
 	assert.Equal(t, "user", body.Candidate.Scope)
-	if assert.Len(t, body.Neighbors, 1) {
+	if assert.Len(t, body.Neighbors, 2) {
+		// the user neighbor is more similar, so it sorts ahead of the global one
+		assert.Equal(t, "n1", body.Neighbors[0].Id)
 		assert.Equal(t, "user", body.Neighbors[0].Scope)
+		assert.Equal(t, 0.99, body.Neighbors[0].Similarity)
+
+		assert.Equal(t, "n2", body.Neighbors[1].Id)
+		assert.Equal(t, "global", body.Neighbors[1].Scope)
+		assert.Equal(t, 0.9, body.Neighbors[1].Similarity)
 	}
 	mDB.AssertExpectations(t)
 }
 
-func TestReconcileMemoriesValidateFails(t *testing.T) {
+func TestReconcileMemoriesUpdateScopeMatchesTarget(t *testing.T) {
+	tests := []struct {
+		name         string
+		targetId     string
+		expectTarget *string
+	}{
+		{
+			name:         "updating a global neighbor keeps the memory global",
+			targetId:     "n-global",
+			expectTarget: nil,
+		},
+		{
+			name:         "updating a user neighbor keeps the memory user-scoped",
+			targetId:     "n-user",
+			expectTarget: util.Ptr("user-1"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mDB := &mockdb.MockDB{}
+			adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+				return textResponse(fmt.Sprintf(`{"operations":[{"op":"UPDATE","target_id":"%s","content":"updated tea preference"}]}`, tc.targetId)), nil
+			}}
+			ac := newReconcileTestCoordinator(mDB, adapter)
+
+			mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+				mock.Anything, "embed-model", 0.8, 20).
+				Return(neighborRows(nearbyRowFixture{
+					id: "n-global", memoryText: "everyone likes tea", modelId: "embed-model", similarity: 0.9,
+				}), nil)
+			mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+				mock.Anything, "embed-model", "user-1", 0.8, 20).
+				Return(neighborRows(nearbyRowFixture{
+					id: "n-user", memoryText: "user likes tea", modelId: "embed-model",
+					targetUserId: util.Ptr("user-1"), similarity: 0.99,
+				}), nil)
+
+			// a user-scoped candidate, so both scope queries run and the agent
+			// sees one neighbor of each scope
+			mem := reconcileTestMem()
+			mem.TargetUserId = util.Ptr("user-1")
+
+			ops, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+
+			assert.NoError(t, err)
+			if assert.Len(t, ops, 1) {
+				assert.Equal(t, "UPDATE", ops[0].Action)
+				assert.Equal(t, tc.targetId, ops[0].Memory.Id)
+				if tc.expectTarget == nil {
+					assert.Nil(t, ops[0].Memory.TargetUserId)
+				} else if assert.NotNil(t, ops[0].Memory.TargetUserId) {
+					assert.Equal(t, *tc.expectTarget, *ops[0].Memory.TargetUserId)
+				}
+			}
+			mDB.AssertExpectations(t)
+		})
+	}
+}
+
+func TestReconcileMemoriesWriteSelfOnlyOmitsGlobalNeighbors(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
-		return textResponse(`{"operations":[{"op":"ADD","target_id":"n1"}]}`), nil
+		return textResponse(`{"operations":[{"op":"NOOP"}]}`), nil
+	}}
+	ac := newReconcileTestCoordinator(mDB, adapter)
+
+	auth := &opAuthorizer{allowed: map[string]bool{"write_self": true}}
+	ac.srv.Authorizer = auth
+
+	// without write_global, only the user-scoped query runs
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
+		Return(neighborRows(nearbyRowFixture{
+			id: "n1", memoryText: "user likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.99,
+		}), nil)
+
+	mem := reconcileTestMem()
+	mem.TargetUserId = util.Ptr("user-1")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+
+	ops, err := ac.reconcileMemories(ctx, []*model.Memory{mem})
+
+	assert.NoError(t, err)
+	assert.Empty(t, ops)
+	assert.Equal(t, "user-1", auth.lastRequestorId)
+
+	var body model.ReconcileMemoryBody
+	assert.NoError(t, json.Unmarshal([]byte(adapter.lastReq.Messages[0].ContentBlocks[0].Text), &body))
+	if assert.Len(t, body.Neighbors, 1) {
+		assert.Equal(t, "n1", body.Neighbors[0].Id)
+		assert.Equal(t, "user", body.Neighbors[0].Scope)
+	}
+
+	mDB.AssertNotCalled(t, "Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20)
+	mDB.AssertExpectations(t)
+}
+
+func TestReconcileMemoriesNoWriteGlobalSkipsGlobalCandidate(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		return textResponse("{}"), nil
+	}}
+	ac := newReconcileTestCoordinator(mDB, adapter)
+	ac.srv.Authorizer = &opAuthorizer{allowed: map[string]bool{"write_self": true}}
+
+	// a global candidate from a session owner without write_global is dropped
+	ops, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, ops)
+	assert.Empty(t, ops)
+	assert.Equal(t, 0, calls)
+	assert.Empty(t, mDB.Calls)
+}
+
+func TestReconcileMemoriesNoWriteSelfSkipsUserCandidate(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		return textResponse("{}"), nil
+	}}
+	ac := newReconcileTestCoordinator(mDB, adapter)
+	ac.srv.Authorizer = &opAuthorizer{allowed: map[string]bool{"write_global": true}}
+
+	mem := reconcileTestMem()
+	mem.TargetUserId = util.Ptr("user-1")
+
+	// a user-scoped candidate from a session owner without write_self is dropped
+	ops, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, ops)
+	assert.Empty(t, ops)
+	assert.Equal(t, 0, calls)
+	assert.Empty(t, mDB.Calls)
+}
+
+func TestReconcileMemoriesInvalidOpsRemoved(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`{"operations":[{"op":"ADD","target_id":"n1"},{"op":"DELETE","target_id":"n1"}]}`), nil
 	}}
 	ac := newReconcileTestCoordinator(mDB, adapter)
 	expectReconcileQuery(mDB, neighborRows(nearbyRowFixture{
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.9,
 	}))
 
+	// the ADD is invalid (carries a TargetId) and is dropped; the DELETE still applies
 	ops, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "ADD with TargetId")
-	assert.Nil(t, ops)
+	assert.NoError(t, err)
+	assert.Len(t, ops, 1)
+	assert.Equal(t, "DELETE", ops[0].Action)
+	assert.Equal(t, "n1", ops[0].Memory.Id)
 }
 
 func TestReconcileMemoriesSendError(t *testing.T) {
@@ -1197,4 +1475,712 @@ func TestReconcileMemoriesBadJSON(t *testing.T) {
 
 	assert.Empty(t, rec)
 	assert.Error(t, err)
+}
+
+// embedAdapter is a captureAdapter whose Embed response is supplied by the
+// test, for driving the embedding paths.
+type embedAdapter struct {
+	captureAdapter
+	lastEmbedReq *model.EmbeddingRequest
+	embedFn      func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error)
+}
+
+func (a *embedAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	a.lastEmbedReq = req
+	return a.embedFn(ctx, req)
+}
+
+// singleEmbedAdapter returns an embedAdapter that produces one fixed embedding
+// per input, the shape most tests need.
+func singleEmbedAdapter() *embedAdapter {
+	return &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{0.1})
+		}
+
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: embeddings}, nil
+	}}
+}
+
+func memoryTestCtx() context.Context {
+	return context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+}
+
+// newScanTestCoordinator builds the full coordinator scanForMemories needs: the
+// three memory roles each mapped to an enabled model with its own adapter, a
+// session store, and DB/authorizer for reconcile and apply.
+func newScanTestCoordinator(store server.Assistantstore, mDB *mockdb.MockDB, extract *scriptedAdapter, embed *embedAdapter, reconcile *scriptedAdapter) *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			DB:             mDB,
+			Authorizer:     &opAuthorizer{allowed: map[string]bool{"write_self": true, "write_global": true}},
+			Assistantstore: store,
+			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{
+					{ID: "mem-model", Adapter: "ExtractAdapter", Enabled: true},
+					{ID: "embed-model", Adapter: "EmbedAdapter", Enabled: true},
+					{ID: "rec-model", Adapter: "ReconcileAdapter", Enabled: true},
+				}},
+			}},
+		},
+		adapters: map[string]server.AssistantAdapter{
+			"ExtractAdapter":   extract,
+			"EmbedAdapter":     embed,
+			"ReconcileAdapter": reconcile,
+		},
+		memoryAgents: map[string]model.Agent{
+			"Memory":    {Name: "Memory", Prompt: "memory prompt"},
+			"Embed":     {Name: "Embed"},
+			"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"},
+		},
+		memoryMapping: map[string]string{
+			"Memory":    "mem-model@ExtractAdapter",
+			"Embed":     "embed-model@EmbedAdapter",
+			"Reconcile": "rec-model@ReconcileAdapter",
+		},
+		mem2memProximityThreshold:    0.8,
+		maxUserMemoriesToReconcile:   20,
+		maxGlobalMemoriesToReconcile: 20,
+	}
+}
+
+func scanTestSession(sessionId string) *model.AssistantSessionDetails {
+	details := &model.AssistantSessionDetails{
+		Session: &model.AssistantSession{SessionId: sessionId},
+		History: []*model.StoredMessage{storedText("user", "I prefer dark mode")},
+	}
+	details.Session.UserId = "user-1"
+
+	return details
+}
+
+func TestScanForMemoriesAddsExtractedFact(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	embed := singleEmbedAdapter()
+	reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		t.Error("Reconcile agent should not be consulted when there are no neighbors")
+		return nil, errors.New("unexpected call")
+	}}
+
+	mDB := &mockdb.MockDB{}
+	// no neighbors in either scope, so the candidate becomes an ADD
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20).
+		Return(neighborRows(), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
+		Return(neighborRows(), nil)
+
+	created := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	mRow := &mockdb.MockRow{}
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		*(args.Get(0).(*string)) = "generated-id"
+		*(args.Get(1).(**time.Time)) = &created
+		*(args.Get(2).(**time.Time)) = &created
+	}).Return(nil)
+	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
+		server.SYSTEM_ID, "prefers dark mode", stringPtrTo("sess-1"), mock.Anything, "embed-model", stringPtrTo("user-1"), false).
+		Return(mRow)
+
+	ac := newScanTestCoordinator(store, mDB, extract, embed, reconcile)
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	if assert.NotNil(t, extract.lastReq) {
+		assert.Equal(t, "mem-model", extract.lastReq.Model)
+	}
+	if assert.NotNil(t, embed.lastEmbedReq) {
+		assert.Equal(t, "embed-model", embed.lastEmbedReq.Model)
+		assert.Equal(t, []string{"prefers dark mode"}, embed.lastEmbedReq.Input)
+	}
+	// permission filtering and reconciliation ran as the session owner
+	assert.Equal(t, "user-1", ac.srv.Authorizer.(*opAuthorizer).lastRequestorId)
+	mDB.AssertExpectations(t)
+}
+
+func TestScanForMemoriesExtractErrorSkipsIndexUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no UpdateSessionMemoryScanIndex expectation: a failed session must stay
+	// pending so the next scan retries it
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return nil, errors.New("model unavailable")
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesContinuesAfterFailedSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+	// only the session that scanned cleanly advances its index
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-2", 1).Return(nil)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("model unavailable")
+		}
+
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	assert.Equal(t, 2, calls)
+}
+
+func TestScanForMemoriesUpdateReembeds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	embed := singleEmbedAdapter()
+	reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`{"operations":[{"op":"UPDATE","target_id":"n1","content":"user likes green tea"}]}`), nil
+	}}
+
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20).
+		Return(neighborRows(), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
+		Return(neighborRows(nearbyRowFixture{
+			id: "n1", memoryText: "user drinks tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+
+	updated := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	mRow := &mockdb.MockRow{}
+	mRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		*(args.Get(0).(**time.Time)) = &updated
+	}).Return(nil)
+	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
+		"n1", "user likes green tea", stringPtrTo("sess-1"), mock.Anything, "embed-model", stringPtrTo("user-1")).
+		Return(mRow)
+
+	ac := newScanTestCoordinator(store, mDB, extract, embed, reconcile)
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	// the reconciled content differs from the candidate, so it is re-embedded
+	// before the UPDATE is applied
+	if assert.NotNil(t, embed.lastEmbedReq) {
+		assert.Equal(t, []string{"user likes green tea"}, embed.lastEmbedReq.Input)
+	}
+	mDB.AssertExpectations(t)
+}
+
+func TestScanForMemoriesEmbedErrorSkipsSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return nil, errors.New("embedding provider down")
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, embed, &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesEmbedCountMismatchSkipsSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}, {0.2}}}, nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, embed, &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesStoreError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return(nil, errors.New("connection lost"))
+
+	extract := &scriptedAdapter{}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	assert.Nil(t, extract.lastReq)
+}
+
+func TestScanForMemoriesNoMemoryAgent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no store expectations: the scan must end before querying for sessions
+	store := servermock.NewMockAssistantstore(ctrl)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	delete(ac.memoryAgents, "Memory")
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesNoEmbedAgent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no store expectations: the scan must end before querying for sessions
+	store := servermock.NewMockAssistantstore(ctrl)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	// an unresolvable model mapping disables the role just like a missing agent
+	ac.memoryMapping["Embed"] = "missing-model"
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestMemoryWorkerShutdown(t *testing.T) {
+	ac := &AssistantCoordinator{memoryScanInterval: time.Hour}
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		ac.memoryWorker(ctx)
+		close(done)
+	}()
+
+	cancel(errors.New("test shutdown"))
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("memory worker did not shut down on context cancellation")
+	}
+}
+
+func TestMemoryWorkerScansOnTick(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	scanned := make(chan struct{}, 1)
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).DoAndReturn(func(ctx context.Context) ([]*model.AssistantSessionDetails, error) {
+		select {
+		case scanned <- struct{}{}:
+		default:
+		}
+
+		return nil, nil
+	}).MinTimes(1)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memoryScanInterval = 5 * time.Millisecond
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		ac.memoryWorker(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-scanned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("memory worker never ran a scan")
+	}
+
+	cancel(nil)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("memory worker did not shut down on context cancellation")
+	}
+}
+
+func TestStartStopMemoryWorker(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return(nil, nil).AnyTimes()
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.useMemory = true
+	ac.memoryScanInterval = time.Hour
+	ac.srv.Context = context.Background()
+
+	assert.NoError(t, ac.Start())
+	assert.True(t, ac.IsRunning())
+	assert.NotNil(t, ac.terminateMemory)
+
+	assert.NoError(t, ac.Stop())
+	assert.False(t, ac.IsRunning())
+}
+
+// newFetchTestCoordinator builds the minimal coordinator fetchMemoriesForPrompt
+// needs: a resolvable "Embed" role, its adapter, per-scope include limits, and
+// an authorizer granting the given operations.
+func newFetchTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter, allowed map[string]bool) *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			DB:         mDB,
+			Authorizer: &opAuthorizer{allowed: allowed},
+			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{
+					{ID: "embed-model", Adapter: "EmbedAdapter", Enabled: true},
+				}},
+			}},
+		},
+		adapters:                   map[string]server.AssistantAdapter{"EmbedAdapter": embed},
+		memoryAgents:               map[string]model.Agent{"Embed": {Name: "Embed"}},
+		memoryMapping:              map[string]string{"Embed": "embed-model@EmbedAdapter"},
+		mem2msgProximityThreshold:  0.7,
+		maxUserMemoriesToInclude:   5,
+		maxGlobalMemoriesToInclude: 5,
+	}
+}
+
+func TestFetchMemoriesForPromptMissingRequestor(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	_, _, err := ac.fetchMemoriesForPrompt(context.Background(), "what do I like")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing RequestorId")
+}
+
+func TestFetchMemoriesForPromptNoReadSelf(t *testing.T) {
+	embed := singleEmbedAdapter()
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, embed, map[string]bool{"read_global": true})
+
+	user, global, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	// without read_authored the fetch is a silent no-op: no error, no embed call
+	assert.NoError(t, err)
+	assert.Nil(t, user)
+	assert.Nil(t, global)
+	assert.Nil(t, embed.lastEmbedReq)
+}
+
+func TestFetchMemoriesForPromptUserAndGlobal(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-user", memoryText: "likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-global", memoryText: "the SOC uses Zeek", modelId: "embed-model",
+			similarity: 0.8,
+		}), nil)
+
+	embed := singleEmbedAdapter()
+	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{"read_authored": true, "read_global": true})
+
+	user, global, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	assert.NoError(t, err)
+	if assert.Len(t, user, 1) {
+		assert.Equal(t, "mem-user", user[0].Memory.Id)
+	}
+	if assert.Len(t, global, 1) {
+		assert.Equal(t, "mem-global", global[0].Memory.Id)
+	}
+	if assert.NotNil(t, embed.lastEmbedReq) {
+		assert.Equal(t, "embed-model", embed.lastEmbedReq.Model)
+		assert.Equal(t, []string{"what do I like"}, embed.lastEmbedReq.Input)
+	}
+	mDB.AssertExpectations(t)
+}
+
+func TestFetchMemoriesForPromptSelfOnlySkipsGlobal(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-user", memoryText: "likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	user, global, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	assert.NoError(t, err)
+	assert.Len(t, user, 1)
+	assert.Empty(t, global)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.7, 5)
+	mDB.AssertExpectations(t)
+}
+
+func TestFetchMemoriesForPromptZeroLimitsSkipQueries(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_global": true})
+	ac.maxUserMemoriesToInclude = 0
+	ac.maxGlobalMemoriesToInclude = 0
+
+	user, global, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	// a limit of zero disables that scope entirely: no LIMIT 0 round trips
+	assert.NoError(t, err)
+	assert.Empty(t, user)
+	assert.Empty(t, global)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestFetchMemoriesForPromptEmbedError(t *testing.T) {
+	embedErr := errors.New("embedding provider down")
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return nil, embedErr
+	}}
+
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, embed, map[string]bool{"read_authored": true})
+
+	_, _, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	assert.ErrorIs(t, err, embedErr)
+}
+
+func TestFetchMemoriesForPromptEmbedCountMismatch(t *testing.T) {
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}, {0.2}}}, nil
+	}}
+
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, embed, map[string]bool{"read_authored": true})
+
+	_, _, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected 1 embedding")
+}
+
+// newMemoryPromptTestCoordinator builds the coordinator prepareChatRequest
+// needs to exercise memory injection: a chat model and adapter alongside the
+// retrieval pieces from newFetchTestCoordinator.
+func newMemoryPromptTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter) (*AssistantCoordinator, *captureAdapter) {
+	chat := &captureAdapter{}
+
+	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{"read_authored": true, "read_global": true})
+	ac.useMemory = true
+	ac.systemPromptAddendum = "base-append"
+	ac.adapters["ChatAdapter"] = chat
+
+	models := &ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+	*models = append(*models, model.ModelParameters{ID: "chat-model", Adapter: "ChatAdapter", Enabled: true})
+
+	return ac, chat
+}
+
+func userTextMessage(text string) *model.Message {
+	return &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: text}}}
+}
+
+// expectUsageCount scripts the async usage-count UPDATE and returns a channel
+// closed when it runs, since prepareChatRequest fires it in a goroutine.
+func expectUsageCount(mDB *mockdb.MockDB, ids []string) chan struct{} {
+	counted := make(chan struct{})
+	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), ids).Run(func(mock.Arguments) {
+		close(counted)
+	}).Return(nil)
+
+	return counted
+}
+
+func waitForSignal(t *testing.T, ch chan struct{}, what string) {
+	t.Helper()
+
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+	}
+}
+
+func TestPrepareChatRequestInjectsMemories(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-user", memoryText: "likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-global", memoryText: "the SOC uses Zeek", modelId: "embed-model",
+			similarity: 0.8,
+		}), nil)
+	counted := expectUsageCount(mDB, []string{"mem-user", "mem-global"})
+
+	ac, _ := newMemoryPromptTestCoordinator(mDB, singleEmbedAdapter())
+
+	req, _, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", []*model.Message{userTextMessage("what do I like")}, false, model.ApplyChatOpts(model.WithMemories()))
+
+	assert.NoError(t, err)
+	assert.Equal(t,
+		"base-append\n\nMemories specific to this user:\n * likes tea\n\nMemories specific to this SOC installation:\n * the SOC uses Zeek",
+		req.SystemAppend)
+
+	waitForSignal(t, counted, "usage count update")
+	mDB.AssertExpectations(t)
+}
+
+func TestPrepareChatRequestUsageCountErrorLogged(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-user", memoryText: "likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.7, 5).
+		Return(neighborRows(), nil)
+
+	counted := make(chan struct{})
+	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), []string{"mem-user"}).Run(func(mock.Arguments) {
+		close(counted)
+	}).Return(errors.New("connection lost"))
+
+	ac, _ := newMemoryPromptTestCoordinator(mDB, singleEmbedAdapter())
+
+	req, _, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", []*model.Message{userTextMessage("what do I like")}, false, model.ApplyChatOpts(model.WithMemories()))
+
+	// a failed usage-count update is telemetry only; the request still carries
+	// the memories
+	assert.NoError(t, err)
+	assert.Contains(t, req.SystemAppend, "likes tea")
+	waitForSignal(t, counted, "usage count update")
+}
+
+func TestPrepareChatRequestWithoutMemoriesOpt(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed := singleEmbedAdapter()
+	ac, _ := newMemoryPromptTestCoordinator(mDB, embed)
+
+	req, _, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", []*model.Message{userTextMessage("what do I like")}, false, model.ApplyChatOpts())
+
+	// useMemory alone is not enough: internal turns (tool continuations,
+	// delegation kickoffs) omit WithMemories and must not retrieve
+	assert.NoError(t, err)
+	assert.Equal(t, "base-append", req.SystemAppend)
+	assert.Nil(t, embed.lastEmbedReq)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPrepareChatRequestMemoriesSkipNonUserTurn(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed := singleEmbedAdapter()
+	ac, _ := newMemoryPromptTestCoordinator(mDB, embed)
+
+	messages := []*model.Message{
+		userTextMessage("what do I like"),
+		{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "you like tea"}}},
+	}
+
+	req, _, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", messages, false, model.ApplyChatOpts(model.WithMemories()))
+
+	assert.NoError(t, err)
+	assert.Equal(t, "base-append", req.SystemAppend)
+	assert.Nil(t, embed.lastEmbedReq)
+}
+
+func TestPrepareChatRequestMemoriesFetchErrorSendsWithout(t *testing.T) {
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		return nil, errors.New("embedding provider down")
+	}}
+	ac, _ := newMemoryPromptTestCoordinator(&mockdb.MockDB{}, embed)
+
+	req, adapter, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", []*model.Message{userTextMessage("what do I like")}, false, model.ApplyChatOpts(model.WithMemories()))
+
+	// retrieval failure downgrades to a memory-less request, not an error
+	assert.NoError(t, err)
+	assert.NotNil(t, adapter)
+	assert.Equal(t, "base-append", req.SystemAppend)
+}
+
+func TestPrepareChatRequestSizeCheckCountsMemories(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.7, 5).
+		Return(neighborRows(nearbyRowFixture{
+			id: "mem-user", memoryText: "likes tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.7, 5).
+		Return(neighborRows(), nil)
+	counted := expectUsageCount(mDB, []string{"mem-user"})
+
+	ac, _ := newMemoryPromptTestCoordinator(mDB, singleEmbedAdapter())
+
+	// message (14) + base-append (11) fit within maxChars = 60 * 1.0 * 1.1 = 66;
+	// the injected memory section (46 chars) pushes the request over
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+	for i := range models {
+		if models[i].ID == "chat-model" {
+			models[i].CharsPerTokenEstimate = 1.0
+			models[i].ContextLimitLarge = 60
+		}
+	}
+
+	_, _, err := ac.prepareChatRequest(memoryTestCtx(), "chat-model@ChatAdapter", []*model.Message{userTextMessage("what do I like")}, false, model.ApplyChatOpts(model.WithMemories()))
+
+	assert.ErrorIs(t, err, ErrRequestTooLarge)
+	waitForSignal(t, counted, "usage count update")
 }

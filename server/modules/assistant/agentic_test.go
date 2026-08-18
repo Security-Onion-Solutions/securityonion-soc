@@ -94,7 +94,7 @@ func TestAssistantCoordinator_InitAgenticDisabled(t *testing.T) {
 		// later enable can never tick at zero.
 		assert.False(t, ac.useMemory)
 		assert.Empty(t, ac.memoryAgents)
-		assert.Equal(t, 30*time.Second, ac.memoryScanInterval)
+		assert.Equal(t, 300*time.Second, ac.memoryScanInterval)
 	}
 }
 
