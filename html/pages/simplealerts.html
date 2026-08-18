@@ -34,7 +34,9 @@
               <div class="so-stat-text">
                 <div class="so-stat-label">{{ endpoint.role }}</div>
                 <div class="so-stat-value simplealerts-endpoint-ip">
-                  {{ endpoint.ip }}<span v-if="endpoint.port">:{{ endpoint.port }}</span>
+                  {{ endpoint.ip }}<v-chip v-if="endpoint.port" size="x-small" variant="tonal"
+                    class="simplealerts-port-chip" :title="endpoint.portLabel"
+                    data-aid="simplealerts_port">{{ endpoint.port }}</v-chip>
                 </div>
                 <div class="so-stat-label" data-aid="simplealerts_details_geo">{{ endpoint.geo }}</div>
               </div>
@@ -298,10 +300,12 @@
                               </td>
                               <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                               <td>
-                                <span v-if="item.sourcePort || item.destPort">
-                                  {{ item.sourcePort || i18n.simpleAlertsStatUnavailable }}
-                                  <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
-                                  {{ item.destPort || i18n.simpleAlertsStatUnavailable }}
+                                <span v-if="item.sourcePort || item.destPort" class="simplealerts-endpoint-cell">
+                                  <v-chip v-if="item.sourcePort" size="x-small" variant="tonal"
+                                    :title="i18n.simpleAlertsSourcePort" data-aid="simplealerts_port">{{ item.sourcePort }}</v-chip>
+                                  <v-icon v-if="item.sourcePort && item.destPort" size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                                  <v-chip v-if="item.destPort" size="x-small" variant="tonal"
+                                    :title="i18n.simpleAlertsDestinationPort" data-aid="simplealerts_port">{{ item.destPort }}</v-chip>
                                 </span>
                                 <span v-else class="text-disabled">&mdash;</span>
                               </td>
@@ -334,11 +338,17 @@
                         <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                         <td v-if="group.kind !== 'rule'" class="simplealerts-rule-cell">{{ item.ruleName }}</td>
                         <td v-if="group.kind === 'rule'">
-                          <span v-if="item.sourceIp">{{ item.sourceIp }}<span v-if="item.sourcePort">:{{ item.sourcePort }}</span></span>
+                          <span v-if="item.sourceIp" class="simplealerts-endpoint-cell">{{ item.sourceIp }}<v-chip
+                            v-if="item.sourcePort" size="x-small" variant="tonal"
+                            class="simplealerts-port-chip" :title="i18n.simpleAlertsSourcePort"
+                            data-aid="simplealerts_port">{{ item.sourcePort }}</v-chip></span>
                           <span v-else class="text-disabled">&mdash;</span>
                         </td>
                         <td v-if="group.kind === 'rule'">
-                          <span v-if="item.destIp">{{ item.destIp }}<span v-if="item.destPort">:{{ item.destPort }}</span></span>
+                          <span v-if="item.destIp" class="simplealerts-endpoint-cell">{{ item.destIp }}<v-chip
+                            v-if="item.destPort" size="x-small" variant="tonal"
+                            class="simplealerts-port-chip" :title="i18n.simpleAlertsDestinationPort"
+                            data-aid="simplealerts_port">{{ item.destPort }}</v-chip></span>
                           <span v-else class="text-disabled">&mdash;</span>
                         </td>
                       </tr>
@@ -397,11 +407,17 @@
                 </td>
                 <td class="simplealerts-rule-cell">{{ item.ruleName }}</td>
                 <td>
-                  <span v-if="item.sourceIp">{{ item.sourceIp }}<span v-if="item.sourcePort">:{{ item.sourcePort }}</span></span>
+                  <span v-if="item.sourceIp" class="simplealerts-endpoint-cell">{{ item.sourceIp }}<v-chip
+                            v-if="item.sourcePort" size="x-small" variant="tonal"
+                            class="simplealerts-port-chip" :title="i18n.simpleAlertsSourcePort"
+                            data-aid="simplealerts_port">{{ item.sourcePort }}</v-chip></span>
                   <span v-else class="text-disabled">&mdash;</span>
                 </td>
                 <td>
-                  <span v-if="item.destIp">{{ item.destIp }}<span v-if="item.destPort">:{{ item.destPort }}</span></span>
+                  <span v-if="item.destIp" class="simplealerts-endpoint-cell">{{ item.destIp }}<v-chip
+                            v-if="item.destPort" size="x-small" variant="tonal"
+                            class="simplealerts-port-chip" :title="i18n.simpleAlertsDestinationPort"
+                            data-aid="simplealerts_port">{{ item.destPort }}</v-chip></span>
                   <span v-else class="text-disabled">&mdash;</span>
                 </td>
               </tr>

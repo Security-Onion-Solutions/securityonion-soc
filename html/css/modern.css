@@ -1417,6 +1417,17 @@ dfn {
   min-width: 16rem;
 }
 
+/* An address and its port read as one unit, so they must not be split across lines. */
+.simplealerts-endpoint-cell {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.simplealerts-port-chip {
+  margin-left: 6px;
+}
+
 .simplealerts-endpoint-ip {
   font-size: 1rem;
 }

@@ -1688,3 +1688,17 @@ test('sortAndSubGroupingPreferencesPersist', () => {
   expect(comp.groupSortBy).toBe('severity');
   expect(comp.groupSortDesc).toBe(false);
 });
+
+test('getEndpointsCarriesAPortLabelForEachSide', () => {
+  const endpoints = comp.getEndpoints({
+    isHostBased: false,
+    sourceIp: '10.0.0.1', sourcePort: 40000,
+    destIp: '8.8.8.8', destPort: 53,
+  });
+
+  // the port chip is only meaningful if it says which end it belongs to
+  expect(endpoints[0].port).toBe(40000);
+  expect(endpoints[0].portLabel).toBe('Source port');
+  expect(endpoints[1].port).toBe(53);
+  expect(endpoints[1].portLabel).toBe('Destination port');
+});
