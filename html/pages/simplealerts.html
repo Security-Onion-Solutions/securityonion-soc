@@ -26,6 +26,17 @@
       <v-divider></v-divider>
 
       <v-card-text class="simplealerts-details-body">
+        <div v-if="showAiSummary(selectedAlertDetails)" class="mb-4" data-aid="simplealerts_details_ai_summary">
+          <div class="so-stat-label mb-2">
+            {{ i18n.summary }}
+            <v-icon size="x-small" class="ml-1" :title="i18n.aiGenSummary" data-aid="simplealerts_ai_summary_indicator">fa-flask</v-icon>
+            <span v-if="!selectedAlertDetails.aiSummaryReviewed" class="ml-1" data-aid="simplealerts_ai_summary_stale">
+              ({{ i18n.aiSummaryStale }})
+            </span>
+          </div>
+          <div class="text-body-2 simplealerts-ai-summary">{{ selectedAlertDetails.aiSummary }}</div>
+        </div>
+
         <div v-if="getEndpoints(selectedAlertDetails).length" class="mb-4" data-aid="simplealerts_details_network">
           <div class="so-stat-label mb-2">{{ i18n.simpleAlertsNetwork }}</div>
           <div class="d-flex flex-wrap ga-3">
@@ -121,6 +132,11 @@
         <v-btn v-if="$root.detectionsEnabled" variant="text" size="small" :loading="actionLoading"
           @click="tuneDetection(selectedAlertDetails)" data-aid="simplealerts_details_tune"
           prepend-icon="fa-sliders">{{ i18n.simpleAlertsTuneDetection }}</v-btn>
+        <v-btn v-if="aiEnabled" variant="text" size="small" color="primary"
+          @click="aiInvestigate(selectedAlertDetails)" data-aid="simplealerts_details_investigate"
+          :title="aiInvestigateTooltip(selectedAlertDetails)" prepend-icon="fa-brain">
+          {{ aiInvestigateTooltip(selectedAlertDetails) }}
+        </v-btn>
         <v-spacer></v-spacer>
         <v-btn v-if="!selectedAlertDetails.acknowledged" variant="text" size="small" color="success"
           :loading="actionLoading" @click="acknowledgeAlert(selectedAlertDetails)"

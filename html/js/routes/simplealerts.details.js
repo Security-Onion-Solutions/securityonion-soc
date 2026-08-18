@@ -33,6 +33,8 @@ globalThis.SimpleAlertsDetails = (function() {
       // Guided analysis runs several queries, so it starts only once the analyst has
       // actually opened the alert, and only once per alert.
       this.loadAlertPlaybook(alert);
+      // No-op without the licence; see simplealerts.ai.js.
+      this.loadAiSummary(alert);
     },
 
     closeDetails() {

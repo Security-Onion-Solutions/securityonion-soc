@@ -1413,6 +1413,13 @@ dfn {
   word-break: break-word;
 }
 
+/* Summaries are prose, so they wrap normally rather than following the nowrap the
+   rest of the dialog's data uses. */
+.simplealerts-ai-summary {
+  white-space: normal;
+  line-height: 1.5;
+}
+
 .simplealerts-endpoint {
   min-width: 16rem;
 }

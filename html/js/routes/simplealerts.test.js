@@ -17,6 +17,7 @@ require('./simplealerts.rules.js');
 require('./simplealerts.actions.js');
 require('./simplealerts.pivots.js');
 require('./simplealerts.playbook.js');
+require('./simplealerts.ai.js');
 require('./simplealerts.js');
 
 let comp;
@@ -1701,4 +1702,200 @@ test('getEndpointsCarriesAPortLabelForEachSide', () => {
   expect(endpoints[0].portLabel).toBe('Source port');
   expect(endpoints[1].port).toBe(53);
   expect(endpoints[1].portLabel).toBe('Destination port');
+});
+
+// --- AI features (Pro only) -------------------------------------------------
+
+function licensed(on) {
+  comp.$root.isLicensed = jest.fn(() => on);
+}
+
+test('aiRequiresBothTheLicenceAndAServerSideAssistant', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: 'p' });
+  expect(comp.aiEnabled).toBe(true);
+
+  // licensed, but the grid has no assistant configured
+  comp.initAssistant({ enabled: false });
+  expect(comp.aiEnabled).toBe(false);
+
+  // assistant configured, but not licensed for it
+  licensed(false);
+  comp.initAssistant({ enabled: true });
+  expect(comp.aiEnabled).toBe(false);
+
+  comp.initAssistant(null);
+  expect(comp.aiEnabled).toBe(false);
+});
+
+test('aiSummaryIsHiddenWithoutTheLicence', async () => {
+  licensed(false);
+  comp.initAssistant({ enabled: true });
+  const mock = mockPapi("get", { data: { aiSummary: 'x', aiSummaryReviewed: true } });
+  const alert = { ruleUuid: 'u1', payload: {} };
+
+  await comp.loadAiSummary(alert);
+
+  // unlicensed grids must not even ask for it
+  expect(mock).not.toHaveBeenCalled();
+  expect(comp.showAiSummary(alert)).toBe(false);
+});
+
+test('aiSummaryLoadsFromTheDetectionAndCachesByRule', async () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true });
+  comp.aiSummaryCache = {};
+  const mock = mockPapi("get", { data: { aiSummary: 'Detects ransomware.', aiSummaryReviewed: true } });
+
+  const first = { ruleUuid: 'u1', payload: {} };
+  await comp.loadAiSummary(first);
+  expect(mock).toHaveBeenCalledWith('detection/public/u1');
+  expect(first.aiSummary).toBe('Detects ransomware.');
+  expect(comp.showAiSummary(first)).toBe(true);
+
+  // a second alert for the same rule reuses the cached summary
+  const second = { ruleUuid: 'u1', payload: {} };
+  await comp.loadAiSummary(second);
+  expect(mock).toHaveBeenCalledTimes(1);
+  expect(second.aiSummary).toBe('Detects ransomware.');
+});
+
+test('unreviewedAiSummariesStayHiddenUnlessTheGridOptsIn', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true });
+  const alert = { aiSummary: 'draft', aiSummaryReviewed: false };
+
+  comp.showUnreviewedAiSummaries = false;
+  expect(comp.showAiSummary(alert)).toBe(false);
+
+  comp.showUnreviewedAiSummaries = true;
+  expect(comp.showAiSummary(alert)).toBe(true);
+});
+
+test('aiSummaryFailureIsSilent', async () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true });
+  comp.aiSummaryCache = {};
+  mockPapi("get", null, new Error('boom'));
+  const showError = mockShowError();
+
+  const alert = { ruleUuid: 'u1', payload: {} };
+  await comp.loadAiSummary(alert);
+
+  // a missing summary must not interrupt triage
+  expect(showError).not.toHaveBeenCalled();
+  expect(comp.showAiSummary(alert)).toBe(false);
+});
+
+test('aiInvestigateOpensANewAssistantSession', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: 'Look at {ruleName} from {sourceIp}' });
+  comp.$router.push = jest.fn();
+
+  comp.aiInvestigate({ payload: {
+    'soc_id': 'evt-1', 'rule.name': 'ET MALWARE One', 'source.ip': '10.0.0.1',
+    'destination.ip': '8.8.8.8', 'event.severity_label': 'high',
+  }});
+
+  const pushed = comp.$router.push.mock.calls[0][0];
+  expect(pushed.name).toBe('assistant');
+  expect(pushed.params.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  expect(pushed.query.investigation).toBe(true);
+  // only the fields the configured prompt interpolates are handed over
+  expect(pushed.query.ruleName).toBe('ET MALWARE One');
+  expect(pushed.query.sourceIp).toBe('10.0.0.1');
+  expect(pushed.query.destIp).toBeUndefined();
+  expect(pushed.query.severity).toBeUndefined();
+  expect(comp.detailsDialog).toBe(false);
+});
+
+test('aiInvestigateReopensAnExistingInvestigation', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
+  comp.$router.push = jest.fn();
+
+  const alert = { payload: {
+    'soc_id': 'evt-1',
+    'event.investigated': true,
+    'event.investigation_session_id': 'chat-existing',
+  }};
+
+  expect(comp.isAiInvestigated(alert)).toBe(true);
+  expect(comp.aiInvestigateTooltip(alert)).toBe(comp.i18n.aiInvestigateView);
+
+  comp.aiInvestigate(alert);
+
+  // reopened rather than starting a second session for the same alert
+  expect(comp.$router.push).toHaveBeenCalledWith({
+    name: 'assistant', params: { sessionId: 'chat-existing' },
+  });
+});
+
+test('aiInvestigateDoesNothingWithoutTheLicence', () => {
+  licensed(false);
+  comp.initAssistant({ enabled: true });
+  comp.$router.push = jest.fn();
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('aiInvestigateNeedsAnIdentifiableAlert', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true });
+  comp.$router.push = jest.fn();
+  const showError = mockShowError();
+
+  comp.aiInvestigate({ payload: {} });
+
+  expect(showError).toHaveBeenCalled();
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('generateChatIdWorksWithoutRandomUUID', () => {
+  // jsdom, like a non-secure browsing context, exposes crypto without randomUUID
+  expect(typeof crypto.randomUUID).toBe('undefined');
+
+  const ids = new Set(Array.from({ length: 50 }, () => comp.generateChatId()));
+  expect(ids.size).toBe(50);
+  ids.forEach(id => {
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+});
+
+test('assistantAndDetectionParamsComeFromASingleRegistration', () => {
+  // $root.loadParameters holds one pending callback, so requesting a second section
+  // before the parameters arrive would silently discard the first registration.
+  const registrations = [];
+  comp.$root.loadParameters = jest.fn((section) => registrations.push(section));
+  comp.$root.parameters = {};
+  licensed(true);
+
+  comp.created();
+
+  expect(registrations).toEqual(['assistant']);
+
+  comp.initAssistant({ enabled: true });
+  expect(comp.aiEnabled).toBe(true);
+});
+
+test('assistantParamsAreUsedDirectlyWhenTheRootAlreadyHasThem', () => {
+  // parametersLoaded is set well after this.parameters is populated, so a page created
+  // in that window must not wait on a callback that will never fire.
+  comp.$root.loadParameters = jest.fn();
+  comp.$root.parametersLoaded = false;
+  comp.$root.parameters = {
+    assistant: { enabled: true, investigationPrompt: 'p' },
+    detection: { showUnreviewedAiSummaries: true },
+  };
+  licensed(true);
+
+  comp.created();
+
+  expect(comp.$root.loadParameters).not.toHaveBeenCalled();
+  expect(comp.aiEnabled).toBe(true);
+  expect(comp.investigationMsg).toBe('p');
+  // the detection option is read off the root at the same time
+  expect(comp.showUnreviewedAiSummaries).toBe(true);
 });

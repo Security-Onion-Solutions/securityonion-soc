@@ -54,6 +54,14 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     detailsDialog: false,
     selectedAlertDetails: null,
 
+    // AI features require both the 'oai' licence feature and a server-side assistant.
+    aiEnabled: false,
+    assistantEnabled: false,
+    investigationMsg: '',
+    showUnreviewedAiSummaries: false,
+    // Summaries belong to the detection, so they are cached by rule uuid.
+    aiSummaryCache: {},
+
     selectionMode: false,
     // Object maps rather than Sets, so template reads stay reactive.
     selectedAlertIds: {},
@@ -156,6 +164,16 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
   },
   created() {
     this.loadLocalSettings();
+    // Use the parameters if the root already has them, and only register a callback
+    // otherwise. loadParameters fires its callback solely off parametersLoaded, which
+    // is set after several unrelated awaits, so a page created in between would
+    // otherwise sit with AI disabled despite the parameters being present.
+    const assistantParams = this.$root.parameters && this.$root.parameters['assistant'];
+    if (assistantParams) {
+      this.initAssistant(assistantParams);
+    } else {
+      this.$root.loadParameters('assistant', this.initAssistant);
+    }
     this.loadAlerts();
   },
   methods: Object.assign({},
@@ -166,6 +184,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     SimpleAlertsActions,
     SimpleAlertsPivots,
     SimpleAlertsPlaybook,
+    SimpleAlertsAi,
     {
     }
   ),
