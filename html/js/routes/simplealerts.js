@@ -49,6 +49,12 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     detailsDialog: false,
     selectedAlertDetails: null,
 
+    selectionMode: false,
+    // Object maps rather than Sets, so template reads stay reactive.
+    selectedAlertIds: {},
+    selectedGroupKeys: {},
+    actionLoading: false,
+
     severityOptions: [
       { value: 'all', title: this.$root.i18n.simpleAlertsAllSeverities },
       { value: 'high', title: this.$root.i18n.simpleAlertsSeverityHigh },
@@ -104,15 +110,22 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     lowSeverityCount() {
       return this.severityTotals ? this.formatCompactNumber(this.severityTotals.low) : this.i18n.simpleAlertsStatUnavailable;
     },
-    // Category is parsed from the rule name, so it can only filter the rule-grouped
-    // view. The select is disabled elsewhere rather than silently doing nothing.
-    categoryFilterEnabled() {
-      return this.groupingMode !== 'source-dest';
-    },
     visibleGroups() {
-      const groups = this.groupingMode === 'source-dest' ? this.sourceDestGroups : this.alertGroups;
+      const groups = this.activeGroups();
       if (this.filterCategory === 'all' || !this.categoryFilterEnabled()) return groups;
       return groups.filter(g => g['rule.category'] === this.filterCategory);
+    },
+    // Counts a selected group as every alert it represents, not the rows on screen,
+    // so the number matches what the bulk action will actually affect.
+    bulkSelectionLabel() {
+      const summary = this.selectionSummary();
+      let key = 'simpleAlertsBulkSelection';
+      if (summary.groups === 1) key = 'simpleAlertsBulkSelectionGroup';
+      else if (summary.groups > 1) key = 'simpleAlertsBulkSelectionGroups';
+      return this.$root.localizeMessage(key, {
+        count: this.formatCompactNumber(summary.total),
+        groups: summary.groups,
+      });
     },
     // Mirrors the active status filter so the headline number is never ambiguous.
     totalAlertsLabel() {
@@ -129,6 +142,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     SimpleAlertsGrouping,
     SimpleAlertsDetails,
     SimpleAlertsRules,
+    SimpleAlertsActions,
     {
     }
   ),

@@ -12,6 +12,7 @@ require('./simplealerts.data.js');
 require('./simplealerts.grouping.js');
 require('./simplealerts.details.js');
 require('./simplealerts.rules.js');
+require('./simplealerts.actions.js');
 require('./simplealerts.js');
 
 let comp;
@@ -835,4 +836,267 @@ test('highlightRuleProducesPrismMarkupForKnownGrammars', () => {
   // Prism emits token spans; the rule text itself must survive intact
   expect(html).toContain('<span');
   expect(html).toContain('sid');
+});
+
+// --- selection and actions --------------------------------------------------
+
+function papiSpy(responses) {
+  const calls = [];
+  comp.$root.papi = {
+    get: jest.fn((route, opts) => { calls.push(['get', route, opts]); return Promise.resolve({ data: '' }); }),
+    post: jest.fn((route, body) => {
+      calls.push(['post', route, body]);
+      return Promise.resolve(responses[route] || { data: {} });
+    }),
+  };
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  comp.$root.showTip = jest.fn();
+  comp.$root.showWarning = jest.fn();
+  return calls;
+}
+
+test('selectionToggles', () => {
+  comp.clearSelection();
+  const alert = { id: 'a1' };
+  expect(comp.isAlertSelected(alert)).toBe(false);
+
+  comp.toggleAlertSelection(alert);
+  expect(comp.isAlertSelected(alert)).toBe(true);
+  comp.toggleAlertSelection(alert);
+  expect(comp.isAlertSelected(alert)).toBe(false);
+
+  const group = { key: 'g1' };
+  comp.toggleGroupSelection(group);
+  expect(comp.isGroupSelected(group)).toBe(true);
+  comp.toggleGroupSelection(group);
+  expect(comp.isGroupSelected(group)).toBe(false);
+});
+
+test('toggleSelectionModeClearsOnExit', () => {
+  comp.clearSelection();
+  comp.selectionMode = false;
+  comp.toggleAlertSelection({ id: 'a1' });
+
+  comp.toggleSelectionMode();
+  expect(comp.selectionMode).toBe(true);
+  expect(comp.hasSelection()).toBe(true);
+
+  comp.toggleSelectionMode();
+  expect(comp.selectionMode).toBe(false);
+  expect(comp.hasSelection()).toBe(false);
+});
+
+test('selectionSummaryCountsWholeGroups', () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.alertGroups = [
+    { key: 'g1', count: 1500, alerts: [] },
+    { key: 'g2', count: 40, alerts: [] },
+  ];
+  comp.filterCategory = 'all';
+
+  comp.toggleGroupSelection(comp.alertGroups[0]);
+  comp.toggleAlertSelection({ id: 'a1' });
+
+  // a selected group contributes its true count, not the rows on screen
+  expect(comp.selectionSummary()).toEqual({ alerts: 1, groups: 1, total: 1501 });
+});
+
+test('buildCaseMatchesHuntShape', () => {
+  const built = comp.buildCase({
+    ruleName: 'ET MALWARE One',
+    severity: 3,
+    payload: { 'rule.case_template': 'tmpl' },
+  });
+
+  expect(built).toEqual({
+    title: 'ET MALWARE One',
+    description: comp.i18n.caseEscalatedDescription,
+    severity: '3',
+    template: 'tmpl',
+  });
+
+  // falls back to the shared escalation title, and truncates very long rule names
+  expect(comp.buildCase({ payload: {} }).title).toBe(comp.i18n.eventCaseTitle);
+  const long = comp.buildCase({ ruleName: 'x'.repeat(200), payload: {} });
+  expect(long.title.length).toBe(100);
+  expect(long.title.endsWith('...')).toBe(true);
+});
+
+test('acknowledgeAlertPostsFilterForThatAlert', async () => {
+  const calls = papiSpy({});
+  comp.filterStatus = 'all';
+  comp.alerts = [];
+  const alert = { id: 'evt-1', ruleName: 'r', payload: {} };
+
+  await comp.acknowledgeAlert(alert);
+
+  const ack = calls.find(c => c[1] === 'events/ack');
+  expect(ack).toBeDefined();
+  expect(ack[2].eventFilter).toEqual({ 'soc_id': 'evt-1' });
+  expect(ack[2].acknowledge).toBe(true);
+  expect(ack[2].escalate).toBe(false);
+  // acknowledging must not create a case
+  expect(calls.find(c => c[1] === 'case/')).toBeUndefined();
+  expect(comp.detailsDialog).toBe(false);
+});
+
+test('escalateAlertCreatesCaseAttachesEventsThenAcks', async () => {
+  const calls = papiSpy({ 'case/': { data: { id: 'case-9' } } });
+  comp.filterStatus = 'all';
+  comp.alerts = [];
+
+  await comp.escalateAlert({ id: 'evt-1', ruleName: 'ET MALWARE One', severity: 3, payload: {} });
+
+  const routes = calls.filter(c => c[0] === 'post').map(c => c[1]);
+  expect(routes).toEqual(['case/', 'case/events', 'events/ack']);
+
+  const attach = calls.find(c => c[1] === 'case/events');
+  expect(attach[2].caseId).toBe('case-9');
+  expect(attach[2].fields).toEqual({ 'soc_id': 'evt-1' });
+
+  expect(calls.find(c => c[1] === 'events/ack')[2].escalate).toBe(true);
+});
+
+test('groupActionUsesTheGroupFilterNotTheLoadedRows', async () => {
+  const calls = papiSpy({});
+  comp.filterStatus = 'all';
+  const group = { kind: 'rule', key: 'k', ruleName: 'ET MALWARE One', count: 5000, alerts: [] };
+
+  await comp.applyGroupAction(group, true, false);
+
+  const ack = calls.find(c => c[1] === 'events/ack');
+  // one request covering every matching alert, including those never fetched
+  expect(calls.filter(c => c[1] === 'events/ack').length).toBe(1);
+  expect(ack[2].eventFilter).toEqual({ 'rule.name': 'ET MALWARE One' });
+});
+
+test('sourceDestGroupActionFiltersOnBothEndpoints', async () => {
+  const calls = papiSpy({});
+  const group = { kind: 'source-dest', key: 'k', sourceIp: '10.0.0.1', destIp: '8.8.8.8', count: 12, alerts: [] };
+
+  await comp.applyGroupAction(group, true, false);
+
+  expect(calls.find(c => c[1] === 'events/ack')[2].eventFilter)
+    .toEqual({ 'source.ip': '10.0.0.1', 'destination.ip': '8.8.8.8' });
+});
+
+test('bulkAcknowledgeCoversGroupsAndIndividualAlerts', async () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.filterCategory = 'all';
+  const alert = { id: 'evt-1', ruleName: 'r', payload: {} };
+  comp.alerts = [alert];
+  comp.alertGroups = [{ kind: 'rule', key: 'g1', ruleName: 'ET MALWARE One', count: 900, alerts: [] }];
+  comp.sourceDestGroups = [];
+  comp.toggleGroupSelection(comp.alertGroups[0]);
+  comp.toggleAlertSelection(alert);
+
+  const calls = papiSpy({});
+  comp.loadAlerts = jest.fn();
+
+  await comp.bulkAcknowledge();
+
+  const acks = calls.filter(c => c[1] === 'events/ack');
+  // one for the group as a whole, one for the individually picked alert
+  expect(acks.length).toBe(2);
+  expect(acks[0][2].eventFilter).toEqual({ 'rule.name': 'ET MALWARE One' });
+  expect(acks[1][2].eventFilter).toEqual({ 'soc_id': 'evt-1' });
+
+  expect(comp.hasSelection()).toBe(false);
+  expect(comp.selectionMode).toBe(false);
+  expect(comp.loadAlerts).toHaveBeenCalled();
+});
+
+test('bulkActionIsANoOpWithoutASelection', async () => {
+  comp.clearSelection();
+  const calls = papiSpy({});
+  await comp.bulkAcknowledge();
+  expect(calls.length).toBe(0);
+});
+
+test('actionErrorsSurfaceAndClearLoading', async () => {
+  comp.$root.papi = { post: jest.fn().mockRejectedValue(new Error('boom')) };
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+  const showError = mockShowError();
+
+  await comp.applyAlertAction({ id: 'a', ruleName: 'r', payload: {} }, true, false);
+
+  expect(showError).toHaveBeenCalled();
+  expect(comp.actionLoading).toBe(false);
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});
+
+test('removeAlertFromViewDropsItEverywhere', () => {
+  const alert = { id: 'a1' };
+  comp.alerts = [alert, { id: 'a2' }];
+  comp.alertGroups = [{ alerts: [alert] }];
+  comp.sourceDestGroups = [{ alerts: [] }];
+  comp.selectedAlertIds = { a1: true };
+
+  comp.removeAlertFromView(alert);
+
+  expect(comp.alerts.map(a => a.id)).toEqual(['a2']);
+  expect(comp.alertGroups[0].alerts.length).toBe(0);
+  expect(comp.selectedAlertIds.a1).toBeUndefined();
+});
+
+test('selectedAlertsResolvesFromEveryViewWithoutDuplicates', () => {
+  const shared = { id: 'dup' };
+  comp.alerts = [shared, { id: 'flat' }];
+  comp.alertGroups = [{ alerts: [shared] }];
+  comp.sourceDestGroups = [{ alerts: [{ id: 'sd' }] }];
+  comp.selectedAlertIds = { dup: true, sd: true };
+
+  expect(comp.selectedAlerts().map(a => a.id).sort()).toEqual(['dup', 'sd']);
+});
+
+test('categoryFilterEnabledIsAMethodNotAComputed', () => {
+  // Vue exposes computeds as properties, so a computed calling another as a function
+  // throws at runtime. The test harness flattens computeds to functions and would hide
+  // that, so assert the shape directly: this must live in methods.
+  const component = global.routes.find(r => r.name === 'simple-alerts').component;
+  expect(typeof component.methods.categoryFilterEnabled).toBe('function');
+  expect(component.computed.categoryFilterEnabled).toBeUndefined();
+  expect(typeof component.methods.activeGroups).toBe('function');
+});
+
+test('visibleGroupsFiltersByCategoryWithoutThrowing', () => {
+  comp.groupingMode = 'rule';
+  comp.alertGroups = [
+    { key: 'a', 'rule.category': 'MALWARE' },
+    { key: 'b', 'rule.category': 'POLICY' },
+  ];
+  comp.sourceDestGroups = [];
+
+  // the path that previously short-circuited before reaching categoryFilterEnabled
+  comp.filterCategory = 'MALWARE';
+  expect(comp.visibleGroups().map(g => g.key)).toEqual(['a']);
+
+  comp.groupingMode = 'source-dest';
+  comp.sourceDestGroups = [{ key: 'x' }, { key: 'y' }];
+  expect(comp.visibleGroups().length).toBe(2);
+});
+
+test('bulkSelectionLabelUsesTheRightPlural', () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.filterCategory = 'all';
+  comp.sourceDestGroups = [];
+  comp.alertGroups = [
+    { key: 'g1', count: 1915, alerts: [] },
+    { key: 'g2', count: 85, alerts: [] },
+  ];
+
+  comp.toggleAlertSelection({ id: 'a1' });
+  expect(comp.bulkSelectionLabel()).toBe('1 selected');
+
+  comp.clearSelection();
+  comp.toggleGroupSelection(comp.alertGroups[0]);
+  expect(comp.bulkSelectionLabel()).toBe('1.9K selected across 1 group');
+
+  comp.toggleGroupSelection(comp.alertGroups[1]);
+  expect(comp.bulkSelectionLabel()).toBe('2K selected across 2 groups');
 });

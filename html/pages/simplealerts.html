@@ -73,6 +73,12 @@
         <v-btn variant="text" size="small" color="primary" :to="getHuntRoute(selectedAlertDetails)"
           data-aid="simplealerts_details_hunt" prepend-icon="fa-crosshairs">{{ i18n.hunt }}</v-btn>
         <v-spacer></v-spacer>
+        <v-btn v-if="!selectedAlertDetails.acknowledged" variant="text" size="small" color="success"
+          :loading="actionLoading" @click="acknowledgeAlert(selectedAlertDetails)"
+          data-aid="simplealerts_details_ack" prepend-icon="fa-check">{{ i18n.acknowledge }}</v-btn>
+        <v-btn v-if="!selectedAlertDetails.escalated" variant="text" size="small" color="warning"
+          :loading="actionLoading" @click="escalateAlert(selectedAlertDetails)"
+          data-aid="simplealerts_details_escalate" prepend-icon="fa-briefcase">{{ i18n.escalate }}</v-btn>
         <v-btn variant="text" size="small" @click="closeDetails" data-aid="simplealerts_details_dismiss">{{ i18n.close }}</v-btn>
       </v-card-actions>
     </v-card>
@@ -89,13 +95,31 @@
           <v-select v-model="filterTimeRange" :items="timeRangeOptions" :label="i18n.simpleAlertsTimeRange" hide-details
             class="mx-2 simplealerts-filter" @update:model-value="onFilterChanged" data-aid="simplealerts_filter_range"></v-select>
           <v-select v-model="filterCategory" :items="categoryOptions" :label="i18n.simpleAlertsCategory" hide-details
-            :disabled="!categoryFilterEnabled" class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
+            :disabled="!categoryFilterEnabled()" class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
           <v-select :model-value="groupingMode" :items="groupingOptions" :label="i18n.simpleAlertsGroupBy" hide-details
             class="mx-2 simplealerts-filter" @update:model-value="setGroupingMode" data-aid="simplealerts_filter_grouping"></v-select>
           <v-spacer></v-spacer>
+          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="toggleSelectionMode()"
+            :color="selectionMode ? 'primary' : ''" data-aid="simplealerts_select_mode"
+            :aria-pressed="selectionMode ? 'true' : 'false'" :aria-label="i18n.simpleAlertsSelectMode">
+            <v-icon>fa-square-check</v-icon>
+          </v-btn>
           <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadAlerts()" data-aid="simplealerts_refresh" :aria-label="i18n.ariaReloadData">
             <v-icon>fa-sync</v-icon>
           </v-btn>
+        </v-toolbar>
+      </v-row>
+
+      <v-row v-if="selectionMode && hasSelection()">
+        <v-toolbar class="so-toolbar elevation-0" color="primary" data-aid="simplealerts_bulk_bar">
+          <span class="ml-4" data-aid="simplealerts_bulk_count">{{ bulkSelectionLabel }}</span>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" size="small" class="mr-2" @click="clearSelection()"
+            data-aid="simplealerts_bulk_clear">{{ i18n.simpleAlertsClearSelection }}</v-btn>
+          <v-btn variant="tonal" size="small" class="mr-2" :loading="actionLoading" @click="bulkAcknowledge()"
+            data-aid="simplealerts_bulk_ack" prepend-icon="fa-check">{{ i18n.acknowledge }}</v-btn>
+          <v-btn variant="tonal" size="small" class="mr-4" :loading="actionLoading" @click="bulkEscalate()"
+            data-aid="simplealerts_bulk_escalate" prepend-icon="fa-briefcase">{{ i18n.escalate }}</v-btn>
         </v-toolbar>
       </v-row>
       <v-row class="ga-3 my-1">
@@ -135,6 +159,9 @@
               <v-list-item class="simplealerts-group-header" :data-aid="'simplealerts_group'"
                 @click="toggleGroup(group)" role="button" :aria-expanded="isGroupExpanded(group) ? 'true' : 'false'">
                 <template #prepend>
+                  <v-checkbox v-if="selectionMode" :model-value="isGroupSelected(group)" hide-details density="compact"
+                    class="mr-2 simplealerts-group-check" @click.stop="toggleGroupSelection(group)"
+                    :data-aid="'simplealerts_group_select'" :aria-label="i18n.simpleAlertsSelectGroup"></v-checkbox>
                   <v-icon class="mr-2">{{ isGroupExpanded(group) ? 'fa-angle-down' : 'fa-angle-right' }}</v-icon>
                   <v-chip size="small" variant="tonal" :color="severityColor(group)" class="mr-3"
                     v-if="group.kind === 'rule'" data-aid="simplealerts_group_severity">
@@ -166,6 +193,11 @@
                     :items-per-page="-1" hide-default-footer class="simplealerts-table" data-aid="simplealerts_group_table">
                     <template #item="{ item }">
                       <tr data-aid="simplealerts_row" class="simplealerts-row-clickable" @click="showDetails(item)">
+                        <td v-if="selectionMode" class="simplealerts-check-cell">
+                          <v-checkbox :model-value="isAlertSelected(item)" hide-details density="compact"
+                            @click.stop="toggleAlertSelection(item)" data-aid="simplealerts_row_select"
+                            :aria-label="i18n.simpleAlertsSelectAlert"></v-checkbox>
+                        </td>
                         <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                         <td v-if="group.kind !== 'rule'" class="simplealerts-rule-cell">{{ item.ruleName }}</td>
                         <td v-if="group.kind === 'rule'">
@@ -217,6 +249,11 @@
             </template>
             <template #item="{ item }">
               <tr data-aid="simplealerts_row" class="simplealerts-row-clickable" @click="showDetails(item)">
+                <td v-if="selectionMode" class="simplealerts-check-cell">
+                  <v-checkbox :model-value="isAlertSelected(item)" hide-details density="compact"
+                    @click.stop="toggleAlertSelection(item)" data-aid="simplealerts_row_select"
+                    :aria-label="i18n.simpleAlertsSelectAlert"></v-checkbox>
+                </td>
                 <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                 <td>
                   <v-chip size="small" variant="tonal" :color="severityColor(item)" data-aid="simplealerts_severity">

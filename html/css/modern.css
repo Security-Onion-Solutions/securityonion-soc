@@ -1383,6 +1383,16 @@ dfn {
   cursor: pointer;
 }
 
+/* Keep the checkbox column tight so enabling selection mode does not visibly
+   reflow the columns beside it. */
+.simplealerts-check-cell {
+  width: 3rem;
+}
+
+.simplealerts-group-check {
+  flex: 0 0 auto;
+}
+
 /* The dialog scrolls its own body rather than growing past the viewport. */
 .simplealerts-details-body {
   max-height: 65vh;
