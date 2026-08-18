@@ -1388,6 +1388,21 @@ dfn {
   max-height: 65vh;
 }
 
+/* Prism's own stylesheet colors the tokens; this only frames the block. Rules run
+   long, so it scrolls itself rather than widening the dialog. */
+.simplealerts-rule {
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--so-radius-nested);
+  border: 1px solid rgba(var(--v-theme-text), 0.08);
+  background: rgb(var(--v-theme-background));
+  max-height: 16rem;
+  overflow: auto;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .simplealerts-endpoint {
   min-width: 16rem;
 }

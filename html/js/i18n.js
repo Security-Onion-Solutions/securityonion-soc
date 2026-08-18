@@ -1465,6 +1465,7 @@ const i18n = {
       simpleAlertsRangeHour: 'Last Hour',
       simpleAlertsRangeMonth: 'Last 30 Days',
       simpleAlertsRangeWeek: 'Last 7 Days',
+      simpleAlertsRule: 'Rule Source',
       simpleAlertsRuleName: 'Rule',
       simpleAlertsSeverityHigh: 'High',
       simpleAlertsSeverityLow: 'Low',

@@ -5,10 +5,13 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+// The rule view highlights with the same vendored Prism grammars the detection page uses.
+require('../external/prism-custom-v1.30.0.js');
 // Method packs must load before simplealerts.js, which merges them into the component.
 require('./simplealerts.data.js');
 require('./simplealerts.grouping.js');
 require('./simplealerts.details.js');
+require('./simplealerts.rules.js');
 require('./simplealerts.js');
 
 let comp;
@@ -779,4 +782,57 @@ test('copyAlertIdSurfacesFailure', async () => {
   await comp.copyAlertId({ id: 'abc' });
 
   expect(showError).toHaveBeenCalled();
+});
+
+// --- rule highlighting ------------------------------------------------------
+
+test('ruleLanguageMapsEngineToGrammar', () => {
+  expect(comp.ruleLanguage({ module: 'suricata' })).toBe('suricata');
+  expect(comp.ruleLanguage({ module: 'Suricata' })).toBe('suricata');
+  expect(comp.ruleLanguage({ module: 'sigma' })).toBe('yaml');
+  expect(comp.ruleLanguage({ module: 'elastalert' })).toBe('yaml');
+  expect(comp.ruleLanguage({ module: 'yara' })).toBe('yara');
+  expect(comp.ruleLanguage({ module: 'strelka' })).toBe('yara');
+
+  expect(comp.ruleLanguage({ module: 'ossec' })).toBeNull();
+  expect(comp.ruleLanguage({})).toBeNull();
+  expect(comp.ruleLanguage(null)).toBeNull();
+});
+
+test('ruleLanguageClass', () => {
+  expect(comp.ruleLanguageClass({ module: 'suricata' })).toBe('language-suricata');
+  expect(comp.ruleLanguageClass({ module: 'sigma' })).toBe('language-yaml');
+  expect(comp.ruleLanguageClass({ module: 'ossec' })).toBe('');
+});
+
+test('hasRuleText', () => {
+  expect(comp.hasRuleText({ ruleText: 'alert tcp any any -> any any (sid:1;)' })).toBe(true);
+  expect(comp.hasRuleText({ ruleText: '' })).toBe(false);
+  expect(comp.hasRuleText({})).toBe(false);
+  expect(comp.hasRuleText(null)).toBe(false);
+});
+
+test('highlightRuleEscapesUntrustedContent', () => {
+  // With no grammar the text renders literally, so markup is escaped rather than
+  // sanitized; sanitizing would keep a stripped <img> tag and misreport the rule.
+  const plain = comp.highlightRule({ module: 'ossec', ruleText: '<img src=x onerror="alert(1)">' });
+  expect(plain).toBe('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
+
+  // The grammar path goes through Prism, which escapes its input as well.
+  const highlighted = comp.highlightRule({ module: 'suricata', ruleText: '<script>alert(1)</script>' });
+  expect(highlighted).not.toContain('<script');
+  expect(highlighted).toContain('&lt;');
+
+  expect(comp.highlightRule({ ruleText: '' })).toBe('');
+  expect(comp.highlightRule(null)).toBe('');
+});
+
+test('highlightRuleProducesPrismMarkupForKnownGrammars', () => {
+  const html = comp.highlightRule({
+    module: 'suricata',
+    ruleText: 'alert tcp any any -> any any (msg:"test"; sid:1;)',
+  });
+  // Prism emits token spans; the rule text itself must survive intact
+  expect(html).toContain('<span');
+  expect(html).toContain('sid');
 });

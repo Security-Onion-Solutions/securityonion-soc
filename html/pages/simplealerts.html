@@ -43,6 +43,12 @@
           </div>
         </div>
 
+        <div v-if="hasRuleText(selectedAlertDetails)" class="mb-4" data-aid="simplealerts_details_rule">
+          <div class="so-stat-label mb-2">{{ i18n.simpleAlertsRule }}</div>
+          <pre class="simplealerts-rule" :class="ruleLanguageClass(selectedAlertDetails)"><code
+            v-html="highlightRule(selectedAlertDetails)" data-aid="simplealerts_details_rule_text"></code></pre>
+        </div>
+
         <div class="so-stat-label mb-1">{{ i18n.simpleAlertsFields }}</div>
         <div v-if="getDetailFields(selectedAlertDetails).length" class="expanded-fields-grid pa-0"
           data-aid="simplealerts_details_fields">
