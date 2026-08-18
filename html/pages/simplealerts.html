@@ -235,9 +235,75 @@
               </v-list-item>
 
               <div v-if="isGroupExpanded(group)" class="simplealerts-group-body" data-aid="simplealerts_group_body">
-                <div v-if="group.alertsLoading" class="pa-4">
+                <div v-if="group.subGroupsLoading || group.alertsLoading" class="pa-4">
                   <v-progress-linear indeterminate color="primary"></v-progress-linear>
                 </div>
+
+                <v-list v-else-if="hasSubGroups(group)" density="compact" class="pa-0" data-aid="simplealerts_subgroups">
+                  <template v-for="subGroup in group.subGroups" :key="subGroup.key">
+                    <v-list-item class="simplealerts-subgroup-header" data-aid="simplealerts_subgroup"
+                      @click="toggleSubGroup(group, subGroup)" role="button"
+                      :aria-expanded="isSubGroupExpanded(group, subGroup) ? 'true' : 'false'">
+                      <template #prepend>
+                        <v-checkbox v-if="selectionMode" :model-value="isSubGroupSelected(group, subGroup)" hide-details
+                          density="compact" class="mr-2 simplealerts-group-check"
+                          @click.stop="toggleSubGroupSelection(group, subGroup)"
+                          data-aid="simplealerts_subgroup_select" :aria-label="i18n.simpleAlertsSelectPair"></v-checkbox>
+                        <v-icon class="mr-2" size="small">
+                          {{ isSubGroupExpanded(group, subGroup) ? 'fa-angle-down' : 'fa-angle-right' }}
+                        </v-icon>
+                      </template>
+                      <v-list-item-title data-aid="simplealerts_subgroup_title">
+                        {{ subGroup.sourceIp || i18n.simpleAlertsStatUnavailable }}
+                        <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                        {{ subGroup.destIp || i18n.simpleAlertsStatUnavailable }}
+                      </v-list-item-title>
+                      <template #append>
+                        <span class="so-stat-label mr-3" data-aid="simplealerts_subgroup_summary">
+                          {{ getGroupSummary(subGroup) }}
+                        </span>
+                      </template>
+                    </v-list-item>
+
+                    <div v-if="isSubGroupExpanded(group, subGroup)" class="simplealerts-subgroup-body"
+                      data-aid="simplealerts_subgroup_body">
+                      <div v-if="subGroup.alertsLoading" class="pa-3">
+                        <v-progress-linear indeterminate color="primary"></v-progress-linear>
+                      </div>
+                      <div v-else-if="!subGroup.alerts.length" class="pa-3 text-body-2">{{ i18n.simpleAlertsGroupEmpty }}</div>
+                      <template v-else>
+                        <v-data-table :headers="subGroupHeaders()" :items="getDisplayedAlerts(subGroup)" density="compact"
+                          :items-per-page="-1" hide-default-footer class="simplealerts-table"
+                          data-aid="simplealerts_subgroup_table">
+                          <template #item="{ item }">
+                            <tr data-aid="simplealerts_row" class="simplealerts-row-clickable" @click="showDetails(item)"
+                              role="button" tabindex="0" :aria-label="i18n.simpleAlertsOpenAlert"
+                              @keydown.enter.space.stop="showDetails(item)">
+                              <td v-if="selectionMode" class="simplealerts-check-cell">
+                                <v-checkbox :model-value="isAlertSelected(item)" hide-details density="compact"
+                                  @click.stop="toggleAlertSelection(item)" data-aid="simplealerts_row_select"
+                                  :aria-label="i18n.simpleAlertsSelectAlert"></v-checkbox>
+                              </td>
+                              <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
+                              <td>
+                                <span v-if="item.sourcePort || item.destPort">
+                                  {{ item.sourcePort || i18n.simpleAlertsStatUnavailable }}
+                                  <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                                  {{ item.destPort || i18n.simpleAlertsStatUnavailable }}
+                                </span>
+                                <span v-else class="text-disabled">&mdash;</span>
+                              </td>
+                            </tr>
+                          </template>
+                        </v-data-table>
+                        <div v-if="shouldShowLoadMore(subGroup)" class="pa-2">
+                          <v-btn variant="text" size="small" color="primary" @click.stop="toggleLoadMore(subGroup)"
+                            data-aid="simplealerts_subgroup_more">{{ getLoadMoreText(subGroup) }}</v-btn>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </v-list>
                 <div v-else-if="!group.alerts.length" class="pa-4 text-body-2" data-aid="simplealerts_group_empty">
                   {{ i18n.simpleAlertsGroupEmpty }}
                 </div>

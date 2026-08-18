@@ -1421,6 +1421,23 @@ dfn {
   font-size: 1rem;
 }
 
+/* Pairs sit one level in from their rule, and their alerts one level in again, so
+   the three tiers read as a hierarchy rather than a flat run of rows. */
+.simplealerts-subgroup-header {
+  min-height: 44px;
+  cursor: pointer;
+  padding-left: 12px;
+}
+
+.simplealerts-subgroup-header:hover {
+  background: rgb(var(--v-theme-row_hover));
+}
+
+.simplealerts-subgroup-body {
+  border-left: 2px solid rgba(var(--v-theme-text), 0.15);
+  margin-left: 24px;
+}
+
 .simplealerts-group-header {
   min-height: 52px;
   cursor: pointer;

@@ -129,7 +129,10 @@ globalThis.SimpleAlertsGrouping = (function() {
         kind: kind,
         key: key,
         count: 0,
-        // Alerts are fetched on first expand, not up front.
+        // Nothing below a group is fetched until it is expanded.
+        subGroups: [],
+        subGroupsLoaded: false,
+        subGroupsLoading: false,
         alerts: [],
         alertsLoaded: false,
         alertsLoading: false,
@@ -142,13 +145,39 @@ globalThis.SimpleAlertsGrouping = (function() {
       return this.expandedGroups.indexOf(group.key) !== -1;
     },
 
+    // A rule group opens into its source/destination pairs; a pair group, and a rule
+    // whose alerts have no network endpoints, opens straight into alerts.
     toggleGroup(group) {
       const idx = this.expandedGroups.indexOf(group.key);
-      if (idx === -1) {
-        this.expandedGroups.push(group.key);
-        if (!group.alertsLoaded) this.loadGroupAlerts(group);
-      } else {
+      if (idx !== -1) {
         this.expandedGroups.splice(idx, 1);
+        return;
+      }
+
+      this.expandedGroups.push(group.key);
+      if (group.kind === 'rule') {
+        if (!group.subGroupsLoaded) this.loadSubGroups(group);
+      } else if (!group.alertsLoaded) {
+        this.loadGroupAlerts(group);
+      }
+    },
+
+    subGroupKey(group, subGroup) {
+      return group.key + ' > ' + subGroup.key;
+    },
+
+    isSubGroupExpanded(group, subGroup) {
+      return this.expandedSubGroups.indexOf(this.subGroupKey(group, subGroup)) !== -1;
+    },
+
+    toggleSubGroup(group, subGroup) {
+      const key = this.subGroupKey(group, subGroup);
+      const idx = this.expandedSubGroups.indexOf(key);
+      if (idx === -1) {
+        this.expandedSubGroups.push(key);
+        if (!subGroup.alertsLoaded) this.loadSubGroupAlerts(group, subGroup);
+      } else {
+        this.expandedSubGroups.splice(idx, 1);
       }
     },
 
@@ -161,6 +190,79 @@ globalThis.SimpleAlertsGrouping = (function() {
         return terms;
       }
       return [{ field: 'rule.name', value: group.ruleName }];
+    },
+
+    // A pair inside a rule is identified by all three, so acting on it affects only
+    // that rule's traffic between those endpoints.
+    subGroupTerms(group, subGroup) {
+      const terms = this.groupTerms(group);
+      if (subGroup.sourceIp) terms.push({ field: 'source.ip', value: subGroup.sourceIp });
+      if (subGroup.destIp) terms.push({ field: 'destination.ip', value: subGroup.destIp });
+      return terms;
+    },
+
+    // Aggregates a rule's alerts into source/destination pairs. Counts are exact for the
+    // same reason the rule counts are: they come from the backend, not from a sample.
+    async loadSubGroups(group) {
+      group.subGroupsLoading = true;
+      try {
+        const narrowed = await this.narrowQuery(this.buildQuery(), this.groupTerms(group));
+        const response = await this.$root.papi.get('events/', { params: {
+          query: narrowed + ' | groupby ' + SOURCE_DEST_FIELDS.join(' '),
+          range: this.getDateRange(),
+          format: this.i18n.timePickerSample,
+          zone: this.zone,
+          metricLimit: this.groupLimit,
+          // only the aggregation is wanted here; alerts come when a pair is opened
+          eventLimit: 1,
+        }});
+
+        const rows = (response && response.data && response.data.metrics
+          && response.data.metrics['groupby_0|' + SOURCE_DEST_FIELDS.join('|')]) || [];
+        group.subGroups = this.parseSourceDestGroups(rows);
+        group.subGroupsLoaded = true;
+
+        // Host-based detections (sigma, yara, ossec) have no endpoints to group by, so
+        // the pair aggregation comes back empty. Those rules open straight into alerts.
+        if (!group.subGroups.length && !group.alertsLoaded) {
+          await this.loadGroupAlerts(group);
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        group.subGroupsLoading = false;
+      }
+    },
+
+    async loadSubGroupAlerts(group, subGroup) {
+      subGroup.alertsLoading = true;
+      try {
+        const query = await this.narrowQuery(this.buildQuery(), this.subGroupTerms(group, subGroup));
+        const response = await this.$root.papi.get('events/', { params: {
+          query: query,
+          range: this.getDateRange(),
+          format: this.i18n.timePickerSample,
+          zone: this.zone,
+          metricLimit: this.metricLimit,
+          eventLimit: this.groupAlertLimit,
+        }});
+
+        if (response && response.data) {
+          subGroup.alerts = this.processAlerts(response.data.events || []);
+          subGroup.alertsLoaded = true;
+          subGroup.alertsTruncated = subGroup.count > subGroup.alerts.length;
+          this.lookupHostnames(subGroup.alerts);
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        subGroup.alertsLoading = false;
+      }
+    },
+
+    // True once a rule group has resolved to pairs rather than a flat alert list.
+    hasSubGroups(group) {
+      return group.kind === 'rule' && group.subGroups.length > 0;
     },
 
     // Escaping a value into OQL is the server's job; query/filtered returns the query
@@ -244,6 +346,15 @@ globalThis.SimpleAlertsGrouping = (function() {
         }));
       }
       return parts.join(' · ');
+    },
+
+    // Inside a rule > pair, the rule and both addresses are already named by the two
+    // headers above, so the rows only need the time and the port pair.
+    subGroupHeaders() {
+      return [
+        { title: this.i18n.time, value: 'timestamp' },
+        { title: this.i18n.simpleAlertsPorts, value: 'sourcePort' },
+      ];
     },
 
     // A rule group already names its rule in the header, so its rows show endpoints;

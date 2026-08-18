@@ -431,23 +431,120 @@ test('applyGroupMetricsToleratesAbsentAggregation', () => {
   expect(comp.alertGroups).toEqual([]);
 });
 
-test('toggleGroupExpandsAndLazyLoadsOnce', async () => {
+test('toggleGroupExpandsARuleIntoItsPairs', () => {
   const group = comp.newGroup('rule', 'ET MALWARE One', { ruleName: 'ET MALWARE One', count: 3 });
+  comp.loadSubGroups = jest.fn();
   comp.loadGroupAlerts = jest.fn();
+  comp.expandedGroups = [];
 
   expect(comp.isGroupExpanded(group)).toBe(false);
 
   comp.toggleGroup(group);
   expect(comp.isGroupExpanded(group)).toBe(true);
-  expect(comp.loadGroupAlerts).toHaveBeenCalledTimes(1);
+  // a rule resolves to source/destination pairs, not straight to alerts
+  expect(comp.loadSubGroups).toHaveBeenCalledTimes(1);
+  expect(comp.loadGroupAlerts).not.toHaveBeenCalled();
 
   comp.toggleGroup(group);
   expect(comp.isGroupExpanded(group)).toBe(false);
 
   // collapsing and re-expanding must not refetch
-  group.alertsLoaded = true;
+  group.subGroupsLoaded = true;
+  comp.toggleGroup(group);
+  expect(comp.loadSubGroups).toHaveBeenCalledTimes(1);
+});
+
+test('toggleGroupOpensAPairGroupStraightIntoAlerts', () => {
+  const group = comp.newGroup('source-dest', 'k', { sourceIp: '10.0.0.1', destIp: '8.8.8.8', count: 3 });
+  comp.loadSubGroups = jest.fn();
+  comp.loadGroupAlerts = jest.fn();
+  comp.expandedGroups = [];
+
   comp.toggleGroup(group);
   expect(comp.loadGroupAlerts).toHaveBeenCalledTimes(1);
+  expect(comp.loadSubGroups).not.toHaveBeenCalled();
+});
+
+test('loadSubGroupsAggregatesPairsWithinTheRule', async () => {
+  const group = comp.newGroup('rule', 'ET MALWARE One', { ruleName: 'ET MALWARE One', count: 900 });
+  comp.narrowQuery = jest.fn().mockResolvedValue('narrowed');
+  const mock = mockPapi("get", { data: { metrics: {
+    'groupby_0|source.ip|destination.ip': [
+      { value: 700, keys: ['10.1.2.15', '8.8.8.8'] },
+      { value: 200, keys: ['10.1.2.44', '1.1.1.1'] },
+    ],
+  }}});
+
+  await comp.loadSubGroups(group);
+
+  // the pair aggregation is scoped to this rule, and asks for counts not events
+  expect(mock.mock.calls[0][1].params.query).toBe('narrowed | groupby source.ip destination.ip');
+  expect(mock.mock.calls[0][1].params.eventLimit).toBe(1);
+
+  expect(group.subGroupsLoaded).toBe(true);
+  expect(group.subGroupsLoading).toBe(false);
+  expect(group.subGroups.map(sg => sg.count)).toEqual([700, 200]);
+  expect(comp.hasSubGroups(group)).toBe(true);
+});
+
+test('hostBasedRulesFallBackToAlertsWhenNoPairsExist', async () => {
+  const group = comp.newGroup('rule', 'Suspicious PowerShell', { ruleName: 'Suspicious PowerShell', count: 12 });
+  comp.narrowQuery = jest.fn().mockResolvedValue('narrowed');
+  comp.loadGroupAlerts = jest.fn();
+  // sigma/yara alerts have no endpoints, so the pair aggregation is all sentinels
+  mockPapi("get", { data: { metrics: {
+    'groupby_0|source.ip|destination.ip': [{ value: 12, keys: ['__missing__', '__missing__'] }],
+  }}});
+
+  await comp.loadSubGroups(group);
+
+  expect(group.subGroups).toEqual([]);
+  expect(comp.hasSubGroups(group)).toBe(false);
+  expect(comp.loadGroupAlerts).toHaveBeenCalledWith(group);
+});
+
+test('subGroupTermsScopeToRuleAndBothEndpoints', () => {
+  const group = { kind: 'rule', ruleName: 'ET MALWARE One' };
+  const subGroup = { sourceIp: '10.0.0.1', destIp: '8.8.8.8' };
+
+  expect(comp.subGroupTerms(group, subGroup)).toEqual([
+    { field: 'rule.name', value: 'ET MALWARE One' },
+    { field: 'source.ip', value: '10.0.0.1' },
+    { field: 'destination.ip', value: '8.8.8.8' },
+  ]);
+});
+
+test('subGroupExpansionIsTrackedPerParentRule', () => {
+  comp.expandedSubGroups = [];
+  const groupA = comp.newGroup('rule', 'ruleA', { ruleName: 'ruleA' });
+  const groupB = comp.newGroup('rule', 'ruleB', { ruleName: 'ruleB' });
+  const pair = { key: '10.0.0.1 8.8.8.8', alerts: [], alertsLoaded: true };
+
+  comp.toggleSubGroup(groupA, pair);
+
+  // the same pair under a different rule is a different row
+  expect(comp.isSubGroupExpanded(groupA, pair)).toBe(true);
+  expect(comp.isSubGroupExpanded(groupB, pair)).toBe(false);
+});
+
+test('loadSubGroupAlertsFetchesTheNarrowedPair', async () => {
+  const group = comp.newGroup('rule', 'r', { ruleName: 'ET MALWARE One', count: 900 });
+  const subGroup = comp.newGroup('source-dest', 'p', { sourceIp: '10.0.0.1', destIp: '8.8.8.8', count: 700 });
+  comp.narrowQuery = jest.fn().mockResolvedValue('narrowed-pair');
+  const mock = mockPapi("get", { data: { events: [{ payload: { 'soc_id': 'a' } }] } });
+
+  await comp.loadSubGroupAlerts(group, subGroup);
+
+  expect(mock.mock.calls[0][1].params.query).toBe('narrowed-pair');
+  expect(subGroup.alerts.length).toBe(1);
+  expect(subGroup.alertsLoaded).toBe(true);
+  // 700 in the pair but only 1 fetched, so the header reports a sample
+  expect(subGroup.alertsTruncated).toBe(true);
+});
+
+test('subGroupHeadersDropWhatTheHeadersAboveAlreadyName', () => {
+  // the rule and both addresses are named by the two headers above
+  expect(comp.subGroupHeaders().map(h => h.value)).toEqual(['timestamp', 'sourcePort']);
 });
 
 test('groupTerms', () => {
@@ -895,9 +992,10 @@ test('selectionSummaryCountsWholeGroups', () => {
   comp.clearSelection();
   comp.groupingMode = 'rule';
   comp.alertGroups = [
-    { key: 'g1', count: 1500, alerts: [] },
-    { key: 'g2', count: 40, alerts: [] },
+    { key: 'g1', count: 1500, alerts: [], subGroups: [] },
+    { key: 'g2', count: 40, alerts: [], subGroups: [] },
   ];
+  comp.sourceDestGroups = [];
   comp.filterCategory = 'all';
 
   comp.toggleGroupSelection(comp.alertGroups[0]);
@@ -905,6 +1003,79 @@ test('selectionSummaryCountsWholeGroups', () => {
 
   // a selected group contributes its true count, not the rows on screen
   expect(comp.selectionSummary()).toEqual({ alerts: 1, groups: 1, total: 1501 });
+});
+
+test('selectingAPairCountsOnlyThatPair', () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.filterCategory = 'all';
+  comp.sourceDestGroups = [];
+  const pair = { key: '10.0.0.1 8.8.8.8', count: 700, alerts: [] };
+  comp.alertGroups = [{ key: 'g1', ruleName: 'r', count: 900, alerts: [], subGroups: [pair] }];
+
+  comp.toggleSubGroupSelection(comp.alertGroups[0], pair);
+
+  expect(comp.isSubGroupSelected(comp.alertGroups[0], pair)).toBe(true);
+  expect(comp.selectionSummary()).toEqual({ alerts: 0, groups: 1, total: 700 });
+});
+
+test('selectingAWholeRuleSupersedesItsPairs', () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.filterCategory = 'all';
+  comp.sourceDestGroups = [];
+  const pair = { key: 'p1', count: 700, alerts: [] };
+  const group = { key: 'g1', ruleName: 'r', count: 900, alerts: [], subGroups: [pair] };
+  comp.alertGroups = [group];
+
+  comp.toggleSubGroupSelection(group, pair);
+  comp.toggleGroupSelection(group);
+
+  // the rule covers the pair, so it must not be actioned twice or double-counted
+  const selected = comp.selectedGroups();
+  expect(selected.length).toBe(1);
+  expect(selected[0].subGroup).toBeNull();
+  expect(comp.selectionSummary().total).toBe(900);
+});
+
+test('bulkActionOnAPairFiltersOnAllThreeFields', async () => {
+  comp.clearSelection();
+  comp.groupingMode = 'rule';
+  comp.filterCategory = 'all';
+  comp.filterStatus = 'all';
+  comp.sourceDestGroups = [];
+  const pair = { key: 'p1', sourceIp: '10.0.0.1', destIp: '8.8.8.8', count: 700, alerts: [] };
+  const group = { kind: 'rule', key: 'g1', ruleName: 'ET MALWARE One', count: 900, alerts: [], subGroups: [pair] };
+  comp.alertGroups = [group];
+  comp.alerts = [];
+  comp.toggleSubGroupSelection(group, pair);
+
+  const calls = papiSpy({});
+  comp.loadAlerts = jest.fn();
+
+  await comp.bulkAcknowledge();
+
+  const ack = calls.find(c => c[1] === 'events/ack');
+  expect(ack[2].eventFilter).toEqual({
+    'rule.name': 'ET MALWARE One',
+    'source.ip': '10.0.0.1',
+    'destination.ip': '8.8.8.8',
+  });
+});
+
+test('selectedAlertsAndRemovalReachPairNestedAlerts', () => {
+  const nested = { id: 'nested' };
+  const pair = { key: 'p1', alerts: [nested] };
+  comp.alerts = [];
+  comp.alertGroups = [{ key: 'g1', alerts: [], subGroups: [pair] }];
+  comp.sourceDestGroups = [];
+  comp.selectedAlertIds = { nested: true };
+
+  expect(comp.selectedAlerts().map(a => a.id)).toEqual(['nested']);
+
+  comp.removeAlertFromView(nested);
+  expect(pair.alerts.length).toBe(0);
+  expect(comp.selectedAlertIds.nested).toBeUndefined();
 });
 
 test('buildCaseMatchesHuntShape', () => {
@@ -992,7 +1163,7 @@ test('bulkAcknowledgeCoversGroupsAndIndividualAlerts', async () => {
   comp.filterCategory = 'all';
   const alert = { id: 'evt-1', ruleName: 'r', payload: {} };
   comp.alerts = [alert];
-  comp.alertGroups = [{ kind: 'rule', key: 'g1', ruleName: 'ET MALWARE One', count: 900, alerts: [] }];
+  comp.alertGroups = [{ kind: 'rule', key: 'g1', ruleName: 'ET MALWARE One', count: 900, alerts: [], subGroups: [] }];
   comp.sourceDestGroups = [];
   comp.toggleGroupSelection(comp.alertGroups[0]);
   comp.toggleAlertSelection(alert);
@@ -1090,8 +1261,8 @@ test('bulkSelectionLabelUsesTheRightPlural', () => {
   comp.filterCategory = 'all';
   comp.sourceDestGroups = [];
   comp.alertGroups = [
-    { key: 'g1', count: 1915, alerts: [] },
-    { key: 'g2', count: 85, alerts: [] },
+    { key: 'g1', count: 1915, alerts: [], subGroups: [] },
+    { key: 'g2', count: 85, alerts: [], subGroups: [] },
   ];
 
   comp.toggleAlertSelection({ id: 'a1' });

@@ -50,8 +50,35 @@ globalThis.SimpleAlertsActions = (function() {
       }
     },
 
+    // Both tiers are selectable. A selected pair is returned with its parent rule so
+    // the action can be filtered on all three fields.
     selectedGroups() {
-      return this.activeGroups().filter(g => this.selectedGroupKeys[g.key]);
+      const found = [];
+      this.activeGroups().forEach(group => {
+        if (this.selectedGroupKeys[group.key]) {
+          found.push({ group: group, subGroup: null });
+          return; // the whole rule is selected; its pairs would be redundant
+        }
+        (group.subGroups || []).forEach(subGroup => {
+          if (this.selectedGroupKeys[this.subGroupKey(group, subGroup)]) {
+            found.push({ group: group, subGroup: subGroup });
+          }
+        });
+      });
+      return found;
+    },
+
+    isSubGroupSelected(group, subGroup) {
+      return !!this.selectedGroupKeys[this.subGroupKey(group, subGroup)];
+    },
+
+    toggleSubGroupSelection(group, subGroup) {
+      const key = this.subGroupKey(group, subGroup);
+      if (this.selectedGroupKeys[key]) {
+        delete this.selectedGroupKeys[key];
+      } else {
+        this.selectedGroupKeys[key] = true;
+      }
     },
 
     selectedAlertCount() {
@@ -61,7 +88,8 @@ globalThis.SimpleAlertsActions = (function() {
     // Groups contribute their full count, which is why this can exceed what is on screen.
     selectionSummary() {
       const groups = this.selectedGroups();
-      const fromGroups = groups.reduce((sum, g) => sum + (g.count || 0), 0);
+      const fromGroups = groups.reduce(
+        (sum, sel) => sum + ((sel.subGroup || sel.group).count || 0), 0);
       return {
         alerts: this.selectedAlertCount(),
         groups: groups.length,
@@ -159,15 +187,17 @@ globalThis.SimpleAlertsActions = (function() {
       }
     },
 
-    // One request for the whole group. The filter is the group's own identity, so alerts
-    // that were never fetched are included, which is what selecting a group implies.
-    async applyGroupAction(group, acknowledge, escalate) {
+    // One request for the whole selection unit. The filter is that unit's own identity,
+    // so alerts that were never fetched are included, which is what selecting implies.
+    async applyGroupAction(group, acknowledge, escalate, subGroup) {
+      const terms = subGroup ? this.subGroupTerms(group, subGroup) : this.groupTerms(group);
       const eventFilter = {};
-      this.groupTerms(group).forEach(term => { eventFilter[term.field] = term.value; });
+      terms.forEach(term => { eventFilter[term.field] = term.value; });
 
       if (escalate) {
-        const sample = group.alerts && group.alerts.length
-          ? group.alerts[0]
+        const source = subGroup || group;
+        const sample = source.alerts && source.alerts.length
+          ? source.alerts[0]
           : { ruleName: group.ruleName, severity: null, payload: {} };
         await this.escalateToCase(sample, eventFilter);
       }
@@ -180,8 +210,8 @@ globalThis.SimpleAlertsActions = (function() {
       this.actionLoading = true;
       this.$root.startLoading();
       try {
-        for (const group of this.selectedGroups()) {
-          await this.applyGroupAction(group, acknowledge, escalate);
+        for (const sel of this.selectedGroups()) {
+          await this.applyGroupAction(sel.group, acknowledge, escalate, sel.subGroup);
         }
 
         for (const alert of this.selectedAlerts()) {
@@ -217,9 +247,7 @@ globalThis.SimpleAlertsActions = (function() {
         }
       };
 
-      this.alerts.forEach(consider);
-      this.alertGroups.forEach(g => g.alerts.forEach(consider));
-      this.sourceDestGroups.forEach(g => g.alerts.forEach(consider));
+      this.eachAlertList(consider);
       return found;
     },
 
@@ -234,15 +262,31 @@ globalThis.SimpleAlertsActions = (function() {
     // Drops an actioned alert from whatever list is on screen, so the row disappears
     // without waiting for a refetch.
     removeAlertFromView(alert) {
-      const drop = (list) => {
+      this.eachAlertList((_, list) => {
         const idx = list.indexOf(alert);
         if (idx !== -1) list.splice(idx, 1);
+      }, alert);
+      delete this.selectedAlertIds[alert.id];
+    },
+
+    // Walks every list an alert can currently live in: the flat view, a group, and a
+    // pair nested inside a rule group.
+    eachAlertList(fn, only) {
+      const visit = (list) => {
+        if (!list) return;
+        if (only) {
+          fn(only, list);
+          return;
+        }
+        list.forEach(a => fn(a, list));
       };
 
-      drop(this.alerts);
-      this.alertGroups.forEach(g => drop(g.alerts));
-      this.sourceDestGroups.forEach(g => drop(g.alerts));
-      delete this.selectedAlertIds[alert.id];
+      visit(this.alerts);
+      this.alertGroups.forEach(g => {
+        visit(g.alerts);
+        (g.subGroups || []).forEach(sg => visit(sg.alerts));
+      });
+      this.sourceDestGroups.forEach(g => visit(g.alerts));
     },
   };
 })();

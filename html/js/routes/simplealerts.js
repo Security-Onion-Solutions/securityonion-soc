@@ -39,6 +39,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     alertGroups: [],
     sourceDestGroups: [],
     expandedGroups: [],
+    expandedSubGroups: [],
     // Aggregation buckets to request, i.e. the maximum number of groups shown.
     groupLimit: 50,
     // Alerts fetched when a group is first expanded.
