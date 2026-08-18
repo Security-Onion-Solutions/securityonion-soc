@@ -145,6 +145,18 @@
             :disabled="!categoryFilterEnabled()" class="mx-2 simplealerts-filter" data-aid="simplealerts_filter_category"></v-select>
           <v-select :model-value="groupingMode" :items="groupingOptions" :label="i18n.simpleAlertsGroupBy" hide-details
             class="mx-2 simplealerts-filter" @update:model-value="setGroupingMode" data-aid="simplealerts_filter_grouping"></v-select>
+          <v-select v-if="groupingMode === 'rule'" :model-value="subGroupingMode" :items="subGroupingOptions"
+            :label="i18n.simpleAlertsSubGroupBy" hide-details class="mx-2 simplealerts-filter"
+            @update:model-value="setSubGroupingMode" data-aid="simplealerts_filter_subgrouping"></v-select>
+          <v-select v-if="groupAlerts" :model-value="groupSortBy" :items="groupSortOptions" :label="i18n.simpleAlertsSortBy"
+            hide-details class="mx-2 simplealerts-filter" @update:model-value="setGroupSort"
+            data-aid="simplealerts_filter_sort"></v-select>
+          <v-btn v-if="groupAlerts" icon variant="flat" class="circle-button mx-2" @click.stop="toggleGroupSortDirection()"
+            data-aid="simplealerts_sort_direction"
+            :aria-label="groupSortDesc ? i18n.simpleAlertsSortDescending : i18n.simpleAlertsSortAscending"
+            :title="groupSortDesc ? i18n.simpleAlertsSortDescending : i18n.simpleAlertsSortAscending">
+            <v-icon>{{ groupSortDesc ? 'fa-arrow-down-wide-short' : 'fa-arrow-up-short-wide' }}</v-icon>
+          </v-btn>
           <v-spacer></v-spacer>
           <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="toggleSelectionMode()"
             :color="selectionMode ? 'primary' : ''" data-aid="simplealerts_select_mode"
@@ -240,7 +252,7 @@
                 </div>
 
                 <v-list v-else-if="hasSubGroups(group)" density="compact" class="pa-0" data-aid="simplealerts_subgroups">
-                  <template v-for="subGroup in group.subGroups" :key="subGroup.key">
+                  <template v-for="subGroup in visibleSubGroups(group)" :key="subGroup.key">
                     <v-list-item class="simplealerts-subgroup-header" data-aid="simplealerts_subgroup"
                       @click="toggleSubGroup(group, subGroup)" role="button"
                       :aria-expanded="isSubGroupExpanded(group, subGroup) ? 'true' : 'false'">
@@ -254,9 +266,9 @@
                         </v-icon>
                       </template>
                       <v-list-item-title data-aid="simplealerts_subgroup_title">
-                        {{ subGroup.sourceIp || i18n.simpleAlertsStatUnavailable }}
-                        <v-icon size="x-small" class="mx-1">fa-arrow-right</v-icon>
-                        {{ subGroup.destIp || i18n.simpleAlertsStatUnavailable }}
+                        <span v-if="subGroup.sourceIp">{{ subGroup.sourceIp }}</span>
+                        <v-icon v-if="subGroup.sourceIp && subGroup.destIp" size="x-small" class="mx-1">fa-arrow-right</v-icon>
+                        <span v-if="subGroup.destIp">{{ subGroup.destIp }}</span>
                       </v-list-item-title>
                       <template #append>
                         <span class="so-stat-label mr-3" data-aid="simplealerts_subgroup_summary">

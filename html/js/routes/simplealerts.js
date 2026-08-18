@@ -35,6 +35,10 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
 
     // 'rule' groups by detection, 'source-dest' by network pair, 'none' is the flat list.
     groupingMode: 'rule',
+    // How a rule group breaks down: by both endpoints, by one, or not at all.
+    subGroupingMode: 'source-dest',
+    groupSortBy: 'count',
+    groupSortDesc: true,
     groupAlerts: true,
     alertGroups: [],
     sourceDestGroups: [],
@@ -81,6 +85,17 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
       { value: 'source-dest', title: this.$root.i18n.simpleAlertsGroupBySourceDest },
       { value: 'none', title: this.$root.i18n.simpleAlertsGroupByNone },
     ],
+    subGroupingOptions: [
+      { value: 'source-dest', title: this.$root.i18n.simpleAlertsGroupBySourceDest },
+      { value: 'source', title: this.$root.i18n.source },
+      { value: 'destination', title: this.$root.i18n.destination },
+      { value: 'none', title: this.$root.i18n.simpleAlertsGroupByNone },
+    ],
+    groupSortOptions: [
+      { value: 'count', title: this.$root.i18n.count },
+      { value: 'severity', title: this.$root.i18n.severity },
+      { value: 'name', title: this.$root.i18n.simpleAlertsRuleName },
+    ],
 
     sortBy: [{ key: 'timestamp', order: 'desc' }],
     itemsPerPage: 25,
@@ -113,9 +128,13 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
       return this.severityTotals ? this.formatCompactNumber(this.severityTotals.low) : this.i18n.simpleAlertsStatUnavailable;
     },
     visibleGroups() {
-      const groups = this.activeGroups();
-      if (this.filterCategory === 'all' || !this.categoryFilterEnabled()) return groups;
-      return groups.filter(g => g['rule.category'] === this.filterCategory);
+      let groups = this.activeGroups();
+      if (this.filterCategory !== 'all' && this.categoryFilterEnabled()) {
+        groups = groups.filter(g => g['rule.category'] === this.filterCategory);
+      }
+      // re-sorted here rather than only at parse time, so changing the sort does not
+      // require refetching the aggregation
+      return this.sortGroups(groups);
     },
     // Counts a selected group as every alert it represents, not the rows on screen,
     // so the number matches what the bulk action will actually affect.

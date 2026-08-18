@@ -1537,3 +1537,154 @@ test('sourceDestGroupKeysAreReadableAndUnique', () => {
   expect(groups.map(g => g.key)).toEqual(['10.0.0.1 8.8.8.8', '10.0.0.2 8.8.8.8']);
   groups.forEach(g => expect(/[\x00-\x1f]/.test(g.key)).toBe(false));
 });
+
+// --- sub-grouping choice and group sorting ----------------------------------
+
+test('subGroupFieldsFollowsTheChosenBreakdown', () => {
+  comp.subGroupingMode = 'source-dest';
+  expect(comp.subGroupFields()).toEqual(['source.ip', 'destination.ip']);
+
+  comp.subGroupingMode = 'source';
+  expect(comp.subGroupFields()).toEqual(['source.ip']);
+
+  comp.subGroupingMode = 'destination';
+  expect(comp.subGroupFields()).toEqual(['destination.ip']);
+
+  // 'none' means no breakdown at all, so the rule lists its alerts directly
+  comp.subGroupingMode = 'none';
+  expect(comp.subGroupFields()).toBeNull();
+});
+
+test('subGroupingNoneSkipsTheAggregationEntirely', async () => {
+  comp.subGroupingMode = 'none';
+  const group = comp.newGroup('rule', 'r', { ruleName: 'ET MALWARE One', count: 90 });
+  const mock = mockPapi("get", { data: {} });
+  comp.loadGroupAlerts = jest.fn();
+
+  await comp.loadSubGroups(group);
+
+  expect(mock).not.toHaveBeenCalled();
+  expect(group.subGroups).toEqual([]);
+  expect(group.subGroupsLoaded).toBe(true);
+  expect(comp.loadGroupAlerts).toHaveBeenCalledWith(group);
+});
+
+test('subGroupingBySingleEndpointAggregatesOnThatFieldOnly', async () => {
+  comp.subGroupingMode = 'source';
+  const group = comp.newGroup('rule', 'r', { ruleName: 'ET MALWARE One', count: 90 });
+  comp.narrowQuery = jest.fn().mockResolvedValue('narrowed');
+  const mock = mockPapi("get", { data: { metrics: {
+    'groupby_0|source.ip': [
+      { value: 60, keys: ['10.1.2.15'] },
+      { value: 30, keys: ['10.1.2.44'] },
+    ],
+  }}});
+
+  await comp.loadSubGroups(group);
+
+  expect(mock.mock.calls[0][1].params.query).toBe('narrowed | groupby source.ip');
+  expect(group.subGroups.map(sg => sg.sourceIp)).toEqual(['10.1.2.15', '10.1.2.44']);
+  // no destination was grouped, so none is claimed
+  expect(group.subGroups[0].destIp).toBeNull();
+  expect(group.subGroups[0].key).toBe('10.1.2.15');
+});
+
+test('parseEndpointGroupsStillDropsRowsWithNoEndpointAtAll', () => {
+  const groups = comp.parseEndpointGroups(
+    [{ value: 5, keys: ['__missing__'] }, { value: 3, keys: ['10.0.0.1'] }], ['source.ip']);
+  expect(groups.length).toBe(1);
+  expect(groups[0].sourceIp).toBe('10.0.0.1');
+});
+
+test('setSubGroupingModeDiscardsWhatWasFetchedUnderTheOldBreakdown', () => {
+  comp.alertGroups = [comp.newGroup('rule', 'g1', { ruleName: 'r' })];
+  comp.alertGroups[0].subGroups = [{ key: 'stale' }];
+  comp.alertGroups[0].subGroupsLoaded = true;
+  comp.alertGroups[0].alerts = [{ id: 'stale' }];
+  comp.alertGroups[0].alertsLoaded = true;
+  comp.expandedGroups = ['g1'];
+  comp.expandedSubGroups = ['g1 > stale'];
+
+  comp.setSubGroupingMode('source');
+
+  expect(comp.subGroupingMode).toBe('source');
+  expect(comp.alertGroups[0].subGroups).toEqual([]);
+  expect(comp.alertGroups[0].subGroupsLoaded).toBe(false);
+  expect(comp.alertGroups[0].alertsLoaded).toBe(false);
+  expect(comp.expandedGroups).toEqual([]);
+  expect(comp.expandedSubGroups).toEqual([]);
+});
+
+test('sortGroupsByCountRespectsDirection', () => {
+  const groups = [{ key: 'a', count: 7 }, { key: 'b', count: 20 }, { key: 'c', count: 12 }];
+
+  comp.groupSortBy = 'count';
+  comp.groupSortDesc = true;
+  expect(comp.sortGroups(groups).map(g => g.count)).toEqual([20, 12, 7]);
+
+  comp.groupSortDesc = false;
+  expect(comp.sortGroups(groups).map(g => g.count)).toEqual([7, 12, 20]);
+
+  // the caller's array is never reordered in place
+  expect(groups.map(g => g.count)).toEqual([7, 20, 12]);
+});
+
+test('sortGroupsByNameAndSeverity', () => {
+  comp.groupSortBy = 'name';
+  comp.groupSortDesc = false;
+  const byName = comp.sortGroups([
+    { key: 'x', ruleName: 'Zeta rule', count: 1 },
+    { key: 'y', ruleName: 'alpha rule', count: 1 },
+  ]);
+  // case-insensitive, so 'alpha' precedes 'Zeta'
+  expect(byName.map(g => g.ruleName)).toEqual(['alpha rule', 'Zeta rule']);
+
+  comp.groupSortBy = 'severity';
+  comp.groupSortDesc = true;
+  const bySeverity = comp.sortGroups([
+    { key: 'l', severityLabel: 'low', count: 500 },
+    { key: 'h', severityLabel: 'high', count: 1 },
+    { key: 'm', severityLabel: 'medium', count: 2 },
+  ]);
+  expect(bySeverity.map(g => g.key)).toEqual(['h', 'm', 'l']);
+});
+
+test('sortGroupsBreaksTiesByCount', () => {
+  comp.groupSortBy = 'severity';
+  comp.groupSortDesc = true;
+  const sorted = comp.sortGroups([
+    { key: 'quiet', severityLabel: 'high', count: 5 },
+    { key: 'noisy', severityLabel: 'high', count: 900 },
+  ]);
+  // equal severity, so the noisier rule leads
+  expect(sorted.map(g => g.key)).toEqual(['noisy', 'quiet']);
+});
+
+test('visibleSubGroupsReSortsWithoutRefetching', () => {
+  const group = { subGroups: [{ key: 'a', count: 5 }, { key: 'b', count: 50 }] };
+  comp.groupSortBy = 'count';
+
+  comp.groupSortDesc = true;
+  expect(comp.visibleSubGroups(group).map(g => g.key)).toEqual(['b', 'a']);
+
+  comp.groupSortDesc = false;
+  expect(comp.visibleSubGroups(group).map(g => g.key)).toEqual(['a', 'b']);
+});
+
+test('sortAndSubGroupingPreferencesPersist', () => {
+  Object.keys(localStorage).filter(k => k.startsWith('settings.simplealerts.')).forEach(k => localStorage.removeItem(k));
+
+  comp.subGroupingMode = 'destination';
+  comp.groupSortBy = 'severity';
+  comp.groupSortDesc = false;
+  comp.saveLocalSettings();
+
+  comp.subGroupingMode = 'source-dest';
+  comp.groupSortBy = 'count';
+  comp.groupSortDesc = true;
+  comp.loadLocalSettings();
+
+  expect(comp.subGroupingMode).toBe('destination');
+  expect(comp.groupSortBy).toBe('severity');
+  expect(comp.groupSortDesc).toBe(false);
+});

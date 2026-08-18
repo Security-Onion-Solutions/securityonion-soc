@@ -99,29 +99,96 @@ globalThis.SimpleAlertsGrouping = (function() {
         if (candidate > current) group.severityLabel = severityLabel;
       });
 
-      return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+      return this.sortGroups(Array.from(groups.values()));
     },
 
-    // One entry per source/destination pair. Host-based alerts have neither endpoint
-    // and aggregate into a single "missing" pair, which is dropped rather than shown
-    // as a meaningless group.
-    parseSourceDestGroups(rows) {
+    // One entry per distinct combination of the grouped endpoint fields. Rows whose
+    // every field is absent are dropped: host-based alerts have no endpoints and would
+    // otherwise collapse into a single meaningless group.
+    parseEndpointGroups(rows, fields) {
       const groups = [];
+      fields = fields || SOURCE_DEST_FIELDS;
 
       rows.forEach(row => {
         const keys = row.keys || [];
-        const sourceIp = present(keys[0]);
-        const destIp = present(keys[1]);
+        const sourceIp = fields.indexOf('source.ip') === -1
+          ? null : present(keys[fields.indexOf('source.ip')]);
+        const destIp = fields.indexOf('destination.ip') === -1
+          ? null : present(keys[fields.indexOf('destination.ip')]);
         if (!sourceIp && !destIp) return;
 
-        groups.push(this.newGroup('source-dest', sourceIp + ' ' + destIp, {
+        groups.push(this.newGroup('source-dest', [sourceIp, destIp].filter(v => v).join(' '), {
           sourceIp: sourceIp,
           destIp: destIp,
           count: row.value || 0,
         }));
       });
 
-      return groups.sort((a, b) => b.count - a.count);
+      return this.sortGroups(groups);
+    },
+
+    // Kept as the name the top-level source/destination view uses.
+    parseSourceDestGroups(rows) {
+      return this.parseEndpointGroups(rows, SOURCE_DEST_FIELDS);
+    },
+
+    // The fields a rule group breaks down by, or null when the user has asked for a
+    // flat list of that rule's alerts instead.
+    subGroupFields() {
+      switch (this.subGroupingMode) {
+        case 'none': return null;
+        case 'source': return ['source.ip'];
+        case 'destination': return ['destination.ip'];
+        default: return SOURCE_DEST_FIELDS;
+      }
+    },
+
+    // Sorting applies to both tiers, so a rule's pairs order the same way its rules do.
+    sortGroups(groups) {
+      const severityRank = { high: 3, medium: 2, low: 1 };
+      const direction = this.groupSortDesc ? -1 : 1;
+
+      const value = (group) => {
+        switch (this.groupSortBy) {
+          case 'severity': return severityRank[this.getSeverityLevel(group)] || 0;
+          case 'name': return String(group.ruleName || group.key || '').toLowerCase();
+          default: return group.count || 0;
+        }
+      };
+
+      // slice() so the caller's array is never reordered in place
+      return groups.slice().sort((a, b) => {
+        const av = value(a), bv = value(b);
+        // direction is -1 when descending, so the smaller value sorts last
+        if (av < bv) return -direction;
+        if (av > bv) return direction;
+        // ties fall back to count, so equal severities still lead with the noisiest
+        return (b.count || 0) - (a.count || 0);
+      });
+    },
+
+    setGroupSort(sortBy) {
+      this.groupSortBy = sortBy;
+      this.saveLocalSettings();
+    },
+
+    toggleGroupSortDirection() {
+      this.groupSortDesc = !this.groupSortDesc;
+      this.saveLocalSettings();
+    },
+
+    setSubGroupingMode(mode) {
+      this.subGroupingMode = mode;
+      // every rule's breakdown is now stale, so drop what was fetched and collapse
+      this.expandedSubGroups = [];
+      this.alertGroups.forEach(group => {
+        group.subGroups = [];
+        group.subGroupsLoaded = false;
+        group.alerts = [];
+        group.alertsLoaded = false;
+      });
+      this.expandedGroups = [];
+      this.saveLocalSettings();
     },
 
     newGroup(kind, key, fields) {
@@ -204,11 +271,20 @@ globalThis.SimpleAlertsGrouping = (function() {
     // Aggregates a rule's alerts into source/destination pairs. Counts are exact for the
     // same reason the rule counts are: they come from the backend, not from a sample.
     async loadSubGroups(group) {
+      const fields = this.subGroupFields();
+      if (!fields) {
+        // the user asked for a flat list of this rule's alerts, with no breakdown
+        group.subGroups = [];
+        group.subGroupsLoaded = true;
+        if (!group.alertsLoaded) await this.loadGroupAlerts(group);
+        return;
+      }
+
       group.subGroupsLoading = true;
       try {
         const narrowed = await this.narrowQuery(this.buildQuery(), this.groupTerms(group));
         const response = await this.$root.papi.get('events/', { params: {
-          query: narrowed + ' | groupby ' + SOURCE_DEST_FIELDS.join(' '),
+          query: narrowed + ' | groupby ' + fields.join(' '),
           range: this.getDateRange(),
           format: this.i18n.timePickerSample,
           zone: this.zone,
@@ -218,8 +294,8 @@ globalThis.SimpleAlertsGrouping = (function() {
         }});
 
         const rows = (response && response.data && response.data.metrics
-          && response.data.metrics['groupby_0|' + SOURCE_DEST_FIELDS.join('|')]) || [];
-        group.subGroups = this.parseSourceDestGroups(rows);
+          && response.data.metrics['groupby_0|' + fields.join('|')]) || [];
+        group.subGroups = this.parseEndpointGroups(rows, fields);
         group.subGroupsLoaded = true;
 
         // Host-based detections (sigma, yara, ossec) have no endpoints to group by, so
@@ -258,6 +334,12 @@ globalThis.SimpleAlertsGrouping = (function() {
       } finally {
         subGroup.alertsLoading = false;
       }
+    },
+
+    // Sorted on read so changing the sort reorders an already-expanded rule's pairs
+    // without refetching them. Pairs carry no severity, so that sort falls back to count.
+    visibleSubGroups(group) {
+      return this.sortGroups(group.subGroups || []);
     },
 
     // True once a rule group has resolved to pairs rather than a flat alert list.
@@ -396,6 +478,9 @@ globalThis.SimpleAlertsGrouping = (function() {
 
     saveLocalSettings() {
       this.saveSetting('groupingMode', this.groupingMode, 'rule');
+      this.saveSetting('subGroupingMode', this.subGroupingMode, 'source-dest');
+      this.saveSetting('groupSortBy', this.groupSortBy, 'count');
+      this.saveSetting('groupSortDesc', this.groupSortDesc, true);
       this.saveSetting('filterStatus', this.filterStatus, 'active');
       this.saveSetting('filterSeverity', this.filterSeverity, 'all');
       this.saveSetting('filterTimeRange', this.filterTimeRange, '24h');
@@ -406,6 +491,9 @@ globalThis.SimpleAlertsGrouping = (function() {
         this.groupingMode = localStorage[SETTINGS_PREFIX + 'groupingMode'];
         this.groupAlerts = this.groupingMode !== 'none';
       }
+      if (localStorage[SETTINGS_PREFIX + 'subGroupingMode']) this.subGroupingMode = localStorage[SETTINGS_PREFIX + 'subGroupingMode'];
+      if (localStorage[SETTINGS_PREFIX + 'groupSortBy']) this.groupSortBy = localStorage[SETTINGS_PREFIX + 'groupSortBy'];
+      if (localStorage[SETTINGS_PREFIX + 'groupSortDesc']) this.groupSortDesc = localStorage[SETTINGS_PREFIX + 'groupSortDesc'] == 'true';
       if (localStorage[SETTINGS_PREFIX + 'filterStatus']) this.filterStatus = localStorage[SETTINGS_PREFIX + 'filterStatus'];
       if (localStorage[SETTINGS_PREFIX + 'filterSeverity']) this.filterSeverity = localStorage[SETTINGS_PREFIX + 'filterSeverity'];
       if (localStorage[SETTINGS_PREFIX + 'filterTimeRange']) this.filterTimeRange = localStorage[SETTINGS_PREFIX + 'filterTimeRange'];
