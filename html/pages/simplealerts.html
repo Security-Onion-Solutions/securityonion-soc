@@ -72,6 +72,12 @@
           data-aid="simplealerts_details_copy" prepend-icon="fa-copy">{{ i18n.simpleAlertsCopyId }}</v-btn>
         <v-btn variant="text" size="small" color="primary" :to="getHuntRoute(selectedAlertDetails)"
           data-aid="simplealerts_details_hunt" prepend-icon="fa-crosshairs">{{ i18n.hunt }}</v-btn>
+        <v-btn variant="text" size="small" :loading="pcapLoading" :disabled="!canRequestPcap(selectedAlertDetails)"
+          @click="requestPcap(selectedAlertDetails)" data-aid="simplealerts_details_pcap"
+          prepend-icon="fa-file-arrow-down">{{ i18n.simpleAlertsPcap }}</v-btn>
+        <v-btn v-if="$root.detectionsEnabled" variant="text" size="small" :loading="actionLoading"
+          @click="tuneDetection(selectedAlertDetails)" data-aid="simplealerts_details_tune"
+          prepend-icon="fa-sliders">{{ i18n.simpleAlertsTuneDetection }}</v-btn>
         <v-spacer></v-spacer>
         <v-btn v-if="!selectedAlertDetails.acknowledged" variant="text" size="small" color="success"
           :loading="actionLoading" @click="acknowledgeAlert(selectedAlertDetails)"
@@ -178,6 +184,11 @@
                 </v-list-item-title>
                 <template #append>
                   <span class="so-stat-label mr-3" data-aid="simplealerts_group_summary">{{ getGroupSummary(group) }}</span>
+                  <v-btn v-if="group.kind === 'rule' && group.ruleUuid && $root.detectionsEnabled" icon variant="text"
+                    size="small" @click.stop="tuneDetection(group)" data-aid="simplealerts_group_tune"
+                    :title="i18n.simpleAlertsTuneDetection" :aria-label="i18n.simpleAlertsTuneDetection">
+                    <v-icon>fa-sliders</v-icon>
+                  </v-btn>
                 </template>
               </v-list-item>
 

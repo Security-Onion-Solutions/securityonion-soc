@@ -54,6 +54,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     selectedAlertIds: {},
     selectedGroupKeys: {},
     actionLoading: false,
+    pcapLoading: false,
 
     severityOptions: [
       { value: 'all', title: this.$root.i18n.simpleAlertsAllSeverities },
@@ -143,6 +144,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     SimpleAlertsDetails,
     SimpleAlertsRules,
     SimpleAlertsActions,
+    SimpleAlertsPivots,
     {
     }
   ),

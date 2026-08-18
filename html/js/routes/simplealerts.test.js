@@ -13,6 +13,7 @@ require('./simplealerts.grouping.js');
 require('./simplealerts.details.js');
 require('./simplealerts.rules.js');
 require('./simplealerts.actions.js');
+require('./simplealerts.pivots.js');
 require('./simplealerts.js');
 
 let comp;
@@ -1099,4 +1100,111 @@ test('bulkSelectionLabelUsesTheRightPlural', () => {
 
   comp.toggleGroupSelection(comp.alertGroups[1]);
   expect(comp.bulkSelectionLabel()).toBe('2K selected across 2 groups');
+});
+
+// --- pivots -----------------------------------------------------------------
+
+test('tuneDetectionOpensTheDetectionTuningTab', async () => {
+  const mock = mockPapi("get", { data: { id: 'det-1', engine: 'suricata' } });
+  comp.$router.push = jest.fn();
+
+  await comp.tuneDetection({ ruleUuid: 'uuid-1' });
+
+  expect(mock).toHaveBeenCalledWith('detection/public/uuid-1');
+  expect(comp.$router.push).toHaveBeenCalledWith({
+    name: 'detection', params: { id: 'det-1' }, query: { tab: 'tuning' },
+  });
+});
+
+test('tuneDetectionSendsStrelkaToTheSourceTab', async () => {
+  mockPapi("get", { data: { id: 'det-2', engine: 'strelka' } });
+  comp.$router.push = jest.fn();
+
+  await comp.tuneDetection({ ruleUuid: 'uuid-2' });
+
+  // strelka detections have no tuning tab; overrides live on source
+  expect(comp.$router.push.mock.calls[0][0].query).toEqual({ tab: 'source' });
+});
+
+test('tuneDetectionReadsTheUuidFromEitherShape', async () => {
+  const mock = mockPapi("get", { data: { id: 'det-3', engine: 'suricata' } });
+  comp.$router.push = jest.fn();
+
+  // an alert carries it on the payload, a group on the group itself
+  await comp.tuneDetection({ payload: { 'rule.uuid': 'uuid-3' } });
+  expect(mock).toHaveBeenCalledWith('detection/public/uuid-3');
+});
+
+test('tuneDetectionWarnsWhenThereIsNoDetection', async () => {
+  comp.$root.showWarning = jest.fn();
+  comp.$router.push = jest.fn();
+
+  await comp.tuneDetection({ payload: {} });
+
+  expect(comp.$root.showWarning).toHaveBeenCalled();
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('canRequestPcapNeedsBothEndpointsAndASensor', () => {
+  const full = { sourceIp: '10.0.0.1', destIp: '8.8.8.8', payload: { 'observer.name': 'sensor1' } };
+  expect(comp.canRequestPcap(full)).toBe(true);
+
+  expect(comp.canRequestPcap({ sourceIp: '10.0.0.1', payload: { 'observer.name': 's' } })).toBe(false);
+  expect(comp.canRequestPcap({ sourceIp: '10.0.0.1', destIp: '8.8.8.8', payload: {} })).toBe(false);
+  expect(comp.canRequestPcap(null)).toBe(false);
+
+  // agent.name is the fallback when the observer is not recorded
+  expect(comp.pcapNodeId({ payload: { 'agent.name': 'agent1' } })).toBe('agent1');
+  expect(comp.pcapNodeId({ payload: { 'observer.name': 'obs', 'agent.name': 'agent1' } })).toBe('obs');
+});
+
+test('requestPcapEnqueuesTheJobAndHandsOffToTheJobPage', async () => {
+  const mock = mockPapi("post", { data: { id: 42 } });
+  comp.$router.push = jest.fn();
+
+  await comp.requestPcap({
+    timestamp: '2026-01-01T12:00:00Z',
+    sourceIp: '10.0.0.1', sourcePort: '1234',
+    destIp: '8.8.8.8', destPort: '53',
+    payload: { 'observer.name': 'sensor1' },
+  });
+
+  const [route, body] = mock.mock.calls[0];
+  expect(route).toBe('job/');
+  expect(body.nodeId).toBe('sensor1');
+  expect(body.filter.srcIp).toBe('10.0.0.1');
+  expect(body.filter.dstIp).toBe('8.8.8.8');
+  // ports are sent as numbers, and the window brackets the alert
+  expect(body.filter.srcPort).toBe(1234);
+  expect(body.filter.dstPort).toBe(53);
+  expect(moment(body.filter.endTime).diff(moment(body.filter.beginTime), 'seconds')).toBe(60);
+
+  // packets are rendered by the job page rather than re-implemented here
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'job', params: { jobId: '42' } });
+  expect(comp.detailsDialog).toBe(false);
+  expect(comp.pcapLoading).toBe(false);
+});
+
+test('requestPcapRefusesWithoutEnoughInformation', async () => {
+  const mock = mockPapi("post", { data: { id: 1 } });
+  comp.$root.showWarning = jest.fn();
+
+  await comp.requestPcap({ sourceIp: '10.0.0.1', payload: {} });
+
+  expect(mock).not.toHaveBeenCalled();
+  expect(comp.$root.showWarning).toHaveBeenCalled();
+});
+
+test('requestPcapSurfacesErrors', async () => {
+  mockPapi("post", null, new Error('boom'));
+  const showError = mockShowError();
+
+  await comp.requestPcap({
+    timestamp: '2026-01-01T12:00:00Z',
+    sourceIp: '10.0.0.1', destIp: '8.8.8.8',
+    payload: { 'observer.name': 'sensor1' },
+  });
+
+  expect(showError).toHaveBeenCalled();
+  expect(comp.pcapLoading).toBe(false);
 });
