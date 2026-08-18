@@ -46,6 +46,9 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     // Of those, how many render before the user asks for the rest.
     subGroupDisplayLimit: 50,
 
+    detailsDialog: false,
+    selectedAlertDetails: null,
+
     severityOptions: [
       { value: 'all', title: this.$root.i18n.simpleAlertsAllSeverities },
       { value: 'high', title: this.$root.i18n.simpleAlertsSeverityHigh },
@@ -124,6 +127,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
   methods: Object.assign({},
     SimpleAlertsData,
     SimpleAlertsGrouping,
+    SimpleAlertsDetails,
     {
     }
   ),

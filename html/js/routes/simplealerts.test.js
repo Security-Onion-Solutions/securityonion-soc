@@ -8,6 +8,7 @@ require('../test_common.js');
 // Method packs must load before simplealerts.js, which merges them into the component.
 require('./simplealerts.data.js');
 require('./simplealerts.grouping.js');
+require('./simplealerts.details.js');
 require('./simplealerts.js');
 
 let comp;
@@ -624,4 +625,158 @@ test('onFilterChangedPersistsAndReloads', () => {
 
   expect(comp.saveLocalSettings).toHaveBeenCalled();
   expect(comp.loadAlerts).toHaveBeenCalled();
+});
+
+// --- details dialog ---------------------------------------------------------
+
+test('extractGeoReadsEcsFields', () => {
+  const geo = comp.extractGeo({
+    'source.geo.city_name': 'Austin',
+    'source.geo.region_iso_code': 'US-TX',
+    'source.geo.country_name': 'United States',
+    'source.as.organization.name': 'Example ISP',
+  }, 'source');
+
+  expect(geo).toEqual({
+    city: 'Austin', regionCode: 'US-TX', regionName: undefined,
+    country: 'United States', asOrg: 'Example ISP',
+  });
+
+  // a document with no geo at all yields null rather than a hollow object
+  expect(comp.extractGeo({ 'source.ip': '1.1.1.1' }, 'source')).toBeNull();
+});
+
+test('processAlertsPopulatesGeo', () => {
+  // the original hard-coded these to null because it requested a "simple" view
+  const alert = comp.processAlerts([{ payload: {
+    'source.ip': '8.8.8.8',
+    'source.geo.country_name': 'United States',
+    'destination.ip': '10.0.0.1',
+  }}])[0];
+
+  expect(alert.sourceGeo).not.toBeNull();
+  expect(alert.sourceGeo.country).toBe('United States');
+  expect(alert.destGeo).toBeNull();
+});
+
+test('formatGeoInfo', () => {
+  expect(comp.formatGeoInfo(null, '10.0.0.1')).toBe('Private network (RFC1918)');
+  // a private address takes precedence even when geo data happens to exist
+  expect(comp.formatGeoInfo({ country: 'X' }, '192.168.1.1')).toBe('Private network (RFC1918)');
+
+  expect(comp.formatGeoInfo(null, '8.8.8.8')).toBe('Location not available');
+
+  expect(comp.formatGeoInfo({ city: 'Austin', regionCode: 'US-TX', country: 'United States' }, '8.8.8.8'))
+    .toBe('Austin, US-TX, United States');
+  // region name is the fallback when the ISO code is absent
+  expect(comp.formatGeoInfo({ city: 'Austin', regionName: 'Texas', country: 'United States' }, '8.8.8.8'))
+    .toBe('Austin, Texas, United States');
+  expect(comp.formatGeoInfo({ country: 'Sweden', asOrg: 'Example AB' }, '8.8.8.8'))
+    .toBe('Sweden · Example AB');
+  expect(comp.formatGeoInfo({ asOrg: 'Example AB' }, '8.8.8.8')).toBe('Example AB');
+});
+
+test('showAndCloseDetails', () => {
+  const alert = { id: 'a1', ruleName: 'r' };
+  comp.showDetails(alert);
+  expect(comp.detailsDialog).toBe(true);
+  expect(comp.selectedAlertDetails).toBe(alert);
+
+  comp.closeDetails();
+  expect(comp.detailsDialog).toBe(false);
+});
+
+test('getDetailFieldsOmitsPromotedAndEmptyValues', () => {
+  const fields = comp.getDetailFields({ payload: {
+    'rule.name': 'promoted away',
+    'source.ip': 'promoted away',
+    'event.severity_label': 'promoted away',
+    'zeta.field': 'z',
+    'alpha.field': 'a',
+    'empty.field': '',
+    'null.field': null,
+    'undefined.field': undefined,
+    'zero.field': 0,
+    'false.field': false,
+  }});
+
+  // sorted for a stable layout; zero and false are real values and must survive
+  expect(fields).toEqual([
+    { key: 'alpha.field', value: 'a' },
+    { key: 'false.field', value: false },
+    { key: 'zero.field', value: 0 },
+    { key: 'zeta.field', value: 'z' },
+  ]);
+});
+
+test('getDetailFieldsOmitsGeoRenderedByTheNetworkPanel', () => {
+  const fields = comp.getDetailFields({ payload: {
+    'destination.geo.city_name': 'Mountain View',
+    'destination.geo.country_name': 'United States',
+    'destination.as.organization.name': 'Google LLC',
+    'network.protocol': 'dns',
+  }});
+
+  // the network panel already shows these as a formatted location
+  expect(fields.map(f => f.key)).toEqual(['network.protocol']);
+});
+
+test('getDetailFieldsHandlesMissingPayload', () => {
+  expect(comp.getDetailFields(null)).toEqual([]);
+  expect(comp.getDetailFields({})).toEqual([]);
+});
+
+test('getEndpoints', () => {
+  const endpoints = comp.getEndpoints({
+    isHostBased: false,
+    sourceIp: '10.0.0.1', sourcePort: 1234, sourceGeo: null,
+    destIp: '8.8.8.8', destPort: 53, destGeo: { country: 'United States' },
+  });
+
+  expect(endpoints.length).toBe(2);
+  expect(endpoints[0].role).toBe('Source');
+  expect(endpoints[0].isPrivate).toBe(true);
+  expect(endpoints[0].geo).toBe('Private network (RFC1918)');
+  expect(endpoints[1].isPrivate).toBe(false);
+  expect(endpoints[1].geo).toBe('United States');
+});
+
+test('getEndpointsSkipsHostBasedAndMissingSides', () => {
+  // host-based alerts have no network dimension, so the panel is omitted entirely
+  expect(comp.getEndpoints({ isHostBased: true, sourceIp: 'x', destIp: 'y' })).toEqual([]);
+  expect(comp.getEndpoints(null)).toEqual([]);
+
+  const oneSided = comp.getEndpoints({ isHostBased: false, sourceIp: '10.0.0.1', destIp: null });
+  expect(oneSided.length).toBe(1);
+  expect(oneSided[0].role).toBe('Source');
+});
+
+test('getHuntRouteEscapesTheAlertId', () => {
+  const route = comp.getHuntRoute({ id: 'weird"id' });
+  expect(route.path).toBe('/alerts');
+  expect(route.query.q).toBe('tags:alert AND soc_id:"weird\\"id"');
+  expect(route.query.z).toBe(comp.zone);
+  expect(route.query.t).toContain(' - ');
+
+  expect(comp.getHuntRoute(null)).toBeNull();
+});
+
+test('copyAlertId', async () => {
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  global.navigator.clipboard = { writeText };
+  comp.$root.showTip = jest.fn();
+
+  await comp.copyAlertId({ id: 'abc' });
+
+  expect(writeText).toHaveBeenCalledWith('abc');
+  expect(comp.$root.showTip).toHaveBeenCalled();
+});
+
+test('copyAlertIdSurfacesFailure', async () => {
+  global.navigator.clipboard = { writeText: jest.fn().mockRejectedValue(new Error('denied')) };
+  const showError = mockShowError();
+
+  await comp.copyAlertId({ id: 'abc' });
+
+  expect(showError).toHaveBeenCalled();
 });

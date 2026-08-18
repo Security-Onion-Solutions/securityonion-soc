@@ -1379,6 +1379,23 @@ dfn {
   min-width: 20rem;
 }
 
+.simplealerts-row-clickable {
+  cursor: pointer;
+}
+
+/* The dialog scrolls its own body rather than growing past the viewport. */
+.simplealerts-details-body {
+  max-height: 65vh;
+}
+
+.simplealerts-endpoint {
+  min-width: 16rem;
+}
+
+.simplealerts-endpoint-ip {
+  font-size: 1rem;
+}
+
 .simplealerts-group-header {
   min-height: 52px;
   cursor: pointer;

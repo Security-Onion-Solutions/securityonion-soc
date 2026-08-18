@@ -161,8 +161,10 @@ globalThis.SimpleAlertsData = (function() {
           severityLabel: data['event.severity_label'] || this.i18n.simpleAlertsSeverityUnknown,
           sourceIp: sourceIp,
           sourcePort: data['source.port'],
+          sourceGeo: this.extractGeo(data, 'source'),
           destIp: destIp,
           destPort: data['destination.port'],
+          destGeo: this.extractGeo(data, 'destination'),
           module: data['event.module'],
           category: data['event.category'],
           'rule.category': ruleCategory,
@@ -180,6 +182,37 @@ globalThis.SimpleAlertsData = (function() {
         .concat(Array.from(categories).sort().map(cat => ({ value: cat, title: cat })));
 
       return alerts;
+    },
+
+    // Pulls the ECS geo and autonomous-system fields for one endpoint. Returns null when
+    // the document carries none, which the UI reports as "not available" rather than
+    // rendering an empty location.
+    extractGeo(data, prefix) {
+      const geo = {
+        city: data[prefix + '.geo.city_name'],
+        regionCode: data[prefix + '.geo.region_iso_code'],
+        regionName: data[prefix + '.geo.region_name'],
+        country: data[prefix + '.geo.country_name'] || data[prefix + '.geo.country_iso_code'],
+        asOrg: data[prefix + '.as.organization.name'] || data[prefix + '.as.organization'],
+      };
+      return Object.values(geo).some(v => v) ? geo : null;
+    },
+
+    // A short, human-readable location for an endpoint. Private addresses are labelled
+    // as such rather than reported as having no geo data, since that is expected.
+    formatGeoInfo(geo, ip) {
+      if (this.isPrivateIP(ip)) return this.i18n.simpleAlertsGeoPrivate;
+      if (!geo) return this.i18n.simpleAlertsGeoUnavailable;
+
+      const parts = [];
+      if (geo.city) parts.push(geo.city);
+      if (geo.regionCode) parts.push(geo.regionCode);
+      else if (geo.regionName) parts.push(geo.regionName);
+      if (geo.country) parts.push(geo.country);
+
+      const location = parts.join(', ');
+      if (location && geo.asOrg) return location + ' · ' + geo.asOrg;
+      return location || geo.asOrg || this.i18n.simpleAlertsGeoUnavailable;
     },
 
     // Rule names carry their ruleset and category as a prefix, e.g. "ET MALWARE ..." or

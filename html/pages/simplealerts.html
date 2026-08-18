@@ -1,4 +1,77 @@
 <v-container fluid data-aid="simplealerts_screen">
+  <v-dialog v-model="detailsDialog" max-width="1100" scrollable>
+    <v-card v-if="selectedAlertDetails" data-aid="simplealerts_details">
+      <v-toolbar class="theme-background-lighten-1" density="comfortable">
+        <v-toolbar-title class="text-body-1 font-weight-bold" data-aid="simplealerts_details_title">
+          {{ selectedAlertDetails.ruleName }}
+        </v-toolbar-title>
+        <v-btn icon variant="flat" class="circle-button mx-2" @click="closeDetails"
+          data-aid="simplealerts_details_close" :aria-label="i18n.close">
+          <v-icon>fa-xmark</v-icon>
+        </v-btn>
+      </v-toolbar>
+
+      <div class="d-flex align-center flex-wrap ga-2 px-4 py-3" data-aid="simplealerts_details_chips">
+        <v-chip size="small" variant="tonal" :color="severityColor(selectedAlertDetails)">
+          {{ selectedAlertDetails.severityLabel }}
+        </v-chip>
+        <v-chip size="small" variant="tonal" v-if="selectedAlertDetails.module">{{ selectedAlertDetails.module }}</v-chip>
+        <v-chip size="small" variant="tonal" v-if="selectedAlertDetails.category">{{ selectedAlertDetails.category }}</v-chip>
+        <v-chip size="small" variant="tonal" color="success" v-if="selectedAlertDetails.acknowledged">{{ i18n.acknowledged }}</v-chip>
+        <v-chip size="small" variant="tonal" color="warning" v-if="selectedAlertDetails.escalated">{{ i18n.escalated }}</v-chip>
+        <v-spacer></v-spacer>
+        <span class="so-stat-label">{{ formatDateTime(selectedAlertDetails.timestamp) }}</span>
+      </div>
+
+      <v-divider></v-divider>
+
+      <v-card-text class="simplealerts-details-body">
+        <div v-if="getEndpoints(selectedAlertDetails).length" class="mb-4" data-aid="simplealerts_details_network">
+          <div class="so-stat-label mb-2">{{ i18n.simpleAlertsNetwork }}</div>
+          <div class="d-flex flex-wrap ga-3">
+            <div v-for="endpoint in getEndpoints(selectedAlertDetails)" :key="endpoint.role"
+              class="so-stat-pill simplealerts-endpoint" data-aid="simplealerts_details_endpoint">
+              <div class="so-stat-text">
+                <div class="so-stat-label">{{ endpoint.role }}</div>
+                <div class="so-stat-value simplealerts-endpoint-ip">
+                  {{ endpoint.ip }}<span v-if="endpoint.port">:{{ endpoint.port }}</span>
+                </div>
+                <div class="so-stat-label" data-aid="simplealerts_details_geo">{{ endpoint.geo }}</div>
+              </div>
+              <v-icon class="so-stat-icon">{{ endpoint.isPrivate ? 'fa-house' : 'fa-globe' }}</v-icon>
+            </div>
+          </div>
+        </div>
+
+        <div class="so-stat-label mb-1">{{ i18n.simpleAlertsFields }}</div>
+        <div v-if="getDetailFields(selectedAlertDetails).length" class="expanded-fields-grid pa-0"
+          data-aid="simplealerts_details_fields">
+          <div v-for="kvp in getDetailFields(selectedAlertDetails)" :key="kvp.key" class="expanded-field-card">
+            <div class="expanded-field-header">
+              <span class="expanded-field-name-row">
+                <span class="expanded-field-name" :id="'simplealerts_field_' + kvp.key">{{ kvp.key }}</span>
+              </span>
+            </div>
+            <div class="expanded-field-value hardwrap" :aria-labelledby="'simplealerts_field_' + kvp.key"
+              data-aid="simplealerts_details_field_value">{{ kvp.value }}</div>
+          </div>
+        </div>
+        <div v-else class="text-body-2" data-aid="simplealerts_details_nofields">{{ i18n.simpleAlertsNoFields }}</div>
+      </v-card-text>
+
+      <v-divider></v-divider>
+
+      <v-card-actions>
+        <v-btn variant="text" size="small" @click="copyAlertId(selectedAlertDetails)"
+          data-aid="simplealerts_details_copy" prepend-icon="fa-copy">{{ i18n.simpleAlertsCopyId }}</v-btn>
+        <v-btn variant="text" size="small" color="primary" :to="getHuntRoute(selectedAlertDetails)"
+          data-aid="simplealerts_details_hunt" prepend-icon="fa-crosshairs">{{ i18n.hunt }}</v-btn>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" size="small" @click="closeDetails" data-aid="simplealerts_details_dismiss">{{ i18n.close }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   <v-row>
     <v-col>
       <v-row>
@@ -86,7 +159,7 @@
                   <v-data-table :headers="groupHeaders(group)" :items="getDisplayedAlerts(group)" density="compact"
                     :items-per-page="-1" hide-default-footer class="simplealerts-table" data-aid="simplealerts_group_table">
                     <template #item="{ item }">
-                      <tr data-aid="simplealerts_row">
+                      <tr data-aid="simplealerts_row" class="simplealerts-row-clickable" @click="showDetails(item)">
                         <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                         <td v-if="group.kind !== 'rule'" class="simplealerts-rule-cell">{{ item.ruleName }}</td>
                         <td v-if="group.kind === 'rule'">
@@ -137,7 +210,7 @@
               </tr>
             </template>
             <template #item="{ item }">
-              <tr data-aid="simplealerts_row">
+              <tr data-aid="simplealerts_row" class="simplealerts-row-clickable" @click="showDetails(item)">
                 <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
                 <td>
                   <v-chip size="small" variant="tonal" :color="severityColor(item)" data-aid="simplealerts_severity">
