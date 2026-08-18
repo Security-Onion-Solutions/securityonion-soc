@@ -465,7 +465,7 @@
 																						<v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
 																					</v-btn>
 																				</div>
-																				<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
+																				<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle ml-2" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
 																			</th>
 																			<td class="expansion va-middle" :data-aid="'events_field_value_' + category">
 																				<div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>
@@ -759,7 +759,7 @@
 																				<v-icon :alt="i18n.addColumnHeader" :color="isColumnHeader(kvp.key) ? 'info' : ''" :title="i18n.addColumnHeaderHelp">fa-table-columns</v-icon>
 																			</v-btn>
 																		</div>
-																		<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
+																		<div :id="'events_fields_' + category + '_' + kvp.key" class="d-inline-block expansion va-middle ml-2" v-text="kvp.key" :data-aid="'events_field_name_' + category"></div>
 																	</th>
 																	<td class="expansion va-middle" :data-aid="'events_field_value_' + category">
 																		<div class="quick-action-trigger d-inline-block expansion hardwrap" @click="toggleQuickAction($event, item, -1, kvp.key, kvp.value)">{{kvp.key.endsWith('detection.author') ? $root.tryLocalize(kvp.value) : kvp.value}}<span class="resolved-host" v-if="$root.tryResolveAlias(kvp.key, kvp.value)"> - {{ $root.tryResolveAlias(kvp.key, kvp.value) }}</span></div>

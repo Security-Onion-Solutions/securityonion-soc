@@ -1662,6 +1662,21 @@ test('toggleShowSection removes item from collapsed sections', () => {
   expect(comp.collapsedSections).not.toContain('section1');
 });
 
+test('collapsedSections persist across reloads', () => {
+  comp.collapsedSections = [];
+
+  comp.toggleShowSection('aimetrics-graphs');
+  expect(comp.collapsedSections).toEqual(['aimetrics-graphs']);
+
+  comp.collapsedSections = [];
+  comp.loadLocalSettings();
+  expect(comp.collapsedSections).toEqual(['aimetrics-graphs']);
+
+  // back to all-expanded clears the stored setting
+  comp.toggleShowSection('aimetrics-graphs');
+  expect(localStorage['settings.aimetrics.collapsedSections']).toBeUndefined();
+});
+
 test('isExpandedSection returns true when section not collapsed', () => {
   comp.collapsedSections = ['section2'];
   

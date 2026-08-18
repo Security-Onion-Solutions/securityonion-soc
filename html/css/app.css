@@ -289,6 +289,12 @@ th:hover, th.is-sorted, .solid {
   overflow-x: hidden;
 }
 
+/* vuetify disables selection on every th; field keys in expanded rows must stay copyable */
+th.expansion {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 th.sortable {
   white-space: nowrap;
 }
