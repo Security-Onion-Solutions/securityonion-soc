@@ -1,3 +1,58 @@
 <v-container fluid data-aid="simplealerts_screen">
-  <h1 class="my-2" v-text="i18n.simpleAlerts"></h1>
+  <v-row>
+    <v-col>
+      <v-row>
+        <v-toolbar class="so-toolbar elevation-0" fixed>
+          <h4 class="ml-2 my-0" data-aid="simplealerts_summary" role="heading" aria-level="2">
+            {{ i18n.simpleAlerts }} {{ formatCompactNumber(totalAlerts) }}
+          </h4>
+          <v-spacer></v-spacer>
+          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadAlerts()" data-aid="simplealerts_refresh" :aria-label="i18n.ariaReloadData">
+            <v-icon>fa-sync</v-icon>
+          </v-btn>
+        </v-toolbar>
+      </v-row>
+      <v-row>
+        <div class="section-panel w-100">
+          <v-data-table :sort-by="sortBy" @update:sort-by="val => sortBy = val" @update:items-per-page="val => itemsPerPage = val"
+            :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort density="compact"
+            :headers="headers" :items="processedAlerts" :loading="loading" item-value="id" data-aid="simplealerts_table">
+            <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+              <tr>
+                <template v-for="header in columns" :key="header.key">
+                  <th :class="[ header.align, {'is-sorted': isSorted(header)} ]"
+                    :data-aid="'simplealerts_header_' + header?.value?.toLowerCase()"
+                    :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                    <span @click="toggleSort(header)">{{ header.title }}</span>
+                    <template v-if="isSorted(header)">
+                      <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                    </template>
+                  </th>
+                </template>
+              </tr>
+            </template>
+            <template #item="{ item }">
+              <tr data-aid="simplealerts_row">
+                <td :title="formatDateTime(item.timestamp)">{{ formatDateTime(item.timestamp) }}</td>
+                <td>
+                  <v-chip size="small" variant="tonal" :color="severityColor(item)" data-aid="simplealerts_severity">
+                    {{ item.severityLabel }}
+                  </v-chip>
+                </td>
+                <td>{{ item.ruleName }}</td>
+                <td>
+                  <span v-if="item.sourceIp">{{ item.sourceIp }}<span v-if="item.sourcePort">:{{ item.sourcePort }}</span></span>
+                  <span v-else class="text-disabled">&mdash;</span>
+                </td>
+                <td>
+                  <span v-if="item.destIp">{{ item.destIp }}<span v-if="item.destPort">:{{ item.destPort }}</span></span>
+                  <span v-else class="text-disabled">&mdash;</span>
+                </td>
+              </tr>
+            </template>
+          </v-data-table>
+        </div>
+      </v-row>
+    </v-col>
+  </v-row>
 </v-container>
