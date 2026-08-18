@@ -30,6 +30,9 @@ globalThis.SimpleAlertsDetails = (function() {
     showDetails(alert) {
       this.selectedAlertDetails = alert;
       this.detailsDialog = true;
+      // Guided analysis runs several queries, so it starts only once the analyst has
+      // actually opened the alert, and only once per alert.
+      this.loadAlertPlaybook(alert);
     },
 
     closeDetails() {

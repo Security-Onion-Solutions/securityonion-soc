@@ -7,6 +7,8 @@
 require('../test_common.js');
 // The rule view highlights with the same vendored Prism grammars the detection page uses.
 require('../external/prism-custom-v1.30.0.js');
+// Guided analysis shares its request sequence with the hunt screen.
+require('../playbook.js');
 // Method packs must load before simplealerts.js, which merges them into the component.
 require('./simplealerts.data.js');
 require('./simplealerts.grouping.js');
@@ -14,6 +16,7 @@ require('./simplealerts.details.js');
 require('./simplealerts.rules.js');
 require('./simplealerts.actions.js');
 require('./simplealerts.pivots.js');
+require('./simplealerts.playbook.js');
 require('./simplealerts.js');
 
 let comp;
@@ -1207,4 +1210,148 @@ test('requestPcapSurfacesErrors', async () => {
 
   expect(showError).toHaveBeenCalled();
   expect(comp.pcapLoading).toBe(false);
+});
+
+// --- guided analysis --------------------------------------------------------
+
+function playbookAlert(extra) {
+  return Object.assign({
+    id: 'evt-1',
+    timestamp: '2026-01-01T12:00:00Z',
+    ruleUuid: 'uuid-1',
+    payload: { 'soc_id': 'sid-1', 'soc_timestamp': '2026-01-01T11:59:00Z' },
+  }, extra || {});
+}
+
+test('playbookTimestampPrefersTheAlertDocumentTime', () => {
+  expect(comp.playbookTimestamp(playbookAlert())).toBe('2026-01-01T11:59:00Z');
+  expect(comp.playbookTimestamp({ timestamp: 'evt-time', payload: {} })).toBe('evt-time');
+});
+
+test('loadAlertPlaybookFetchesSkeletonByDetectionAndAnswersQuestions', async () => {
+  const skeleton = [{ id: 'pb1', questions: [
+    { question: 'Ranged one?', range: '24h' },
+    { question: 'Rangeless one?' },
+  ]}];
+  const converted = [{ id: 'pb1', questions: [
+    { oqlQuery: 'oql-1', fields: ['source.ip'], isAggregate: false },
+    {},
+  ]}];
+
+  const get = jest.fn((route) => {
+    if (route.indexOf('stage=convert') !== -1) return Promise.resolve({ data: converted });
+    return Promise.resolve({ data: skeleton });
+  });
+  const post = jest.fn(() => Promise.resolve({ data: { queryResults: [
+    { payload: { 'source.ip': '10.0.0.1' }, timestamp: 't1' },
+  ]}}));
+  comp.$root.papi = { get: get, post: post };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+
+  // rule.uuid routes the skeleton to the cheaper detection endpoint
+  expect(get).toHaveBeenCalledWith('playbook/detection/uuid-1');
+  expect(get.mock.calls.some(c => c[0].indexOf('stage=convert') !== -1)).toBe(true);
+
+  expect(alert.playbookErr).toBe(false);
+  expect(alert.playbookNone).toBe(false);
+  expect(alert.playbookLoading).toBe(false);
+  expect(alert.questions.length).toBe(2);
+
+  // the ranged question ran a query; its columns came from the conversion
+  expect(alert.questions[0].status).toBe(PlaybookRunner.STATUS_DONE);
+  expect(alert.questions[0].fields).toEqual(['@timestamp', 'source.ip']);
+  expect(alert.questions[0].queryResults.length).toBe(1);
+
+  // the rangeless question is answered by the alert itself, without a query
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(alert.questions[1].status).toBe(PlaybookRunner.STATUS_DONE);
+  expect(alert.questions[1].queryResults[0].payload['soc_id']).toBe('sid-1');
+});
+
+test('loadAlertPlaybookReportsNoPlaybookDistinctlyFromFailure', async () => {
+  comp.$root.papi = { get: jest.fn(() => Promise.resolve({ data: [] })) };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+
+  expect(alert.playbookNone).toBe(true);
+  expect(alert.playbookErr).toBe(false);
+  expect(alert.playbooks).toBeNull();
+});
+
+test('loadAlertPlaybookReportsFailure', async () => {
+  comp.$root.papi = { get: jest.fn(() => Promise.reject(new Error('boom'))) };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+
+  expect(alert.playbookErr).toBe(true);
+  expect(alert.playbookNone).toBe(false);
+  expect(alert.playbookLoading).toBe(false);
+});
+
+test('loadAlertPlaybookNeedsASocId', async () => {
+  const get = jest.fn();
+  comp.$root.papi = { get: get };
+
+  const alert = { id: 'x', payload: {} };
+  await comp.loadAlertPlaybook(alert);
+
+  expect(alert.playbookErr).toBe(true);
+  expect(get).not.toHaveBeenCalled();
+});
+
+test('loadAlertPlaybookRunsOnlyOncePerAlert', async () => {
+  const get = jest.fn(() => Promise.resolve({ data: [] }));
+  comp.$root.papi = { get: get };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+  const callsAfterFirst = get.mock.calls.length;
+
+  await comp.loadAlertPlaybook(alert);
+  expect(get.mock.calls.length).toBe(callsAfterFirst);
+});
+
+test('rangedQuestionWithoutAConvertedQueryIsMarkedFailed', async () => {
+  const skeleton = [{ id: 'pb1', questions: [{ question: 'Ranged?', range: '24h' }] }];
+  comp.$root.papi = {
+    get: jest.fn((route) => route.indexOf('stage=convert') !== -1
+      ? Promise.reject(new Error('convert failed'))
+      : Promise.resolve({ data: skeleton })),
+    post: jest.fn(),
+  };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+
+  expect(alert.questions[0].status).toBe(PlaybookRunner.STATUS_ERROR);
+  expect(alert.questions[0].queryResults).toEqual([]);
+  expect(comp.$root.papi.post).not.toHaveBeenCalled();
+});
+
+test('questionPresentationHelpers', () => {
+  expect(comp.hasPlaybook({ questions: [{}] })).toBe(true);
+  expect(comp.hasPlaybook({ questions: [] })).toBe(false);
+  expect(comp.hasPlaybook(null)).toBe(false);
+
+  expect(comp.questionStatusColor({ status: PlaybookRunner.STATUS_ERROR })).toBe('error');
+  expect(comp.questionStatusColor({ status: PlaybookRunner.STATUS_DONE, queryResults: [{}] })).toBe('success');
+  // answered, but nothing matched
+  expect(comp.questionStatusColor({ status: PlaybookRunner.STATUS_DONE, queryResults: [] })).toBe('info');
+  expect(comp.isQuestionRunning({ status: PlaybookRunner.STATUS_RUNNING })).toBe(true);
+
+  expect(comp.questionAnswerCount({ queryResults: [{}, {}] })).toBe(2);
+  expect(comp.questionAnswerCount({})).toBe(0);
+
+  expect(comp.questionColumns({ fields: ['a'] })).toEqual(['a']);
+  expect(comp.questionColumns({})).toEqual([]);
+
+  const answer = { payload: { 'source.ip': '1.1.1.1' }, timestamp: 'ts' };
+  expect(comp.questionRowValue(answer, '@timestamp')).toBe('ts');
+  expect(comp.questionRowValue(answer, 'source.ip')).toBe('1.1.1.1');
+  expect(comp.questionRowValue(answer, 'missing')).toBe('');
+  expect(comp.questionRowValue(null, 'x')).toBe('');
 });

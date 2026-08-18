@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('../playbook.js');
 require('./hunt.js');
 
 let comp;

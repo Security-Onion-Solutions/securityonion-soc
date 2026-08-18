@@ -145,6 +145,7 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     SimpleAlertsRules,
     SimpleAlertsActions,
     SimpleAlertsPivots,
+    SimpleAlertsPlaybook,
     {
     }
   ),

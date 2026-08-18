@@ -2821,29 +2821,18 @@ const huntComponent = {
 
       try {
         // the alert doc's own time, which the server's alert lookup windows on
-        const ts = encodeURIComponent(event?.['soc_timestamp'] || this.getEventTimestamp(event));
+        const ts = event?.['soc_timestamp'] || this.getEventTimestamp(event);
 
-        // start the slow conversion request immediately; the skeleton renders meanwhile
-        convertPromise = this.$root.papi.get(`playbook/event/${socId}?stage=convert&ts=${ts}`, { signal: convertAbort.signal });
-        convertPromise.catch(() => {}); // handled in answerPlaybookQuestions
-
-        // rule.uuid allows the skeleton to come from the cheaper detection route
-        const ruleUuid = event?.['rule.uuid'];
-        const response = ruleUuid
-          ? await this.$root.papi.get(`playbook/detection/${encodeURIComponent(ruleUuid)}`)
-          : await this.$root.papi.get(`playbook/event/${socId}?stage=skeleton&ts=${ts}`);
-
-        playbooks = response.data;
+        convertPromise = PlaybookRunner.startConversion(this.$root.papi, socId, ts, convertAbort);
+        playbooks = await PlaybookRunner.fetchSkeleton(
+          this.$root.papi, socId, ts, event?.['rule.uuid']);
       } catch (e) {
         pbErr = true;
         playbooks = null;
       }
 
       // no playbooks for this detection is a valid state, not an error
-      const pbNone = !pbErr && (!playbooks || playbooks.length === 0);
-      if (pbNone) {
-        playbooks = null;
-      }
+      const pbNone = !pbErr && !playbooks;
 
       if (!playbooks) {
         convertAbort.abort(); // nothing to convert for
@@ -2855,14 +2844,7 @@ const huntComponent = {
       delete event.playbookLoading;
 
       if (playbooks) {
-        let questions = [];
-        for (let pb of playbooks) {
-          for (let q of pb.questions) {
-            q.status = QUESTION_STATUS_RUNNING;
-            questions.push(q);
-          }
-        }
-
+        const questions = PlaybookRunner.collectQuestions(playbooks);
         event.questions = questions;
 
         // expand the first question while queries run
@@ -2882,57 +2864,11 @@ const huntComponent = {
         converted = null;
       }
 
-      if (converted) {
-        // match strictly by id; a positional guess could attach another playbook's queries
-        const convertedById = {};
-        for (const pb of converted) {
-          if (pb.id) {
-            convertedById[pb.id] = pb;
-          }
-        }
+      PlaybookRunner.attachConvertedQueries(event.playbooks, converted, this.i18n);
+      PlaybookRunner.markUnanswerableQuestions(event.questions);
 
-        for (const pb of event.playbooks) {
-          const conv = convertedById[pb.id];
-
-          for (let i = 0; i < pb.questions.length; i++) {
-            const q = pb.questions[i];
-            const cq = conv?.questions?.[i];
-
-            if (!cq || !cq.oqlQuery) continue;
-
-            q.oqlQuery = cq.oqlQuery;
-            q.queryFields = cq.fields || [];
-            q.isAggregate = !!cq.isAggregate;
-
-            if (q.isAggregate) {
-              q.fields = [this.i18n.count, ...q.queryFields];
-            } else {
-              q.fields = ['@timestamp', ...q.queryFields];
-            }
-          }
-        }
-      }
-
-      // ranged questions need a converted query; rangeless ones are answered by the alert
-      for (const q of event.questions) {
-        if (q.range && !q.oqlQuery) {
-          q.queryResults = [];
-          q.status = QUESTION_STATUS_ERROR;
-        } else if (!q.range && !q.fields) {
-          // conversion missed this rangeless question; still render the alert row
-          q.fields = ['soc_timestamp'];
-        }
-      }
-
-      // cap concurrent searches
-      const queue = event.questions.map((q, qi) => [q, qi]);
-      const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-        while (queue.length > 0) {
-          const [q, qi] = queue.shift();
-          await this.runPlaybookQuery(event, index, q, qi);
-        }
-      });
-      await Promise.all(workers);
+      await PlaybookRunner.runQuestions(event.questions,
+        (q, qi) => this.runPlaybookQuery(event, index, q, qi));
     },
     async runPlaybookQuery(event, index, question, qi) {
       if (question.status === QUESTION_STATUS_ERROR) return;
@@ -2947,24 +2883,8 @@ const huntComponent = {
         return;
       }
 
-      question.status = QUESTION_STATUS_RUNNING;
-
-      try {
-        // ranges anchor to the source event's time, not the alert doc's time
-        const ts = encodeURIComponent(this.getEventTimestamp(event));
-        const response = await this.$root.papi.post(`playbook/question?ts=${ts}`, {
-          range: question.range,
-          oqlQuery: question.oqlQuery,
-          fields: question.queryFields,
-          isAggregate: question.isAggregate,
-        });
-
-        question.queryResults = response.data.queryResults || [];
-        question.status = QUESTION_STATUS_DONE;
-      } catch (e) {
-        question.queryResults = [];
-        question.status = QUESTION_STATUS_ERROR;
-      }
+      // ranges anchor to the source event's time, not the alert doc's time
+      await PlaybookRunner.runQuery(this.$root.papi, question, this.getEventTimestamp(event));
 
       this.finishPlaybookQuestion(event, index, question, qi);
     },
