@@ -165,6 +165,25 @@ test('saveTimezone', () => {
   expect(comp.zone).toBe("Foo/Bar");
 });
 
+test('collapsedSections persist across reloads', () => {
+  const origParams = comp.params;
+  comp.params = {};
+  comp.collapsedSections = [];
+
+  comp.toggleShowSection('hunt-graphs');
+  expect(comp.collapsedSections).toEqual(['hunt-graphs']);
+
+  comp.collapsedSections = [];
+  comp.loadLocalSettings();
+  expect(comp.collapsedSections).toEqual(['hunt-graphs']);
+
+  // back to all-expanded clears the stored setting
+  comp.toggleShowSection('hunt-graphs');
+  expect(localStorage['settings.' + comp.category + '.collapsedSections']).toBeUndefined();
+
+  comp.params = origParams;
+});
+
 test('removeFilter', () => {
   comp.query = "abc def | groupby foo bar*";
   comp.$router.resolve = jest.fn();
