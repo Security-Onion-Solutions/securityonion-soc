@@ -107,7 +107,7 @@
 }
 
 .v-navigation-drawer__content .v-list-item--active {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .v-navigation-drawer__content .v-list-group__header > .v-list-item__append,
@@ -195,6 +195,14 @@ td.expansion:last-child {
 
 .no-link .v-btn__overlay {
   background-color: rgb(var(--v-theme-text)) !important;
+}
+
+/* __overlay is absolutely positioned, so it paints over static content regardless of DOM order.
+   These are flex items, so z-index lifts the label back on top (allows for proper axe a11y scans)
+   without position: relative, which would re-anchor absolute children like .v-tab__slider. */
+.v-chip__content,
+.v-btn__content {
+  z-index: 1;
 }
 
 .short-spacer .v-list-item__spacer {
@@ -856,7 +864,7 @@ code {
 }
 
 [data-aid="terms_screen"] .v-tab--selected {
-  color: rgb(var(--v-theme-primary)) !important;
+  color: rgb(var(--v-theme-altprimary)) !important;
 }
 
 [data-aid="terms_screen"] .fa {
@@ -887,7 +895,7 @@ ul ul ul {
 }
 
 .treeview-item--active {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
   background-color: rgba(var(--v-theme-primary), 0.12) !important;
 }
 
@@ -1165,7 +1173,7 @@ ul ul ul {
 
 .chat-history-sidebar .v-list-item.bg-primary {
   background-color: rgba(var(--v-theme-primary), 0.12) !important;
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .chat-history-sidebar .v-list-item-title {
@@ -1575,5 +1583,3 @@ ul ul ul {
     background-color: transparent;
   }
 }
-
-

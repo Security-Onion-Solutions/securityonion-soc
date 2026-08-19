@@ -43,9 +43,12 @@
             <v-chip variant="flat" color="grey-darken-3" size="small" class="text-white ma-1">white on grey-darken-3</v-chip>
           </div>
 
-          <!-- hunt.html toolbar buttons: button_icon_color icons on primary flat buttons -->
-          <div v-if="surface.primaryButtonIcon" class="mt-2">
-            <v-btn color="primary" size="small" class="ma-1"><span class="text-button_icon_color">button_icon_color on primary</span></v-btn>
+          <!-- hunt.html toolbar buttons: button_icon_color glyphs on flat icon buttons -->
+          <div v-if="surface.iconButtons" class="mt-2">
+            <v-btn v-for="b in iconButtonsFor(surface)" :key="b" :color="b" variant="flat" icon size="small"
+                   class="ma-1" :aria-label="'button_icon_color on ' + b">
+              <v-icon color="button_icon_color">fa-crosshairs</v-icon>
+            </v-btn>
           </div>
 
           <!-- index.html grid selector: white text on blue-darken-4 in the app bar -->

@@ -74,6 +74,18 @@ html, body, * {
   color: rgb(var(--v-theme-altinfo)) !important;
 }
 
+.text-secondary {
+  color: rgb(var(--v-theme-altsecondary)) !important;
+}
+
+.text-cyan {
+  color: rgb(var(--v-theme-altcyan)) !important;
+}
+
+.text-teal {
+  color: rgb(var(--v-theme-altteal)) !important;
+}
+
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
   --v-theme-error: var(--v-theme-alterror) !important;
   --v-field-color: var(--v-theme-alterror) !important;
@@ -570,7 +582,7 @@ html, body, * {
 }
 
 .expanded-field-value:hover {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .expanded-field-expand-btn {
@@ -1348,7 +1360,7 @@ dfn {
 
 /* A disabled agent/skill still lists, but reads as inactive. */
 .agentstudio-row-disabled td {
-  opacity: 0.55;
+  opacity: 0.65;
 }
 
 .agentstudio-row-disabled td:last-child {

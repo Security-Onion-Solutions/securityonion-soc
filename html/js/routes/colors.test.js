@@ -159,9 +159,16 @@ test('chipsFor matches exceptions after the light-theme remap', () => {
     expect(dark.filter(c => c.color === 'orange' && c.variant === 'outlined')).toHaveLength(0);
 });
 
-test('buttonsFor, alertsFor, and progressFor filter their exceptions', () => {
+test('buttonsFor, iconButtonsFor, alertsFor, and progressFor filter their exceptions', () => {
     expect(comp.buttonsFor({})).toEqual(comp.buttonColors);
-    expect(comp.buttonsFor({ exceptions: ['button:light-green'] })).not.toContain('light-green');
+    expect(comp.buttonsFor({ exceptions: ['button:warning'] })).not.toContain('warning');
+
+    expect(comp.iconButtonsFor({})).toEqual(comp.iconButtonColors);
+    expect(comp.iconButtonsFor({ exceptions: ['iconbutton:icon'] })).not.toContain('icon');
+    // 'primary' is in both lists because production renders it both ways; the two kinds
+    // must not share an exception namespace.
+    expect(comp.iconButtonsFor({ exceptions: ['button:primary'] })).toContain('primary');
+    expect(comp.buttonsFor({ exceptions: ['iconbutton:primary'] })).toContain('primary');
 
     expect(comp.alertsFor({})).toEqual(comp.alertTypes);
     expect(comp.alertsFor({ exceptions: ['alert:info'] })).toEqual(['warning', 'error']);
@@ -192,9 +199,8 @@ test('configured exceptions exclude the audited non-production combos', () => {
     // table_background: semantic text never renders in tables except default/primary
     expect(comp.textTokensFor(surface('table_background'))).toEqual(['text', 'primary']);
 
-    // table_background: production "teal lighten-2" is invalid in Vuetify 3, renders colorless
     const tableChips = comp.chipsFor(surface('table_background'), 'dark');
-    expect(tableChips.filter(c => c.color === 'teal-lighten-2')).toHaveLength(0);
+    expect(tableChips).toContainEqual({ color: 'teal', variant: 'tonal' });
     expect(tableChips).toContainEqual({ color: 'cyan', variant: 'tonal' });
 });
 
