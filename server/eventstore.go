@@ -62,4 +62,8 @@ type Eventstore interface {
 	Acknowledge(context context.Context, criteria *model.EventAckCriteria) (*model.EventUpdateResults, error)
 	GetActiveQueries(context context.Context, filter bool) ([]*model.QueryTask, error)
 	CancelQuery(context context.Context, queryId string) error
+
+	// Indicators and findings are ranked most severe first; optional sections
+	// are best-effort, with failures recorded in Errors.
+	GetEventsHealth(ctx context.Context) (*model.EventsHealth, error)
 }
