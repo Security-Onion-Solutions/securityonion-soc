@@ -1933,3 +1933,70 @@ test('assistantParamsAreUsedDirectlyWhenTheRootAlreadyHasThem', () => {
   // the detection option is read off the root at the same time
   expect(comp.showUnreviewedAiSummaries).toBe(true);
 });
+
+test('answeredQuestionsOpenThemselves', async () => {
+  const skeleton = [{ id: 'pb1', questions: [
+    { question: 'One?', range: '24h' },
+    { question: 'Two?', range: '24h' },
+  ]}];
+  const converted = [{ id: 'pb1', questions: [
+    { oqlQuery: 'q1', fields: ['source.ip'] },
+    { oqlQuery: 'q2', fields: ['source.ip'] },
+  ]}];
+
+  comp.$root.papi = {
+    get: jest.fn((route) => Promise.resolve({
+      data: route.indexOf('stage=convert') !== -1 ? converted : skeleton })),
+    // only the second question finds anything
+    post: jest.fn((route, body) => Promise.resolve({ data: {
+      queryResults: body.oqlQuery === 'q2' ? [{ payload: {}, timestamp: 't' }] : [],
+    }})),
+  };
+
+  const alert = playbookAlert();
+  await comp.loadAlertPlaybook(alert);
+
+  // the first opens up front so the section never reads as empty, and any question
+  // that found something opens itself; a question with no answers is left closed
+  expect(comp.expandedQuestions).toContain(0);
+  expect(comp.expandedQuestions).toContain(1);
+  expect(comp.questionAnswerCount(alert.questions[1])).toBe(1);
+});
+
+test('revealAnsweredQuestionIgnoresEmptyResults', () => {
+  comp.expandedQuestions = [];
+
+  comp.revealAnsweredQuestion({ queryResults: [] }, 3);
+  expect(comp.expandedQuestions).toEqual([]);
+
+  comp.revealAnsweredQuestion({ queryResults: [{}] }, 3);
+  expect(comp.expandedQuestions).toEqual([3]);
+
+  // never duplicated
+  comp.revealAnsweredQuestion({ queryResults: [{}] }, 3);
+  expect(comp.expandedQuestions).toEqual([3]);
+});
+
+test('questionHeadersAndRowsFeedTheDataTable', () => {
+  const question = {
+    fields: ['@timestamp', 'source.ip'],
+    queryResults: [
+      { payload: { 'source.ip': '10.0.0.1' }, timestamp: 't1' },
+      { payload: { 'source.ip': '10.0.0.2' }, timestamp: 't2' },
+    ],
+  };
+
+  expect(comp.questionHeaders(question)).toEqual([
+    { title: '@timestamp', value: '@timestamp' },
+    { title: 'source.ip', value: 'source.ip' },
+  ]);
+
+  // rows are flattened per column; @timestamp comes off the envelope, not the payload
+  expect(comp.questionRows(question)).toEqual([
+    { '@timestamp': 't1', 'source.ip': '10.0.0.1' },
+    { '@timestamp': 't2', 'source.ip': '10.0.0.2' },
+  ]);
+
+  expect(comp.questionHeaders({})).toEqual([]);
+  expect(comp.questionRows({})).toEqual([]);
+});

@@ -73,8 +73,8 @@
           <div v-else-if="selectedAlertDetails.playbookNone" class="text-body-2" data-aid="simplealerts_playbook_none">
             {{ i18n.simpleAlertsNoPlaybook }}
           </div>
-          <v-expansion-panels v-else-if="hasPlaybook(selectedAlertDetails)" variant="accordion" multiple
-            data-aid="simplealerts_playbook_questions">
+          <v-expansion-panels v-else-if="hasPlaybook(selectedAlertDetails)" v-model="expandedQuestions"
+            variant="accordion" multiple data-aid="simplealerts_playbook_questions">
             <v-expansion-panel v-for="(question, qi) in selectedAlertDetails.questions" :key="qi"
               data-aid="simplealerts_playbook_question">
               <v-expansion-panel-title>
@@ -85,18 +85,16 @@
                 <span data-aid="simplealerts_playbook_question_text">{{ question.question }}</span>
               </v-expansion-panel-title>
               <v-expansion-panel-text>
-                <v-table v-if="questionAnswerCount(question)" density="compact" class="simplealerts-answers">
-                  <thead>
-                    <tr>
-                      <th v-for="field in questionColumns(question)" :key="field" scope="col">{{ field }}</th>
+                <v-data-table v-if="questionAnswerCount(question)" density="compact"
+                  :headers="questionHeaders(question)" :items="questionRows(question)"
+                  :items-per-page="-1" hide-default-footer class="simplealerts-answers"
+                  data-aid="simplealerts_playbook_answers">
+                  <template #item="{ item }">
+                    <tr data-aid="simplealerts_playbook_answer">
+                      <td v-for="field in questionColumns(question)" :key="field">{{ item[field] }}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(answer, ai) in question.queryResults" :key="ai" data-aid="simplealerts_playbook_answer">
-                      <td v-for="field in questionColumns(question)" :key="field">{{ questionRowValue(answer, field) }}</td>
-                    </tr>
-                  </tbody>
-                </v-table>
+                  </template>
+                </v-data-table>
                 <div v-else class="text-body-2" data-aid="simplealerts_playbook_no_answers">{{ i18n.simpleAlertsNoAnswers }}</div>
               </v-expansion-panel-text>
             </v-expansion-panel>

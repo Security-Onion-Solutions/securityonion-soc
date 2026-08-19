@@ -58,6 +58,9 @@ globalThis.SimpleAlertsPlaybook = (function() {
 
       // render the questions immediately; their answers arrive as the queries finish
       alert.questions = PlaybookRunner.collectQuestions(playbooks);
+      // Open the first straight away so the section does not read as empty while the
+      // queries run; the rest open themselves as they find something.
+      this.expandedQuestions = alert.questions.length ? [0] : [];
       await this.answerAlertQuestions(alert, convertPromise);
     },
 
@@ -74,10 +77,10 @@ globalThis.SimpleAlertsPlaybook = (function() {
       PlaybookRunner.markUnanswerableQuestions(alert.questions);
 
       await PlaybookRunner.runQuestions(alert.questions,
-        (question) => this.runAlertQuestion(alert, question));
+        (question, index) => this.runAlertQuestion(alert, question, index));
     },
 
-    async runAlertQuestion(alert, question) {
+    async runAlertQuestion(alert, question, index) {
       if (question.status === PlaybookRunner.STATUS_ERROR) return;
 
       // a question without a range is answered by the alert itself; copy the fields
@@ -88,10 +91,23 @@ globalThis.SimpleAlertsPlaybook = (function() {
           timestamp: alert.timestamp,
         }];
         question.status = PlaybookRunner.STATUS_DONE;
+        this.revealAnsweredQuestion(question, index);
         return;
       }
 
       await PlaybookRunner.runQuery(this.$root.papi, question, this.playbookTimestamp(alert));
+      this.revealAnsweredQuestion(question, index);
+    },
+
+    // A question that found something opens itself, as it does on the hunt screen.
+    // Without this the answers are fetched but stay behind a collapsed panel, which
+    // reads as the playbook having produced nothing.
+    revealAnsweredQuestion(question, index) {
+      if (index === undefined || index === null) return;
+      if (!question.queryResults || question.queryResults.length === 0) return;
+      if (this.expandedQuestions.indexOf(index) === -1) {
+        this.expandedQuestions.push(index);
+      }
     },
 
     hasPlaybook(alert) {
@@ -120,6 +136,22 @@ globalThis.SimpleAlertsPlaybook = (function() {
     // The columns a question's answers render into, as assembled during conversion.
     questionColumns(question) {
       return question.fields || [];
+    },
+
+    // Answers are rendered through v-data-table rather than a hand-written table:
+    // page templates are parsed as HTML, and raw <thead>/<tbody> inside a <v-table>
+    // are discarded by the parser's table-nesting rules, leaving an empty table.
+    questionHeaders(question) {
+      return this.questionColumns(question).map(field => ({ title: field, value: field }));
+    },
+
+    questionRows(question) {
+      const columns = this.questionColumns(question);
+      return (question.queryResults || []).map(answer => {
+        const row = {};
+        columns.forEach(field => { row[field] = this.questionRowValue(answer, field); });
+        return row;
+      });
     },
 
     questionRowValue(answer, field) {

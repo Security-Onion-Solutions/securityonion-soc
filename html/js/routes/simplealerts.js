@@ -53,6 +53,8 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
 
     detailsDialog: false,
     selectedAlertDetails: null,
+    // Indices of the playbook questions currently open in the details dialog.
+    expandedQuestions: [],
 
     // AI features require both the 'oai' licence feature and a server-side assistant.
     aiEnabled: false,
