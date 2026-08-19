@@ -202,9 +202,12 @@
 															<dt class="filter label">{{ i18n.eventstoreStatus }}:</dt>
 															<dd id="node_eventstoreStatus" style="overflow: visible;" :class="areMetricsCurrent(item) ? 'filter value text-' + colorNodeStatus(item.eventstoreStatus) : 'filter value stale'">
 																{{ $root.localizeMessage(item.eventstoreStatus) }}
-																<a v-if="canShowEventsHealth(item)" href="#" @click.prevent="showEventsHealth(item)" class="no-underline" :title="i18n.eventsHealthShow" :aria-label="i18n.eventsHealthShow" data-aid="grid_node_eventshealth">
-																	<v-icon size="small" class="ml-1 theme-icon">fa-stethoscope</v-icon>
-																</a>
+																<template v-if="canShowEventsHealth(item)">
+																	<v-btn v-if="item.eventstoreStatus == NodeStatusFault || item.eventstoreStatus == NodeStatusPending" color="primary" size="small" density="comfortable" variant="outlined" class="ml-2" prepend-icon="fa-stethoscope" @click="showEventsHealth(item)" :title="i18n.eventsHealthShow" data-aid="grid_node_eventshealth">{{ i18n.eventsHealthTroubleshoot }}</v-btn>
+																	<a v-else href="#" @click.prevent="showEventsHealth(item)" class="no-underline" :title="i18n.eventsHealthShow" :aria-label="i18n.eventsHealthShow" data-aid="grid_node_eventshealth">
+																		<v-icon size="small" class="ml-1 theme-icon">fa-stethoscope</v-icon>
+																	</a>
+																</template>
 															</dd>
 														</template>
 														

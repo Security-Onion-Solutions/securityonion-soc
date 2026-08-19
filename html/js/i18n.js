@@ -787,6 +787,7 @@ const i18n = {
       eventsHealthReportUnavailable: 'Collection failed: {value}',
       eventsHealthShow: 'View Elasticsearch cluster health details',
       eventsHealthTitle: 'Elasticsearch Health',
+      eventsHealthTroubleshoot: 'Troubleshoot',
       eventsHealthUnavailable: 'Elasticsearch health information is currently unavailable.',
       eventstoreStatus: 'Elasticsearch Status',
       eventTotal: 'Total Found',
