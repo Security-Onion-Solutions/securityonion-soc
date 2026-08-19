@@ -74,6 +74,18 @@ html, body, * {
   color: rgb(var(--v-theme-altinfo)) !important;
 }
 
+.text-secondary {
+  color: rgb(var(--v-theme-altsecondary)) !important;
+}
+
+.text-cyan {
+  color: rgb(var(--v-theme-altcyan)) !important;
+}
+
+.text-teal {
+  color: rgb(var(--v-theme-altteal)) !important;
+}
+
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
   --v-theme-error: var(--v-theme-alterror) !important;
   --v-field-color: var(--v-theme-alterror) !important;

@@ -197,6 +197,13 @@ td.expansion:last-child {
   background-color: rgb(var(--v-theme-text)) !important;
 }
 
+/* __overlay is absolutely positioned, so it paints over static content regardless of DOM order;
+   positioning __content puts the label back on top (allows for proper axe a11y scans). */
+.v-chip__content,
+.v-btn__content {
+  position: relative;
+}
+
 .short-spacer .v-list-item__spacer {
   max-width: 16px;
 }
@@ -1575,5 +1582,3 @@ ul ul ul {
     background-color: transparent;
   }
 }
-
-
