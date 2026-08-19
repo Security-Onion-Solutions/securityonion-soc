@@ -144,6 +144,18 @@ globalThis.SimpleAlertsData = (function() {
           data = Object.assign({}, data, data.event_data);
         }
 
+        // soc_id and friends are not fields on the document; the client derives them
+        // from the search-result envelope, exactly as hunt.js's extractSocValues does.
+        // Several things downstream — the playbook lookup, the assistant handoff — key
+        // off soc_id, so they must be present here too.
+        data = Object.assign({}, data, {
+          soc_id: event.id,
+          soc_score: event.score,
+          soc_type: event.type,
+          soc_timestamp: event.timestamp,
+          soc_source: event.source,
+        });
+
         const ruleName = data['rule.name'] || this.i18n.simpleAlertsUnknownRule;
         const ruleCategory = this.ruleCategory(ruleName);
         if (ruleCategory) categories.add(ruleCategory);

@@ -83,7 +83,7 @@ test('processAlertsMergesFieldSources', () => {
     timestamp: '2025-01-01T00:00:00Z',
     payload: { 'rule.name': 'ET MALWARE Something Bad', 'source.ip': '10.1.2.3' },
     fields: { 'destination.ip': '8.8.8.8', 'event.severity_label': 'high' },
-    event_data: { 'soc_id': 'evt-1' },
+    id: 'evt-1',
   }]);
 
   expect(alerts.length).toBe(1);
@@ -123,9 +123,43 @@ test('processAlertsHandlesMissingFields', () => {
   expect(alerts[0].isHostBased).toBe(true);
 });
 
-test('processAlertsPrefersSocIdOverEventId', () => {
-  expect(comp.processAlerts([{ id: 'evt', payload: { 'soc_id': 'soc' } }])[0].id).toBe('soc');
-  expect(comp.processAlerts([{ id: 'evt', payload: {} }])[0].id).toBe('evt');
+test('socValuesAreDerivedFromTheEnvelopeNotThePayload', () => {
+  // The backend does not return soc_id as a document field; hunt.js's extractSocValues
+  // synthesizes it from the search result envelope, and so must this page — the playbook
+  // lookup and the assistant handoff both key off it.
+  const alert = comp.processAlerts([{
+    id: 'evt-1',
+    timestamp: '2026-01-01T12:00:00Z',
+    score: 7,
+    type: 'alert',
+    source: 'sensor1',
+    payload: { 'rule.name': 'ET MALWARE One' },
+  }])[0];
+
+  expect(alert.id).toBe('evt-1');
+  expect(alert.payload['soc_id']).toBe('evt-1');
+  expect(alert.payload['soc_timestamp']).toBe('2026-01-01T12:00:00Z');
+  expect(alert.payload['soc_score']).toBe(7);
+  expect(alert.payload['soc_type']).toBe('alert');
+  expect(alert.payload['soc_source']).toBe('sensor1');
+});
+
+test('playbookAndAiCanIdentifyAnAlertBuiltFromARealisticEvent', async () => {
+  // A regression guard for the whole chain: an event shaped the way the backend
+  // actually returns one must reach the playbook request, not bail at its guard.
+  const alert = comp.processAlerts([{
+    id: 'evt-9',
+    timestamp: '2026-01-01T12:00:00Z',
+    payload: { 'rule.name': 'ET MALWARE One', 'rule.uuid': 'uuid-9' },
+  }])[0];
+
+  const get = jest.fn(() => Promise.resolve({ data: [] }));
+  comp.$root.papi = { get: get };
+
+  await comp.loadAlertPlaybook(alert);
+
+  expect(alert.playbookErr).toBe(false);
+  expect(get).toHaveBeenCalledWith('playbook/detection/uuid-9');
 });
 
 test('getSeverityLevel', () => {
