@@ -1475,3 +1475,14 @@ dfn {
   border-left: 3px solid rgb(var(--v-theme-primary));
   margin-left: 12px;
 }
+
+/* An assistant conversation rendered inside another page (js/components/assistant-chat.js).
+   The standalone chat sizes itself to the viewport, which is wrong inside a dialog. A
+   fixed height rather than a viewport fraction: the dialog hosting it already scrolls, so
+   the panel only needs to be a predictable size, and a vh here would fight the dialog's
+   own sizing. Scoped to the embedded class so the /assistant page keeps its own sizing. */
+.assistant-chat-embedded.chat-container {
+  height: 360px;
+  border: 1px solid rgba(var(--v-theme-text), 0.15);
+  border-radius: var(--so-radius-nested);
+}

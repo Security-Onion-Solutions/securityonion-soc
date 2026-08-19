@@ -40,7 +40,7 @@ globalThis.AssistantStreaming = (function() {
         this.saveCurrentChatId();
       }
       
-      if (this.currentChatId && !this.$route.params.sessionId) {
+      if (!this.embedded && this.currentChatId && !this.$route.params.sessionId) {
         await this.updateUrlWithSessionId(this.currentChatId);
         await this.$nextTick();
       }
@@ -290,21 +290,26 @@ globalThis.AssistantStreaming = (function() {
 
       try {
         let url = '/assistant/chat';
-        const socId = this.$route.query.socId;
+        // The page carries the alert being investigated in the URL; embedded there is no
+        // URL to carry it, so the host component hands it over directly. Either way it is
+        // consumed once, so follow-up messages don't re-mark the alert as investigated.
+        const socId = this.embedded ? this.investigationSocId : this.$route.query.socId;
         if (socId) {
           url += `?entityType=alert_investigation&entityId=${encodeURIComponent(socId)}`;
-          // Clear the investigation query params after first use to prevent
-          // marking the alert as investigated on every subsequent message
-          this.$nextTick(() => {
-            const query = { ...this.$route.query };
-            delete query.investigation;
-            delete query.socId;
-            this.$router.replace({
-              name: 'assistant',
-              params: this.$route.params,
-              query: query
+          if (this.embedded) {
+            this.investigationSocId = null;
+          } else {
+            this.$nextTick(() => {
+              const query = { ...this.$route.query };
+              delete query.investigation;
+              delete query.socId;
+              this.$router.replace({
+                name: 'assistant',
+                params: this.$route.params,
+                query: query
+              });
             });
-          });
+          }
         }
         
         const response = await this.$root.papi.post(url, {

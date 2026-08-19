@@ -25,6 +25,9 @@ let comp;
 beforeEach(() => {
   comp = getComponent("simple-alerts");
   resetPapi();
+  // The AI privacy notice counts as accepted unless a test says otherwise; the gate
+  // itself has its own test.
+  localStorage.setItem(ONIONAI_DISCLAIMER_KEY, 'true');
 });
 
 test('buildQuery', () => {
@@ -1821,32 +1824,67 @@ test('aiSummaryFailureIsSilent', async () => {
   expect(comp.showAiSummary(alert)).toBe(false);
 });
 
-test('aiInvestigateOpensANewAssistantSession', () => {
+test('aiInvestigateRaisesThePrivacyNoticeBeforeOpeningTheChat', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
+  localStorage.removeItem(ONIONAI_DISCLAIMER_KEY);
+  comp.$root.showDisclaimer = jest.fn();
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+
+  // showing the notice unmounts the page, so the panel must not open behind it
+  expect(comp.aiChatOpen).toBe(false);
+  expect(comp.$root.showDisclaimer).toHaveBeenCalledWith(
+    comp.i18n.assistantDisclaimerMessage, comp.i18n.assistantDisclaimerTitle,
+    comp.i18n.getStarted, ONIONAI_DISCLAIMER_KEY);
+
+  // once accepted, the same click opens it and the notice is not raised again
+  localStorage.setItem(ONIONAI_DISCLAIMER_KEY, 'true');
+  comp.$root.showDisclaimer.mockClear();
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+
+  expect(comp.aiChatOpen).toBe(true);
+  expect(comp.$root.showDisclaimer).not.toHaveBeenCalled();
+});
+
+test('aiInvestigateOpensTheChatInlineWithoutNavigating', () => {
   licensed(true);
   comp.initAssistant({ enabled: true, investigationPrompt: 'Look at {ruleName} from {sourceIp}' });
   comp.$router.push = jest.fn();
+  comp.detailsDialog = true;
 
   comp.aiInvestigate({ payload: {
     'soc_id': 'evt-1', 'rule.name': 'ET MALWARE One', 'source.ip': '10.0.0.1',
     'destination.ip': '8.8.8.8', 'event.severity_label': 'high',
   }});
 
-  const pushed = comp.$router.push.mock.calls[0][0];
-  expect(pushed.name).toBe('assistant');
-  expect(pushed.params.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  expect(pushed.query.investigation).toBe(true);
-  // only the fields the configured prompt interpolates are handed over
-  expect(pushed.query.ruleName).toBe('ET MALWARE One');
-  expect(pushed.query.sourceIp).toBe('10.0.0.1');
-  expect(pushed.query.destIp).toBeUndefined();
-  expect(pushed.query.severity).toBeUndefined();
-  expect(comp.detailsDialog).toBe(false);
+  // the point of the inline panel: the analyst keeps the alert in view
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.detailsDialog).toBe(true);
+  expect(comp.aiChatOpen).toBe(true);
+  expect(comp.aiChatSessionId).toBeNull();
+  expect(comp.aiChatFields.socId).toBe('evt-1');
+  expect(comp.aiChatFields.ruleName).toBe('ET MALWARE One');
+  expect(comp.aiChatFields.sourceIp).toBe('10.0.0.1');
 });
 
-test('aiInvestigateReopensAnExistingInvestigation', () => {
+test('aiInvestigateRemountsTheChatWhenSwitchingAlerts', () => {
   licensed(true);
   comp.initAssistant({ enabled: true, investigationPrompt: '' });
-  comp.$router.push = jest.fn();
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+  const firstKey = comp.aiChatKey;
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-2' } });
+
+  // a stale conversation must never be shown against a different alert
+  expect(comp.aiChatKey).not.toBe(firstKey);
+  expect(comp.aiChatFields.socId).toBe('evt-2');
+});
+
+test('aiInvestigateResumesAnExistingInvestigation', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
 
   const alert = { payload: {
     'soc_id': 'evt-1',
@@ -1859,43 +1897,72 @@ test('aiInvestigateReopensAnExistingInvestigation', () => {
 
   comp.aiInvestigate(alert);
 
-  // reopened rather than starting a second session for the same alert
+  // resumed rather than starting a second session for the same alert
+  expect(comp.aiChatOpen).toBe(true);
+  expect(comp.aiChatSessionId).toBe('chat-existing');
+  expect(comp.aiChatFields).toBeNull();
+});
+
+test('aiSessionStartedMarksTheAlertInvestigated', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
+
+  const alert = { payload: { 'soc_id': 'evt-1' } };
+  comp.aiInvestigate(alert);
+  comp.onAiSessionStarted('chat-new');
+
+  // reopening the alert resumes the conversation instead of starting another
+  expect(comp.aiInvestigationSessionId(alert)).toBe('chat-new');
+  expect(comp.aiChatSessionId).toBe('chat-new');
+});
+
+test('openAiSessionInAssistantHandsTheConversationOff', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
+  comp.$router.push = jest.fn();
+  comp.detailsDialog = true;
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+  comp.onAiSessionStarted('chat-new');
+  comp.openAiSessionInAssistant();
+
+  expect(comp.detailsDialog).toBe(false);
   expect(comp.$router.push).toHaveBeenCalledWith({
-    name: 'assistant', params: { sessionId: 'chat-existing' },
+    name: 'assistant', params: { sessionId: 'chat-new' },
   });
+});
+
+test('openingAnotherAlertClosesTheInvestigation', () => {
+  licensed(true);
+  comp.initAssistant({ enabled: true, investigationPrompt: '' });
+
+  comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
+  comp.showDetails({ payload: { 'soc_id': 'evt-2' }, id: 'evt-2' });
+
+  // an investigation belongs to the alert it was opened from
+  expect(comp.aiChatOpen).toBe(false);
+  expect(comp.aiChatAlert).toBeNull();
+  expect(comp.aiChatSessionId).toBeNull();
 });
 
 test('aiInvestigateDoesNothingWithoutTheLicence', () => {
   licensed(false);
   comp.initAssistant({ enabled: true });
-  comp.$router.push = jest.fn();
 
   comp.aiInvestigate({ payload: { 'soc_id': 'evt-1' } });
 
-  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.aiChatOpen).toBe(false);
 });
 
 test('aiInvestigateNeedsAnIdentifiableAlert', () => {
   licensed(true);
   comp.initAssistant({ enabled: true });
-  comp.$router.push = jest.fn();
   const showError = mockShowError();
 
   comp.aiInvestigate({ payload: {} });
 
   expect(showError).toHaveBeenCalled();
-  expect(comp.$router.push).not.toHaveBeenCalled();
-});
-
-test('generateChatIdWorksWithoutRandomUUID', () => {
-  // jsdom, like a non-secure browsing context, exposes crypto without randomUUID
-  expect(typeof crypto.randomUUID).toBe('undefined');
-
-  const ids = new Set(Array.from({ length: 50 }, () => comp.generateChatId()));
-  expect(ids.size).toBe(50);
-  ids.forEach(id => {
-    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  });
+  expect(comp.aiChatOpen).toBe(false);
 });
 
 test('assistantAndDetectionParamsComeFromASingleRegistration', () => {

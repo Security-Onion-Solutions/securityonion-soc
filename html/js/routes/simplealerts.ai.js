@@ -82,11 +82,13 @@ globalThis.SimpleAlertsAi = (function() {
       return this.isAiInvestigated(alert) ? this.i18n.aiInvestigateView : this.i18n.aiInvestigate;
     },
 
-    // Only the fields the configured investigation prompt actually interpolates are
-    // passed along, so the assistant is not handed alert data the prompt never asked for.
-    buildInvestigationQuery(alert) {
+    // The alert fields the configured investigation prompt can interpolate. Unlike the
+    // hunt screen's version these are handed to the chat component in memory rather than
+    // through the URL, so there is no need to strip the fields the prompt does not use --
+    // generateInvestigationPrompt only substitutes the placeholders the prompt contains.
+    buildInvestigationFields(alert) {
       const payload = (alert && alert.payload) || {};
-      const alertData = {
+      return {
         socId: payload['soc_id'],
         ruleUuid: payload['rule.uuid'],
         ruleName: payload['rule.name'],
@@ -99,33 +101,12 @@ globalThis.SimpleAlertsAi = (function() {
         message: payload['message'],
         alertRule: payload['rule.rule'],
       };
-
-      const query = { investigation: true };
-      Object.keys(alertData).forEach(key => {
-        if (this.investigationMsg && this.investigationMsg.includes('{' + key + '}')) {
-          query[key] = alertData[key];
-        }
-      });
-      return query;
     },
 
-    // crypto.randomUUID is only defined in a secure context, so it is absent over plain
-    // http and in some embedded browsers. Falling back to getRandomValues keeps the
-    // session id unguessable rather than dropping to Math.random.
-    generateChatId() {
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-      }
-
-      const bytes = new Uint8Array(16);
-      crypto.getRandomValues(bytes);
-      bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-      bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
-      const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-      return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
-              hex.slice(16, 20), hex.slice(20)].join('-');
-    },
-
+    // Opens the investigation inside the details dialog rather than navigating to the
+    // assistant page: the analyst keeps the alert, its fields and its playbook answers
+    // in view while the assistant works on it. An alert already investigated resumes its
+    // session instead of starting a second one for the same alert.
     aiInvestigate(alert) {
       if (!this.aiEnabled) return;
 
@@ -135,18 +116,51 @@ globalThis.SimpleAlertsAi = (function() {
         return;
       }
 
-      const existing = this.aiInvestigationSessionId(alert);
-      if (existing) {
-        this.$router.push({ name: 'assistant', params: { sessionId: existing } });
+      // Handing an alert to the assistant is what the data privacy notice covers, so it
+      // has to be accepted first. Showing it replaces the whole page (index.html swaps it
+      // in for the router view), so it is raised instead of opening the panel rather than
+      // over it -- opening first would only lose the dialog when the page unmounts. It is
+      // the same notice and acknowledgement the assistant page uses, so a user who has
+      // accepted it there never sees it here.
+      if (localStorage.getItem(ONIONAI_DISCLAIMER_KEY) !== 'true') {
+        this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage,
+          this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, ONIONAI_DISCLAIMER_KEY);
         return;
       }
 
+      const existing = this.aiInvestigationSessionId(alert);
+      this.aiChatAlert = alert;
+      this.aiChatSessionId = existing || null;
+      this.aiChatFields = existing ? null : this.buildInvestigationFields(alert);
+      // Remounts the chat component when switching alerts or resuming a different
+      // session, so a stale conversation can never be shown against a new alert.
+      this.aiChatKey += 1;
+      this.aiChatOpen = true;
+    },
+
+    closeAiChat() {
+      this.aiChatOpen = false;
+      this.aiChatAlert = null;
+      this.aiChatFields = null;
+      this.aiChatSessionId = null;
+    },
+
+    // The backend records the session against the alert; mirroring it locally means
+    // reopening the alert in this session resumes the conversation rather than starting
+    // a second investigation of the same alert.
+    onAiSessionStarted(sessionId) {
+      this.aiChatSessionId = sessionId;
+      const alert = this.aiChatAlert;
+      if (!alert || !alert.payload) return;
+      alert.payload['event.investigated'] = true;
+      alert.payload['event.investigation_session_id'] = sessionId;
+    },
+
+    // Hands the conversation off to the full assistant page, which loads it by id.
+    openAiSessionInAssistant() {
+      if (!this.aiChatSessionId) return;
       this.detailsDialog = false;
-      this.$router.push({
-        name: 'assistant',
-        params: { sessionId: this.generateChatId() },
-        query: this.buildInvestigationQuery(alert),
-      });
+      this.$router.push({ name: 'assistant', params: { sessionId: this.aiChatSessionId } });
     },
   };
 })();

@@ -1,0 +1,77 @@
+<div class="chat-container assistant-chat-embedded" data-aid="assistant_chat_embedded">
+  <div v-if="startErr" class="text-body-2 pa-4" data-aid="assistant_chat_embedded_error">{{ startErr }}</div>
+
+  <div v-else class="chat-messages pa-3" @scroll="onChatScroll" @click="onChatClick"
+    data-aid="assistant_chat_embedded_messages">
+    <!-- Polite live region: announces newly-surfaced sub-agent approval prompts to screen readers -->
+    <div class="d-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ subAgentApprovalAnnouncement }}</div>
+
+    <div v-for="(message, index) in messages" :key="index" class="message-item mb-3"
+      data-aid="assistant_chat_embedded_message">
+      <div class="d-flex align-start">
+        <v-avatar size="28" class="mr-3" :color="message.role === 'user' ? 'primary' : 'transparent'">
+          <v-icon v-if="message.role === 'user'" class="text-white" size="x-small">fa-user</v-icon>
+          <img v-else src="images/favicon/onion.png" alt="" style="width: 20px; height: 20px;">
+        </v-avatar>
+        <div class="flex-grow-1">
+          <div class="d-flex align-center mb-1">
+            <strong class="text-body-2 mr-2">{{ message.role === 'user' ? i18n.you : i18n.chat }}</strong>
+            <span class="text-body-small text-medium-emphasis">{{ formatTimestamp(message.timestamp) }}</span>
+          </div>
+
+          <div v-if="showModelThinking && message.thoughts" class="thought-display mb-3 mt-3">
+            <v-expansion-panels variant="accordion" density="compact">
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <v-icon size="small" class="mr-2">fa-lightbulb</v-icon>
+                  <span class="font-weight-medium text-body-2">{{ message.content || message.toolUses?.length > 0 ? i18n.thoughts : getLastThoughtTitle(message.thoughts) }}</span>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <div class="text-body-small" style="white-space: pre-wrap;" v-html="formatMarkdown(message.thoughts)"></div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </div>
+
+          <div class="text-body-2" :key="message.content" v-html="formatMarkdown(message.content)"></div>
+
+          <div v-if="message.toolUses && message.toolUses.length > 0" class="mt-3">
+            <tool-use-card v-for="toolUse in message.toolUses" :key="toolUse.id" :tool-use="toolUse"></tool-use-card>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="isTyping || starting" class="message-item mb-3" data-aid="assistant_chat_embedded_typing">
+      <div class="d-flex align-start">
+        <v-avatar size="28" class="mr-3" color="secondary-lighten-1">
+          <img src="images/favicon/onion.png" alt="" style="width: 20px; height: 20px;">
+        </v-avatar>
+        <div class="flex-grow-1">
+          <div class="d-flex align-center mb-1">
+            <span class="font-weight-medium text-body-2 mr-2">{{ i18n.chat }}</span>
+            <span class="text-body-small text-medium-emphasis">{{ i18n.typing }}...</span>
+          </div>
+          <v-progress-linear indeterminate color="secondary-lighten-1" height="2"></v-progress-linear>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <v-divider v-if="!startErr"></v-divider>
+
+  <div v-if="!startErr" class="d-flex align-center pa-3" data-aid="assistant_chat_embedded_compose">
+    <v-textarea ref="chatInputField" v-model="newMessage" :placeholder="i18n.chatPlaceholder"
+      :hide-details="!isMessageTooLong" :hint="isMessageTooLong ? i18n.assistantMessageTooLong : ''"
+      :persistent-hint="isMessageTooLong" :error="isMessageTooLong" auto-grow rows="1" max-rows="6"
+      autocomplete="off" spellcheck="false" class="chat-input flex-grow-1 mr-3"
+      @keydown.enter.exact.prevent="$refs.sendButton.$el.click()"
+      :disabled="!canChat || !creditsLoaded" data-aid="assistant_chat_embedded_input"
+      :aria-label="i18n.ariaMessageAi"></v-textarea>
+    <v-btn ref="sendButton" class="flex-shrink-0"
+      :disabled="!newMessage.trim() || !canChat || checkForActivity() || !creditsLoaded || isMessageTooLong"
+      @click="sendMessage()" data-aid="assistant_chat_embedded_send" :aria-label="i18n.ariaSendMessage">
+      <v-icon color="primary">{{ checkForActivity() ? 'fa-hourglass-half' : 'fa-paper-plane' }}</v-icon>
+    </v-btn>
+  </div>
+</div>

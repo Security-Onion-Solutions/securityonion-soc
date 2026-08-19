@@ -64,6 +64,15 @@ routes.push({ path: '/simple-alerts', name: 'simple-alerts', component: {
     // Summaries belong to the detection, so they are cached by rule uuid.
     aiSummaryCache: {},
 
+    // The investigation chat embedded in the details dialog (see simplealerts.ai.js).
+    aiChatOpen: false,
+    aiChatAlert: null,
+    aiChatFields: null,
+    aiChatSessionId: null,
+    // Bumped on every open so switching alerts remounts the chat rather than reusing
+    // the previous alert's conversation.
+    aiChatKey: 0,
+
     selectionMode: false,
     // Object maps rather than Sets, so template reads stay reactive.
     selectedAlertIds: {},

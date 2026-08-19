@@ -71,6 +71,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     perMessageStatsEnabled: false,
     showModelThinking: false,
     showOptionsDialog: false,
+    // This is the assistant page itself: it owns the URL and the disclaimer. The shared
+    // method packs check this to stay off both when rendered inside another page (see
+    // components/assistant-chat.js).
+    embedded: false,
+    investigationSocId: null,
   }},
   async created() {
     this.loadLocalSettings();

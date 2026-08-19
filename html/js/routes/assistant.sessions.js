@@ -18,6 +18,28 @@ globalThis.AssistantSessions = (function() {
       this.initAssistant((this.$root.parameters || {}).assistant || {});
     },
     async initAssistant(params) {
+      this.applyAssistantParams(params);
+
+      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, ONIONAI_DISCLAIMER_KEY);
+
+      this.paramsLoaded = true;
+
+      if (this.assistantEnabled) {
+        if (!this.$root.disclaimer) {
+          await this.loadStoredChats();
+          await this.handleRouteSessionId();
+          await this.loadCredits();
+          this.focusChatInput();
+        }
+      } else {
+        this.$root.disclaimer = false;
+      }
+    },
+
+    // Parameters -> chat state, with none of the page's own startup (disclaimer, route
+    // session, credits). Split out so the embedded chat component can configure itself
+    // from the same parameters without owning the URL or showing a second disclaimer.
+    applyAssistantParams(params) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
       this.compressContextMsg = params["compressContextPrompt"];
@@ -80,23 +102,8 @@ globalThis.AssistantSessions = (function() {
         this.adaptersMap = new Map(this.availableAdapters.map(a => [a.name, a]));
       }
       this.updateModelParams();
-
-      this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
-
-      this.paramsLoaded = true;
-
-      if (this.assistantEnabled) {
-        if (!this.$root.disclaimer) {
-          await this.loadStoredChats();
-          await this.handleRouteSessionId();
-          await this.loadCredits();
-          this.focusChatInput();
-        }
-      } else {
-        this.$root.disclaimer = false;
-      }
     },
-    
+
     // Ignore input tokens when on a context compression message.
     calculateContextFromUsage(usage, ignoreInputTokens) {
       if (!usage) return 0;
@@ -201,6 +208,10 @@ globalThis.AssistantSessions = (function() {
       }
     },
     saveCurrentChatId() {
+      // The embedded chat is a side conversation about one alert, not the user's place
+      // in the assistant; letting it write here would make "restore last active" reopen
+      // an investigation instead of the chat they were actually in.
+      if (this.embedded) return;
       if (this.currentChatId) {
         localStorage.setItem('settings.assistant.currentChatId', this.currentChatId);
       } else {
@@ -304,8 +315,21 @@ globalThis.AssistantSessions = (function() {
       
       await this.loadStoredChats();
     },
+    // crypto.randomUUID is only defined in a secure context, so it is absent over plain
+    // http and in some embedded browsers. Falling back to getRandomValues keeps the
+    // session id unguessable rather than dropping to Math.random.
     generateChatId() {
-      return crypto.randomUUID();
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
+      const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
+              hex.slice(16, 20), hex.slice(20)].join('-');
     },
     async loadChat(chat) {
       await this.saveCurrentChat();
@@ -335,9 +359,9 @@ globalThis.AssistantSessions = (function() {
           this.currentChatId = null;
           this.saveCurrentChatId();
           this.loadNewChatScreen();
-          this.$router.push({ name: 'assistant' });
+          if (!this.embedded) this.$router.push({ name: 'assistant' });
         }
-        
+
       } catch (error) {
         this.$root.showError(this.i18n.assistantUnableToDeleteChat + ': ' + (error.response?.data?.error || error.message));
       }
@@ -352,9 +376,12 @@ globalThis.AssistantSessions = (function() {
       this.loadNewChatScreen(); // also resets context length
       this.focusChatInput();
       this.canChat = true;
-      this.$router.push({ name: 'assistant' });
+      if (!this.embedded) this.$router.push({ name: 'assistant' });
     },
     async updateUrlWithSessionId(sessionId) {
+      // Embedded, the URL belongs to the host page; navigating would close the dialog
+      // the chat is rendered in.
+      if (this.embedded) return;
       if (this.$route.params.sessionId !== sessionId) {
         await this.$router.replace({ name: 'assistant', params: { sessionId: sessionId } });
       }

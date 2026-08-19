@@ -10,6 +10,10 @@ const iconSets = [];
 const templatePromises = [];
 const directives = [];
 
+// Acknowledgement of the Onion AI data privacy notice. Shared by every surface that can
+// send event data to the assistant, so accepting it in one place covers all of them.
+const ONIONAI_DISCLAIMER_KEY = "settings.disclaimer.acknowledged.onionai";
+
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
 const LICENSE_STATUS_EXPIRED = "expired";
@@ -52,6 +56,7 @@ if (typeof global !== 'undefined') {
   global.templatePromises = templatePromises;
   global.directives = directives;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
+  global.ONIONAI_DISCLAIMER_KEY = ONIONAI_DISCLAIMER_KEY;
 }
 
 $(document).ready(function () {

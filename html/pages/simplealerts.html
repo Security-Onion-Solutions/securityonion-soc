@@ -37,6 +37,23 @@
           <div class="text-body-2 simplealerts-ai-summary">{{ selectedAlertDetails.aiSummary }}</div>
         </div>
 
+        <div v-if="aiChatOpen" class="mb-4" data-aid="simplealerts_details_ai_chat">
+          <div class="d-flex align-center mb-2">
+            <span class="so-stat-label">{{ i18n.aiInvestigate }}</span>
+            <v-spacer></v-spacer>
+            <v-btn v-if="aiChatSessionId" variant="text" size="x-small" prepend-icon="fa-up-right-from-square"
+              @click="openAiSessionInAssistant()" data-aid="simplealerts_ai_chat_open_full">
+              {{ i18n.simpleAlertsOpenInAssistant }}
+            </v-btn>
+            <v-btn icon variant="flat" size="x-small" class="circle-button ml-2" @click="closeAiChat()"
+              data-aid="simplealerts_ai_chat_close" :aria-label="i18n.close" :title="i18n.close">
+              <v-icon>fa-xmark</v-icon>
+            </v-btn>
+          </div>
+          <assistant-chat :key="aiChatKey" :investigation="aiChatFields" :session-id="aiChatSessionId"
+            @session-started="onAiSessionStarted"></assistant-chat>
+        </div>
+
         <div v-if="getEndpoints(selectedAlertDetails).length" class="mb-4" data-aid="simplealerts_details_network">
           <div class="so-stat-label mb-2">{{ i18n.simpleAlertsNetwork }}</div>
           <div class="d-flex flex-wrap ga-3">

@@ -30,6 +30,9 @@ globalThis.SimpleAlertsDetails = (function() {
     showDetails(alert) {
       this.selectedAlertDetails = alert;
       this.detailsDialog = true;
+      // An investigation belongs to the alert it was opened from, so it does not carry
+      // over to the next one.
+      this.closeAiChat();
       // Guided analysis runs several queries, so it starts only once the analyst has
       // actually opened the alert, and only once per alert.
       this.loadAlertPlaybook(alert);
@@ -39,6 +42,7 @@ globalThis.SimpleAlertsDetails = (function() {
 
     closeDetails() {
       this.detailsDialog = false;
+      this.closeAiChat();
     },
 
     // Everything not already promoted into the dialog chrome, sorted so the layout is
