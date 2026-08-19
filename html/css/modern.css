@@ -582,7 +582,7 @@ html, body, * {
 }
 
 .expanded-field-value:hover {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .expanded-field-expand-btn {
@@ -1360,7 +1360,7 @@ dfn {
 
 /* A disabled agent/skill still lists, but reads as inactive. */
 .agentstudio-row-disabled td {
-  opacity: 0.55;
+  opacity: 0.65;
 }
 
 .agentstudio-row-disabled td:last-child {
