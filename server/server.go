@@ -55,6 +55,7 @@ type Server struct {
 	AssistantManager AssistantManager
 	ApiRouter        *chi.Mux
 	Statusstore      Statusstore
+	Notifier         Notifier
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
