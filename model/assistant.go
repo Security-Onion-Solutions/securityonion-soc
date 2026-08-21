@@ -39,9 +39,9 @@ type ChatRequest struct {
 	// Optionally indicate the temperature for response randomness.
 	Temperature float64 `json:"temperature,omitempty" example:"0.7"`
 	// Optionally indicate the top-p sampling parameter.
-	TopP float64 `json:"top_p" example:"1"`
+	TopP float64 `json:"top_p,omitempty" example:"1"`
 	// Optionally indicate the top-k sampling parameter.
-	TopK int `json:"top_k" example:"40"`
+	TopK int `json:"top_k,omitempty" example:"40"`
 	// Optionally indicate the stop sequences for the response.
 	StopSequences []string `json:"stop_sequences,omitempty" example:"end_turn"`
 	// Optionally provide an alternative System prompt

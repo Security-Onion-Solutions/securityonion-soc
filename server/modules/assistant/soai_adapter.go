@@ -191,7 +191,6 @@ func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatReque
 	}
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
-
 		return nil, err
 	}
 

@@ -1376,7 +1376,6 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 
 	logger.WithFields(log.Fields{
 		"pendingCount": len(details),
-		"requestId":    ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Found sessions pending memory scan")
 
 	return details, nil

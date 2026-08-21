@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -408,9 +407,6 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 	for name, skill := range ac.SkillLibrary {
 		ac.builtinSkills[name] = skill
 	}
-
-	// small value for testing, real value will probably be more like 5-15 mins
-	ac.memoryScanInterval = time.Second * 30
 }
 
 func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string {

@@ -1856,6 +1856,7 @@ func TestStartStopMemoryWorker(t *testing.T) {
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.useMemory = true
+	ac.useMemoryScanner = true
 	ac.memoryScanInterval = time.Hour
 	ac.srv.Context = context.Background()
 

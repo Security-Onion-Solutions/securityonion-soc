@@ -93,6 +93,12 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 		}
 
 		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())
+
+		if ac.srv.DB == nil {
+			logger.Warn("no database connection; skipping scan")
+			continue
+		}
+
 		logger.Info("starting memory scan")
 
 		start := time.Now()
@@ -104,6 +110,12 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 }
 
 func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log.Entry) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error in the memory pipeline")
+		}
+	}()
+
 	memoryAgent, memoryModel, err := ac.resolveMemoryAgent("Memory")
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Memory agent, ending scan")
@@ -146,7 +158,7 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 		// filter facts by user permissions
 		facts = ac.filterFactsByUserPerms(sesOwnerCtx, facts)
 
-		filteredFacts := len(facts) - before
+		filteredFacts := before - len(facts)
 
 		logger.WithFields(log.Fields{
 			"factsCount":    len(facts),
@@ -367,7 +379,30 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 		return nil, err
 	}
 
-	return extracted, nil
+	normalized := make([]*model.ExtractedFact, 0, len(extracted))
+	// normalize
+	for _, fact := range extracted {
+		if fact == nil {
+			continue
+		}
+
+		// Collapse all interior whitespace
+		fact.Fact = strings.Join(strings.Fields(fact.Fact), " ")
+
+		// The prompt allows only "user" and "global" and says to default to
+		// "user" when unsure; normalize anything unexpected the same way.
+		if strings.EqualFold(fact.Scope, "global") {
+			fact.Scope = "global"
+		} else {
+			fact.Scope = "user"
+		}
+
+		if len(fact.Fact) > 0 {
+			normalized = append(normalized, fact)
+		}
+	}
+
+	return normalized, nil
 }
 
 func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*model.Memory) (ops []*model.ReconciledMemory, err error) {
@@ -848,6 +883,10 @@ func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string
 }
 
 func (ac *AssistantCoordinator) fetchMemoriesForPrompt(ctx context.Context, content string) (user []*model.NearbyMemory, global []*model.NearbyMemory, err error) {
+	if ac.srv.DB == nil {
+		return nil, nil, ErrNoDatabase
+	}
+
 	logger := log.FromContext(ctx)
 
 	userId, ok := ctx.Value(web.ContextKeyRequestorId).(string)

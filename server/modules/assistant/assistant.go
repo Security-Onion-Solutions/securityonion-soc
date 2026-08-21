@@ -69,7 +69,7 @@ const (
 	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
 	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
 
-	DEFAULT_USE_MEMORY_SCANNER           = true
+	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
 
 	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
@@ -219,13 +219,18 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.loadAdapters(config)
 
+	ac.validateModelSelectors()
+
 	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
 	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
+	ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
+	ac.maxUserMemoriesToInclude = module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE)
+	ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
+	ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
+	ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
 
-	ac.validateModelSelectors()
-
-	if ac.isAgentic || ac.useMemory {
+	if ac.isAgentic || ac.useMemory || ac.useMemoryScanner {
 		prompts := ac.unzipAndUnmarshal(allPrompts)
 
 		if ac.isAgentic {
@@ -242,12 +247,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 			ac.exposeAgents()
 		}
 
-		if ac.useMemory {
-			ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
-			ac.maxUserMemoriesToInclude = module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE)
-			ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
-			ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
-			ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
+		if ac.useMemory || ac.useMemoryScanner {
 			ac.setupMemoryAgents(prompts)
 			ac.memoryMapping = map[string]string{
 				"Memory":    module.GetStringDefault(config, "memoryModel", ""),
@@ -843,7 +843,7 @@ func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *mo
 
 	user, global, err := ac.fetchMemoriesForPrompt(ctx, content)
 	if err != nil {
-		// log error but send request with memories
+		// log error but send request without memories
 		logger.WithError(err).Warnf("failed to fetch memories for prompt, sending without memories")
 		return
 	}
