@@ -38,6 +38,9 @@ roles/write:               user-admin
 users/read:                user-monitor
 users/write:               user-admin
 users/delete:              user-admin
+notifications/read:        notification-monitor
+notifications/read_all:    notification-auditor
+notifications/write:       notification-admin
 playbooks/read:            playbook-monitor
 playbooks/write:           playbook-admin
 playbooks/delete:          playbook-admin
@@ -63,6 +66,7 @@ grid-monitor:       grid-admin
 job-monitor:        job-admin
 job-user:           job-admin
 node-monitor:       node-admin
+notification-monitor: notification-admin notification-auditor
 query-monitor:      query-admin
 user-monitor:       user-admin
 playbook-monitor:   playbook-admin

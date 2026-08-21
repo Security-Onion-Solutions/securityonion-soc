@@ -8,7 +8,6 @@ package notify
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -17,15 +16,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/notify/database"
 )
 
 type SOCChannel struct {
 	server *server.Server
+	store  *database.Store
 }
 
-func NewSOCChannel(srv *server.Server) *SOCChannel {
+func NewSOCChannel(srv *server.Server, store *database.Store) *SOCChannel {
 	return &SOCChannel{
 		server: srv,
+		store:  store,
 	}
 }
 
@@ -73,6 +75,8 @@ func (c *SOCChannel) Send(ctx context.Context, params map[string]interface{}, pa
 		payload.Timestamp = time.Now().UTC()
 	}
 
+	payload.Links = database.SanitizeLinks(payload.Links)
+
 	storeInPostgres := true
 	if params != nil {
 		if val, ok := params["storeInPostgres"]; ok {
@@ -82,51 +86,29 @@ func (c *SOCChannel) Send(ctx context.Context, params map[string]interface{}, pa
 		}
 	}
 
-	if !storeInPostgres {
+	var err error
+	if storeInPostgres {
+		if c.store != nil {
+			err = c.store.InsertNotification(ctx, payload)
+		} else if c.server != nil && c.server.DB != nil {
+			var store *database.Store
+			store, err = database.New(ctx, c.server.DB)
+			if err == nil {
+				err = store.InsertNotification(ctx, payload)
+			}
+		} else {
+			log.WithField("notificationId", payload.ID).Debug("PostgreSQL DB not configured or available; skipping database insertion")
+		}
+	} else {
 		log.WithField("notificationId", payload.ID).Debug("storeInPostgres is false; skipping database insertion")
-		return nil
 	}
 
-	if c.server == nil || c.server.DB == nil {
-		log.WithField("notificationId", payload.ID).Debug("PostgreSQL DB not configured or available; skipping database insertion")
-		return nil
-	}
-
-	fieldsJSON, err := json.Marshal(payload.Fields)
-	if err != nil || payload.Fields == nil {
-		fieldsJSON = []byte("{}")
-	}
-
-	linksJSON, err := json.Marshal(payload.Links)
-	if err != nil || payload.Links == nil {
-		linksJSON = []byte("{}")
-	}
-
-	attachmentsJSON, err := json.Marshal(payload.Attachments)
-	if err != nil || payload.Attachments == nil {
-		attachmentsJSON = []byte("[]")
-	}
-
-	query := `
-		INSERT INTO notifications (id, source, title, summary, severity, fields, links, attachments, silence_key, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (id) DO NOTHING`
-
-	err = c.server.DB.Exec(ctx, query,
-		payload.ID,
-		payload.Source,
-		payload.Title,
-		payload.Summary,
-		payload.Severity,
-		string(fieldsJSON),
-		string(linksJSON),
-		string(attachmentsJSON),
-		payload.SilenceKey,
-		payload.Timestamp,
-	)
 	if err != nil {
-		log.WithError(err).WithField("notificationId", payload.ID).Error("Failed to store notification in PostgreSQL")
-		return fmt.Errorf("failed to store notification in postgres: %w", err)
+		return err
+	}
+
+	if c.server != nil && c.server.Host != nil {
+		c.server.Host.Broadcast("notification", "notifications", payload)
 	}
 
 	return nil

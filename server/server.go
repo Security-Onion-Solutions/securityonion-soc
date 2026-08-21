@@ -54,8 +54,9 @@ type Server struct {
 	DetectionEngines sync.Map // map[model.EngineName]DetectionEngine
 	AssistantManager AssistantManager
 	ApiRouter        *chi.Mux
-	Statusstore      Statusstore
-	Notifier         Notifier
+	Statusstore       Statusstore
+	Notifier          Notifier
+	Notificationstore Notificationstore
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -125,6 +126,7 @@ func (server *Server) Start() {
 		RegisterPlaybookRoutes(server, server.ApiRouter, "/api/playbook")
 		RegisterAssistantRoutes(server, server.ApiRouter, "/api/assistant")
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
+		RegisterNotificationRoutes(server, server.ApiRouter, "/api/notifications")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)
 

@@ -233,16 +233,52 @@ func TestNotifierSendWithSilence(t *testing.T) {
 	}
 	notifier := NewNotifier(nil, reg, cfg)
 
-	payload := &model.NotificationPayload{Title: "Silenced Alert"}
-	silence := &model.SilenceParams{
+	// First send: should succeed and dispatch
+	payload1 := &model.NotificationPayload{Source: "detection", Title: "Silenced Alert 1"}
+	silence1 := &model.SilenceParams{
 		SilenceKey:      "unique-silence-key",
 		SilenceDuration: 15 * time.Minute,
 		ThresholdCount:  1,
 	}
 
-	err := notifier.SendWithSilence(context.Background(), payload, silence)
+	err := notifier.SendWithSilence(context.Background(), payload1, silence1)
 	assert.NoError(t, err)
-	assert.Equal(t, "unique-silence-key", payload.SilenceKey)
+	assert.Equal(t, "unique-silence-key", payload1.SilenceKey)
+	assert.Equal(t, payload1, mockCh.sentPayload)
+
+	// Second send with same key within window: should suppress (sentPayload remains payload1)
+	mockCh.sentPayload = nil
+	payload2 := &model.NotificationPayload{Source: "detection", Title: "Silenced Alert 2"}
+	err = notifier.SendWithSilence(context.Background(), payload2, silence1)
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// Send with ThresholdCount = 3: should suppress first 2 times, then dispatch on 3rd
+	mockCh.sentPayload = nil
+	silence3 := &model.SilenceParams{
+		SilenceKey:      "threshold-silence-key",
+		SilenceDuration: 15 * time.Minute,
+		ThresholdCount:  3,
+	}
+
+	p1 := &model.NotificationPayload{Source: "detection", Title: "T1"}
+	p2 := &model.NotificationPayload{Source: "detection", Title: "T2"}
+	p3 := &model.NotificationPayload{Source: "detection", Title: "T3"}
+
+	// Trigger 1 (suppressed)
+	err = notifier.SendWithSilence(context.Background(), p1, silence3)
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// Trigger 2 (suppressed)
+	err = notifier.SendWithSilence(context.Background(), p2, silence3)
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// Trigger 3 (dispatched!)
+	err = notifier.SendWithSilence(context.Background(), p3, silence3)
+	assert.NoError(t, err)
+	assert.Equal(t, p3, mockCh.sentPayload)
 }
 
 func TestNotifierGettersAndUpdateConfig(t *testing.T) {

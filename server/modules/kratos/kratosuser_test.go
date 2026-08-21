@@ -41,6 +41,11 @@ func TestCopyFromUserActive(tester *testing.T) {
 
 func TestCopyToUser(tester *testing.T) {
 	kratosUser := NewKratosUser("myEmail", "myFirst", "myLast", "note", "inactive")
+	created := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
+	kratosUser.CreateDate = created
+	kratosUser.UpdateDate = updated
+
 	kratosUser.Credentials = make(map[string]*KratosCredential)
 	kratosUser.Credentials["totp"] = &KratosCredential{Type: "totp"}
 	kratosUser.Credentials["webauthn"] = &KratosCredential{Type: "webauthn"}
@@ -54,6 +59,8 @@ func TestCopyToUser(tester *testing.T) {
 	assert.Equal(tester, kratosUser.Traits.FirstName, user.FirstName)
 	assert.Equal(tester, kratosUser.Traits.LastName, user.LastName)
 	assert.Equal(tester, kratosUser.Traits.Note, user.Note)
+	assert.Equal(tester, created, user.CreateTime)
+	assert.Equal(tester, updated, user.UpdateTime)
 	assert.Equal(tester, kratosUser.Addresses[0].Value, user.Email)
 	assert.Equal(tester, "locked", user.Status)
 	assert.Equal(tester, "enabled", user.TotpStatus)

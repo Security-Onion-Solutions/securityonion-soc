@@ -15,17 +15,18 @@ import (
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestSOCChannelType(t *testing.T) {
-	ch := NewSOCChannel(nil)
+	ch := NewSOCChannel(nil, nil)
 	assert.Equal(t, model.ChannelTypeSOC, ch.Type())
 }
 
 func TestSOCChannelValidateConfig(t *testing.T) {
-	ch := NewSOCChannel(nil)
+	ch := NewSOCChannel(nil, nil)
 
 	// nil params
 	assert.NoError(t, ch.ValidateConfig(nil))
@@ -59,14 +60,14 @@ func TestSOCChannelValidateConfig(t *testing.T) {
 }
 
 func TestSOCChannelSendNilPayload(t *testing.T) {
-	ch := NewSOCChannel(nil)
+	ch := NewSOCChannel(nil, nil)
 	err := ch.Send(context.Background(), nil, nil)
 	assert.Error(t, err)
 }
 
 func TestSOCChannelSendNilDB(t *testing.T) {
 	srv := &server.Server{}
-	ch := NewSOCChannel(srv)
+	ch := NewSOCChannel(srv, nil)
 
 	payload := &model.NotificationPayload{
 		Source:   model.SourceMetric,
@@ -84,7 +85,7 @@ func TestSOCChannelSendNilDB(t *testing.T) {
 func TestSOCChannelSendStoreInPostgresFalse(t *testing.T) {
 	mDB := new(mockdb.MockDB)
 	srv := &server.Server{DB: mDB}
-	ch := NewSOCChannel(srv)
+	ch := NewSOCChannel(srv, nil)
 
 	payload := &model.NotificationPayload{
 		ID:       "custom-id",
@@ -103,8 +104,9 @@ func TestSOCChannelSendStoreInPostgresFalse(t *testing.T) {
 func TestSOCChannelSendWithMockDB(t *testing.T) {
 	ctx := context.Background()
 	mDB := new(mockdb.MockDB)
+	mDB.On("Migrate", mock.Anything, mock.Anything, "notify").Return(nil).Maybe()
 	srv := &server.Server{DB: mDB}
-	ch := NewSOCChannel(srv)
+	ch := NewSOCChannel(srv, nil)
 
 	fixedTime := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 	payload := &model.NotificationPayload{
@@ -148,8 +150,9 @@ func TestSOCChannelSendWithMockDB(t *testing.T) {
 func TestSOCChannelSendDBError(t *testing.T) {
 	ctx := context.Background()
 	mDB := new(mockdb.MockDB)
+	mDB.On("Migrate", mock.Anything, mock.Anything, "notify").Return(nil).Maybe()
 	srv := &server.Server{DB: mDB}
-	ch := NewSOCChannel(srv)
+	ch := NewSOCChannel(srv, nil)
 
 	payload := &model.NotificationPayload{
 		ID:       "notif-err",
@@ -165,5 +168,34 @@ func TestSOCChannelSendDBError(t *testing.T) {
 	err := ch.Send(ctx, nil, payload)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "connection closed")
+	mDB.AssertExpectations(t)
+}
+
+func TestSOCChannelSend_BroadcastWebSocket(t *testing.T) {
+	ctx := context.Background()
+	mDB := new(mockdb.MockDB)
+	mDB.On("Migrate", mock.Anything, mock.Anything, "notify").Return(nil).Maybe()
+
+	host := web.NewHost("127.0.0.1:0", "", 1000, "1.0", []byte("12345678901234567890123456789012"))
+	srv := &server.Server{
+		DB:   mDB,
+		Host: host,
+	}
+	ch := NewSOCChannel(srv, nil)
+
+	payload := &model.NotificationPayload{
+		ID:        "notif-ws",
+		Source:    model.SourceDetection,
+		Title:     "WS Alert",
+		Summary:   "WS Summary",
+		Severity:  model.NotificationSeverityHigh,
+		Timestamp: time.Now().UTC(),
+	}
+
+	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Once()
+
+	err := ch.Send(ctx, nil, payload)
+	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
 }

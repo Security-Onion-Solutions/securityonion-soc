@@ -7,12 +7,14 @@
 package notify
 
 import (
+	"context"
 	"sync"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/notify/database"
 )
 
 type NotificationModule struct {
@@ -20,6 +22,7 @@ type NotificationModule struct {
 	config    module.ModuleConfig
 	registry  *ChannelRegistry
 	notifier  *NotifierImpl
+	store     *database.Store
 	isRunning bool
 	mu        sync.RWMutex
 }
@@ -49,8 +52,21 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 		return err
 	}
 
+	if mod.server != nil && mod.server.DB != nil {
+		ctx := mod.server.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		var err error
+		mod.store, err = database.New(ctx, mod.server.DB)
+		if err != nil {
+			log.WithError(err).Error("Failed to initialize notification database")
+			return err
+		}
+	}
+
 	// Register core SOC channel driver
-	socChannel := NewSOCChannel(mod.server)
+	socChannel := NewSOCChannel(mod.server, mod.store)
 	if err := mod.registry.Register(socChannel); err != nil {
 		log.WithError(err).Error("Failed to register SOC notification channel")
 		return err
@@ -59,6 +75,7 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 	mod.notifier = NewNotifier(mod.server, mod.registry, parsedConfig)
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
+		mod.server.Notificationstore = NewNotificationstore(mod.server, mod.store)
 	}
 
 	log.WithFields(log.Fields{

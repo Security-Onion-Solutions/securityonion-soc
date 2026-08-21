@@ -20,6 +20,9 @@ event-monitor:     agent auditor limited-auditor
 grid-admin:        superuser
 node-admin:        agent
 node-monitor:      analyst limited-analyst auditor limited-auditor superuser
+notification-admin: analyst limited-analyst superuser
+notification-monitor: auditor limited-auditor
+notification-auditor: auditor superuser
 user-admin:        superuser
 user-monitor:      agent analyst auditor
 job-admin:         analyst superuser

@@ -8,9 +8,12 @@ package notify
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -18,11 +21,19 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
+type silencerEntry struct {
+	lastDispatched time.Time
+	triggerCount   int
+	windowStart    time.Time
+}
+
 type NotifierImpl struct {
-	server   *server.Server
-	registry *ChannelRegistry
-	config   model.NotificationConfig
-	mu       sync.RWMutex
+	server    *server.Server
+	registry  *ChannelRegistry
+	config    model.NotificationConfig
+	mu        sync.RWMutex
+	silenceMu sync.Mutex
+	silenced  map[string]*silencerEntry
 }
 
 func NewNotifier(srv *server.Server, registry *ChannelRegistry, cfg model.NotificationConfig) *NotifierImpl {
@@ -30,6 +41,7 @@ func NewNotifier(srv *server.Server, registry *ChannelRegistry, cfg model.Notifi
 		server:   srv,
 		registry: registry,
 		config:   cfg,
+		silenced: make(map[string]*silencerEntry),
 	}
 }
 
@@ -105,10 +117,79 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 }
 
 func (n *NotifierImpl) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
-	if payload != nil && silence != nil && silence.SilenceKey != "" {
+	if payload == nil {
+		return errors.New("notification payload cannot be nil")
+	}
+	if silence != nil && silence.SilenceKey != "" {
 		payload.SilenceKey = silence.SilenceKey
+
+		shouldSuppress, err := n.checkSilence(payload.Source, silence)
+		if err != nil {
+			return err
+		}
+		if shouldSuppress {
+			log.WithFields(log.Fields{
+				"source":     payload.Source,
+				"silenceKey": silence.SilenceKey,
+			}).Debug("Notification suppressed by silencer")
+			return nil
+		}
 	}
 	return n.Send(ctx, payload, destinations...)
+}
+
+func (n *NotifierImpl) checkSilence(source string, silence *model.SilenceParams) (bool, error) {
+	n.silenceMu.Lock()
+	defer n.silenceMu.Unlock()
+
+	hasher := sha256.New()
+	hasher.Write([]byte(source + ":" + silence.SilenceKey))
+	key := hex.EncodeToString(hasher.Sum(nil))
+
+	now := time.Now()
+	entry, exists := n.silenced[key]
+
+	if !exists {
+		entry = &silencerEntry{
+			windowStart: now,
+		}
+		n.silenced[key] = entry
+	}
+
+	duration := silence.SilenceDuration
+	if duration <= 0 {
+		n.mu.RLock()
+		gsw := n.config.GlobalSilenceWindowSeconds
+		n.mu.RUnlock()
+		if gsw > 0 {
+			duration = time.Duration(gsw) * time.Second
+		} else {
+			duration = 300 * time.Second
+		}
+	}
+
+	if now.Sub(entry.windowStart) >= duration {
+		entry.windowStart = now
+		entry.triggerCount = 0
+	}
+
+	entry.triggerCount++
+
+	threshold := silence.ThresholdCount
+	if threshold <= 0 {
+		threshold = 1
+	}
+
+	if !entry.lastDispatched.IsZero() && now.Sub(entry.lastDispatched) < duration {
+		return true, nil
+	}
+
+	if entry.triggerCount < threshold {
+		return true, nil
+	}
+
+	entry.lastDispatched = now
+	return false, nil
 }
 
 func (n *NotifierImpl) RegisterChannel(channel server.NotificationChannel) {

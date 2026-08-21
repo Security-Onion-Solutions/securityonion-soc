@@ -99,3 +99,49 @@ type NotificationConfig struct {
 	// Map of configured notification destinations keyed by destination identifier.
 	Destinations map[string]DestinationConfig `json:"destinations,omitempty"`
 }
+
+// @Description NotificationRecord represents a persisted notification with user-specific state.
+type NotificationRecord struct {
+	// The unique identifier for this notification.
+	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
+	// The source subsystem that originated this notification.
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report"`
+	// The brief title or headline of the notification.
+	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
+	// A human-readable summary describing the notification details.
+	Summary string `json:"summary" example:"Inbound SSH scan detected from 192.168.1.100."`
+	// The severity classification of this notification.
+	Severity string `json:"severity" example:"high" enums:"info,low,medium,high,critical"`
+	// Structured key-value fields providing context (e.g. host, IP, metric name).
+	Fields map[string]string `json:"fields,omitempty" example:"src_ip:192.168.1.100,dst_ip:10.0.0.1"`
+	// Deep-links back to relevant views or dashboards in SOC.
+	Links map[string]string `json:"links,omitempty" example:"View in SOC:https://soc.example.com/#/alerts/123"`
+	// Optional binary or URL attachments associated with this notification.
+	Attachments []Attachment `json:"attachments,omitempty"`
+	// Unique key used for duration silencing and debouncing.
+	SilenceKey string `json:"silenceKey,omitempty" example:"detection:sigma:12345:192.168.1.100"`
+	// The timestamp when this notification was created.
+	CreatedAt time.Time `json:"createdAt" example:"2026-08-17T12:00:00Z"`
+	// Indicates whether this notification has been marked as read by the user.
+	IsRead bool `json:"isRead" example:"false"`
+	// The timestamp when the notification was marked as read.
+	ReadAt *time.Time `json:"readAt,omitempty" example:"2026-08-17T12:05:00Z"`
+	// Indicates whether this notification has been dismissed by the user.
+	IsDismissed bool `json:"isDismissed" example:"false"`
+	// The timestamp when the notification was dismissed.
+	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+}
+
+// @Description NotificationAuditEntry represents a user view or dismissal audit state record.
+type NotificationAuditEntry struct {
+	// The user identifier who read or dismissed the notification.
+	UserID string `json:"userId" example:"admin@soc.local"`
+	// Indicates whether this user has read the notification.
+	IsRead bool `json:"isRead" example:"true"`
+	// The timestamp when this user read the notification.
+	ReadAt *time.Time `json:"readAt,omitempty" example:"2026-08-17T12:05:00Z"`
+	// Indicates whether this user has dismissed the notification.
+	IsDismissed bool `json:"isDismissed" example:"false"`
+	// The timestamp when this user dismissed the notification.
+	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+}
