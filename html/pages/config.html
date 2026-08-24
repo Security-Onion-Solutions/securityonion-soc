@@ -310,7 +310,7 @@
 														<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
 															<v-icon>fa-arrow-down</v-icon>
 														</v-btn>
-														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop>fa-grip-vertical</v-icon>
+														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop data-aid="config_ui_element_drag_handle">fa-grip-vertical</v-icon>
 													</div>
 												</v-expansion-panel-title>
 												<v-expansion-panel-text>
