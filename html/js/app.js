@@ -234,6 +234,12 @@ $(document).ready(function () {
           warningTimeout: 30000,
           errorTimeout: 120000,
           toolbar: null,
+          notificationMenu: false,
+          notificationShowDismissed: false,
+          notifications: [],
+          expandedNotifications: {},
+          unreadCount: 0,
+          notificationAudits: {},
           wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
           apiUrl: location.origin + location.pathname + 'api/',
           authUrl: '/auth/self-service/',
@@ -255,6 +261,7 @@ $(document).ready(function () {
           tools: [],
           casesEnabled: false,
           detectionsEnabled: false,
+          notificationsStarted: false,
           subtitle: '',
           connected: false,
           reconnecting: false,
@@ -282,6 +289,7 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          FEAT_NTF: 'ntf',
           validators: {
             required: value => !!value || _i18n.required,
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
@@ -332,6 +340,7 @@ $(document).ready(function () {
         'selectedGridId': 'onGridSelected',
       },
       methods: {
+        ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
         getMetricsUrl() {
           for (var i = 0; i < this.tools.length; i++) {
             const tool = this.tools[i];
@@ -609,6 +618,8 @@ $(document).ready(function () {
                   if (this.user) {
                     this.username = this.user.email;
                   }
+                  this.notificationsStarted = !!response.data.notificationsStarted;
+                  this.handleServerInfoNotifications(response.data);
 
                   if (this.parameterCallback != null) {
                     this.parameterCallback(this.parameters[this.parameterSection]);
@@ -646,6 +657,7 @@ $(document).ready(function () {
                   this.checkUserSecuritySettings(response.data);
 
                   this.subscribe("status", this.updateStatus);
+                  this.subscribe('notification', this.handleIncomingNotification);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);

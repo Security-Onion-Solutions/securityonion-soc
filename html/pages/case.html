@@ -1015,14 +1015,14 @@
 										<td :colspan="6" class="case">
 											<div class="mt-2">
 												<template v-for="value, key in item.fields">
-													<v-row no-gutters class="py-1 case tabular-row" v-if="!key.startsWith(internalPrefix)">
-														<v-col cols="1">
-															<v-btn :id="`events-${index}-addobservable`" variant="text" size="small" @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable" :aria-label="i18n.addObservable">
+													<v-row no-gutters align="center" class="py-1 case tabular-row" v-if="!key.startsWith(internalPrefix)">
+														<v-col cols="1" class="d-flex align-center">
+															<v-btn :id="`events-${index}-addobservable`" variant="text" size="x-small" icon @click="populateAddObservableForm(key, value)" data-aid="case_event_add_observable" :aria-label="i18n.addObservable">
 																<v-icon :title="i18n.addObservable">fa-eye</v-icon>
 															</v-btn>
-															<router-link class="no-underline" :title="i18n.huntForFieldValue" :to="{ name: 'hunt', query: {q: getHuntActionProps(value) }}" data-aid="case_event_hunt" :aria-label="i18n.huntForFieldValue">
+															<v-btn class="no-underline" variant="text" size="x-small" icon v-bind="getHuntActionProps(value)" :title="i18n.huntForFieldValue" data-aid="case_event_hunt" :aria-label="i18n.huntForFieldValue">
 																<v-icon class="theme-text">fa-crosshairs</v-icon>
-															</router-link>
+															</v-btn>
 														</v-col>
 														<v-col cols="4"><span :id="`events-${index}-field-${key}`" class="case tabular-label" data-aid="case_event_field_display">{{ key }}:</span></v-col>
 														<v-col cols="7"><span class="case" :aria-labelledby="`events-${index}-field-${key}`" data-aid="case_event_value_display">{{ value }}</span></v-col>

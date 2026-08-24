@@ -67,6 +67,124 @@
               <v-list-item v-bind="itemProps" :base-color="getSubgridColor(item?.id)" :append-icon="getSubgridIcon(item?.id)"></v-list-item>
             </template>
           </v-select>
+          <!-- Notification Envelope -->
+          <v-menu v-if="isLicensed(FEAT_NTF) && notificationsStarted" v-model="notificationMenu" :close-on-content-click="false" location="bottom end" offset="5">
+            <template #activator="{ props }">
+              <v-btn icon v-bind="props" data-aid="nav_notification_bell" @click="loadNotifications">
+                <v-badge dot :model-value="unreadCount > 0" color="error" data-aid="nav_notification_bell_badge">
+                  <v-icon class="text-white">{{ unreadCount > 0 ? 'fa-envelope' : 'fa-envelope-open' }}</v-icon>
+                </v-badge>
+              </v-btn>
+            </template>
+            <v-card width="400" max-height="600" class="d-flex flex-column">
+              <v-card-item class="py-2" :class="theme.global.current.dark ? 'bg-grey-darken-3' : 'bg-grey-lighten-4'">
+                <div class="d-flex align-center justify-between w-100">
+                  <v-switch v-model="notificationShowDismissed" density="compact" hide-details inset color="primary" class="my-0" data-aid="notification_dismissed_toggle" @update:model-value="loadNotifications">
+                    <template #label>
+                      <span class="text-caption mr-1" :class="theme.global.current.dark ? 'text-white' : 'text-grey-darken-4'">{{ i18n.dismissed }}</span>
+                    </template>
+                  </v-switch>
+                  <v-spacer></v-spacer>
+                  <v-btn icon size="x-small" variant="text" :color="theme.global.current.dark ? 'white' : 'grey-darken-4'" data-aid="notification_action_refresh" :title="i18n.refresh" @click="refreshNotifications">
+                    <v-icon size="small">fa-sync</v-icon>
+                  </v-btn>
+                </div>
+              </v-card-item>
+              <v-divider></v-divider>
+              <v-list class="flex-grow-1 overflow-y-auto" style="min-height: 200px;">
+                <v-list-item v-if="notifications.length === 0">
+                  <v-list-item-title class="text-center text-grey py-4" v-text="i18n.noNotifications" data-aid="notification_empty_state"></v-list-item-title>
+                </v-list-item>
+                <template v-else v-for="notif in notifications" :key="notif.id">
+                  <v-list-item class="py-2 cursor-pointer"
+                    :class="[
+                      !notif.isRead ? (theme.global.current.dark ? 'bg-grey-darken-4' : 'bg-blue-lighten-5') : '',
+                      notif.isDismissed ? 'opacity-75' : ''
+                    ]"
+                    data-aid="notification_expand_toggle"
+                    @click="toggleNotificationExpand(notif)">
+                    <div class="d-flex flex-column w-100">
+                      <div class="d-flex align-center justify-between mb-1">
+                        <span class="text-caption" :class="getSeverityColorClass(notif.severity, notif.isRead)">{{ notif.severity.toUpperCase() }}</span>
+                        <v-spacer></v-spacer>
+                        <span class="text-caption mr-2" :class="theme.global.current.dark ? 'text-grey' : 'text-grey-darken-1'">{{ formatTimeAgo(notif.createdAt) }}</span>
+                        <v-icon size="x-small" :class="theme.global.current.dark ? 'text-grey' : 'text-grey-darken-1'">{{ expandedNotifications[notif.id] ? 'fa-chevron-up' : 'fa-chevron-down' }}</v-icon>
+                      </div>
+                      <div class="d-flex align-center">
+                        <v-icon size="small" class="mr-2" :class="notif.isRead ? (theme.global.current.dark ? 'text-grey' : 'text-grey-darken-1') : (theme.global.current.dark ? 'text-blue-lighten-2' : 'text-blue-darken-2')">
+                          {{ notif.isRead ? 'fa-envelope-open' : 'fa-envelope' }}
+                        </v-icon>
+                        <div class="text-subtitle-2"
+                          :class="[
+                            !expandedNotifications[notif.id] ? 'text-truncate' : '',
+                            notif.isRead ? 'font-weight-regular' : 'font-weight-bold',
+                            theme.global.current.dark ? (notif.isRead ? 'text-grey-lighten-1' : 'text-white') : (notif.isRead ? 'text-grey-darken-3' : 'text-grey-darken-4')
+                          ]"
+                          data-aid="notification_item_title">
+                          {{ notif.title }}
+                        </div>
+                      </div>
+                      
+                      <!-- Expanded Content -->
+                      <div v-if="expandedNotifications[notif.id]" class="mt-2">
+                        <div v-if="notif.summary && notif.summary.trim() !== notif.title.trim()" class="text-caption mb-2" :class="theme.global.current.dark ? 'text-grey-lighten-1' : 'text-grey-darken-2'">{{ notif.summary }}</div>
+                        
+                        <!-- Fields list -->
+                        <div v-if="notif.fields && Object.keys(notif.fields).length > 0" class="mb-2 pa-2 rounded" :class="theme.global.current.dark ? 'bg-grey-darken-3 text-white' : 'bg-grey-lighten-3 text-grey-darken-4'">
+                          <div v-for="(val, name) in notif.fields" :key="name" v-show="name !== 'title' && name !== 'summary' && name !== 'source'" class="text-caption">
+                            <strong>{{ name }}:</strong> {{ val }}
+                          </div>
+                        </div>
+
+                        <!-- Deep-links -->
+                        <div v-if="notif.links && Object.keys(notif.links).length > 0" class="d-flex flex-wrap gap-1 mb-2">
+                          <v-btn v-for="(url, name) in notif.links" :key="name" :href="sanitizeDeepLink(url)" target="_blank" size="x-small" color="primary" class="mr-1" data-aid="notification_deep_link" @click.stop>
+                            {{ name }}
+                          </v-btn>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="d-flex align-center mt-2">
+                          <v-btn v-if="notif.isRead" size="x-small" variant="text" color="grey" class="px-1 mr-2" data-aid="notification_action_mark_unread" @click.stop="markAsRead(notif.id, false)">
+                            {{ i18n.markAsUnread }}
+                          </v-btn>
+                          <v-btn v-if="!notif.isRead" size="x-small" variant="text" color="info" class="px-1 mr-2" data-aid="notification_action_mark_read" @click.stop="markAsRead(notif.id, true)">
+                            {{ i18n.markAsRead }}
+                          </v-btn>
+                          <v-btn v-if="!notif.isDismissed" size="x-small" variant="text" color="error" class="px-1 mr-2" data-aid="notification_action_dismiss" @click.stop="dismissNotification(notif.id, true)">
+                            {{ i18n.dismiss }}
+                          </v-btn>
+                          <v-btn v-if="notif.isDismissed" size="x-small" variant="text" color="success" class="px-1 mr-2" data-aid="notification_action_restore" @click.stop="dismissNotification(notif.id, false)">
+                            {{ i18n.restore }}
+                          </v-btn>
+                          <v-spacer></v-spacer>
+                          <!-- Audit list popover -->
+                          <v-menu v-if="userHasRole('superuser') || userHasRole('auditor')" location="bottom center" open-on-hover :close-on-content-click="false">
+                            <template #activator="{ props }">
+                              <v-btn icon size="x-small" v-bind="props" variant="text" data-aid="notification_action_audit" @click.stop @mouseenter="loadNotificationAudit(notif.id)">
+                                <v-icon size="small">fa-info-circle</v-icon>
+                              </v-btn>
+                            </template>
+                            <v-card class="pa-2 bg-grey-darken-4 text-caption" style="max-width: 300px;">
+                              <div class="font-weight-bold mb-1" v-text="i18n.userActivityAudit" data-aid="notification_audit_title"></div>
+                              <div v-if="!notificationAudits[notif.id] || notificationAudits[notif.id].length === 0" class="text-grey" v-text="i18n.noActivityYet" data-aid="notification_audit_empty"></div>
+                              <div v-else v-for="audit in notificationAudits[notif.id]" :key="audit.userId" class="mb-1 text-white border-bottom border-grey-darken-3 pb-1">
+                                <div><strong>{{ audit.userId }}</strong></div>
+                                <div v-if="audit.isRead">{{ i18n.readAtLabel }} {{ formatTimeAgo(audit.readAt) }}</div>
+                                <div v-if="audit.isDismissed">{{ i18n.dismissedAtLabel }} {{ formatTimeAgo(audit.dismissedAt) }}</div>
+                              </div>
+                            </v-card>
+                          </v-menu>
+                        </div>
+                      </div>
+                    </div>
+                  </v-list-item>
+                  <v-divider v-if="notifications.indexOf(notif) < notifications.length - 1" :key="'div-'+notif.id"></v-divider>
+                </template>
+              </v-list>
+            </v-card>
+          </v-menu>
+
           <v-menu bottom left offset-y>
             <template #activator="{ props }">
               <v-btn icon v-bind="props" :aria-label="i18n.ariaUserSettings" data-aid="nav_profile">
@@ -500,6 +618,7 @@
 
     <script src="js/i18n.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/graphing.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/notifications.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/app.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/directives/fix-group-role.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/lucide-set.js?v=VERSION_PLACEHOLDER"></script>

@@ -1,12 +1,23 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestInfoHandler_getCustomReports(t *testing.T) {
@@ -182,4 +193,74 @@ Content`),
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestInfoHandler_getInfo_NotificationLicense(t *testing.T) {
+	defer licensing.Shutdown()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := servermock.NewMockNotificationstore(ctrl)
+	mockUserstore := servermock.NewMockUserstore(ctrl)
+
+	srv := &Server{
+		Host:              web.NewHost("127.0.0.1:0", "", 1000, "1.0", []byte("12345678901234567890123456789012")),
+		Notificationstore: mockStore,
+		Userstore:         mockUserstore,
+		Config: &config.ServerConfig{
+			SrvKeyBytes: []byte("12345678901234567890123456789012"),
+		},
+	}
+
+	mockUserstore.EXPECT().GetUserById(gomock.Any(), "user-1").Return(&model.User{
+		Id:         "user-1",
+		Email:      "user@soc.local",
+		TotpStatus: "enabled",
+	}, nil).AnyTimes()
+
+	h := &InfoHandler{server: srv}
+
+	// 1. When FEAT_NTF is disabled: GetLastUnreadTime should NOT be called
+	licensing.Shutdown()
+	req := httptest.NewRequest("GET", "/api/info", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestCSRFExempt, false)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.getInfo(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp1 model.Info
+	_ = json.Unmarshal(w.Body.Bytes(), &resp1)
+	assert.Nil(t, resp1.LastUnreadNotificationTime)
+	assert.False(t, resp1.NotificationsStarted)
+
+	// 2. When FEAT_NTF is enabled: GetLastUnreadTime SHOULD be called
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	fixedTime := time.Date(2026, 8, 20, 17, 0, 0, 0, time.UTC)
+	mockStore.EXPECT().GetLastUnreadTime(gomock.Any()).Return(&fixedTime, nil).Times(1)
+
+	req2 := httptest.NewRequest("GET", "/api/info", nil)
+	req2 = req2.WithContext(ctx)
+	w2 := httptest.NewRecorder()
+	h.getInfo(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	var resp2 model.Info
+	_ = json.Unmarshal(w2.Body.Bytes(), &resp2)
+	assert.NotNil(t, resp2.LastUnreadNotificationTime)
+	assert.Equal(t, fixedTime, *resp2.LastUnreadNotificationTime)
+	assert.True(t, resp2.NotificationsStarted)
+
+	// 3. When FEAT_NTF is enabled but Notificationstore is nil: NotificationsStarted is false
+	srv.Notificationstore = nil
+	req3 := httptest.NewRequest("GET", "/api/info", nil)
+	req3 = req3.WithContext(ctx)
+	w3 := httptest.NewRecorder()
+	h.getInfo(w3, req3)
+	assert.Equal(t, http.StatusOK, w3.Code)
+	var resp3 model.Info
+	_ = json.Unmarshal(w3.Body.Bytes(), &resp3)
+	assert.Nil(t, resp3.LastUnreadNotificationTime)
+	assert.False(t, resp3.NotificationsStarted)
 }
