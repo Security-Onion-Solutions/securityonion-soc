@@ -291,12 +291,9 @@
 									</div>
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
 										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title"
-											:draggable="canDragEntry(entryIdx)"
-											@dragstart="onEntryDragStart($event, entryIdx)"
 											@dragover="onEntryDragOver($event, entryIdx)"
 											@dragleave="onEntryDragLeave($event, entryIdx)"
 											@drop="onEntryDrop($event, entryIdx, selected)"
-											@dragend="onEntryDragEnd"
 											:class="{
 												'entry-dragging': draggedEntryIdx === entryIdx,
 												'entry-drag-above': (dragOverEntryIdx === entryIdx && dragPosition === 'above') || (dragOverEntryIdx === entryIdx - 1 && dragPosition === 'below'),
@@ -313,7 +310,7 @@
 														<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
 															<v-icon>fa-arrow-down</v-icon>
 														</v-btn>
-														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder">fa-grip-vertical</v-icon>
+														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop data-aid="config_ui_element_drag_handle">fa-grip-vertical</v-icon>
 													</div>
 												</v-expansion-panel-title>
 												<v-expansion-panel-text>
