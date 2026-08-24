@@ -714,6 +714,10 @@ func (memOps *MemoryOperations) RemoveInvalid(neighbors []MemoryNeighbor) {
 	kept := make([]*MemoryOp, 0, len(memOps.Operations))
 
 	for _, op := range memOps.Operations {
+		if op == nil {
+			continue
+		}
+
 		oper := strings.ToUpper(op.Op)
 
 		reason := ""

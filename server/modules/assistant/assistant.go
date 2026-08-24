@@ -28,6 +28,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -41,12 +42,11 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 var protocols = map[string]ProtocolConstructor{}
 
 var (
-	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
-	ErrRequestTooLarge    = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
-	ErrInvalidModel       = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
-	ErrInvalidAgent       = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
-	ErrNoDatabase         = errors.New("no database configured")
-	ErrInvalidMemoryScope = errors.New("memory scope not specified")
+	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
+	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
+	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase      = errors.New("no database configured")
 )
 
 const (
@@ -134,6 +134,7 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
+	store                        *database.Store
 	useMemory                    bool
 	useMemoryScanner             bool
 	maxUserMemoriesToInclude     int
@@ -211,17 +212,6 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
-	ac.mem2memProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD)
-	ac.mem2msgProximityThreshold = module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD)
-
-	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
-	ac.memoryScanInterval = time.Second * time.Duration(memScanInterval)
-
-	ac.loadAdapters(config)
-
-	ac.validateModelSelectors()
-
-	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
 	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
 	ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
@@ -229,6 +219,21 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
 	ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
 	ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
+	ac.mem2memProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD)
+	ac.mem2msgProximityThreshold = module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD)
+
+	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
+	if memScanInterval > 0 {
+		ac.memoryScanInterval = time.Second * time.Duration(memScanInterval)
+	} else if err == nil && ac.useMemoryScanner {
+		err = fmt.Errorf("memoryScanInterval must be > 0")
+	}
+
+	ac.loadAdapters(config)
+
+	ac.validateModelSelectors()
+
+	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
 	if ac.isAgentic || ac.useMemory || ac.useMemoryScanner {
 		prompts := ac.unzipAndUnmarshal(allPrompts)
@@ -508,6 +513,15 @@ func (ac *AssistantCoordinator) getPrompt() {
 
 func (ac *AssistantCoordinator) Start() error {
 	ac.isRunning = true
+
+	if ac.srv != nil && ac.srv.DB != nil {
+		store, err := database.New(context.Background(), ac.srv.DB)
+		if err != nil {
+			log.WithError(err).Error("assistant: database init failed")
+			return err
+		}
+		ac.store = store
+	}
 
 	// Agent definitions and limits can be managed as config settings (some
 	// DB-stored, e.g. "assistant.agents") that do not arrive through the module's
@@ -869,8 +883,10 @@ func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *mo
 
 	go func() {
 		noCancelCtx := context.WithoutCancel(ctx)
+		noCancelCtx, cancel := context.WithTimeout(noCancelCtx, time.Second*10)
+		defer cancel()
 
-		err := ac.countMemoryUsage(noCancelCtx, ids)
+		err := ac.store.CountMemoryUsage(noCancelCtx, ids)
 		if err != nil {
 			logger.WithError(err).WithField("memoryIds", ids).Error("unable to update usage count for memories")
 		}

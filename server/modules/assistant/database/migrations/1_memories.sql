@@ -15,5 +15,6 @@ CREATE TABLE IF NOT EXISTS memories (
     usage_count        int         NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_memories_user_id
-    ON memories (user_id);
+-- FindNearbyMemories always filters on model_id and usually a target_user_id scope
+CREATE INDEX IF NOT EXISTS idx_memories_model_id_target_user_id
+    ON memories (model_id, target_user_id);

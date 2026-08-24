@@ -19,6 +19,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
@@ -32,12 +33,6 @@ import (
 func sqlContains(substr string) any {
 	return mock.MatchedBy(func(sql string) bool {
 		return strings.Contains(sql, substr)
-	})
-}
-
-func nilStringPtr() any {
-	return mock.MatchedBy(func(s *string) bool {
-		return s == nil
 	})
 }
 
@@ -100,13 +95,26 @@ func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 		}).Return(nil).Once()
 }
 
+// newTestMemoryStore wraps mDB in a real database.Store so coordinator tests
+// keep scripting SQL expectations directly on the DB mock.
+func newTestMemoryStore(mDB *mockdb.MockDB) *database.Store {
+	mDB.On("Migrate", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	s, err := database.New(context.Background(), mDB)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
+}
+
 // newReconcileTestCoordinator builds the minimal coordinator reconcileMemories
 // needs: a resolvable "Reconcile" memory role mapped to an enabled model whose
 // adapter is registered.
 func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAdapter) *AssistantCoordinator {
 	return &AssistantCoordinator{
+		store: newTestMemoryStore(mDB),
 		srv: &server.Server{
-			DB:         mDB,
 			Authorizer: &opAuthorizer{allowed: map[string]bool{"write_self": true, "write_global": true}},
 			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
 				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{
@@ -123,220 +131,19 @@ func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAda
 	}
 }
 
-func TestAddMemory(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mem := &model.Memory{
-		MemoryText:  "the user prefers dark mode",
-		SessionId:   "session-1",
-		Embedding:   []float32{0.1, 0.2},
-		ModelID:     "embed-model",
-		UserDefined: true,
-	}
-	mem.UserId = "user-1"
-
-	created := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		*(args.Get(0).(*string)) = "generated-id"
-		*(args.Get(1).(**time.Time)) = &created
-		*(args.Get(2).(**time.Time)) = &created
-	}).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("$7"),
-		"user-1", "the user prefers dark mode", stringPtrTo("session-1"), mock.Anything, "embed-model", nilStringPtr(), true).
-		Return(mRow)
-
-	err := ac.AddMemory(context.Background(), mem)
-
-	assert.NoError(t, err)
-	assert.Equal(t, "generated-id", mem.Id)
-	assert.Equal(t, &created, mem.CreateTime)
-	assert.Equal(t, &created, mem.UpdateTime)
-	mDB.AssertExpectations(t)
-	mRow.AssertExpectations(t)
-}
-
-func TestAddMemoryEmptySessionId(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mem := &model.Memory{
-		MemoryText: "seeded memory",
-		Embedding:  []float32{0.1},
-		ModelID:    "embed-model",
-	}
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
-		mock.Anything, mock.Anything, nilStringPtr(), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(mRow)
-
-	err := ac.AddMemory(context.Background(), mem)
-
-	assert.NoError(t, err)
-	mDB.AssertExpectations(t)
-}
-
-func TestUpdateMemory(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mem := &model.Memory{
-		MemoryText: "updated text",
-		SessionId:  "session-2",
-		Embedding:  []float32{0.3},
-		ModelID:    "embed-model",
-	}
-	mem.Id = "mem-1"
-
-	updated := time.Date(2026, 8, 6, 13, 0, 0, 0, time.UTC)
-	lastUsed := time.Date(2026, 8, 6, 12, 30, 0, 0, time.UTC)
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		*(args.Get(0).(**time.Time)) = &updated
-		*(args.Get(1).(**time.Time)) = &lastUsed
-		*(args.Get(2).(*int)) = 4
-	}).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
-		"mem-1", "updated text", stringPtrTo("session-2"), mock.Anything, "embed-model", nilStringPtr()).
-		Return(mRow)
-
-	err := ac.UpdateMemory(context.Background(), mem)
-
-	assert.NoError(t, err)
-	assert.Equal(t, &updated, mem.UpdateTime)
-	assert.Equal(t, &lastUsed, mem.LastUsedAt)
-	assert.Equal(t, 4, mem.UsageCount)
-	mDB.AssertExpectations(t)
-	mRow.AssertExpectations(t)
-}
-
-func TestUpdateMemoryEmptyId(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	err := ac.UpdateMemory(context.Background(), &model.Memory{MemoryText: "no id"})
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "without an id")
-	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestUpdateMemoryScanError(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mem := &model.Memory{}
-	mem.Id = "missing-id"
-
-	scanErr := errors.New("no rows in result set")
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(scanErr)
-
-	mDB.On("QueryRow", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mRow)
-
-	err := ac.UpdateMemory(context.Background(), mem)
-
-	assert.ErrorIs(t, err, scanErr)
-}
-
-func TestDeleteMemory(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mDB.On("Exec", mock.Anything, sqlContains("DELETE FROM memories"), "mem-1").Return(nil)
-
-	err := ac.DeleteMemory(context.Background(), "mem-1")
-
-	assert.NoError(t, err)
-	mDB.AssertExpectations(t)
-}
-
-func TestDeleteMemoryEmptyId(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	err := ac.DeleteMemory(context.Background(), "")
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "without an id")
-	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestDeleteMemoryExecError(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	execErr := errors.New("connection lost")
-
-	mDB.On("Exec", mock.Anything, mock.Anything, mock.Anything).Return(execErr)
-
-	err := ac.DeleteMemory(context.Background(), "mem-1")
-
-	assert.ErrorIs(t, err, execErr)
-}
-
-func TestCountMemoryUsage(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET usage_count = usage_count + 1, last_used_at = $2"), []string{"mem-1", "mem-2"}, mock.AnythingOfType("time.Time")).Return(nil)
-
-	err := ac.countMemoryUsage(context.Background(), []string{"mem-1", "mem-2"})
-
-	assert.NoError(t, err)
-	mDB.AssertExpectations(t)
-}
-
-func TestCountMemoryUsageEmptyIds(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	err := ac.countMemoryUsage(context.Background(), []string{})
-
-	assert.NoError(t, err)
-	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestCountMemoryUsageExecError(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	execErr := errors.New("connection lost")
-
-	mDB.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(execErr)
-
-	err := ac.countMemoryUsage(context.Background(), []string{"mem-1"})
-
-	assert.ErrorIs(t, err, execErr)
-}
-
 func TestMemoryNoDB(t *testing.T) {
 	ac := &AssistantCoordinator{srv: &server.Server{}}
 
-	assert.ErrorIs(t, ac.AddMemory(context.Background(), &model.Memory{}), ErrNoDatabase)
-	assert.ErrorIs(t, ac.UpdateMemory(context.Background(), &model.Memory{}), ErrNoDatabase)
-	assert.ErrorIs(t, ac.DeleteMemory(context.Background(), "mem-1"), ErrNoDatabase)
-	assert.ErrorIs(t, ac.countMemoryUsage(context.Background(), []string{"mem-1"}), ErrNoDatabase)
-
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.1}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
+	_, err := ac.reconcileMemories(context.Background(), []*model.Memory{{}})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = ac.reconcileMemories(context.Background(), []*model.Memory{{}})
+	_, _, err = ac.fetchMemoriesForPrompt(context.Background(), "what do I like")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }
 
 func TestApplyMemories(t *testing.T) {
 	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+	ac := &AssistantCoordinator{store: newTestMemoryStore(mDB)}
 
 	addRow := &mockdb.MockRow{}
 	addRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -381,7 +188,7 @@ func TestApplyMemories(t *testing.T) {
 
 func TestApplyMemoriesCollectsErrors(t *testing.T) {
 	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
+	ac := &AssistantCoordinator{store: newTestMemoryStore(mDB)}
 
 	addRow := &mockdb.MockRow{}
 	addRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -648,200 +455,6 @@ func TestFilterFactsByUserPerms(t *testing.T) {
 			assert.Equal(t, "user-1", auth.lastRequestorId)
 		})
 	}
-}
-
-func TestFindNearbyMemoriesUserScoped(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(true).Twice()
-	mRows.On("Next").Return(false)
-	expectNearbyRow(mRows, nearbyRowFixture{
-		id: "mem-1", userId: "system", memoryText: "likes tea", modelId: "embed-model",
-		sessionId: util.Ptr("sess-1"), targetUserId: util.Ptr("user-1"),
-		embedding: []float32{0.5, 0.6}, similarity: 0.91, userDefined: true,
-	})
-	expectNearbyRow(mRows, nearbyRowFixture{
-		id: "mem-2", userId: "system", memoryText: "drinks coffee", modelId: "embed-model",
-		similarity: 0.85,
-	})
-	mRows.On("Err").Return(nil)
-	mRows.On("Close").Return()
-
-	// args are appended in clause order: scope user, then similarity, then limit
-	userOnly := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "target_user_id = $3") &&
-			!strings.Contains(sql, "target_user_id IS NULL")
-	})
-	mDB.On("Query", mock.Anything, userOnly,
-		mock.Anything, "embed-model", "user-1", 0.8, 5).
-		Return(mRows, nil)
-
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5, 0.6}, "embed-model", UserMemories("user-1"), WithMinSimilarity(0.8), WithLimit(5))
-
-	assert.NoError(t, err)
-	assert.Len(t, got, 2)
-
-	assert.Equal(t, 0.91, got[0].Similarity)
-	assert.Equal(t, "mem-1", got[0].Memory.Id)
-	assert.Equal(t, "memory", got[0].Memory.Kind)
-	assert.Equal(t, "likes tea", got[0].Memory.MemoryText)
-	assert.Equal(t, "sess-1", got[0].Memory.SessionId)
-	assert.Equal(t, []float32{0.5, 0.6}, got[0].Memory.Embedding)
-	assert.Equal(t, util.Ptr("user-1"), got[0].Memory.TargetUserId)
-	assert.True(t, got[0].Memory.UserDefined)
-
-	// NULL session_id stays empty
-	assert.Equal(t, "", got[1].Memory.SessionId)
-	assert.Nil(t, got[1].Memory.TargetUserId)
-	assert.False(t, got[1].Memory.UserDefined)
-
-	mDB.AssertExpectations(t)
-	mRows.AssertExpectations(t)
-}
-
-func TestFindNearbyMemoriesGlobalScopeNoLimit(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(false)
-	mRows.On("Err").Return(nil)
-	mRows.On("Close").Return()
-
-	// global scope only queries untargeted rows; no WithLimit means no LIMIT arg
-	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
-		mock.Anything, "embed-model", 0.8).
-		Return(mRows, nil)
-
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8))
-
-	assert.NoError(t, err)
-	assert.NotNil(t, got)
-	assert.Empty(t, got)
-	mDB.AssertExpectations(t)
-}
-
-func TestFindNearbyMemoriesUserOnlyScope(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(false)
-	mRows.On("Err").Return(nil)
-	mRows.On("Close").Return()
-
-	// user-only scope must not pull in global rows
-	userOnly := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "target_user_id = $3") &&
-			!strings.Contains(sql, "target_user_id IS NULL")
-	})
-	mDB.On("Query", mock.Anything, userOnly,
-		mock.Anything, "embed-model", "user-1", 2).
-		Return(mRows, nil)
-
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", UserMemories("user-1"), WithLimit(2))
-
-	assert.NoError(t, err)
-	assert.Empty(t, got)
-	mDB.AssertExpectations(t)
-}
-
-func TestFindNearbyMemoriesAllUsersNoFilters(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(false)
-	mRows.On("Err").Return(nil)
-	mRows.On("Close").Return()
-
-	// all-users scope has no target clause; no options means no similarity or LIMIT clauses
-	unfiltered := mock.MatchedBy(func(sql string) bool {
-		return !strings.Contains(sql, "target_user_id =") &&
-			!strings.Contains(sql, "target_user_id IS NULL") &&
-			!strings.Contains(sql, ">=") &&
-			!strings.Contains(sql, "LIMIT")
-	})
-	mDB.On("Query", mock.Anything, unfiltered,
-		mock.Anything, "embed-model").
-		Return(mRows, nil)
-
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", AllMemories())
-
-	assert.NoError(t, err)
-	assert.Empty(t, got)
-	mDB.AssertExpectations(t)
-}
-
-func TestFindNearbyMemoriesUnspecifiedScope(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	// the zero-value scope fails closed: no query, no results
-	got, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", MemoryScope{})
-
-	assert.ErrorIs(t, err, ErrInvalidMemoryScope)
-	assert.Nil(t, got)
-	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestFindNearbyMemoriesQueryError(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	queryErr := errors.New("connection lost")
-
-	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(&mockdb.MockRows{}, queryErr)
-
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
-
-	assert.ErrorIs(t, err, queryErr)
-}
-
-func TestFindNearbyMemoriesScanError(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	scanErr := errors.New("bad row")
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(true)
-	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything).
-		Return(scanErr)
-	mRows.On("Close").Return()
-
-	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(mRows, nil)
-
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
-
-	assert.ErrorIs(t, err, scanErr)
-	mRows.AssertCalled(t, "Close")
-	mRows.AssertNotCalled(t, "Err")
-}
-
-func TestFindNearbyMemoriesRowsErr(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
-
-	rowsErr := errors.New("cursor failed")
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(false)
-	mRows.On("Err").Return(rowsErr)
-	mRows.On("Close").Return()
-
-	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(mRows, nil)
-
-	_, err := ac.FindNearbyMemories(context.Background(), []float32{0.5}, "embed-model", GlobalMemories(), WithMinSimilarity(0.8), WithLimit(5))
-
-	assert.ErrorIs(t, err, rowsErr)
 }
 
 func extractTestFixtures() (*model.AssistantSessionDetails, *model.Agent, *model.ModelParameters) {
@@ -1376,7 +989,7 @@ func TestReconcileMemoriesNoWriteGlobalSkipsGlobalCandidate(t *testing.T) {
 	assert.NotNil(t, ops)
 	assert.Empty(t, ops)
 	assert.Equal(t, 0, calls)
-	assert.Empty(t, mDB.Calls)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestReconcileMemoriesNoWriteSelfSkipsUserCandidate(t *testing.T) {
@@ -1399,7 +1012,7 @@ func TestReconcileMemoriesNoWriteSelfSkipsUserCandidate(t *testing.T) {
 	assert.NotNil(t, ops)
 	assert.Empty(t, ops)
 	assert.Equal(t, 0, calls)
-	assert.Empty(t, mDB.Calls)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestReconcileMemoriesInvalidOpsRemoved(t *testing.T) {
@@ -1523,6 +1136,7 @@ func memoryTestCtx() context.Context {
 // session store, and DB/authorizer for reconcile and apply.
 func newScanTestCoordinator(store server.Assistantstore, mDB *mockdb.MockDB, extract *scriptedAdapter, embed *embedAdapter, reconcile *scriptedAdapter) *AssistantCoordinator {
 	return &AssistantCoordinator{
+		store: newTestMemoryStore(mDB),
 		srv: &server.Server{
 			DB:             mDB,
 			Authorizer:     &opAuthorizer{allowed: map[string]bool{"write_self": true, "write_global": true}},
@@ -1874,6 +1488,8 @@ func TestStartStopMemoryWorker(t *testing.T) {
 	assert.NoError(t, ac.Start())
 	assert.True(t, ac.IsRunning())
 	assert.NotNil(t, ac.terminateMemory)
+	// Start rebuilds the store from srv.DB, running the module's migrations
+	assert.NotNil(t, ac.store)
 
 	assert.NoError(t, ac.Stop())
 	assert.False(t, ac.IsRunning())
@@ -1884,8 +1500,8 @@ func TestStartStopMemoryWorker(t *testing.T) {
 // an authorizer granting the given operations.
 func newFetchTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter, allowed map[string]bool) *AssistantCoordinator {
 	return &AssistantCoordinator{
+		store: newTestMemoryStore(mDB),
 		srv: &server.Server{
-			DB:         mDB,
 			Authorizer: &opAuthorizer{allowed: allowed},
 			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
 				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{

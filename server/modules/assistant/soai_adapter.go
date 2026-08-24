@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,10 @@ func init() {
 const (
 	DEFAULT_APIURL                 = "https://onionai.securityonion.net/"
 	DEFAULT_HEALTH_TIMEOUT_SECONDS = 3
+)
+
+var (
+	ErrNon2XXResponse = errors.New("received a non-2XX response")
 )
 
 type SOAiCloudAdapter struct {
@@ -134,6 +139,15 @@ func (a *SOAiCloudAdapter) Embed(ctx context.Context, req *model.EmbeddingReques
 		logger.WithError(err).Error("unable to execute request")
 
 		return nil, err
+	}
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		logger.WithFields(log.Fields{
+			"statusCode": res.StatusCode,
+			"status":     res.Status,
+		}).Error("unexpected status code in embedding response")
+
+		return nil, ErrNon2XXResponse
 	}
 
 	resBody, err := io.ReadAll(res.Body)
