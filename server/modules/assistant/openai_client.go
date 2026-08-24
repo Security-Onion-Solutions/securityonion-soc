@@ -66,6 +66,9 @@ type OpenAIClient interface {
 
 	// ChatCompletionsNewStreaming wraps the Chat.Completions.NewStreaming method for streaming calls
 	ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream
+
+	// EmbeddingsNew wraps the Embeddings.New method for generating vector embeddings
+	EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
 }
 
 //go:generate mockgen -source=openai_client.go -destination=mock/mock_openai_client.go -package=mock
@@ -122,6 +125,11 @@ func (r *realOpenAIClient) ChatCompletionsNew(ctx context.Context, params openai
 func (r *realOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream {
 	stream := r.client.Chat.Completions.NewStreaming(ctx, params)
 	return &realChatCompletionStream{stream: stream}
+}
+
+// EmbeddingsNew wraps the client.Embeddings.New call.
+func (r *realOpenAIClient) EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	return r.client.Embeddings.New(ctx, params)
 }
 
 // realChatCompletionStream wraps a concrete ssestream.Stream to implement ChatCompletionStream interface

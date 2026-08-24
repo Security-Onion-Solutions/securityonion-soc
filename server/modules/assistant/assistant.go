@@ -28,6 +28,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -45,6 +46,7 @@ var (
 	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
 	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
 	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase      = errors.New("no database configured")
 )
 
 const (
@@ -66,6 +68,18 @@ const (
 	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
 	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
 	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
+
+	DEFAULT_USE_MEMORY_SCANNER           = false
+	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
+
+	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
+	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE   = 5
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE = 5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
 )
 
 //go:embed SOSystemPrompt.bin
@@ -119,6 +133,20 @@ type AssistantCoordinator struct {
 	// sessionLocks serializes a session's tool-turn continuation so that exactly one
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
+
+	store                        *database.Store
+	useMemory                    bool
+	useMemoryScanner             bool
+	maxUserMemoriesToInclude     int
+	maxGlobalMemoriesToInclude   int
+	maxUserMemoriesToReconcile   int
+	maxGlobalMemoriesToReconcile int
+	terminateMemory              context.CancelCauseFunc
+	memoryScanInterval           time.Duration
+	mem2memProximityThreshold    float64
+	mem2msgProximityThreshold    float64
+	memoryAgents                 map[string]model.Agent // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
+	memoryMapping                map[string]string      // map[roleName]modelSelector from the memoryModel/embedModel/reconcileModel config keys
 
 	detections.IOManager
 }
@@ -185,27 +213,54 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
 
-	ac.loadAdapters(config)
+	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
+	ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
+	ac.maxUserMemoriesToInclude = module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE)
+	ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
+	ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
+	ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
+	ac.mem2memProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD)
+	ac.mem2msgProximityThreshold = module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD)
 
-	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
-
-	if ac.isAgentic {
-		ac.setupAgentic()
-		ac.agentMapping = ac.loadAgentMapping(config)
-
-		// A reload restores this for any built-in the stored setting omits.
-		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
-		for name, selector := range ac.agentMapping {
-			ac.builtinAgentMapping[name] = selector
-		}
+	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
+	if memScanInterval > 0 {
+		ac.memoryScanInterval = time.Second * time.Duration(memScanInterval)
+	} else if err == nil && ac.useMemoryScanner {
+		err = fmt.Errorf("memoryScanInterval must be > 0")
 	}
+
+	ac.loadAdapters(config)
 
 	ac.validateModelSelectors()
 
-	if ac.isAgentic {
-		ac.validateAgentMappings()
-		ac.registerDelegateTools()
-		ac.exposeAgents()
+	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
+
+	if ac.isAgentic || ac.useMemory || ac.useMemoryScanner {
+		prompts := ac.unzipAndUnmarshal(allPrompts)
+
+		if ac.isAgentic {
+			ac.setupAgentic(prompts)
+			ac.agentMapping = ac.loadAgentMapping(config)
+
+			ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+			for name, selector := range ac.agentMapping {
+				ac.builtinAgentMapping[name] = selector
+			}
+
+			ac.validateAgentMappings()
+			ac.registerDelegateTools()
+			ac.exposeAgents()
+		}
+
+		if ac.useMemory || ac.useMemoryScanner {
+			ac.setupMemoryAgents(prompts)
+			ac.memoryMapping = map[string]string{
+				"Memory":    module.GetStringDefault(config, "memoryModel", ""),
+				"Embed":     module.GetStringDefault(config, "embedModel", ""),
+				"Reconcile": module.GetStringDefault(config, "reconcileModel", ""),
+			}
+			ac.validateMemoryMappings()
+		}
 	}
 
 	ac.getPrompt()
@@ -379,6 +434,10 @@ func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolF
 		}
 	}
 
+	if len(toolSpecs) == 0 {
+		return nil, nil
+	}
+
 	tc := &model.ToolConfig{
 		Tools: toolSpecs,
 		ToolChoice: map[string]model.JSONSchema{
@@ -455,6 +514,15 @@ func (ac *AssistantCoordinator) getPrompt() {
 func (ac *AssistantCoordinator) Start() error {
 	ac.isRunning = true
 
+	if ac.srv != nil && ac.srv.DB != nil {
+		store, err := database.New(context.Background(), ac.srv.DB)
+		if err != nil {
+			log.WithError(err).Error("assistant: database init failed")
+			return err
+		}
+		ac.store = store
+	}
+
 	// Agent definitions and limits can be managed as config settings (some
 	// DB-stored, e.g. "assistant.agents") that do not arrive through the module's
 	// Init config. Start runs after every module's Init, so the Configstore is
@@ -463,6 +531,13 @@ func (ac *AssistantCoordinator) Start() error {
 	if ac.isAgentic {
 		ac.registerConfigCallbacks()
 		ac.reloadAgentConfiguration(ac.srv.Context)
+	}
+
+	if ac.useMemoryScanner {
+		var memCtx context.Context
+		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
+
+		go ac.memoryWorker(memCtx)
 	}
 
 	return nil
@@ -506,6 +581,10 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 
 func (ac *AssistantCoordinator) Stop() error {
 	ac.isRunning = false
+
+	if ac.terminateMemory != nil {
+		ac.terminateMemory(nil)
+	}
 
 	return nil
 }
@@ -629,6 +708,23 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.Agent, *model.
 	return &agent, modelParams, nil
 }
 
+// resolveMemoryAgent resolves an internal memory role (Memory, Embed,
+// Reconcile) to its prompt-holding definition and the model that executes it,
+// configured via the memoryModel/embedModel/reconcileModel module config keys.
+func (ac *AssistantCoordinator) resolveMemoryAgent(name string) (*model.Agent, *model.ModelParameters, error) {
+	agent, ok := ac.memoryAgents[name]
+	if !ok {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	modelParams := ac.resolveModel(ac.memoryMapping[name])
+	if modelParams == nil {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	return &agent, modelParams, nil
+}
+
 // resolveSelector resolves a client-supplied selector string. In agentic mode
 // the string is first tried as an agent name; a string that is not an agent
 // (or any string in non-agentic mode) is tried as a model selector
@@ -708,17 +804,14 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, ErrInvalidModel
 	}
 
+	clean := cleanupMessages(messages)
+
 	req := &model.ChatRequest{
-		Messages:  cleanupMessages(messages),
+		Messages:  clean,
 		Stream:    stream,
 		UserId:    userID,
 		Model:     modelParams.ID,
 		MaxTokens: config.MaxTokens,
-	}
-
-	if err := ac.checkRequestSize(req, modelParams); err != nil {
-		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
-		return nil, nil, err
 	}
 
 	adapter, ok := ac.adapters[modelParams.Adapter]
@@ -741,7 +834,70 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		req.SystemAppend = ac.systemPromptAddendum
 	}
 
+	if ac.useMemory && config.IncludeMemories && len(clean) != 0 {
+		latest := clean[len(clean)-1]
+		if strings.EqualFold(latest.Role, "user") {
+			content := messageText(latest)
+			if content != "" {
+				ac.addMemoriesToPrompt(ctx, req, content)
+			}
+		}
+	}
+
+	if err := ac.checkRequestSize(req, modelParams); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, nil, err
+	}
+
 	return req, adapter, nil
+}
+
+func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *model.ChatRequest, content string) {
+	logger := log.FromContext(ctx)
+
+	user, global, err := ac.fetchMemoriesForPrompt(ctx, content)
+	if err != nil {
+		// log error but send request without memories
+		logger.WithError(err).Warnf("failed to fetch memories for prompt, sending without memories")
+		return
+	}
+
+	memPrompt := strings.Builder{}
+	ids := make([]string, 0, len(user)+len(global))
+
+	if len(user) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this user:")
+		for _, m := range user {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	if len(global) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this SOC installation:")
+		for _, m := range global {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	go func() {
+		noCancelCtx := context.WithoutCancel(ctx)
+		noCancelCtx, cancel := context.WithTimeout(noCancelCtx, time.Second*10)
+		defer cancel()
+
+		err := ac.store.CountMemoryUsage(noCancelCtx, ids)
+		if err != nil {
+			logger.WithError(err).WithField("memoryIds", ids).Error("unable to update usage count for memories")
+		}
+	}()
+
+	logger.WithFields(log.Fields{
+		"userMemoriesAdded":   len(user),
+		"globalMemoriesAdded": len(global),
+	}).Info("adding memories to message")
+
+	req.SystemAppend += memPrompt.String()
 }
 
 func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
@@ -939,6 +1095,30 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 	}
 
 	return response, nil
+}
+
+// Embed resolves the given model selector to its adapter and generates a vector
+// embedding for each input. It mirrors the model->adapter resolution used by
+// Balance/Health but also needs the model id to pass to the provider.
+func (ac *AssistantCoordinator) Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error) {
+	logger := log.FromContext(ctx)
+
+	modelParams := ac.resolveModel(aiModel)
+	if modelParams == nil {
+		logger.WithField("model", aiModel).Error("requested embedding model is not configured")
+		return nil, ErrInvalidModel
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
+	}
+
+	return adapter.Embed(ctx, &model.EmbeddingRequest{
+		Model: modelParams.ID,
+		Input: input,
+	})
 }
 
 // ToolInSession is the non-streaming counterpart to ToolStreamInSession. It runs

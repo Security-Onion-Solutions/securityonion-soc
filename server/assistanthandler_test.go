@@ -3012,18 +3012,30 @@ func TestStreamResponse_NotFlushable(t *testing.T) {
 }
 
 func TestUnstreamResponse_EdgeCases(t *testing.T) {
-	t.Run("error event returns an error", func(t *testing.T) {
-		data := `data: {"type":"error","error":{"type":"overloaded","message":"too busy"}}
+	// Backstop rows ("message-less stream..."): a message-less stream (empty / no
+	// message_start) must never panic, even with a non-nil aux (the exact shape
+	// that previously crashed the handler).
+	messageLessAux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig")}}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		assert.Contains(t, err.Error(), "too busy")
-	})
+	testCases := []struct {
+		name             string
+		data             string
+		aux              *model.AuxMessageData
+		wantErrSubstring string // non-empty: expect an error containing this and a nil message
+		wantNilMsg       bool   // expect no error and a nil message
+		wantThoughts     string // non-empty: assert msg.Thoughts
+		wantSignature    []byte // non-nil: assert msg.ContentBlocks[0].ThoughtSignature
+	}{
+		{
+			name: "error event returns an error",
+			data: `data: {"type":"error","error":{"type":"overloaded","message":"too busy"}}
 
-	t.Run("thought delta accumulates into Thoughts and malformed lines are skipped", func(t *testing.T) {
-		data := `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
+data: [DONE]`,
+			wantErrSubstring: "too busy",
+		},
+		{
+			name: "thought delta accumulates into Thoughts and malformed lines are skipped",
+			data: `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
 
 data: {not valid json}
 
@@ -3031,50 +3043,76 @@ data: {"type":"content_block_delta","index":0,"delta":{"type":"thought_delta","t
 
 data: {"type":"content_block_stop","index":0}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, msg)
-		assert.Equal(t, "thinking...", msg.Thoughts)
-	})
-
-	t.Run("aux thought signatures are applied to tool_use blocks", func(t *testing.T) {
-		data := `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
+data: [DONE]`,
+			wantThoughts: "thinking...",
+		},
+		{
+			name: "aux thought signatures are applied to tool_use blocks",
+			data: `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
 
 data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"query_events","input":{}}}
 
 data: {"type":"content_block_stop","index":0}
 
-data: [DONE]`
-		aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig-123")}}
-		msg, err := UnstreamResponse(context.Background(), data, aux)
-		assert.NoError(t, err)
-		assert.NotNil(t, msg)
-		assert.Equal(t, []byte("sig-123"), msg.ContentBlocks[0].ThoughtSignature)
-	})
+data: [DONE]`,
+			aux:           &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig-123")}},
+			wantSignature: []byte("sig-123"),
+		},
+		// A first-chunk LLM failure now arrives as an SSE error event (see
+		// handleStreamError); it must surface as a real error, not a nil-deref panic.
+		{
+			name: "error event surfaces the real message",
+			data: `data: {"type":"error","error":{"type":"error","message":"quota exceeded"}}
 
-	// A first-chunk LLM failure now arrives as an SSE error event (see
-	// handleStreamError); it must surface as a real error, not a nil-deref panic.
-	t.Run("error event surfaces the real message", func(t *testing.T) {
-		data := `data: {"type":"error","error":{"type":"error","message":"quota exceeded"}}
+data: [DONE]`,
+			wantErrSubstring: "quota exceeded",
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: empty stream",
+			data:       "",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: done only",
+			data:       "data: [DONE]",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: orphan delta",
+			data:       "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\n\ndata: [DONE]",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+	}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		assert.Contains(t, err.Error(), "quota exceeded")
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := UnstreamResponse(context.Background(), tc.data, tc.aux)
 
-	// Backstop: a message-less stream (empty / no message_start) must never panic,
-	// even with a non-nil aux (the exact shape that previously crashed the handler).
-	t.Run("message-less stream with aux returns nil without panicking", func(t *testing.T) {
-		aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig")}}
-		for _, data := range []string{"", "data: [DONE]", "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\n\ndata: [DONE]"} {
-			msg, err := UnstreamResponse(context.Background(), data, aux)
+			if tc.wantErrSubstring != "" {
+				assert.Error(t, err)
+				assert.Nil(t, msg)
+				assert.Contains(t, err.Error(), tc.wantErrSubstring)
+				return
+			}
+
 			assert.NoError(t, err)
-			assert.Nil(t, msg)
-		}
-	})
+			if tc.wantNilMsg {
+				assert.Nil(t, msg)
+				return
+			}
+
+			assert.NotNil(t, msg)
+			if tc.wantThoughts != "" {
+				assert.Equal(t, tc.wantThoughts, msg.Thoughts)
+			}
+			if tc.wantSignature != nil {
+				assert.Equal(t, tc.wantSignature, msg.ContentBlocks[0].ThoughtSignature)
+			}
+		})
+	}
 }
 
 func assistantMsg(blocks ...model.ContentBlock) *model.StoredMessage {
@@ -3090,40 +3128,70 @@ func toolResultMsg(toolUseId string) *model.StoredMessage {
 
 func TestPendingToolApproval(t *testing.T) {
 	toolUse := model.ContentBlock{Type: "tool_use", Id: "tu-1", Name: "query_events", Input: json.RawMessage(`{"q":"dns"}`)}
+	delegate := model.ContentBlock{Type: "tool_use", Id: "del-1", Name: "delegate_to_Hunter", Input: json.RawMessage(`{}`)}
 
-	t.Run("trailing unresolved tool_use is pending", func(t *testing.T) {
-		history := []*model.StoredMessage{
-			{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "go"}}}},
-			assistantMsg(toolUse),
-		}
-		pending := pendingToolApproval("child-1", history, nil)
-		assert.NotNil(t, pending)
-		assert.Equal(t, "child-1", pending.SessionId)
-		assert.Equal(t, "tu-1", pending.ToolUseId)
-		assert.Equal(t, "query_events", pending.ToolName)
-		assert.JSONEq(t, `{"q":"dns"}`, string(pending.Input))
-	})
+	testCases := []struct {
+		name          string
+		sessionId     string
+		history       []*model.StoredMessage
+		delegated     map[string]struct{}
+		wantNil       bool
+		wantToolUseId string
+		wantToolName  string
+		wantInput     string
+	}{
+		{
+			name:      "trailing unresolved tool_use is pending",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "go"}}}},
+				assistantMsg(toolUse),
+			},
+			wantToolUseId: "tu-1",
+			wantToolName:  "query_events",
+			wantInput:     `{"q":"dns"}`,
+		},
+		{
+			name:      "tool_use with a following tool_result is resolved (nil)",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				assistantMsg(toolUse),
+				toolResultMsg("tu-1"),
+				assistantMsg(model.ContentBlock{Type: "text", Text: "done"}),
+			},
+			wantNil: true,
+		},
+		{
+			name:      "delegate tool_use that spawned a sub-session is running, not pending (nil)",
+			sessionId: "parent",
+			history:   []*model.StoredMessage{assistantMsg(delegate)},
+			delegated: map[string]struct{}{"del-1": {}},
+			wantNil:   true,
+		},
+		{
+			name:      "no tool_use yields nil",
+			sessionId: "s",
+			history:   []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})},
+			wantNil:   true,
+		},
+	}
 
-	t.Run("tool_use with a following tool_result is resolved (nil)", func(t *testing.T) {
-		history := []*model.StoredMessage{
-			assistantMsg(toolUse),
-			toolResultMsg("tu-1"),
-			assistantMsg(model.ContentBlock{Type: "text", Text: "done"}),
-		}
-		assert.Nil(t, pendingToolApproval("child-1", history, nil))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pending := pendingToolApproval(tc.sessionId, tc.history, tc.delegated)
 
-	t.Run("delegate tool_use that spawned a sub-session is running, not pending (nil)", func(t *testing.T) {
-		delegate := model.ContentBlock{Type: "tool_use", Id: "del-1", Name: "delegate_to_Hunter", Input: json.RawMessage(`{}`)}
-		history := []*model.StoredMessage{assistantMsg(delegate)}
-		delegated := map[string]struct{}{"del-1": {}}
-		assert.Nil(t, pendingToolApproval("parent", history, delegated))
-	})
+			if tc.wantNil {
+				assert.Nil(t, pending)
+				return
+			}
 
-	t.Run("no tool_use yields nil", func(t *testing.T) {
-		history := []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})}
-		assert.Nil(t, pendingToolApproval("s", history, nil))
-	})
+			assert.NotNil(t, pending)
+			assert.Equal(t, tc.sessionId, pending.SessionId)
+			assert.Equal(t, tc.wantToolUseId, pending.ToolUseId)
+			assert.Equal(t, tc.wantToolName, pending.ToolName)
+			assert.JSONEq(t, tc.wantInput, string(pending.Input))
+		})
+	}
 }
 
 func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
@@ -3257,142 +3325,165 @@ func paddedSSE(eventsAfterStart string) *http.Response {
 	}
 }
 
+// subSession is the delegated child session shape shared by the client-disconnect
+// tests below.
+func subSession() *model.AssistantSession {
+	return &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}
+}
+
 // A client that disconnects mid-turn must not cost us the turn: streamBody keeps
 // draining the upstream body so finalize receives the FULL response and the parse
 // correctly classifies it. This is the regression behind the "dead sub-session /
-// never-resolving delegation" bug. Two shapes are exercised:
+// never-resolving delegation" bug. Two shapes are exercised (one per test below):
 //   - the sub-agent's continuation requests another tool: the loop must recognize the
 //     tool_use (parse the full body) and break WITHOUT resolving the delegation, so a
 //     pending tool is left for the user to resume on reload.
 //   - the sub-agent's continuation is final text: the full text must reach
 //     ResolveDelegationStream so the delegation folds back into its parent.
-func TestPostTool_StreamingClientDisconnectStillPersistsTurn(t *testing.T) {
-	subSession := func() *model.AssistantSession {
-		return &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}
+//
+// Here: tool_use continuation — full turn finalized, no premature resolution.
+func TestPostTool_StreamingClientDisconnect_PersistsTurnWithoutDelegation(t *testing.T) {
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	srv.AssistantManager = mockManager
+
+	finalized := make(chan []byte, 1)
+	toolUseResp := paddedSSE(
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"query_events\"}}\n\n" +
+			"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+		&model.StreamedTurn{Response: toolUseResp, SessionId: "child", Model: "sonnet", Session: subSession(),
+			Finalize: func(raw []byte) error { finalized <- raw; return nil }}, nil)
+
+	// The continuation requests a tool, so the chain must NOT resolve the delegation.
+	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, _ := newToolStreamRequest(t, "parent", "query_events")
+	w := &disconnectingWriter{}
+	NewAssistantHandler(srv).PostTool(w, req)
+
+	select {
+	case raw := <-finalized:
+		msg, err := UnstreamResponse(context.Background(), string(raw), nil)
+		assert.NoError(t, err)
+		if assert.NotNil(t, msg, "finalize must receive the full turn even though the client was gone") {
+			assert.True(t, messageHasToolUse(msg), "the persisted turn must contain the sub-agent's tool_use")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("finalize was never called with the turn")
 	}
+}
 
-	t.Run("tool_use continuation: full turn finalized, no premature resolution", func(t *testing.T) {
-		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+// Client-disconnect, final-text continuation: full child text reaches delegation
+// resolution. See TestPostTool_StreamingClientDisconnect_PersistsTurnWithoutDelegation
+// for the full background.
+func TestPostTool_StreamingClientDisconnect_ResolvesDelegation(t *testing.T) {
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockManager := mock.NewMockAssistantManager(ctrl)
-		srv.AssistantManager = mockManager
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	srv.AssistantManager = mockManager
 
-		finalized := make(chan []byte, 1)
-		toolUseResp := paddedSSE(
-			"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"query_events\"}}\n\n" +
-				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+	textResp := paddedSSE(
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +
+			"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
 
-		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-			&model.StreamedTurn{Response: toolUseResp, SessionId: "child", Model: "sonnet", Session: subSession(),
-				Finalize: func(raw []byte) error { finalized <- raw; return nil }}, nil)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+		&model.StreamedTurn{Response: textResp, SessionId: "child", Model: "sonnet", Session: subSession(), Finalize: noopFinalize}, nil)
 
-		// The continuation requests a tool, so the chain must NOT resolve the delegation.
-		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	// The full child text must survive the disconnect and drive resolution. A
+	// truncated read would deliver empty/partial text and fail this matcher.
+	resolved := make(chan string, 1)
+	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
+		func(_ context.Context, _ *model.AssistantSession, childText string) (*model.StreamedTurn, error) {
+			resolved <- childText
+			// A top-level parent turn ends the chain.
+			return &model.StreamedTurn{Response: paddedSSE(""), SessionId: "parent", Model: "agent",
+				Session: &model.AssistantSession{SessionId: "parent"}, Finalize: noopFinalize}, nil
+		})
 
-		req, _ := newToolStreamRequest(t, "parent", "query_events")
-		w := &disconnectingWriter{}
-		NewAssistantHandler(srv).PostTool(w, req)
+	req, _ := newToolStreamRequest(t, "parent", "query_events")
+	w := &disconnectingWriter{}
+	NewAssistantHandler(srv).PostTool(w, req)
 
-		select {
-		case raw := <-finalized:
-			msg, err := UnstreamResponse(context.Background(), string(raw), nil)
-			assert.NoError(t, err)
-			if assert.NotNil(t, msg, "finalize must receive the full turn even though the client was gone") {
-				assert.True(t, messageHasToolUse(msg), "the persisted turn must contain the sub-agent's tool_use")
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("finalize was never called with the turn")
-		}
-	})
+	select {
+	case childText := <-resolved:
+		assert.Equal(t, "child answer", childText)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ResolveDelegationStream was never called")
+	}
+}
 
-	t.Run("final-text continuation: full child text reaches delegation resolution", func(t *testing.T) {
-		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+// decodeToolResultEvent asserts the SSE framing of a writeToolResultEvent body
+// ("data: " prefix, "\n\n" suffix) and decodes its JSON payload.
+func decodeToolResultEvent(t *testing.T, body string) (eventType string, toolResult *model.ToolResult) {
+	t.Helper()
 
-		mockManager := mock.NewMockAssistantManager(ctrl)
-		srv.AssistantManager = mockManager
+	assert.True(t, strings.HasPrefix(body, "data: "))
+	assert.True(t, strings.HasSuffix(body, "\n\n"))
 
-		textResp := paddedSSE(
-			"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +
-				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
-
-		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-			&model.StreamedTurn{Response: textResp, SessionId: "child", Model: "sonnet", Session: subSession(), Finalize: noopFinalize}, nil)
-
-		// The full child text must survive the disconnect and drive resolution. A
-		// truncated read would deliver empty/partial text and fail this matcher.
-		resolved := make(chan string, 1)
-		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
-			func(_ context.Context, _ *model.AssistantSession, childText string) (*model.StreamedTurn, error) {
-				resolved <- childText
-				// A top-level parent turn ends the chain.
-				return &model.StreamedTurn{Response: paddedSSE(""), SessionId: "parent", Model: "agent",
-					Session: &model.AssistantSession{SessionId: "parent"}, Finalize: noopFinalize}, nil
-			})
-
-		req, _ := newToolStreamRequest(t, "parent", "query_events")
-		w := &disconnectingWriter{}
-		NewAssistantHandler(srv).PostTool(w, req)
-
-		select {
-		case childText := <-resolved:
-			assert.Equal(t, "child answer", childText)
-		case <-time.After(2 * time.Second):
-			t.Fatal("ResolveDelegationStream was never called")
-		}
-	})
+	var payload struct {
+		Type       string            `json:"type"`
+		ToolResult *model.ToolResult `json:"toolResult"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(body, "data: "))), &payload))
+	return payload.Type, payload.ToolResult
 }
 
 func TestWriteToolResultEvent(t *testing.T) {
-	t.Run("success result", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		tr := &model.ToolResult{
-			Name:      "query_events",
-			ToolUseId: "tool-use-1",
-			Content:   []model.ToolResultContent{{Json: map[string]any{"result": "ok"}}},
-		}
-		assert.NoError(t, writeToolResultEvent(w, tr))
+	testCases := []struct {
+		name          string
+		toolResult    *model.ToolResult
+		wantToolUseId string // non-empty: assert the decoded ToolUseId
+		wantIsError   bool
+		wantText      string // non-empty: assert the decoded Content[0].Text
+	}{
+		{
+			name: "success result",
+			toolResult: &model.ToolResult{
+				Name:      "query_events",
+				ToolUseId: "tool-use-1",
+				Content:   []model.ToolResultContent{{Json: map[string]any{"result": "ok"}}},
+			},
+			wantToolUseId: "tool-use-1",
+			wantIsError:   false,
+		},
+		{
+			name: "error result",
+			toolResult: &model.ToolResult{
+				ToolUseId: "tool-use-2",
+				Status:    "error",
+				IsError:   true,
+				Content:   []model.ToolResultContent{{Text: "boom"}},
+			},
+			wantIsError: true,
+			wantText:    "boom",
+		},
+	}
 
-		out := w.Body.String()
-		assert.True(t, strings.HasPrefix(out, "data: "))
-		assert.True(t, strings.HasSuffix(out, "\n\n"))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			assert.NoError(t, writeToolResultEvent(w, tc.toolResult))
 
-		var payload struct {
-			Type       string            `json:"type"`
-			ToolResult *model.ToolResult `json:"toolResult"`
-		}
-		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(out, "data: "))), &payload))
-		assert.Equal(t, "tool_result", payload.Type)
-		if assert.NotNil(t, payload.ToolResult) {
-			assert.Equal(t, "tool-use-1", payload.ToolResult.ToolUseId)
-			assert.False(t, payload.ToolResult.IsError)
-		}
-	})
-
-	t.Run("error result", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		tr := &model.ToolResult{
-			ToolUseId: "tool-use-2",
-			Status:    "error",
-			IsError:   true,
-			Content:   []model.ToolResultContent{{Text: "boom"}},
-		}
-		assert.NoError(t, writeToolResultEvent(w, tr))
-
-		var payload struct {
-			Type       string            `json:"type"`
-			ToolResult *model.ToolResult `json:"toolResult"`
-		}
-		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(w.Body.String(), "data: "))), &payload))
-		assert.Equal(t, "tool_result", payload.Type)
-		if assert.NotNil(t, payload.ToolResult) {
-			assert.True(t, payload.ToolResult.IsError)
-			assert.Equal(t, "boom", payload.ToolResult.Content[0].Text)
-		}
-	})
+			eventType, toolResult := decodeToolResultEvent(t, w.Body.String())
+			assert.Equal(t, "tool_result", eventType)
+			if assert.NotNil(t, toolResult) {
+				if tc.wantToolUseId != "" {
+					assert.Equal(t, tc.wantToolUseId, toolResult.ToolUseId)
+				}
+				assert.Equal(t, tc.wantIsError, toolResult.IsError)
+				if tc.wantText != "" {
+					assert.Equal(t, tc.wantText, toolResult.Content[0].Text)
+				}
+			}
+		})
+	}
 }
 
 // HTTP/2 forbids hop-by-hop headers; forwarding them (or a per-turn Content-Length,

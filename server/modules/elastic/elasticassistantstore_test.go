@@ -8,6 +8,7 @@ package elastic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -836,10 +837,61 @@ func TestSaveChat(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(indexResponse)),
 	}, nil)
 
+	// Mock UpdateByQuery response for the session messageCount increment
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"took": 1, "updated": 1, "version_conflicts": 0, "failures": []}`)),
+	}, nil)
+
 	err := store.SaveChat(ctx, chat)
 	assert.NoError(t, err)
 	assert.NotNil(t, chat.CreateTime)
 	assert.Equal(t, "test-user", chat.UserId)
+
+	// The save must also bump the session's denormalized messageCount so the
+	// memory scanner can find the session in a single query.
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 2)
+	assert.Contains(t, reqs[1].URL.Path, "_update_by_query")
+	assert.Contains(t, reqs[1].URL.RawQuery, "conflicts=proceed")
+	body, err := io.ReadAll(reqs[1].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "messageCount")
+	assert.Contains(t, string(body), "chat_123456")
+}
+
+func TestSaveChat_IncrementFailureNonFatal(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	chat := &model.StoredMessage{
+		SessionId: "chat_123456",
+		Message: &model.Message{
+			ContentStr: "Hello, world!",
+		},
+	}
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 201,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"_id": "msg1", "result": "created"}`)),
+	}, nil)
+
+	transport.AddResponse(nil, errors.New("update by query failed"))
+
+	// The message is durably saved before the increment; a failed increment
+	// must not fail the save.
+	err := store.SaveChat(ctx, chat)
+	assert.NoError(t, err)
 }
 
 func TestCreateSession(t *testing.T) {
@@ -929,6 +981,337 @@ func TestDeleteSession(t *testing.T) {
 
 	err := store.DeleteSession(ctx, "session1")
 	assert.NoError(t, err)
+}
+
+func addJsonResponse(transport *modmock.MockTransport, statusCode int, body string) {
+	transport.AddResponse(&http.Response{
+		StatusCode: statusCode,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(body)),
+	}, nil)
+}
+
+func TestFindSessionsPendingMemoryScan(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	// Two pending sessions: one with counts recorded, one legacy session that
+	// predates messageCount/lastMemoryScannedIndex entirely.
+	sessionResponse := `{
+		"hits": {
+			"total": { "value": 2 },
+			"hits": [
+				{
+					"_id": "session1",
+					"_source": {
+						"so_kind": "session",
+						"so_session": {
+							"sessionId": "session1",
+							"userId": "user-a",
+							"lastMemoryScannedIndex": 1,
+							"messageCount": 2
+						}
+					}
+				},
+				{
+					"_id": "session2",
+					"_source": {
+						"so_kind": "session",
+						"so_session": {
+							"sessionId": "session2",
+							"userId": "user-b"
+						}
+					}
+				}
+			]
+		}
+	}`
+	addJsonResponse(transport, 200, sessionResponse)
+
+	chatResponse1 := `{
+		"hits": {
+			"total": { "value": 2 },
+			"hits": [
+				{
+					"_id": "msg1",
+					"_source": {
+						"so_kind": "chat",
+						"so_chat": {
+							"sessionId": "session1",
+							"message": { "role": "user", "contentStr": "Hello" }
+						}
+					}
+				},
+				{
+					"_id": "msg2",
+					"_source": {
+						"so_kind": "chat",
+						"so_chat": {
+							"sessionId": "session1",
+							"message": { "role": "assistant", "contentStr": "Hi there!" }
+						}
+					}
+				}
+			]
+		}
+	}`
+	addJsonResponse(transport, 200, chatResponse1)
+
+	chatResponse2 := `{
+		"hits": {
+			"total": { "value": 1 },
+			"hits": [
+				{
+					"_id": "msg3",
+					"_source": {
+						"so_kind": "chat",
+						"so_chat": {
+							"sessionId": "session2",
+							"message": { "role": "user", "contentStr": "Legacy message" }
+						}
+					}
+				}
+			]
+		}
+	}`
+	addJsonResponse(transport, 200, chatResponse2)
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, details, 2)
+
+	assert.Equal(t, "session1", details[0].Session.SessionId)
+	assert.Equal(t, 1, details[0].Session.LastMemoryScannedIndex)
+	assert.Equal(t, 2, details[0].Session.MessageCount)
+	assert.Len(t, details[0].History, 2)
+	assert.Equal(t, "Hello", details[0].History[0].Message.ContentStr)
+
+	assert.Equal(t, "session2", details[1].Session.SessionId)
+	assert.Equal(t, 0, details[1].Session.LastMemoryScannedIndex)
+	assert.Len(t, details[1].History, 1)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 3)
+
+	// The pending check is a single query on the session index: a script filter
+	// comparing messageCount to lastMemoryScannedIndex, restricted to
+	// non-deleted root sessions.
+	body, err := io.ReadAll(reqs[0].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, reqs[0].URL.Path, "session-index")
+	assert.Contains(t, string(body), "script")
+	assert.Contains(t, string(body), "so_session.messageCount")
+	assert.Contains(t, string(body), "so_session.lastMemoryScannedIndex")
+	assert.Contains(t, string(body), "so_session.deleteTime")
+	assert.Contains(t, string(body), "so_session.parentSessionId")
+
+	body, err = io.ReadAll(reqs[1].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, reqs[1].URL.Path, "chat-index")
+	assert.Contains(t, string(body), "session1")
+
+	body, err = io.ReadAll(reqs[2].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "session2")
+}
+
+func TestFindSessionsPendingMemoryScan_EmptyHistorySkipped(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	// A legacy session with no messageCount matches the pending query even when
+	// it has no messages at all; it must be skipped, not scanned.
+	sessionResponse := `{
+		"hits": {
+			"total": { "value": 1 },
+			"hits": [
+				{
+					"_id": "session1",
+					"_source": {
+						"so_kind": "session",
+						"so_session": {
+							"sessionId": "session1",
+							"userId": "user-a"
+						}
+					}
+				}
+			]
+		}
+	}`
+	addJsonResponse(transport, 200, sessionResponse)
+	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.NoError(t, err)
+	assert.Empty(t, details)
+}
+
+func TestFindSessionsPendingMemoryScan_HistoryErrorSkipsSession(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	sessionResponse := `{
+		"hits": {
+			"total": { "value": 2 },
+			"hits": [
+				{
+					"_id": "session1",
+					"_source": {
+						"so_kind": "session",
+						"so_session": { "sessionId": "session1", "userId": "user-a" }
+					}
+				},
+				{
+					"_id": "session2",
+					"_source": {
+						"so_kind": "session",
+						"so_session": { "sessionId": "session2", "userId": "user-b" }
+					}
+				}
+			]
+		}
+	}`
+	addJsonResponse(transport, 200, sessionResponse)
+
+	// session1's history fetch fails; the scan continues with session2.
+	addJsonResponse(transport, 500, `{"error": "internal server error"}`)
+	addJsonResponse(transport, 200, `{
+		"hits": {
+			"total": { "value": 1 },
+			"hits": [
+				{
+					"_id": "msg1",
+					"_source": {
+						"so_kind": "chat",
+						"so_chat": {
+							"sessionId": "session2",
+							"message": { "role": "user", "contentStr": "Hello" }
+						}
+					}
+				}
+			]
+		}
+	}`)
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, details, 1)
+	assert.Equal(t, "session2", details[0].Session.SessionId)
+}
+
+func TestFindSessionsPendingMemoryScan_NoResults(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.NoError(t, err)
+	assert.Empty(t, details)
+	assert.Len(t, transport.GetRequests(), 1)
+}
+
+func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 500, `{"error": "internal server error"}`)
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.Error(t, err)
+	assert.Nil(t, details)
+}
+
+func TestFindSessionsPendingMemoryScan_Unauthorized(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	assert.Error(t, err)
+	assert.Nil(t, details)
+	assert.Empty(t, transport.GetRequests())
+}
+
+func TestUpdateSessionMemoryScanIndex(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "version_conflicts": 0, "failures": []}`)
+
+	err := store.UpdateSessionMemoryScanIndex(ctx, "chat_123456", 7)
+	assert.NoError(t, err)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+	assert.Contains(t, reqs[0].URL.Path, "session-index")
+	assert.Contains(t, reqs[0].URL.Path, "_update_by_query")
+	assert.Contains(t, reqs[0].URL.RawQuery, "conflicts=proceed")
+	assert.Contains(t, reqs[0].URL.RawQuery, "refresh=true")
+
+	body, err := io.ReadAll(reqs[0].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "chat_123456")
+	assert.Contains(t, string(body), "lastMemoryScannedIndex")
+	// The scanner also heals a missing or undercounted messageCount.
+	assert.Contains(t, string(body), "messageCount")
+	assert.Contains(t, string(body), `"scanned":7`)
+}
+
+func TestUpdateSessionMemoryScanIndex_ElasticsearchError(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	transport.AddResponse(nil, errors.New("update by query failed"))
+
+	err := store.UpdateSessionMemoryScanIndex(ctx, "chat_123456", 7)
+	assert.Error(t, err)
+}
+
+func TestUpdateSessionMemoryScanIndex_Unauthorized(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	err := store.UpdateSessionMemoryScanIndex(ctx, "chat_123456", 7)
+	assert.Error(t, err)
+	assert.Empty(t, transport.GetRequests())
 }
 
 func TestGetUsage(t *testing.T) {

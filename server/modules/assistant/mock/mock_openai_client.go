@@ -205,6 +205,21 @@ func (mr *MockOpenAIClientMockRecorder) ChatCompletionsNewStreaming(ctx, params 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatCompletionsNewStreaming", reflect.TypeOf((*MockOpenAIClient)(nil).ChatCompletionsNewStreaming), ctx, params)
 }
 
+// EmbeddingsNew mocks base method.
+func (m *MockOpenAIClient) EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EmbeddingsNew", ctx, params)
+	ret0, _ := ret[0].(*openai.CreateEmbeddingResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EmbeddingsNew indicates an expected call of EmbeddingsNew.
+func (mr *MockOpenAIClientMockRecorder) EmbeddingsNew(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmbeddingsNew", reflect.TypeOf((*MockOpenAIClient)(nil).EmbeddingsNew), ctx, params)
+}
+
 // ModelsList mocks base method.
 func (m *MockOpenAIClient) ModelsList(ctx context.Context) (*pagination.Page[openai.Model], error) {
 	m.ctrl.T.Helper()

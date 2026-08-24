@@ -16,7 +16,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestSSEEventWriter(t *testing.T) {
+func TestSSEEventWriter_SingleEvents(t *testing.T) {
 	tests := []struct {
 		name     string
 		writeOp  func(*sseEventWriter) error
@@ -132,8 +132,10 @@ func TestSSEEventWriter(t *testing.T) {
 			assert.Equal(t, tt.expected, buf.String())
 		})
 	}
+}
 
-	// Sequence tests - these test multiple operations in sequence with flexible validation
+// Sequence tests - these test multiple operations in sequence with flexible validation
+func TestSSEEventWriter_Sequences(t *testing.T) {
 	sequenceTests := []struct {
 		name          string
 		writeOps      []func(*sseEventWriter) error
@@ -1528,110 +1530,127 @@ func TestFinalizeOpenAI(t *testing.T) {
 	}
 }
 
-func TestOpenAIHelperFunctions(t *testing.T) {
-	t.Run("writeOpenAIFunctionHeader", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		processor := newStreamProcessor(writer, "gpt-4", wg)
+// newTestStreamProcessor builds a stream processor writing SSE events into the
+// returned buffer, with the WaitGroup already incremented for the first send.
+func newTestStreamProcessor(t *testing.T) (*streamProcessor, *strings.Builder, *sync.WaitGroup) {
+	t.Helper()
 
-		processor.writeOpenAIFunctionHeader("call_xyz", "my_function")
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "gpt-4", wg)
 
-		output := buf.String()
-		assert.Contains(t, output, `"type":"content_block_start"`)
-		assert.Contains(t, output, `"type":"tool_use"`)
-		assert.Contains(t, output, `"id":"call_xyz"`)
-		assert.Contains(t, output, `"name":"my_function"`)
-		assert.True(t, processor.hasOpenBlock)
-		assert.True(t, processor.writingOpenAIToolUse)
-	})
+	return processor, &buf, wg
+}
 
-	t.Run("writeOpenAIFunctionHeader with empty ID", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		processor := newStreamProcessor(writer, "gpt-4", wg)
+func TestWriteOpenAIFunctionHeader(t *testing.T) {
+	tests := []struct {
+		name            string
+		id              string
+		functionName    string
+		wantContains    []string
+		assertOpenState bool
+	}{
+		{
+			name:         "writeOpenAIFunctionHeader",
+			id:           "call_xyz",
+			functionName: "my_function",
+			wantContains: []string{
+				`"type":"content_block_start"`,
+				`"type":"tool_use"`,
+				`"id":"call_xyz"`,
+				`"name":"my_function"`,
+			},
+			assertOpenState: true,
+		},
+		{
+			name:         "writeOpenAIFunctionHeader with empty ID",
+			id:           "",
+			functionName: "unnamed",
+			wantContains: []string{
+				`"id":"toolu_`, // Generated unique ID (uuid suffix)
+				`"name":"unnamed"`,
+			},
+		},
+	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processor, buf, _ := newTestStreamProcessor(t)
+
+			processor.writeOpenAIFunctionHeader(tt.id, tt.functionName)
+
+			output := buf.String()
+			for _, expected := range tt.wantContains {
+				assert.Contains(t, output, expected)
+			}
+			if tt.assertOpenState {
+				assert.True(t, processor.hasOpenBlock)
+				assert.True(t, processor.writingOpenAIToolUse)
+			}
+		})
+	}
+}
+
+func TestWriteOpenAIFunctionHeaderFallbackIdsUnique(t *testing.T) {
+	// Each generated fallback id must be globally unique, not reset per turn:
+	// the frontend keys lookups by tool_use id, so two delegations across turns
+	// must not collide (regression test for repeat-delegation rendering bug).
+	idFor := func() string {
+		processor, buf, _ := newTestStreamProcessor(t)
 		processor.writeOpenAIFunctionHeader("", "unnamed")
 
-		output := buf.String()
-		assert.Contains(t, output, `"id":"toolu_`) // Generated unique ID (uuid suffix)
-		assert.Contains(t, output, `"name":"unnamed"`)
-	})
-
-	t.Run("empty-ID fallback ids are unique across responses", func(t *testing.T) {
-		// Each generated fallback id must be globally unique, not reset per turn:
-		// the frontend keys lookups by tool_use id, so two delegations across turns
-		// must not collide (regression test for repeat-delegation rendering bug).
-		idFor := func() string {
-			var buf strings.Builder
-			writer := newSSEEventWriter(log.Log, &buf)
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			processor := newStreamProcessor(writer, "gpt-4", wg)
-			processor.writeOpenAIFunctionHeader("", "unnamed")
-
-			var ev struct {
-				ContentBlock struct {
-					Id string `json:"id"`
-				} `json:"content_block"`
-			}
-			for _, line := range strings.Split(buf.String(), "\n") {
-				data, ok := strings.CutPrefix(line, "data: ")
-				if !ok {
-					continue
-				}
-				if err := json.Unmarshal([]byte(data), &ev); err == nil && ev.ContentBlock.Id != "" {
-					return ev.ContentBlock.Id
-				}
-			}
-			return ""
+		var ev struct {
+			ContentBlock struct {
+				Id string `json:"id"`
+			} `json:"content_block"`
 		}
+		for _, line := range strings.Split(buf.String(), "\n") {
+			data, ok := strings.CutPrefix(line, "data: ")
+			if !ok {
+				continue
+			}
+			if err := json.Unmarshal([]byte(data), &ev); err == nil && ev.ContentBlock.Id != "" {
+				return ev.ContentBlock.Id
+			}
+		}
+		return ""
+	}
 
-		first := idFor()
-		second := idFor()
-		assert.True(t, strings.HasPrefix(first, "toolu_"))
-		assert.True(t, strings.HasPrefix(second, "toolu_"))
-		assert.NotEqual(t, first, second, "fallback tool_use ids must be unique across responses")
-	})
+	first := idFor()
+	second := idFor()
+	assert.True(t, strings.HasPrefix(first, "toolu_"))
+	assert.True(t, strings.HasPrefix(second, "toolu_"))
+	assert.NotEqual(t, first, second, "fallback tool_use ids must be unique across responses")
+}
 
-	t.Run("writeOpenAIFunctionInput", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		processor := newStreamProcessor(writer, "gpt-4", wg)
+func TestWriteOpenAIFunctionInput(t *testing.T) {
+	processor, buf, _ := newTestStreamProcessor(t)
 
-		processor.writeOpenAIFunctionHeader("call_1", "test")
-		buf.Reset() // Clear header output
+	processor.writeOpenAIFunctionHeader("call_1", "test")
+	buf.Reset() // Clear header output
 
-		processor.writeOpenAIFunctionInput(`{"key": "value"}`)
+	processor.writeOpenAIFunctionInput(`{"key": "value"}`)
 
-		output := buf.String()
-		assert.Contains(t, output, `"type":"input_json_delta"`)
-		assert.Contains(t, output, `"partial_json":"{\"key\": \"value\"}"`)
-	})
+	output := buf.String()
+	assert.Contains(t, output, `"type":"input_json_delta"`)
+	assert.Contains(t, output, `"partial_json":"{\"key\": \"value\"}"`)
+}
 
-	t.Run("writeOpenAIFunctionStop", func(t *testing.T) {
-		var buf strings.Builder
-		writer := newSSEEventWriter(log.Log, &buf)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		processor := newStreamProcessor(writer, "gpt-4", wg)
+func TestWriteOpenAIFunctionStop(t *testing.T) {
+	processor, buf, _ := newTestStreamProcessor(t)
 
-		processor.writeOpenAIFunctionHeader("call_1", "test")
-		initialIndex := processor.contentBlockIndex
+	processor.writeOpenAIFunctionHeader("call_1", "test")
+	initialIndex := processor.contentBlockIndex
 
-		processor.writeOpenAIFunctionStop()
+	processor.writeOpenAIFunctionStop()
 
-		output := buf.String()
-		assert.Contains(t, output, `"type":"content_block_stop"`)
-		assert.False(t, processor.hasOpenBlock)
-		assert.False(t, processor.writingOpenAIToolUse)
-		assert.Equal(t, initialIndex+1, processor.contentBlockIndex)
-	})
+	output := buf.String()
+	assert.Contains(t, output, `"type":"content_block_stop"`)
+	assert.False(t, processor.hasOpenBlock)
+	assert.False(t, processor.writingOpenAIToolUse)
+	assert.Equal(t, initialIndex+1, processor.contentBlockIndex)
 }
 
 func TestOpenAIStreamIntegration(t *testing.T) {

@@ -324,15 +324,9 @@ func parseIntSetting(value string) (int, error) {
 //go:embed SOAgenticPrompts.bin
 var allPrompts []byte
 
-// setupAgentic defines the fixed set of agents the coordinator exposes when
-// agentic mode is enabled. The agent set is hardcoded for now; only the
-// agentName->model mapping (ac.agentMapping) is admin-configurable. A future
-// release will make these agents editable. Each agent carries its system
-// prompt and tool/delegation scope, but no model/adapter/context details: the
-// executing model is resolved through ac.agentMapping at request time.
-func (ac *AssistantCoordinator) setupAgentic() {
-	prompts := ac.unzipAndUnmarshal(allPrompts)
-
+// setupAgentic defines the fixed set of chat-orchestration agents and the
+// skill library the coordinator exposes when agentic mode is enabled.
+func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 	ac.agents = map[string]model.Agent{
 		"Orchestrator": {
 			Name:           "Orchestrator",
@@ -440,10 +434,6 @@ func (ac *AssistantCoordinator) unzipAndUnmarshal(data []byte) map[string]string
 	return prompts
 }
 
-// loadAgentMapping reads the admin-supplied agentName->model-selector map
-// ("id@adapter" or bare id values) from module config (the "agentMapping"
-// key). Entries with non-string values are skipped with a warning. Returns an
-// empty (non-nil) map when the key is absent or malformed.
 func (ac *AssistantCoordinator) loadAgentMapping(config module.ModuleConfig) map[string]string {
 	logger := log.FromContext(ac.srv.Context)
 	mapping := map[string]string{}
@@ -470,10 +460,7 @@ func (ac *AssistantCoordinator) loadAgentMapping(config module.ModuleConfig) map
 }
 
 // validateAgentMappings drops any agent whose configured model mapping is
-// missing or does not resolve to an enabled model. Policy is log-and-continue,
-// mirroring validateModelSelectors: a misconfigured agent is removed from the
-// fixed set rather than failing module init. Must run after
-// validateModelSelectors so disabled models are already accounted for.
+// missing or does not resolve to an enabled model.
 func (ac *AssistantCoordinator) validateAgentMappings() {
 	logger := log.FromContext(ac.srv.Context)
 

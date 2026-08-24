@@ -48,6 +48,7 @@ type AssistantManager interface {
 	DeleteAgent(ctx context.Context, name string) error
 	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
 	DeleteSkill(ctx context.Context, name string) error
+	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
 }
 
 type AssistantAdapter interface {
@@ -56,6 +57,7 @@ type AssistantAdapter interface {
 	SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error)
 	GetBalance(ctx context.Context) (*model.BalanceResponse, error)
 	GetHealth(ctx context.Context) (*model.HealthResponse, error)
+	Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error)
 }
 
 //go:generate mockgen -destination mock/mock_assistantmanager.go -package mock . AssistantManager

@@ -52,6 +52,12 @@ assistant/delete_authored: assistant-user
 assistant/read_all:        assistant-admin assistant-monitor
 assistant/write_all:       assistant-admin
 assistant/delete_all:      assistant-admin
+memory/read_authored:      memory-user memory-monitor
+memory/read_global:        memory-curator memory-monitor
+memory/read_all:           memory-admin memory-monitor
+memory/write_self:         memory-user
+memory/write_global:       memory-curator
+memory/write_all:          memory-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
@@ -73,3 +79,5 @@ playbook-monitor:   playbook-admin
 detections-monitor: playbook-monitor
 assistant-user:     assistant-admin
 assistant-monitor:  assistant-admin
+memory-user:        memory-curator
+memory-curator:     memory-admin

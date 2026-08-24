@@ -36,3 +36,6 @@ playbook-monitor:  limited-analyst auditor limited-auditor
 assistant-admin:   superuser
 assistant-user:    analyst
 assistant-monitor: agent auditor
+memory-user:       analyst superuser
+memory-admin:      superuser
+memory-monitor:    auditor

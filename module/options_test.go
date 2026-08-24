@@ -67,6 +67,21 @@ func TestGetIntDefault(tester *testing.T) {
 	assert.Equal(tester, 1234, actual)
 }
 
+func TestGetFloatDefault(t *testing.T) {
+	options := make(map[string]interface{})
+	actual := GetFloatDefault(options, "MyKey", 0.8)
+	assert.Equal(t, 0.8, actual)
+	options["MyKey"] = float64(1.5)
+	actual = GetFloatDefault(options, "MyKey", 0.8)
+	assert.Equal(t, 1.5, actual)
+	options["MyKey"] = float64(0)
+	actual = GetFloatDefault(options, "MyKey", 0.8)
+	assert.Equal(t, float64(0), actual)
+	options["MyKey"] = "not a float"
+	actual = GetFloatDefault(options, "MyKey", 0.8)
+	assert.Equal(t, 0.8, actual)
+}
+
 func TestGetBool(tester *testing.T) {
 	options := make(map[string]interface{})
 	_, err := GetBool(options, "MyKey")

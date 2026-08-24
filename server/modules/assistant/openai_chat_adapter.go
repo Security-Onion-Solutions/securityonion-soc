@@ -62,6 +62,10 @@ func (a *OpenAIChatAdapter) Protocol() string {
 	return "openai_chat"
 }
 
+func (a *OpenAIChatAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	return nil, ErrEmbeddingsUnsupported
+}
+
 func (a *OpenAIChatAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 
