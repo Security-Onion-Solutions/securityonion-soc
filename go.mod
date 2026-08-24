@@ -26,8 +26,8 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/openai/openai-go/v3 v3.52.0
-	github.com/pierrec/lz4/v4 v4.1.29
 	github.com/pgvector/pgvector-go v0.4.0
+	github.com/pierrec/lz4/v4 v4.1.29
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.53.0
 	go.uber.org/mock v0.6.0
