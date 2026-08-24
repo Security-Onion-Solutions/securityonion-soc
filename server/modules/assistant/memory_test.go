@@ -71,27 +71,32 @@ func textResponse(texts ...string) *model.Message {
 type nearbyRowFixture struct {
 	id, userId, memoryText, modelId string
 	sessionId, targetUserId         *string
+	lastUsedAt                      *time.Time
 	embedding                       []float32
 	similarity                      float64
 	userDefined                     bool
+	usageCount                      int
 }
 
-// expectNearbyRow scripts one Scan call on mRows, filling the eleven out-params
+// expectNearbyRow scripts one Scan call on mRows, filling the thirteen out-params
 // FindNearbyMemories reads per row. Uses Once so successive rows are consumed
 // in order; pair each with an .On("Next").Return(true).Once().
 func expectNearbyRow(mRows *mockdb.MockRows, row nearbyRowFixture) {
 	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) {
 			*(args.Get(0).(*string)) = row.id
-			*(args.Get(3).(*string)) = row.userId
-			*(args.Get(4).(*string)) = row.memoryText
-			*(args.Get(5).(**string)) = row.sessionId
-			*(args.Get(6).(*pgvector.Vector)) = pgvector.NewVector(row.embedding)
-			*(args.Get(7).(*string)) = row.modelId
-			*(args.Get(8).(**string)) = row.targetUserId
-			*(args.Get(9).(*float64)) = row.similarity
-			*(args.Get(10).(*bool)) = row.userDefined
+			*(args.Get(3).(**time.Time)) = row.lastUsedAt
+			*(args.Get(4).(*string)) = row.userId
+			*(args.Get(5).(*string)) = row.memoryText
+			*(args.Get(6).(**string)) = row.sessionId
+			*(args.Get(7).(*pgvector.Vector)) = pgvector.NewVector(row.embedding)
+			*(args.Get(8).(*string)) = row.modelId
+			*(args.Get(9).(**string)) = row.targetUserId
+			*(args.Get(10).(*float64)) = row.similarity
+			*(args.Get(11).(*bool)) = row.userDefined
+			*(args.Get(12).(*int)) = row.usageCount
 		}).Return(nil).Once()
 }
 
@@ -190,10 +195,13 @@ func TestUpdateMemory(t *testing.T) {
 	mem.Id = "mem-1"
 
 	updated := time.Date(2026, 8, 6, 13, 0, 0, 0, time.UTC)
+	lastUsed := time.Date(2026, 8, 6, 12, 30, 0, 0, time.UTC)
 
 	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		*(args.Get(0).(**time.Time)) = &updated
+		*(args.Get(1).(**time.Time)) = &lastUsed
+		*(args.Get(2).(*int)) = 4
 	}).Return(nil)
 
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
@@ -204,6 +212,8 @@ func TestUpdateMemory(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, &updated, mem.UpdateTime)
+	assert.Equal(t, &lastUsed, mem.LastUsedAt)
+	assert.Equal(t, 4, mem.UsageCount)
 	mDB.AssertExpectations(t)
 	mRow.AssertExpectations(t)
 }
@@ -229,7 +239,7 @@ func TestUpdateMemoryScanError(t *testing.T) {
 	scanErr := errors.New("no rows in result set")
 
 	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything).Return(scanErr)
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(scanErr)
 
 	mDB.On("QueryRow", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mRow)
 
@@ -278,7 +288,7 @@ func TestCountMemoryUsage(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	ac := &AssistantCoordinator{srv: &server.Server{DB: mDB}}
 
-	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET usage_count = usage_count + 1"), []string{"mem-1", "mem-2"}).Return(nil)
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET usage_count = usage_count + 1, last_used_at = $2"), []string{"mem-1", "mem-2"}, mock.AnythingOfType("time.Time")).Return(nil)
 
 	err := ac.countMemoryUsage(context.Background(), []string{"mem-1", "mem-2"})
 
@@ -302,7 +312,7 @@ func TestCountMemoryUsageExecError(t *testing.T) {
 
 	execErr := errors.New("connection lost")
 
-	mDB.On("Exec", mock.Anything, mock.Anything, mock.Anything).Return(execErr)
+	mDB.On("Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(execErr)
 
 	err := ac.countMemoryUsage(context.Background(), []string{"mem-1"})
 
@@ -335,7 +345,7 @@ func TestApplyMemories(t *testing.T) {
 		Return(addRow)
 
 	updateRow := &mockdb.MockRow{}
-	updateRow.On("Scan", mock.Anything).Return(nil)
+	updateRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
 		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(updateRow)
@@ -381,7 +391,7 @@ func TestApplyMemoriesCollectsErrors(t *testing.T) {
 
 	updateErr := errors.New("update failed")
 	updateRow := &mockdb.MockRow{}
-	updateRow.On("Scan", mock.Anything).Return(updateErr)
+	updateRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(updateErr)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
 		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(updateRow)
@@ -800,7 +810,8 @@ func TestFindNearbyMemoriesScanError(t *testing.T) {
 	mRows := &mockdb.MockRows{}
 	mRows.On("Next").Return(true)
 	mRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything).
 		Return(scanErr)
 	mRows.On("Close").Return()
 
@@ -1684,7 +1695,7 @@ func TestScanForMemoriesUpdateReembeds(t *testing.T) {
 
 	updated := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
 	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		*(args.Get(0).(**time.Time)) = &updated
 	}).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
@@ -2035,7 +2046,7 @@ func userTextMessage(text string) *model.Message {
 // closed when it runs, since prepareChatRequest fires it in a goroutine.
 func expectUsageCount(mDB *mockdb.MockDB, ids []string) chan struct{} {
 	counted := make(chan struct{})
-	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), ids).Run(func(mock.Arguments) {
+	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), ids, mock.AnythingOfType("time.Time")).Run(func(mock.Arguments) {
 		close(counted)
 	}).Return(nil)
 
@@ -2094,7 +2105,7 @@ func TestPrepareChatRequestUsageCountErrorLogged(t *testing.T) {
 		Return(neighborRows(), nil)
 
 	counted := make(chan struct{})
-	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), []string{"mem-user"}).Run(func(mock.Arguments) {
+	mDB.On("Exec", mock.Anything, sqlContains("usage_count"), []string{"mem-user"}, mock.AnythingOfType("time.Time")).Run(func(mock.Arguments) {
 		close(counted)
 	}).Return(errors.New("connection lost"))
 

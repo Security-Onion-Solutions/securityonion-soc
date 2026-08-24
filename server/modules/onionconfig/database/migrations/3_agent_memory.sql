@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS memories (
     id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now(),
+    last_used_at       timestamptz,
     user_id            text        NOT NULL,  -- user ID
     memory_text        text        NOT NULL,
     session_id         text,                  -- originating session (NULL for seeded/system memories)

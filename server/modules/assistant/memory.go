@@ -679,7 +679,7 @@ func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embeddin
 
 	args := []any{pgvector.NewVector(embedding), modelID}
 
-	stmt := `SELECT id, created_at, updated_at, user_id, memory_text, session_id, embedding, model_id, target_user_id, 1 - (embedding <=> $1) AS similarity, user_defined
+	stmt := `SELECT id, created_at, updated_at, last_used_at, user_id, memory_text, session_id, embedding, model_id, target_user_id, 1 - (embedding <=> $1) AS similarity, user_defined, usage_count
 		FROM memories
 		WHERE model_id = $2`
 
@@ -730,7 +730,7 @@ func (ac *AssistantCoordinator) FindNearbyMemories(ctx context.Context, embeddin
 		var vec pgvector.Vector
 		var similarity float64
 
-		err = rows.Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.UserId, &mem.MemoryText, &sessionId, &vec, &mem.ModelID, &mem.TargetUserId, &similarity, &mem.UserDefined)
+		err = rows.Scan(&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.LastUsedAt, &mem.UserId, &mem.MemoryText, &sessionId, &vec, &mem.ModelID, &mem.TargetUserId, &similarity, &mem.UserDefined, &mem.UsageCount)
 		if err != nil {
 			return nil, err
 		}
@@ -790,9 +790,9 @@ func (ac *AssistantCoordinator) UpdateMemory(ctx context.Context, mem *model.Mem
 		UPDATE memories
 		SET memory_text = $2, session_id = $3, embedding = $4, model_id = $5, target_user_id = $6, updated_at = now()
 		WHERE id = $1
-		RETURNING updated_at`,
+		RETURNING updated_at, last_used_at, usage_count`,
 		mem.Id, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId).
-		Scan(&mem.UpdateTime)
+		Scan(&mem.UpdateTime, &mem.LastUsedAt, &mem.UsageCount)
 }
 
 func (ac *AssistantCoordinator) DeleteMemory(ctx context.Context, id string) error {
@@ -947,5 +947,5 @@ func (ac *AssistantCoordinator) countMemoryUsage(ctx context.Context, ids []stri
 		return nil
 	}
 
-	return ac.srv.DB.Exec(ctx, `UPDATE memories SET usage_count = usage_count + 1 WHERE id = ANY($1)`, ids)
+	return ac.srv.DB.Exec(ctx, `UPDATE memories SET usage_count = usage_count + 1, last_used_at = $2 WHERE id = ANY($1)`, ids, time.Now())
 }
