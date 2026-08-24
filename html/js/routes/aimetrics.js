@@ -283,6 +283,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, 24);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, RELATIVE_TIME_HOURS);
       this.saveSetting('autoRefreshInterval', this.autoRefreshInterval, 0);
+      this.saveSetting('collapsedSections', JSON.stringify(this.collapsedSections), '[]');
       localStorage['timezone'] = this.zone;
     },
     loadLocalSettings() {
@@ -300,6 +301,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (localStorage['settings.aimetrics.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
       if (localStorage['timezone']) this.zone = localStorage['timezone'];
       if (localStorage['settings.aimetrics.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
+      if (localStorage['settings.aimetrics.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.aimetrics.collapsedSections']);
     },
     buildUserLink(userId) {
       return { name: 'aimetrics', params: { userId: userId } };
@@ -545,6 +547,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else {
         this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
       }
+      this.saveLocalSettings();
     },
     isExpandedSection(item) {
       return (this.collapsedSections.indexOf(item) == -1);

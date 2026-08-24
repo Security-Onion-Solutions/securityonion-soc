@@ -44,20 +44,27 @@ routes.push({ path: '/colors', name: 'colors', component: {
       status: { colors: ['success', 'error', 'warning', 'info', 'gray'], variants: ['tonal', 'flat'] },
       // getToolStatusColor() — assistant tool chips are flat (tool-use-card.html).
       toolStatus: { colors: ['info', 'warning', 'success', 'error'], variants: ['flat'] },
-      // colorLicenseStatus() — flat in the footer (index.html), tonal on terms.html.
-      license: { colors: ['white', 'success', 'error', 'warning', 'info'], variants: ['flat', 'tonal'] },
+      // colorLicenseStatus() — flat in the footer (index.html).
+      licenseFooter: { colors: ['white', 'success', 'error', 'warning', 'info'], variants: ['flat'] },
+      // colorLicenseStatus() — tonal on terms.html, over the page background.
+      licenseTerms: { colors: ['white', 'success', 'error', 'warning', 'info'], variants: ['tonal'],
+                      lightRemap: { white: 'secondary' } },
       // colorizeChip() TLP/PAP passthrough; in the light theme it substitutes white->secondary,
       // red->error, and green->success, so those pairs never render in light mode.
       tlp: { colors: ['red', 'amber', 'green', 'white'], variants: ['tonal', 'outlined'],
              lightRemap: { white: 'secondary', red: 'error', green: 'success' } },
       // colorType()/colorFlag() for packets (job.html); 'accent' omitted (undefined in both themes).
-      packet: { colors: ['cyan', 'teal-lighten-2', 'secondary', 'primary', 'success', 'error', 'warning'], variants: ['tonal'] },
+      packet: { colors: ['cyan', 'teal', 'secondary', 'primary', 'success', 'error', 'warning'], variants: ['tonal'] },
       // Hunt sortBy chip (hunt.html).
       hunt: { colors: ['secondary'], variants: ['tonal'] },
     },
 
-    // Static v-btn color= attributes, plus the dynamic hunt button colors (hunt.html).
-    buttonColors: ['primary', 'error', 'warning', 'success', 'text_button', 'light-green', 'icon'],
+    // Static v-btn color= attributes on buttons that carry a text label.
+    buttonColors: ['primary', 'error', 'warning', 'success', 'text_button'],
+
+    // Colors production only ever applies to icon-only buttons.
+    iconButtonColors: ['primary', 'icon', 'light-green'],
+    
     alertTypes: ['info', 'warning', 'error'],
 
     // Surfaces (theme color names, rendered as "bg-<name>") and which foreground groups
@@ -72,26 +79,20 @@ routes.push({ path: '/colors', name: 'colors', component: {
     //
     // exceptions lists combinations this page generates that never occur in production, so
     // axe violations on them would be meaningless. Entries are "kind:value" where kind is
-    // text, icon, chip, button, alert, or progress. Chip values are "color/variant"
+    // text, icon, chip, button, iconbutton, alert, or progress. Chip values are "color/variant"
     // (matched after the light-theme remap); a segment of '*' or an omitted trailing
     // segment matches anything: 'chip:purple/outlined' excepts one chip, 'chip:purple'
     // all purple chips, 'chip:*/outlined' all outlined chips.
     surfaces: [
-      { name: 'background',        text: ['semantic'],            icons: ['actions'],    chips: ['license', 'tlp', 'hunt'], buttons: true, alerts: true, links: true, labelChip: true, primaryButtonIcon: true,
+      { name: 'background',        text: ['semantic'],            icons: ['actions'],    chips: ['licenseTerms', 'tlp', 'hunt'], buttons: true, alerts: true, links: true, labelChip: true, iconButtons: true,
         exceptions: [
-          // Flat chips here would be license chips, but flat license chips only render
-          // in the footer (index.html) — the nav_background section covers them.
-          'chip:*/flat',
           // Success-colored text only appears on drawer_background stat pills: the
           // assistant context stoplight (getContextColor) and the hunt detection engine
           // status (getDetectionEngineStatusClass).
           'text:success',
         ] },
-      { name: 'nav_background',    text: ['nav'],                                        chips: ['license'],                links: true, linkColor: 'nav_background_link', gridSelector: true,
+      { name: 'nav_background',    text: ['nav'],                                        chips: ['licenseFooter'],          links: true, linkColor: 'nav_background_link', gridSelector: true,
         exceptions: [
-          // The footer license chips are always flat (index.html); the tonal license
-          // chip lives on terms.html, covered by the background section.
-          'chip:*/tonal',
         ] },
       // drawer_background: every generated combo is real in the assistant/nav drawers.
       { name: 'drawer_background', text: ['semantic', 'context'], icons: ['toolStatus'], chips: ['toolStatus'],             links: true, progress: ['secondary-lighten-1'],
@@ -103,10 +104,6 @@ routes.push({ path: '/colors', name: 'colors', component: {
           // drawer's active v-list item is primary text on a v-list, which CSS paints
           // table_background (app.css .v-list-item--active, modern.css .v-list).
           'text:success', 'text:error', 'text:info', 'text:warning',
-          // colorType() returns Vuetify-2-style "teal lighten-2" (job.js), which Vuetify 3
-          // ignores — production DHCP packet chips actually render colorless. Fix job.js
-          // to 'teal-lighten-2' and remove this exception to restore coverage.
-          'chip:teal-lighten-2/tonal',
         ] },
     ],
   }},
@@ -184,6 +181,9 @@ routes.push({ path: '/colors', name: 'colors', component: {
     buttonsFor(surface) {
       return this.buttonColors.filter((color) => !this.excluded(surface, 'button', color));
     },
+    iconButtonsFor(surface) {
+      return this.iconButtonColors.filter((color) => !this.excluded(surface, 'iconbutton', color));
+    },
     alertsFor(surface) {
       return this.alertTypes.filter((type) => !this.excluded(surface, 'alert', type));
     },
@@ -195,9 +195,9 @@ routes.push({ path: '/colors', name: 'colors', component: {
     // lighten/darken keys Vuetify derives from the configured colors, plus theme keys
     // that are only ever used as foregrounds in the app, never as backgrounds.
     themeColorNames(themeName) {
-      const foregroundOnly = ['altprimary', 'altsuccess', 'altinfo', 'alterror',
-                              'text', 'icon', 'nav', 'nav_background_link', 'text_button',
-                              'button_icon_color'];
+      const foregroundOnly = ['altprimary', 'altsuccess', 'altinfo', 'alterror', 'altwarning',
+        'altsecondary', 'altcyan', 'altteal', 'text', 'icon', 'nav', 'nav_background_link',
+        'text_button', 'button_icon_color'];
       const theme = this.$root.theme || {};
       const themes = (theme.themes && theme.themes.value) || theme.themes || {};
       const colors = (themes[themeName] && themes[themeName].colors) || {};

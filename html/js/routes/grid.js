@@ -14,6 +14,7 @@ const NodeStatusRestart = "restart";
 const UNREALISTIC_AGE = 1700000000; // About 54 years
 const STALENESS_CHECK_INTERVAL_MS = 30000
 
+const ROLES_WITH_EVENTSTORE_HEALTH = ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'];
 routes.push({ path: '/grid', name: 'grid', component: {
   template: '#page-grid',
   data() { return {
@@ -58,6 +59,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
     gridMemberTestConfirmDialog: false,
     gridMemberRestartConfirmDialog: false,
     gridMemberUploadConfirmDialog: false,
+    eventsHealthDialog: false,
+    eventsHealthLoading: false,
+    eventsHealth: null,
+    eventsHealthAbort: null,
+    eventsHealthExpanded: {},
     uploadForm: { valid: true, attachment: null },
     maxUploadSizeBytes: 25 * 1024 * 1024,
     staleMetricsMs: 120000,
@@ -112,6 +118,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     this.$root.unsubscribe("node", this.updateNode);
     this.$root.unsubscribe("status", this.updateStatus);
     clearInterval(this.stalenessInterval);
+    this.abortEventsHealth();
     if (this.metricsRefreshInterval) {
       clearInterval(this.metricsRefreshInterval);
     }
@@ -134,6 +141,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'moreColumns': 'saveLocalSettings',
+    'eventsHealthDialog': 'onEventsHealthDialogChanged',
     'zone'(val) {
       this.saveTimezone();
       if (this.activeTab === 'metrics') {
@@ -479,7 +487,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return this.hasContainer(item, 'so-elasticsearch');
     },
     hasEventstoreHealth(item) {
-      return ['so-manager', 'so-managersearch', 'so-eval', 'so-standalone', 'so-heavynode', 'so-import'].indexOf(item.role) != -1;
+      return ROLES_WITH_EVENTSTORE_HEALTH.indexOf(item.role) != -1;
     },
     hasMetricstore(item) {
       return this.hasContainer(item, 'so-influxdb');

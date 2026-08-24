@@ -32,7 +32,7 @@
 										<v-row class="my-1">
 											<v-col id="license-status-label" cols="3" class="pa-1 text-right font-weight-bold">{{ i18n.licenseStatus }}:</v-col>
 											<v-col cols="9" class="px-1 py-0" aria-labelledby="license-status-label">
-												<v-chip density="compact" small :color="$root.colorLicenseStatus($root.getSelectedGridInfo().licenseStatus)">
+												<v-chip density="compact" small :color="$root.colorizeChip($root.colorLicenseStatus($root.getSelectedGridInfo().licenseStatus))">
 													{{ $root.localizeMessage($root.getSelectedGridInfo().licenseStatus) }}
 												</v-chip>
 											</v-col>

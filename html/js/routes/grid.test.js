@@ -6,6 +6,7 @@
 
 require('../test_common.js');
 require('./grid.js');
+require('./grid_eventshealth.js');
 require('./grid_metrics.js');
 
 const comp = getComponent("grid");
@@ -379,6 +380,7 @@ test('loadLocalSettings_defaults', () => {
   expect(comp.sortBy).toEqual([{ key: 'id', order: 'asc' }]);
   expect(comp.itemsPerPage).toBe(10);
 });
+
 
 test('showNodeMetrics', () => {
 	comp.$root.papi.get = jest.fn().mockResolvedValue({ data: {} });

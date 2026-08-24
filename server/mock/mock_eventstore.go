@@ -99,6 +99,21 @@ func (mr *MockEventstoreMockRecorder) GetActiveQueries(arg0, filter any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveQueries", reflect.TypeOf((*MockEventstore)(nil).GetActiveQueries), arg0, filter)
 }
 
+// GetEventsHealth mocks base method.
+func (m *MockEventstore) GetEventsHealth(ctx context.Context) (*model.EventsHealth, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEventsHealth", ctx)
+	ret0, _ := ret[0].(*model.EventsHealth)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEventsHealth indicates an expected call of GetEventsHealth.
+func (mr *MockEventstoreMockRecorder) GetEventsHealth(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventsHealth", reflect.TypeOf((*MockEventstore)(nil).GetEventsHealth), ctx)
+}
+
 // Index mocks base method.
 func (m *MockEventstore) Index(ctx context.Context, index string, document map[string]any, id string) (*model.EventIndexResults, error) {
 	m.ctrl.T.Helper()

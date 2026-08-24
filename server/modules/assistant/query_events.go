@@ -282,7 +282,7 @@ func filterEvents(events []*model.EventRecord, extraFields ...string) []map[stri
 		"network.community_id", "network.protocol", "network.transport",
 		"notice.message",
 		"observer.name",
-		"process.name", "process.executable", "process.entity_id",
+		"process.name", "process.executable", "process.entity_id", "process.parent.entity_id",
 		"rule.category", "rule.name", "rule.uuid",
 		"software.name", "software.type", "software.version.unparsed",
 		"source.ip", "source.port", "source.geo.country_name",

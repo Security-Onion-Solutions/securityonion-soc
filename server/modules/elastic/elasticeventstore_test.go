@@ -1761,3 +1761,107 @@ func TestWatchAsyncUpdate(t *testing.T) {
 		store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"})
 	})
 }
+
+func healthResponse(statusCode int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: statusCode,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func newHealthTestStore(t *testing.T) (*ElasticEventstore, *modmock.MockTransport) {
+	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+	client, transport := modmock.NewMockClient(t)
+	store.esClient = client
+	return store, transport
+}
+
+func TestClusterHealthReport(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(200, `{"status":"green"}`), nil)
+
+	json, err := store.clusterHealthReport(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, `{"status":"green"}`, json)
+
+	requests := transport.GetRequests()
+	assert.Len(t, requests, 1)
+	assert.Equal(t, "/_health_report", requests[0].URL.Path)
+	assert.Equal(t, "true", requests[0].URL.Query().Get("verbose"))
+}
+
+func TestClusterHealthReportError(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(500, `{"error":{"type":"master_not_discovered_exception","reason":"no master"}}`), nil)
+
+	_, err := store.clusterHealthReport(context.Background())
+
+	assert.Error(t, err)
+}
+
+func TestClusterSettings(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(200, `{"persistent":{},"transient":{}}`), nil)
+
+	json, err := store.clusterSettings(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, `{"persistent":{},"transient":{}}`, json)
+
+	requests := transport.GetRequests()
+	assert.Len(t, requests, 1)
+	assert.Equal(t, "/_cluster/settings", requests[0].URL.Path)
+	assert.Equal(t, "true", requests[0].URL.Query().Get("flat_settings"))
+}
+
+func TestListNodes(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(200, `[{"name":"node-1"}]`), nil)
+
+	json, err := store.listNodes(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, `[{"name":"node-1"}]`, json)
+
+	requests := transport.GetRequests()
+	assert.Len(t, requests, 1)
+	assert.Equal(t, "/_cat/nodes", requests[0].URL.Path)
+	assert.Equal(t, "json", requests[0].URL.Query().Get("format"))
+	assert.Equal(t,
+		"name,ip,node.role,master,version,heap.percent,ram.percent,cpu,load_1m,disk.total,disk.used_percent,uptime",
+		requests[0].URL.Query().Get("h"))
+}
+
+func TestListShards(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(200, `[{"index":"so-logs"}]`), nil)
+
+	json, err := store.listShards(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, `[{"index":"so-logs"}]`, json)
+
+	requests := transport.GetRequests()
+	assert.Len(t, requests, 1)
+	assert.Equal(t, "/_cat/shards", requests[0].URL.Path)
+	assert.Equal(t, "json", requests[0].URL.Query().Get("format"))
+	assert.Equal(t, "index,shard,prirep,state,unassigned.reason", requests[0].URL.Query().Get("h"))
+}
+
+func TestExplainAllocation(t *testing.T) {
+	store, transport := newHealthTestStore(t)
+	transport.AddResponse(healthResponse(200, `{"can_allocate":"no"}`), nil)
+
+	json, err := store.explainAllocation(context.Background(), "so-logs", 2, true)
+
+	assert.NoError(t, err)
+	assert.Equal(t, `{"can_allocate":"no"}`, json)
+
+	requests := transport.GetRequests()
+	assert.Len(t, requests, 1)
+	assert.Equal(t, "/_cluster/allocation/explain", requests[0].URL.Path)
+	body, _ := io.ReadAll(requests[0].Body)
+	assert.JSONEq(t, `{"index":"so-logs","shard":2,"primary":true}`, string(body))
+}
