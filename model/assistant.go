@@ -646,6 +646,8 @@ type ExtractedFact struct {
 
 type Memory struct {
 	Auditable
+	LastUsedAt   *time.Time
+	UsageCount   int
 	MemoryText   string
 	SessionId    string
 	Embedding    []float32

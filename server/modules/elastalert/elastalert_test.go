@@ -9,6 +9,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -1740,6 +1742,11 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 
 	assert.NoError(t, writer.Close())
 
+	// the zip's bytes vary by Go toolchain, so the fingerprint can't be hardcoded;
+	// hash before Sync drains the buffer through the mocked response body
+	zipHash := sha256.Sum256(buf.Bytes())
+	fingerprint := base64.StdEncoding.EncodeToString(zipHash[:])
+
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
@@ -1793,7 +1800,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// check for changes before sync
-	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "GwJvQmt07Ma9kvq2D8bpbQfXW+IRe0nN4fITj9Ghxis="}`), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "`+fingerprint+`"}`), nil)
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck
