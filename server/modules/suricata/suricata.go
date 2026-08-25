@@ -615,6 +615,10 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterruptSync()
+
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error during a Suricata sync")
+		}
 	}()
 
 	// Check for sync block at the very start
