@@ -273,6 +273,18 @@ func TestSubgridPermissionsWithRealRbacFiles(tester *testing.T) {
 			canWriteSubgrid: true,
 		},
 		{
+			name:            "subgrid-superuser has subgrid read and write",
+			role:            "subgrid-superuser",
+			canReadSubgrid:  true,
+			canWriteSubgrid: true,
+		},
+		{
+			name:            "subgrid-auditor has subgrid read only",
+			role:            "subgrid-auditor",
+			canReadSubgrid:  true,
+			canWriteSubgrid: false,
+		},
+		{
 			name:            "subgrid-admin has subgrid read and write",
 			role:            "subgrid-admin",
 			canReadSubgrid:  true,
