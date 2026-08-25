@@ -35,6 +35,8 @@ queries/read:              query-monitor
 queries/delete:            query-admin
 roles/read:                user-monitor
 roles/write:               user-admin
+subgrid/read:              subgrid-monitor
+subgrid/write:             subgrid-admin
 users/read:                user-monitor
 users/write:               user-admin
 users/delete:              user-admin
@@ -74,6 +76,7 @@ job-user:           job-admin
 node-monitor:       node-admin
 notification-monitor: notification-admin notification-auditor
 query-monitor:      query-admin
+subgrid-monitor:    subgrid-admin
 user-monitor:       user-admin
 playbook-monitor:   playbook-admin
 detections-monitor: playbook-monitor

@@ -252,3 +252,67 @@ func TestEnsureDefaultRoleForUser_SkipClient(tester *testing.T) {
 	_, roles := auth.GetRolesForAuthId(ctx, user.Id)
 	assert.NotContains(tester, roles, "defrole")
 }
+
+func TestSubgridPermissionsWithRealRbacFiles(tester *testing.T) {
+	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
+	roleFiles := []string{"../../../rbac/permissions", "../../../rbac/roles"}
+	userFiles := []string{}
+	err := auth.Init(userFiles, roleFiles, DEFAULT_SCAN_INTERVAL_MS, "user")
+	assert.NoError(tester, err)
+
+	testCases := []struct {
+		name             string
+		role             string
+		canReadSubgrid   bool
+		canWriteSubgrid  bool
+	}{
+		{
+			name:            "superuser has subgrid read and write",
+			role:            "superuser",
+			canReadSubgrid:  true,
+			canWriteSubgrid: true,
+		},
+		{
+			name:            "subgrid-admin has subgrid read and write",
+			role:            "subgrid-admin",
+			canReadSubgrid:  true,
+			canWriteSubgrid: true,
+		},
+		{
+			name:            "subgrid-monitor has subgrid read only",
+			role:            "subgrid-monitor",
+			canReadSubgrid:  true,
+			canWriteSubgrid: false,
+		},
+		{
+			name:            "analyst has no subgrid access",
+			role:            "analyst",
+			canReadSubgrid:  false,
+			canWriteSubgrid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tester.Run(tc.name, func(t *testing.T) {
+			user := model.NewUser()
+			user.Id = "user-" + tc.role
+			auth.AddRoleToUser(user, tc.role)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, user.Id)
+
+			readErr := auth.CheckContextOperationAuthorized(ctx, "read", "subgrid")
+			if tc.canReadSubgrid {
+				assert.NoError(t, readErr, "Expected read subgrid authorized for %s", tc.role)
+			} else {
+				assert.Error(t, readErr, "Expected read subgrid unauthorized for %s", tc.role)
+			}
+
+			writeErr := auth.CheckContextOperationAuthorized(ctx, "write", "subgrid")
+			if tc.canWriteSubgrid {
+				assert.NoError(t, writeErr, "Expected write subgrid authorized for %s", tc.role)
+			} else {
+				assert.Error(t, writeErr, "Expected write subgrid unauthorized for %s", tc.role)
+			}
+		})
+	}
+}

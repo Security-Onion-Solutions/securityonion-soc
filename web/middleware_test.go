@@ -400,3 +400,147 @@ func TestCopyProxiedHttpHeaders(t *testing.T) {
 		})
 	}
 }
+
+type recordingAuthorizer struct {
+	authorized      bool
+	lastOperation   string
+	lastTarget      string
+}
+
+func (r *recordingAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
+	r.lastOperation = operation
+	r.lastTarget = target
+	if r.authorized {
+		return nil
+	}
+	return model.NewUnauthorized("test-user", operation, target)
+}
+
+func (r *recordingAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	r.lastOperation = operation
+	r.lastTarget = target
+	if r.authorized {
+		return nil
+	}
+	return model.NewUnauthorized(userId, operation, target)
+}
+
+func TestMiddleware_SubgridProxyAuthorization(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		method            string
+		url               string
+		authorized        bool
+		expectedOp        string
+		expectedTarget    string
+		expectedStatus    int
+		expectedBody      string
+		expectNextCalled  bool
+	}{
+		{
+			name:             "GET with gridId denied",
+			method:           http.MethodGet,
+			url:              "/api/events?gridId=subgrid1",
+			authorized:       false,
+			expectedOp:       "read",
+			expectedTarget:   "subgrid",
+			expectedStatus:   http.StatusForbidden,
+			expectedBody:     "ERROR_PERMISSION_DENIED",
+			expectNextCalled: false,
+		},
+		{
+			name:             "HEAD with gridId denied",
+			method:           http.MethodHead,
+			url:              "/api/events?gridId=subgrid1",
+			authorized:       false,
+			expectedOp:       "read",
+			expectedTarget:   "subgrid",
+			expectedStatus:   http.StatusForbidden,
+			expectedBody:     "ERROR_PERMISSION_DENIED",
+			expectNextCalled: false,
+		},
+		{
+			name:             "POST with gridId denied",
+			method:           http.MethodPost,
+			url:              "/api/events?gridId=subgrid1",
+			authorized:       false,
+			expectedOp:       "write",
+			expectedTarget:   "subgrid",
+			expectedStatus:   http.StatusForbidden,
+			expectedBody:     "ERROR_PERMISSION_DENIED",
+			expectNextCalled: false,
+		},
+		{
+			name:             "DELETE with gridId denied",
+			method:           http.MethodDelete,
+			url:              "/api/events?gridId=subgrid1",
+			authorized:       false,
+			expectedOp:       "write",
+			expectedTarget:   "subgrid",
+			expectedStatus:   http.StatusForbidden,
+			expectedBody:     "ERROR_PERMISSION_DENIED",
+			expectNextCalled: false,
+		},
+		{
+			name:             "GET without gridId passes to next handler",
+			method:           http.MethodGet,
+			url:              "/api/events",
+			authorized:       false,
+			expectedOp:       "",
+			expectedTarget:   "",
+			expectedStatus:   http.StatusOK,
+			expectedBody:     "OK",
+			expectNextCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth := &recordingAuthorizer{authorized: tt.authorized}
+			host := NewHost("http://localhost", "html", 1000, "1.0.0", []byte("srv-key"))
+			host.Authorizer = auth
+			_ = host.AddPreprocessor(&mockAuthPreprocessor{priority: 100, userId: "test-user"})
+
+			nextCalled := false
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("OK"))
+			})
+
+			middleware := Middleware(host, false, nil)
+			handler := middleware(nextHandler)
+
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(tt.method, tt.url, nil)
+			if tt.method == http.MethodPost || tt.method == http.MethodDelete {
+				ctx := context.WithValue(r.Context(), ContextKeyRequestCSRFExempt, true)
+				r = r.WithContext(ctx)
+			}
+
+			handler.ServeHTTP(w, r)
+
+			assert.Equal(t, tt.expectedOp, auth.lastOperation)
+			assert.Equal(t, tt.expectedTarget, auth.lastTarget)
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Equal(t, tt.expectNextCalled, nextCalled)
+			assert.Contains(t, w.Body.String(), tt.expectedBody)
+		})
+	}
+}
+
+type mockAuthPreprocessor struct {
+	priority int
+	userId   string
+}
+
+func (m *mockAuthPreprocessor) PreprocessPriority() int {
+	return m.priority
+}
+
+func (m *mockAuthPreprocessor) Preprocess(ctx context.Context, request *http.Request) (context.Context, int, error) {
+	ctx = context.WithValue(ctx, ContextKeyRequestorId, m.userId)
+	return ctx, 0, nil
+}

@@ -69,6 +69,17 @@ func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Hand
 			// Proxy subgrid requests
 			gridId := strings.TrimSpace(r.URL.Query().Get("gridId"))
 			if len(gridId) > 0 {
+				if host != nil && host.Authorizer != nil {
+					op := "write"
+					if r.Method == http.MethodGet || r.Method == http.MethodHead {
+						op = "read"
+					}
+					if err := host.Authorizer.CheckContextOperationAuthorized(ctx, op, "subgrid"); err != nil {
+						Respond(w, r, http.StatusForbidden, err)
+						return
+					}
+				}
+
 				ctx = context.WithValue(ctx, ContextKeySubgridResponses, make(map[string][]byte))
 				r = r.WithContext(ctx)
 				proxySubgridRequest(subgrids, gridId, ctx, w, r)
