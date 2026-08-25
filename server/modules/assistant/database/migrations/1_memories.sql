@@ -1,4 +1,4 @@
-cdCREATE TABLE IF NOT EXISTS memories (
+CREATE TABLE IF NOT EXISTS memories (
     id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now(),
