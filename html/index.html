@@ -49,7 +49,7 @@
             <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline text-white" data-aid="license_expiring_notice"></span>
           </div>
           <v-spacer></v-spacer>
-          <v-select v-if="hasSubgrids()"
+          <v-select v-if="hasSubgrids() && (userHasRole('superuser') || userHasRole('subgrid-superuser') || userHasRole('subgrid-auditor'))"
             id="subgrid-selector" 
             :disabled="!subgridSelectorEnabled"
             v-model="selectedGridId" 
@@ -67,7 +67,6 @@
               <v-list-item v-bind="itemProps" :base-color="getSubgridColor(item?.id)" :append-icon="getSubgridIcon(item?.id)"></v-list-item>
             </template>
           </v-select>
-          <!-- Notification Envelope -->
           <v-menu v-if="isLicensed(FEAT_NTF) && notificationsStarted" v-model="notificationMenu" :close-on-content-click="false" location="bottom end" offset="5">
             <template #activator="{ props }">
               <v-btn icon v-bind="props" data-aid="nav_notification_bell" @click="loadNotifications">
