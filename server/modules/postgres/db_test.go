@@ -8,6 +8,7 @@ package postgres
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,7 +68,26 @@ func TestOpen_Unreachable(t *testing.T) {
 		Database: "nodb",
 		Username: "nobody",
 		Password: "nopass",
+		SSLMode:  "allow",
 	}
 	_, err := Open(context.Background(), cfg)
 	assert.Error(t, err)
+}
+
+func TestDB_EnsureMigrationsTable_Concurrent_AlreadyCreated(t *testing.T) {
+	db := &DB{
+		tableCreated: true,
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := db.ensureMigrationsTable(context.Background())
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+	assert.True(t, db.tableCreated)
 }
