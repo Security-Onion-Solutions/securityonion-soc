@@ -1110,6 +1110,11 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	assert.Contains(t, string(body), "so_session.lastMemoryScannedIndex")
 	assert.Contains(t, string(body), "so_session.deleteTime")
 	assert.Contains(t, string(body), "so_session.parentSessionId")
+	// memory-usage bookkeeping sessions are never scanned themselves
+	assert.Contains(t, string(body), "so_session.tags")
+	assert.Contains(t, string(body), `"memory"`)
+	assert.Contains(t, string(body), `"embed"`)
+	assert.Contains(t, string(body), `"reconcile"`)
 
 	body, err = io.ReadAll(reqs[1].Body)
 	assert.NoError(t, err)
@@ -1598,7 +1603,7 @@ func TestGetChatHistory(t *testing.T) {
 	assert.Equal(t, "Hello", messages[0].Message.ContentStr)
 	assert.Equal(t, "Hi there!", messages[1].Message.ContentStr)
 
-	// ensure GetSession call does not filter out deleted sessions
+	// ensure GetSession call does not filter out deleted or memory sessions
 	reqs := transport.GetRequests()
 	assert.Len(t, reqs, 3) // One for GetSessions, one for session meta data, one for chat messages
 	body, err := reqs[0].GetBody()
@@ -1606,6 +1611,7 @@ func TestGetChatHistory(t *testing.T) {
 	data, err := io.ReadAll(body)
 	assert.NoError(t, err)
 	assert.NotContains(t, string(data), "deleteTime")
+	assert.NotContains(t, string(data), "so_session.tags")
 }
 
 func TestGetSessions_WithFilters(t *testing.T) {
@@ -1996,10 +2002,104 @@ func TestGetSessions_IncludeDeleted(t *testing.T) {
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
 	assert.NoError(t, err)
 
-	// Verify must_not clause is NOT present (includeDeleted=true)
+	// includeDeleted=true drops the deleteTime exclusion; the default
+	// memory-session exclusion remains as the only must_not member
+	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
+	mustNot, hasMustNot := boolQuery["must_not"].([]any)
+	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 1) {
+		terms := mustNot[0].(map[string]any)["terms"].(map[string]any)
+		assert.ElementsMatch(t, []any{"memory", "embed", "reconcile"}, terms["so_session.tags"])
+	}
+}
+
+func TestGetSessions_ExcludesMemorySessionsByDefault(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	searchResponse := `{
+		"hits": {
+			"total": {
+				"value": 0
+			},
+			"hits": []
+		}
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(searchResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx)
+	assert.NoError(t, err)
+	assert.Empty(t, sessions)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+
+	var query map[string]any
+	err = json.NewDecoder(reqs[0].Body).Decode(&query)
+	assert.NoError(t, err)
+
+	// by default both the deleted and the memory-session exclusions apply
+	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
+	mustNot, hasMustNot := boolQuery["must_not"].([]any)
+	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 2) {
+		exists := mustNot[0].(map[string]any)["exists"].(map[string]any)
+		assert.Equal(t, "so_session.deleteTime", exists["field"])
+
+		terms := mustNot[1].(map[string]any)["terms"].(map[string]any)
+		assert.ElementsMatch(t, []any{"memory", "embed", "reconcile"}, terms["so_session.tags"])
+	}
+}
+
+func TestGetSessions_IncludeMemorySessions(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	searchResponse := `{
+		"hits": {
+			"total": {
+				"value": 0
+			},
+			"hits": []
+		}
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(searchResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
+	assert.NoError(t, err)
+	assert.Empty(t, sessions)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+
+	var query map[string]any
+	err = json.NewDecoder(reqs[0].Body).Decode(&query)
+	assert.NoError(t, err)
+
+	// with both include opts no exclusions remain
 	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
 	_, hasMustNot := boolQuery["must_not"]
-	assert.False(t, hasMustNot, "must_not clause should not be present when includeDeleted=true")
+	assert.False(t, hasMustNot, "must_not clause should not be present when both include opts are set")
 }
 
 func TestGetSessions_TimeRangeFilter(t *testing.T) {

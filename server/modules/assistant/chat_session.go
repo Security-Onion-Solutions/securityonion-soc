@@ -33,7 +33,7 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
 
-	response, err := ac.Send(ctx, incMsg.Model, messages, model.WithMemories())
+	response, err := ac.Send(ctx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"sessionId": incMsg.SessionId,
@@ -86,7 +86,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages, model.WithMemories())
+	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"sessionId": incMsg.SessionId,
