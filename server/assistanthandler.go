@@ -1650,7 +1650,7 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[memory/read_global]
 // @Security     bearer[memory/read_all]
 // @Param        scope   query  string  false  "self, global, or all (default)"
-// @Param        userId  query  string  false  "Another user's memories; requires memory/read_all"
+// @Param        userId  query  string  false  "Narrow to one user; another user requires memory/read_all"
 // @Param        q       query  string  false  "Order results by similarity to this text"
 // @Param        limit   query  int     false  "Page size"
 // @Param        offset  query  int     false  "Page offset"
@@ -1795,7 +1795,7 @@ func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) 
 func (h *AssistantHandler) respondMemoryError(w http.ResponseWriter, r *http.Request, err error, logMsg string) {
 	switch {
 	case strings.Contains(err.Error(), "ERROR_MEMORY_UNAUTHORIZED"):
-		web.Respond(w, r, http.StatusUnauthorized, err)
+		web.Respond(w, r, http.StatusForbidden, err)
 	case strings.Contains(err.Error(), "ERROR_MEMORY_NOT_FOUND"):
 		web.Respond(w, r, http.StatusNotFound, err)
 	case strings.Contains(err.Error(), "ERROR_MEMORY_TEXT_REQUIRED"):

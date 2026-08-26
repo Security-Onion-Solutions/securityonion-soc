@@ -3795,7 +3795,7 @@ func TestGetMemoriesMapsErrors(t *testing.T) {
 		err        error
 		wantStatus int
 	}{
-		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
 		{name: "server", err: errors.New("boom"), wantStatus: http.StatusInternalServerError},
 	}
 
@@ -3890,7 +3890,7 @@ func TestSaveMemoryMapsErrors(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "empty", err: errors.New("ERROR_MEMORY_TEXT_REQUIRED"), wantStatus: http.StatusBadRequest},
-		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
 		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
 	}
 
@@ -3926,7 +3926,7 @@ func TestDeleteMemoryMapsErrors(t *testing.T) {
 		wantStatus int
 	}{
 		{name: "deleted", err: nil, wantStatus: http.StatusOK},
-		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
 		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
 	}
 

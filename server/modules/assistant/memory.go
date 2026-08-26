@@ -222,18 +222,39 @@ func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 		return
 	}
 
+	// The pass outlives the request that triggered it, so it keeps that context's
+	// values but takes its cancellation from Stop instead.
+	passCtx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
+
 	ac.reembedding = true
+	ac.terminateReembed = cancel
 	ac.memoryWorkerMu.Unlock()
 
 	go func() {
 		defer func() {
+			cancel(nil)
+
 			ac.memoryWorkerMu.Lock()
 			ac.reembedding = false
+			ac.terminateReembed = nil
 			ac.memoryWorkerMu.Unlock()
 		}()
 
-		ac.reembedStaleMemories(context.WithoutCancel(ctx))
+		ac.reembedStaleMemories(passCtx)
 	}()
+}
+
+// Bounds one embedding call so a stalled gateway cannot park the pass forever.
+func (ac *AssistantCoordinator) embedWithTimeout(ctx context.Context, selector string, texts []string) (*model.EmbeddingResponse, error) {
+	timeout := ac.reembedCallTimeout
+	if timeout <= 0 {
+		timeout = MEMORY_REEMBED_CALL_TIMEOUT
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	return ac.Embed(callCtx, selector, texts)
 }
 
 func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
@@ -247,7 +268,7 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 
 	// model_id is whatever the provider reported, not the selector, so a probe
 	// embedding names the current model.
-	probe, err := ac.Embed(ctx, embedModel.Selector(), []string{"probe"})
+	probe, err := ac.embedWithTimeout(ctx, embedModel.Selector(), []string{"probe"})
 	if err != nil || len(probe.Embeddings) == 0 {
 		logger.WithError(err).Error("unable to determine the current embedding model; not re-embedding")
 		return
@@ -288,7 +309,7 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 			texts = append(texts, mem.MemoryText)
 		}
 
-		res, err := ac.Embed(ctx, embedModel.Selector(), texts)
+		res, err := ac.embedWithTimeout(ctx, embedModel.Selector(), texts)
 		if err != nil {
 			logger.WithError(err).WithField("reembedded", done).Error("unable to embed; stopping re-embed pass")
 			return
@@ -299,6 +320,18 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 				"embeddingsCount": len(res.Embeddings),
 				"batchSize":       len(batch),
 			}).Error("unexpected number of embeddings returned; stopping re-embed pass")
+
+			return
+		}
+
+		// Storing a model the batch query does not filter on would re-read the same
+		// rows forever. The next pass re-probes and picks up the new model.
+		if res.Model != current {
+			logger.WithFields(log.Fields{
+				"expectedModel": current,
+				"embedModel":    res.Model,
+				"reembedded":    done,
+			}).Error("embedding model changed mid-pass; stopping re-embed pass")
 
 			return
 		}
@@ -969,18 +1002,18 @@ func (ac *AssistantCoordinator) memoryReadScope(ctx context.Context, filter *mod
 
 		return `target_user_id IS NULL`, args, nil
 	default:
-		if canReadAll {
+		if canReadAll && filter.TargetUserId == "" {
 			return `TRUE`, args, nil
 		}
 
 		clauses := []string{}
 
-		if canReadSelf {
+		if canReadSelf || canReadAll {
 			args = append(args, targetUserId)
 			clauses = append(clauses, fmt.Sprintf(`target_user_id = $%d`, len(args)))
 		}
 
-		if canReadGlobal {
+		if canReadGlobal || canReadAll {
 			clauses = append(clauses, `target_user_id IS NULL`)
 		}
 

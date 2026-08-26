@@ -93,6 +93,9 @@ const (
 	// Pause between batches. Every user message also embeds, so the pass yields
 	// gateway headroom to live recall rather than running as fast as it can.
 	MEMORY_REEMBED_BATCH_DELAY = 2 * time.Second
+	// Ceiling on one embedding call; a stalled gateway would otherwise strand the
+	// pass and block every later one.
+	MEMORY_REEMBED_CALL_TIMEOUT = 2 * time.Minute
 )
 
 //go:embed SOSystemPrompt.bin
@@ -156,12 +159,15 @@ type AssistantCoordinator struct {
 	// memoryWorkerMu guards the scanner goroutine; terminateMemory is nil when stopped.
 	memoryWorkerMu  sync.Mutex
 	terminateMemory context.CancelCauseFunc
-	// True while a re-embed pass runs, so a second one cannot start.
-	reembedding bool
+	// True while a re-embed pass runs, so a second one cannot start;
+	// terminateReembed interrupts it at the next batch boundary.
+	reembedding      bool
+	terminateReembed context.CancelCauseFunc
 	// Published count of memories awaiting re-embedding.
 	staleMemories atomic.Int64
-	// Paces the re-embed pass; tests shorten it.
-	reembedBatchDelay time.Duration
+	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
+	reembedBatchDelay  time.Duration
+	reembedCallTimeout time.Duration
 	// Wakes the worker ahead of its next tick, after an interval change.
 	scanNow chan struct{}
 
@@ -328,6 +334,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	}
 
 	ac.reembedBatchDelay = MEMORY_REEMBED_BATCH_DELAY
+	ac.reembedCallTimeout = MEMORY_REEMBED_CALL_TIMEOUT
 
 	ac.setMemorySettings(memory)
 	ac.exposeMemorySettings()
@@ -720,6 +727,12 @@ func (ac *AssistantCoordinator) Stop() error {
 	ac.isRunning = false
 
 	ac.applyScannerState(false)
+
+	ac.memoryWorkerMu.Lock()
+	if ac.terminateReembed != nil {
+		ac.terminateReembed(errors.New("assistant stopped"))
+	}
+	ac.memoryWorkerMu.Unlock()
 
 	return nil
 }

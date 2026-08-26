@@ -1954,6 +1954,23 @@ func TestListMemoriesReadAllSeesEveryScope(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+// Naming a user without a scope narrows to that user plus global, rather than
+// falling through to every memory.
+func TestListMemoriesReadAllHonorsTargetUser(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_all": true})
+
+	expectMemoryCount(mDB, 0, "user-2")
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $1 OR target_user_id IS NULL"), "user-2", 25, 0).
+		Return(memoryListRows(), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{TargetUserId: "user-2"})
+
+	assert.NoError(t, err)
+	assert.Empty(t, results.Memories)
+	mDB.AssertExpectations(t)
+}
+
 func TestListMemoriesGlobalScopeRequiresReadGlobal(t *testing.T) {
 	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"read_authored": true})
 
@@ -2602,6 +2619,113 @@ func TestReembedRequiresAnEmbedRole(t *testing.T) {
 
 	ac.reembedStaleMemories(context.Background())
 
+	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// The pass must survive the request that triggered it, but still be reachable by
+// Stop; a cancelled request context alone must not end it.
+func TestStartReembedOutlivesItsRequestButStopEndsIt(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	ac.reembedBatchDelay = time.Hour
+
+	reqCtx, cancelRequest := context.WithCancel(context.Background())
+
+	batched := make(chan struct{})
+
+	expectStaleCount(mDB, "embed-model", 2)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding"), mock.Anything, mock.Anything, mock.Anything).
+		Run(func(mock.Arguments) { close(batched) }).Return(nil)
+
+	ac.startReembed(reqCtx)
+
+	select {
+	case <-batched:
+	case <-time.After(2 * time.Second):
+		t.Fatal("re-embed pass never reached its first batch")
+	}
+
+	// The request is done, but the pass is parked in its inter-batch pause.
+	cancelRequest()
+
+	assert.Eventually(t, func() bool {
+		ac.memoryWorkerMu.Lock()
+		defer ac.memoryWorkerMu.Unlock()
+
+		return ac.reembedding
+	}, time.Second, 10*time.Millisecond, "re-embed pass ended with its request context")
+
+	assert.NoError(t, ac.Stop())
+
+	assert.Eventually(t, func() bool {
+		ac.memoryWorkerMu.Lock()
+		defer ac.memoryWorkerMu.Unlock()
+
+		return !ac.reembedding && ac.terminateReembed == nil
+	}, 2*time.Second, 10*time.Millisecond, "Stop did not end the re-embed pass")
+}
+
+// Storing a model the batch query does not filter on would re-read the same rows
+// forever, so a mid-pass model change ends the pass instead.
+func TestReembedStopsWhenTheModelChangesMidPass(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+
+	calls := 0
+	drifting := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		calls++
+
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{0.1})
+		}
+
+		// The probe names one model; the batch comes back from another.
+		if calls == 1 {
+			return &model.EmbeddingResponse{Model: req.Model, Embeddings: embeddings}, nil
+		}
+
+		return &model.EmbeddingResponse{Model: "embed-model-v2", Embeddings: embeddings}, nil
+	}}
+
+	ac := newReembedTestCoordinator(mDB, drifting)
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+
+	ac.reembedStaleMemories(context.Background())
+
+	// Nothing was written, so the next pass finds the same rows under the new model.
+	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mDB.AssertNumberOfCalls(t, "Query", 1)
+}
+
+// A stalled embedding call is bounded, so it cannot strand the pass and block
+// every later one.
+func TestReembedTimesOutAStalledEmbedCall(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+
+	stalled := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+
+	ac := newReembedTestCoordinator(mDB, stalled)
+	ac.reembedCallTimeout = 50 * time.Millisecond
+
+	done := make(chan struct{})
+	go func() {
+		ac.reembedStaleMemories(context.Background())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stalled embedding call was never bounded")
+	}
+
+	// The probe never returned a model, so nothing was counted or read.
 	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
 }
 
