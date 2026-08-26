@@ -1649,11 +1649,11 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[memory/read_authored]
 // @Security     bearer[memory/read_global]
 // @Security     bearer[memory/read_all]
-// @Param        scope   query  string  false  "self, global, or all (default)"
-// @Param        userId  query  string  false  "Narrow to one user; another user requires memory/read_all"
-// @Param        q       query  string  false  "Order results by similarity to this text"
-// @Param        limit   query  int     false  "Page size"
-// @Param        offset  query  int     false  "Page offset"
+// @Param        scope   query  string  false  "self, global, or all (default)" example(global)
+// @Param        userId  query  string  false  "Narrow to one user; another user requires memory/read_all" example(8beae4b5-275b-4669-b678-8cff894911b5)
+// @Param        q       query  string  false  "Order results by similarity to this text" example(preferred timezone)
+// @Param        limit   query  int     false  "Page size" example(25)
+// @Param        offset  query  int     false  "Page offset" example(0)
 // @Produce      json
 // @Success      200 {object} model.MemoryResults "A page of memories"
 // @Failure      401           "Request was not properly authenticated"
@@ -1709,7 +1709,7 @@ func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) 
 // @Security     bearer[memory/write_self]
 // @Security     bearer[memory/write_global]
 // @Security     bearer[memory/write_all]
-// @Param        id       path  string               true  "Memory ID"
+// @Param        id       path  string               true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Param        request  body  model.MemoryRequest  true  "Replacement memory"
 // @Produce      json
 // @Success      200 {object} model.MemoryRecord "The updated memory"
@@ -1769,7 +1769,7 @@ func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id
 // @Security     bearer[memory/write_self]
 // @Security     bearer[memory/write_global]
 // @Security     bearer[memory/write_all]
-// @Param        id  path  string  true  "Memory ID"
+// @Param        id  path  string  true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200           "Memory deleted"
 // @Failure      401           "Request was not properly authenticated"

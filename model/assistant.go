@@ -672,34 +672,34 @@ type MemoryFilter struct {
 
 // Client-facing view of a memory; the embedding is omitted.
 type MemoryRecord struct {
-	Id           string     `json:"id"`
+	Id           string     `json:"id" example:"c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a"`
 	CreateTime   *time.Time `json:"createTime"`
 	UpdateTime   *time.Time `json:"updateTime,omitempty"`
-	MemoryText   string     `json:"memoryText"`
-	Scope        string     `json:"scope" example:"user"`
-	TargetUserId string     `json:"targetUserId,omitempty"`
-	SessionId    string     `json:"sessionId,omitempty"`
-	UserDefined  bool       `json:"userDefined"`
-	UsageCount   int        `json:"usageCount"`
+	MemoryText   string     `json:"memoryText" example:"The user prefers timestamps in UTC."`
+	Scope        string     `json:"scope" example:"user" enum:"user,global"`
+	TargetUserId string     `json:"targetUserId,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	SessionId    string     `json:"sessionId,omitempty" example:"chat_1757086398900_ykhmndscn"`
+	UserDefined  bool       `json:"userDefined" example:"true"`
+	UsageCount   int        `json:"usageCount" example:"4"`
 	LastUsedAt   *time.Time `json:"lastUsedAt,omitempty"`
-	ModelId      string     `json:"modelId,omitempty"`
-	Similarity   *float64   `json:"similarity,omitempty"`
+	ModelId      string     `json:"modelId,omitempty" example:"claude-sonnet-4.5"`
+	Similarity   *float64   `json:"similarity,omitempty" example:"0.82"`
 }
 
 // MemoryRequest is the body of a memory create or update.
 type MemoryRequest struct {
-	MemoryText string `json:"memoryText"`
-	Scope      string `json:"scope" example:"user"`
+	MemoryText string `json:"memoryText" example:"The user prefers timestamps in UTC."`
+	Scope      string `json:"scope" example:"user" enum:"user,global"`
 	// TargetUserId assigns a user-scoped memory to someone else; requires
 	// memory/write_all. Empty means the requestor.
-	TargetUserId string `json:"targetUserId,omitempty"`
+	TargetUserId string `json:"targetUserId,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
 }
 
 type MemoryResults struct {
 	Memories []*MemoryRecord `json:"memories"`
-	Total    int             `json:"total"`
-	Offset   int             `json:"offset"`
-	Limit    int             `json:"limit"`
+	Total    int             `json:"total" example:"42"`
+	Offset   int             `json:"offset" example:"0"`
+	Limit    int             `json:"limit" example:"25"`
 }
 
 func NewMemoryRecord(mem *Memory) *MemoryRecord {
