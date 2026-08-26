@@ -452,6 +452,54 @@ timestamp_field: '@timestamp'
 	assert.YAMLEq(t, expected, wrappedRule)
 }
 
+func TestSigmaToElastAlertMissingDetection(t *testing.T) {
+	engine := ElastAlertEngine{}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `title: Test Detection`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
+	assert.ErrorContains(t, err, "does not contain a detection section")
+}
+
+func TestSigmaToElastAlertMissingCondition(t *testing.T) {
+	engine := ElastAlertEngine{}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"selection": {"a": "b"}}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
+	assert.ErrorContains(t, err, "does not contain a condition")
+}
+
 func TestElastAlertInitUseEsql(t *testing.T) {
 	srv := &server.Server{Config: &config.ServerConfig{}}
 	mod := NewElastAlertEngine(srv)
@@ -1725,6 +1773,31 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 	err := eng.Sync(logger, false)
 	assert.Equal(t, detections.ErrSyncFailed, err)
 	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncRecoversFromPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").DoAndReturn(func(ctx context.Context, publicId string) (*model.Detection, error) {
+		panic("test panic")
+	})
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: util.Ptr("123"),
+	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = eng.Sync(logger, false)
+	})
+	assert.NoError(t, err)
 }
 
 func TestSyncIncrementalNoChanges(t *testing.T) {
