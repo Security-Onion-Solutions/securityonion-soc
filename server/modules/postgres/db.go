@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apex/log"
@@ -23,7 +24,9 @@ import (
 
 // DB wraps a pgxpool.Pool and provides migration support.
 type DB struct {
-	pool *pgxpool.Pool
+	pool         *pgxpool.Pool
+	mu           sync.Mutex
+	tableCreated bool
 }
 
 var _ db.DB = (*DB)(nil)
@@ -184,6 +187,13 @@ func (db *DB) Migrate(ctx context.Context, fs embed.FS, module string) error {
 }
 
 func (db *DB) ensureMigrationsTable(ctx context.Context) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.tableCreated {
+		return nil
+	}
+
 	_, err := db.pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS migrations (
 			module     VARCHAR(128)  NOT NULL,
@@ -191,6 +201,10 @@ func (db *DB) ensureMigrationsTable(ctx context.Context) error {
 			applied_at TIMESTAMPTZ   NOT NULL DEFAULT now(),
 			PRIMARY KEY (module, version)
 		)`)
+	if err == nil {
+		log.Info("Postgres migrations table created successfully")
+		db.tableCreated = true
+	}
 	return err
 }
 
