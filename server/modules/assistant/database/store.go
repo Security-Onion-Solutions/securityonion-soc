@@ -250,9 +250,8 @@ func scanMemoryRow(rows db.Rows, similarity *float64) (*model.Memory, error) {
 	return mem, nil
 }
 
-// MemoryQuery is a listing request. Where and Args come from the caller, which
-// is responsible for limiting them to what the requestor may read. A non-nil
-// Embedding orders by similarity to it and restricts results to EmbedModelId.
+// Where and Args must already be limited to what the requestor may read. A
+// non-nil Embedding orders by similarity and filters on EmbedModelId.
 type MemoryQuery struct {
 	Where        string
 	Args         []any
@@ -335,8 +334,6 @@ func (s *Store) ListMemories(ctx context.Context, query MemoryQuery) (*model.Mem
 	return results, nil
 }
 
-// GetMemory reads a single memory without any permission check; callers apply
-// the check themselves against the scope it comes back with.
 func (s *Store) GetMemory(ctx context.Context, id string) (*model.Memory, error) {
 	rows, err := s.db.Query(ctx, `SELECT `+memoryColumns+` FROM memories WHERE id = $1`, id)
 	if err != nil {
@@ -356,9 +353,6 @@ func (s *Store) GetMemory(ctx context.Context, id string) (*model.Memory, error)
 	return scanMemoryRow(rows, nil)
 }
 
-// CountStaleMemories reports how many memories were embedded by a model other
-// than modelId. Those rows match no similarity query, since every one of them
-// filters on model_id.
 func (s *Store) CountStaleMemories(ctx context.Context, modelId string) (int, error) {
 	stale := 0
 	err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM memories WHERE model_id <> $1`, modelId).Scan(&stale)
@@ -366,7 +360,7 @@ func (s *Store) CountStaleMemories(ctx context.Context, modelId string) (int, er
 	return stale, err
 }
 
-// StaleMemoryBatch returns the next batch of memories to re-embed.
+// Returns the next batch of memories to re-embed.
 func (s *Store) StaleMemoryBatch(ctx context.Context, modelId string, limit int) ([]*model.Memory, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT id, memory_text FROM memories WHERE model_id <> $1 ORDER BY created_at LIMIT $2`, modelId, limit)
@@ -390,8 +384,7 @@ func (s *Store) StaleMemoryBatch(ctx context.Context, modelId string, limit int)
 	return batch, rows.Err()
 }
 
-// SetMemoryEmbedding re-vectorizes one memory, leaving its text, counts and
-// user_defined flag alone.
+// Re-vectorizes one memory, leaving its text, counts and user_defined flag alone.
 func (s *Store) SetMemoryEmbedding(ctx context.Context, id string, embedding []float32, modelId string) error {
 	return s.db.Exec(ctx, `UPDATE memories SET embedding = $2, model_id = $3 WHERE id = $1`,
 		id, pgvector.NewVector(embedding), modelId)
