@@ -81,7 +81,7 @@ func TestProcessJob(t *testing.T) {
 	jm := &JobManager{}
 
 	jm.AddJobProcessor(&idJobProcessor{})
-	jm.AddJobProcessor(&panicProcessor{errorString: "panic"})
+	jm.AddJobProcessor(&idJobProcessor{})
 
 	// prep model
 	job := &model.Job{
@@ -95,17 +95,18 @@ func TestProcessJob(t *testing.T) {
 	data, rerr := io.ReadAll(stream)
 	assert.NoError(t, rerr)
 
-	assert.Equal(t, "101", string(data))
+	assert.Equal(t, "101101", string(data))
 	assert.Nil(t, err)
 }
 
-func TestProcessJobContinuesIfNoDataAvailable(t *testing.T) {
+func TestProcessJobReturnsErrorImmediately(t *testing.T) {
 	// prep test object
 	jm := &JobManager{}
 
-	proc := panicProcessor{errorString: "No data available"}
-	jm.AddJobProcessor(&proc)
-	jm.AddJobProcessor(&proc)
+	firstProc := panicProcessor{errorString: "No data available"}
+	secondProc := panicProcessor{}
+	jm.AddJobProcessor(&firstProc)
+	jm.AddJobProcessor(&secondProc)
 
 	// prep model
 	job := &model.Job{
@@ -113,9 +114,34 @@ func TestProcessJobContinuesIfNoDataAvailable(t *testing.T) {
 	}
 
 	// test
-	_, err := jm.ProcessJob(job)
+	stream, err := jm.ProcessJob(job)
 
-	assert.Equal(t, 2, proc.processCount)
+	// verify the first processor's error is returned and no
+	// subsequent processors are invoked
+	assert.Equal(t, 1, firstProc.processCount)
+	assert.Equal(t, 0, secondProc.processCount)
+	assert.Nil(t, stream)
+	assert.ErrorContains(t, err, "No data available")
+}
+
+func TestProcessJobReturnsErrorEvenIfDataAvailable(t *testing.T) {
+	// prep test object
+	jm := &JobManager{}
+
+	jm.AddJobProcessor(&idJobProcessor{})
+	jm.AddJobProcessor(&panicProcessor{errorString: "No data available"})
+
+	// prep model
+	job := &model.Job{
+		Id: 101,
+	}
+
+	// test
+	stream, err := jm.ProcessJob(job)
+
+	// verify the processor error is not swallowed by an
+	// earlier processor that provided data
+	assert.Nil(t, stream)
 	assert.ErrorContains(t, err, "No data available")
 }
 
@@ -135,7 +161,7 @@ func TestProcessJobErrorsIfNoOutput(t *testing.T) {
 	_, err := jm.ProcessJob(job)
 
 	assert.Equal(t, 1, proc.processCount)
-	assert.ErrorContains(t, err, "no job processor provider a result")
+	assert.ErrorContains(t, err, "no job processor provided a result")
 }
 
 func TestUpdateDataEpoch(t *testing.T) {
