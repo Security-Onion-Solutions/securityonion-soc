@@ -1351,6 +1351,7 @@ dfn {
 
 .agentstudio-toolbar {
   width: fit-content;
+  max-width: 100%;
 }
 
 #agentstudio-agents .expanded-row-wrapper .v-window-item,

@@ -66,6 +66,10 @@ func (a *OpenAIResponsesAdapter) Embed(ctx context.Context, req *model.Embedding
 	return nil, ErrEmbeddingsUnsupported
 }
 
+func (a *OpenAIResponsesAdapter) SupportsEmbeddings() bool {
+	return false
+}
+
 func (a *OpenAIResponsesAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 

@@ -92,9 +92,9 @@ func TestAssistantCoordinator_InitAgenticDisabled(t *testing.T) {
 
 		// Memory defaults off, but the scan interval is set regardless so a
 		// later enable can never tick at zero.
-		assert.False(t, ac.useMemory)
+		assert.False(t, ac.memorySnapshot().useMemory)
 		assert.Empty(t, ac.memoryAgents)
-		assert.Equal(t, 300*time.Second, ac.memoryScanInterval)
+		assert.Equal(t, 300*time.Second, ac.memorySnapshot().scanInterval)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestAssistantCoordinator_InitNonAgenticMemoryEnabled(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.False(t, ac.isAgentic)
-	assert.True(t, ac.useMemory)
+	assert.True(t, ac.memorySnapshot().useMemory)
 
 	// All three memory roles are defined and resolvable.
 	assert.Len(t, ac.memoryAgents, 3)
@@ -172,7 +172,7 @@ func TestAssistantCoordinator_InitNonAgenticMemoryUnmapped(t *testing.T) {
 			err := ac.Init(tc.cfg)
 			assert.NoError(t, err)
 
-			assert.True(t, ac.useMemory)
+			assert.True(t, ac.memorySnapshot().useMemory)
 			assert.Empty(t, ac.memoryAgents)
 
 			_, _, err = ac.resolveMemoryAgent("Memory")
@@ -204,7 +204,7 @@ func TestAssistantCoordinator_InitAgenticWithMemory(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, ac.isAgentic)
-	assert.True(t, ac.useMemory)
+	assert.True(t, ac.memorySnapshot().useMemory)
 
 	assert.Len(t, ac.agents, 3)
 	assert.Len(t, ac.memoryAgents, 3)

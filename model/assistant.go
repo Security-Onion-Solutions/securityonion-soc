@@ -656,6 +656,74 @@ type Memory struct {
 	UserDefined  bool
 }
 
+const (
+	MemoryScopeSelf   = "self"
+	MemoryScopeGlobal = "global"
+	MemoryScopeAll    = "all"
+)
+
+type MemoryFilter struct {
+	Scope        string
+	TargetUserId string
+	Query        string
+	Limit        int
+	Offset       int
+}
+
+// Client-facing view of a memory; the embedding is omitted.
+type MemoryRecord struct {
+	Id           string     `json:"id"`
+	CreateTime   *time.Time `json:"createTime"`
+	UpdateTime   *time.Time `json:"updateTime,omitempty"`
+	MemoryText   string     `json:"memoryText"`
+	Scope        string     `json:"scope" example:"user"`
+	TargetUserId string     `json:"targetUserId,omitempty"`
+	SessionId    string     `json:"sessionId,omitempty"`
+	UserDefined  bool       `json:"userDefined"`
+	UsageCount   int        `json:"usageCount"`
+	LastUsedAt   *time.Time `json:"lastUsedAt,omitempty"`
+	ModelId      string     `json:"modelId,omitempty"`
+	Similarity   *float64   `json:"similarity,omitempty"`
+}
+
+// MemoryRequest is the body of a memory create or update.
+type MemoryRequest struct {
+	MemoryText string `json:"memoryText"`
+	Scope      string `json:"scope" example:"user"`
+	// TargetUserId assigns a user-scoped memory to someone else; requires
+	// memory/write_all. Empty means the requestor.
+	TargetUserId string `json:"targetUserId,omitempty"`
+}
+
+type MemoryResults struct {
+	Memories []*MemoryRecord `json:"memories"`
+	Total    int             `json:"total"`
+	Offset   int             `json:"offset"`
+	Limit    int             `json:"limit"`
+}
+
+func NewMemoryRecord(mem *Memory) *MemoryRecord {
+	record := &MemoryRecord{
+		Id:          mem.Id,
+		CreateTime:  mem.CreateTime,
+		UpdateTime:  mem.UpdateTime,
+		MemoryText:  mem.MemoryText,
+		Scope:       "global",
+		SessionId:   mem.SessionId,
+		UserDefined: mem.UserDefined,
+		UsageCount:  mem.UsageCount,
+		LastUsedAt:  mem.LastUsedAt,
+		ModelId:     mem.ModelID,
+	}
+
+	if mem.TargetUserId != nil {
+		record.Scope = "user"
+		record.TargetUserId = *mem.TargetUserId
+	}
+
+	return record
+}
+
 type NearbyMemory struct {
 	Similarity float64
 	Memory     *Memory

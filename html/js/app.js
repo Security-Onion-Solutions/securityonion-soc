@@ -84,6 +84,12 @@ $(document).ready(function () {
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
         },
+        VDataTableServer: {
+          firstIcon: 'fa-backward-step',
+          prevIcon: 'fa-chevron-left',
+          nextIcon: 'fa-chevron-right',
+          lastIcon: 'fa-forward-step',
+        },
         VFileInput: {
           prependIcon: 'fa-paperclip',
           variant: 'outlined',

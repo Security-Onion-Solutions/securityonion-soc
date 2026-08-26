@@ -1,24 +1,128 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="agentstudio_loading_parameters"></v-container>
-<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentstudio_screen">
+<v-container v-else-if="assistantEnabled && (agentic || memoryEnabled)" fluid data-aid="agentstudio_screen">
   <!-- Options dialog -->
-  <v-dialog v-model="showOptionsDialog" max-width="540" data-aid="agentstudio_options_dialog">
+  <v-dialog v-model="showOptionsDialog" max-width="720" scrollable data-aid="agentstudio_options_dialog">
     <v-card class="pa-2">
-      <v-card-title role="heading" aria-level="2">{{ i18n.options }}</v-card-title>
+      <v-card-title role="heading" aria-level="2">{{ i18n.configSettings }}</v-card-title>
       <v-card-text data-aid="agentstudio_options">
+        <template v-if="agentic">
+          <v-row>
+            <v-col cols="6">
+              <v-text-field v-model.number="maxDelegationDepth" type="number" min="0" :label="i18n.agentStudioMaxDepth" prepend-inner-icon="fa-layer-group" hide-details data-aid="agentstudio_options_depth"></v-text-field>
+            </v-col>
+            <v-col cols="6">
+              <v-text-field v-model.number="maxSubSessionTokens" type="number" min="0" :label="i18n.agentStudioMaxSubTokens" prepend-inner-icon="fa-coins" hide-details data-aid="agentstudio_options_tokens"></v-text-field>
+            </v-col>
+          </v-row>
+          <div class="text-body-small text-medium-emphasis mt-3" v-text="i18n.agentStudioOptionsHelp"></div>
+        </template>
+
+        <v-divider v-if="agentic" class="my-4"></v-divider>
+        <div class="text-overline mb-2">{{ i18n.agentStudioMemories }}</div>
         <v-row>
-          <v-col cols="6">
-            <v-text-field v-model.number="maxDelegationDepth" type="number" min="0" :label="i18n.agentStudioMaxDepth" prepend-inner-icon="fa-layer-group" hide-details data-aid="agentstudio_options_depth"></v-text-field>
+          <v-col cols="12" md="6">
+            <v-switch v-model="memoryOptions.useMemory" color="primary" density="compact" inset :label="i18n.agentStudioMemoryUse" :hint="i18n.agentStudioMemoryUseHelp" persistent-hint data-aid="agentstudio_options_use_memory"></v-switch>
           </v-col>
-          <v-col cols="6">
-            <v-text-field v-model.number="maxSubSessionTokens" type="number" min="0" :label="i18n.agentStudioMaxSubTokens" prepend-inner-icon="fa-coins" hide-details data-aid="agentstudio_options_tokens"></v-text-field>
+          <v-col cols="12" md="6">
+            <v-switch v-model="memoryOptions.useMemoryScanner" color="primary" density="compact" inset :label="i18n.agentStudioMemoryScanner" :hint="i18n.agentStudioMemoryScannerHelp" persistent-hint data-aid="agentstudio_options_use_scanner"></v-switch>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field v-model.number="memoryOptions.scanIntervalSeconds" type="number" min="1" :label="i18n.agentStudioMemoryScanInterval" :title="i18n.agentStudioMemoryScanIntervalHelp" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock" hide-details data-aid="agentstudio_options_scan_interval"></v-text-field>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field v-model.number="memoryOptions.memoryProximityThreshold" type="number" min="0" max="1" step="0.05" :label="i18n.agentStudioMemoryProximity" hide-details data-aid="agentstudio_options_memory_proximity"></v-text-field>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field v-model.number="memoryOptions.messageProximityThreshold" type="number" min="0" max="1" step="0.05" :label="i18n.agentStudioMessageProximity" hide-details data-aid="agentstudio_options_message_proximity"></v-text-field>
           </v-col>
         </v-row>
-        <div class="text-body-small mt-3" v-text="i18n.agentStudioOptionsHelp"></div>
+        <div class="text-body-small text-medium-emphasis mt-2 mb-6" v-text="i18n.agentStudioMemoryThresholdHelp"></div>
+
+        <v-row class="my-2">
+          <v-col cols="12" md="4">
+            <v-select v-model="memoryOptions.memoryModel" :items="groupModelItems(modelItems())" :label="i18n.agentStudioMemoryModel"
+              :hint="memoryRoleHint('memoryModel', i18n.agentStudioMemoryModelHelp)" persistent-hint
+              :error="!memoryRoleResolves('memoryModel')" data-aid="agentstudio_options_memory_model">
+              <template v-slot:item="{ props, item }">
+                <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
+                <v-list-item v-else v-bind="props"></v-list-item>
+              </template>
+            </v-select>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-select v-model="memoryOptions.embedModel" :items="groupModelItems(embedModelItems())" :label="i18n.agentStudioEmbedModel"
+              :hint="memoryRoleHint('embedModel', i18n.agentStudioEmbedModelHelp)" persistent-hint
+              :error="!memoryRoleResolves('embedModel')" data-aid="agentstudio_options_embed_model">
+              <template v-slot:item="{ props, item }">
+                <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
+                <v-list-item v-else v-bind="props"></v-list-item>
+              </template>
+            </v-select>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-select v-model="memoryOptions.reconcileModel" :items="groupModelItems(modelItems())" :label="i18n.agentStudioReconcileModel"
+              :hint="memoryRoleHint('reconcileModel', i18n.agentStudioReconcileModelHelp)" persistent-hint
+              :error="!memoryRoleResolves('reconcileModel')" data-aid="agentstudio_options_reconcile_model">
+              <template v-slot:item="{ props, item }">
+                <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
+                <v-list-item v-else v-bind="props"></v-list-item>
+              </template>
+            </v-select>
+          </v-col>
+        </v-row>
+
+        <div class="text-overline mb-4 mt-2">{{ i18n.agentStudioMemoryIncludeLimits }}</div>
+        <v-row>
+          <v-col cols="6">
+            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToInclude" type="number" min="0" :label="i18n.agentStudioMemoryScopeUser" hide-details data-aid="agentstudio_options_max_user_include"></v-text-field>
+          </v-col>
+          <v-col cols="6">
+            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToInclude" type="number" min="0" :label="i18n.agentStudioMemoryScopeGlobal" hide-details data-aid="agentstudio_options_max_global_include"></v-text-field>
+          </v-col>
+        </v-row>
+
+        <div class="text-overline my-4">{{ i18n.agentStudioMemoryReconcileLimits }}</div>
+        <v-row>
+          <v-col cols="6">
+            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToReconcile" type="number" min="0" :label="i18n.agentStudioMemoryScopeUser" hide-details data-aid="agentstudio_options_max_user_reconcile"></v-text-field>
+          </v-col>
+          <v-col cols="6">
+            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToReconcile" type="number" min="0" :label="i18n.agentStudioMemoryScopeGlobal" hide-details data-aid="agentstudio_options_max_global_reconcile"></v-text-field>
+          </v-col>
+        </v-row>
+        <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryLimitsHelp"></div>
       </v-card-text>
       <v-card-actions>
+        <v-btn variant="text" class="ml-2" color="primary" @click.stop="showPersonaDialog = true" data-aid="agentstudio_options_personas">
+          <v-icon class="mr-2">fa-masks-theater</v-icon>{{ i18n.agentStudioMemoryPersonas }}
+          <v-icon v-if="memoryPersonaDirty()" size="x-small" class="ml-2" :title="i18n.agentStudioMemoryPersonaSet">fa-circle</v-icon>
+        </v-btn>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="showOptionsDialog = false" data-aid="agentstudio_options_cancel">{{ i18n.cancel }}</v-btn>
         <v-btn variant="text" :color="optionsDirty() ? 'primary' : ''" :disabled="!optionsDirty()" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="showPersonaDialog" width="900px" scrollable data-aid="agentstudio_personas_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-masks-theater</v-icon>{{ i18n.agentStudioMemoryPersonas }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+          {{ i18n.agentStudioSystemPersonaNote }}
+        </v-alert>
+        <v-textarea v-model="memoryOptions.memoryPersona" :label="i18n.agentStudioMemoryModel" variant="outlined" density="comfortable" rows="8" auto-grow
+          :hint="i18n.agentStudioMemoryPersonaHelp" persistent-hint data-aid="agentstudio_persona_memory"></v-textarea>
+        <v-textarea v-model="memoryOptions.reconcilePersona" :label="i18n.agentStudioReconcileModel" variant="outlined" density="comfortable" rows="8" auto-grow class="mt-4"
+          :hint="i18n.agentStudioReconcilePersonaHelp" persistent-hint data-aid="agentstudio_persona_reconcile"></v-textarea>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" color="primary" @click="showPersonaDialog = false" data-aid="agentstudio_personas_close">{{ i18n.close }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -99,28 +203,72 @@
     </v-card>
   </v-dialog>
 
+  <!-- Create memory dialog -->
+  <v-dialog v-model="createMemoryDialog" persistent width="900px" scrollable data-aid="agentstudio_create_memory_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-brain</v-icon>{{ i18n.agentStudioNewMemory }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-row>
+          <v-col cols="12">
+            <v-textarea v-model="newMemory.memoryText" :label="i18n.agentStudioMemoryText" variant="outlined" density="comfortable" rows="4" auto-grow autofocus :hint="i18n.agentStudioMemoryTextHelp" persistent-hint data-aid="agentstudio_new_memory_text"></v-textarea>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-select v-model="newMemory.scope" :items="scopeItems" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint data-aid="agentstudio_new_memory_scope"></v-select>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="createMemoryDialog = false" data-aid="agentstudio_create_memory_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" :color="newMemory.memoryText ? 'primary' : ''" :disabled="!newMemory.memoryText" @click="saveNewMemory()" data-aid="agentstudio_create_memory_confirm">{{ i18n.create }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
   <v-row>
     <v-col>
-      <!-- Tabs (left) + shortened action toolbar (right) -->
-      <div class="d-flex align-center mb-2">
+      <!-- Tabs (left) + per-tab filter and action toolbars (right) -->
+      <div class="d-flex align-center flex-wrap ga-2 mb-2">
         <v-tabs v-model="tab" color="primary" class="flex-grow-0" data-aid="agentstudio_tabs">
-          <v-tab value="agents" data-aid="agentstudio_agents_tab">
+          <v-tab v-if="agentic" value="agents" data-aid="agentstudio_agents_tab">
             <v-icon class="mr-2">fa-user-tie</v-icon>{{ i18n.agentStudioAgents }}
           </v-tab>
-          <v-tab value="skills" data-aid="agentstudio_skills_tab">
+          <v-tab v-if="agentic" value="skills" data-aid="agentstudio_skills_tab">
             <v-icon class="mr-2">fa-puzzle-piece</v-icon>{{ i18n.agentStudioSkills }}
+          </v-tab>
+          <v-tab v-if="memoryEnabled" value="memories" data-aid="agentstudio_memories_tab">
+            <v-icon class="mr-2">fa-brain</v-icon>{{ i18n.agentStudioMemories }}
           </v-tab>
         </v-tabs>
         <v-spacer></v-spacer>
+
+        <v-toolbar v-if="tab === 'memories'" class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable" data-aid="agentstudio_memories_filter_toolbar">
+          <v-select v-model="memoryScope" :items="scopeFilterItems" :label="i18n.agentStudioMemoryScope" class="mx-2" style="min-width: 140px; max-width: 160px"
+            variant="outlined" density="compact" hide-details @update:model-value="onMemoryFilterChanged()" data-aid="agentstudio_memories_scope"></v-select>
+          <v-text-field v-model="memorySearch" :label="i18n.search" :title="i18n.agentStudioMemorySearchHelp" class="mx-2" style="min-width: 200px; max-width: 280px"
+            variant="outlined" density="compact" hide-details clearable
+            @keydown.enter="onMemoryFilterChanged()" @click:clear="onMemoryFilterChanged()" data-aid="agentstudio_memories_search"></v-text-field>
+          <v-btn icon variant="text" size="small" @click.stop="onMemoryFilterChanged()" :title="i18n.search" :aria-label="i18n.search" data-aid="agentstudio_memories_search_apply">
+            <v-icon class="theme-icon">fa-magnifying-glass</v-icon>
+          </v-btn>
+        </v-toolbar>
+
         <v-toolbar class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable">
           <v-btn v-if="tab === 'agents'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAgent()" data-aid="agentstudio_create_new_agent" :aria-label="i18n.agentStudioNewAgent" :title="i18n.agentStudioNewAgent">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn v-else icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
+          <v-btn v-else-if="tab === 'skills'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.options" :title="i18n.options">
-            <v-icon>fa-gear</v-icon>
+          <v-btn v-else icon variant="flat" class="circle-button mx-2" @click.stop="showAddMemory()" data-aid="agentstudio_create_new_memory" :aria-label="i18n.agentStudioNewMemory" :title="i18n.agentStudioNewMemory">
+            <v-icon>fa-plus</v-icon>
+          </v-btn>
+          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.configSettings" :title="i18n.configSettings">
+            <v-icon>fa-screwdriver-wrench</v-icon>
           </v-btn>
           <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="agentstudio_docs" :aria-label="i18n.contextualDocsBtn">
             <v-icon>fa-circle-question</v-icon>
@@ -130,7 +278,7 @@
 
       <v-tabs-window v-model="tab">
         <!-- Agents tab -->
-        <v-tabs-window-item value="agents">
+        <v-tabs-window-item v-if="agentic" value="agents">
           <v-row>
             <v-col id="agentstudio-agents" class="section-panel" data-aid="agentstudio_agents_section">
               <v-data-table :sort-by="sortByAgents" @update:sort-by="val => sortByAgents = val"
@@ -279,7 +427,7 @@
         </v-tabs-window-item>
 
         <!-- Skills tab -->
-        <v-tabs-window-item value="skills">
+        <v-tabs-window-item v-if="agentic" value="skills">
           <v-row>
             <v-col id="agentstudio-skills" class="section-panel" data-aid="agentstudio_skills_section">
               <v-data-table :sort-by="sortBySkills" @update:sort-by="val => sortBySkills = val"
@@ -388,6 +536,79 @@
                   </tr>
                 </template>
               </v-data-table>
+            </v-col>
+          </v-row>
+        </v-tabs-window-item>
+
+        <!-- Memory tab -->
+        <v-tabs-window-item v-if="memoryEnabled" value="memories">
+          <v-alert v-if="staleMemoryCount" type="warning" variant="tonal" density="compact" class="mb-2" data-aid="agentstudio_memories_stale">
+            {{ staleMemoryCount }} {{ i18n.agentStudioMemoryStale }}
+          </v-alert>
+          <v-row>
+            <v-col id="agentstudio-memories" class="section-panel" data-aid="agentstudio_memories_section">
+              <v-data-table-server :headers="memoryHeaders" :items="memories" :items-length="memoryTotal" item-value="id"
+                v-model:page="memoryPage" v-model:items-per-page="memoryItemsPerPage" :items-per-page-options="itemsPerPageOptions"
+                v-model:expanded="expandedMemories" @update:options="onMemoryOptions" :no-data-text="i18n.agentStudioMemoriesEmpty"
+                data-aid="agentstudio_memories_table">
+                <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                    <td>
+                      <v-btn icon variant="text" size="small" @click.stop="onToggleMemory(item, toggleExpand, internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_memories_expand">
+                        <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
+                        <v-icon v-else>fa-angle-right</v-icon>
+                      </v-btn>
+                    </td>
+                    <td>
+                      {{ item.memoryText }}
+                      <v-chip v-if="item.userDefined" size="x-small" variant="outlined" class="ml-2" :title="i18n.agentStudioMemoryUserDefinedHelp">{{ i18n.agentStudioMemoryUserDefined }}</v-chip>
+                      <v-chip v-if="item.similarity != null" size="x-small" variant="tonal" class="ml-2">{{ Math.round(item.similarity * 100) }}%</v-chip>
+                    </td>
+                    <td>
+                      <v-chip v-if="item.scope === 'global'" size="small" color="primary" variant="tonal">{{ i18n.agentStudioMemoryScopeGlobal }}</v-chip>
+                      <v-chip v-else size="small" variant="tonal">{{ i18n.agentStudioMemoryScopeUser }}</v-chip>
+                    </td>
+                    <td>{{ memoryOwner(item) }}</td>
+                    <td>{{ item.usageCount }}</td>
+                    <td>{{ $root.formatDateTime(item.updateTime) }}</td>
+                  </tr>
+                </template>
+                <template #expanded-row="{ item }">
+                  <tr class="expanded-row" data-aid="agentstudio_memories_expanded">
+                    <td :colspan="memoryHeaders.length" class="px-0">
+                      <div class="expanded-row-wrapper pa-4">
+                        <v-card variant="flat" class="agentstudio-editor">
+                          <v-card-text>
+                            <v-alert v-if="!item.userDefined" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_memory_scanned_note_' + item.id">
+                              {{ i18n.agentStudioMemoryScanned }}
+                            </v-alert>
+                            <v-row>
+                              <v-col cols="12">
+                                <v-textarea v-model="draftForMemory(item).memoryText" :label="i18n.agentStudioMemoryText" variant="outlined" density="comfortable" rows="4" auto-grow :hint="i18n.agentStudioMemoryTextHelp" persistent-hint :data-aid="'agentstudio_memory_text_' + item.id"></v-textarea>
+                              </v-col>
+                              <v-col cols="12" md="6">
+                                <v-select v-model="draftForMemory(item).scope" :items="scopeItems" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint :data-aid="'agentstudio_memory_scope_' + item.id"></v-select>
+                              </v-col>
+                              <v-col cols="12" md="3">
+                                <v-text-field :model-value="item.sessionId" :label="i18n.agentStudioMemoryOrigin" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioMemoryOriginHelp" persistent-hint></v-text-field>
+                              </v-col>
+                              <v-col cols="12" md="3">
+                                <v-text-field :model-value="memoryLastRecalled(item)" :label="i18n.agentStudioMemoryLastRecalled" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioMemoryRecalledHelp" persistent-hint></v-text-field>
+                              </v-col>
+                            </v-row>
+                          </v-card-text>
+                          <v-divider></v-divider>
+                          <v-card-actions class="px-4">
+                            <v-btn variant="text" color="error" @click.stop="removeMemory(item)" :data-aid="'agentstudio_memory_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-spacer></v-spacer>
+                            <v-btn variant="text" :color="memoryDirty(item) ? 'primary' : ''" :disabled="!memoryDirty(item)" @click.stop="saveMemory(item)" :data-aid="'agentstudio_memory_save_' + item.id">{{ i18n.save }}</v-btn>
+                          </v-card-actions>
+                        </v-card>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table-server>
             </v-col>
           </v-row>
         </v-tabs-window-item>

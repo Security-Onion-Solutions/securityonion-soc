@@ -23,7 +23,10 @@ var migrationFS embed.FS
 
 const moduleName = "assistant"
 
-var ErrInvalidMemoryScope = errors.New("memory scope not specified")
+var (
+	ErrInvalidMemoryScope = errors.New("memory scope not specified")
+	ErrMemoryNotFound     = errors.New("ERROR_MEMORY_NOT_FOUND")
+)
 
 // Store encapsulates all Postgres operations for assistant memories.
 type Store struct {
@@ -203,10 +206,10 @@ func (s *Store) UpdateMemory(ctx context.Context, mem *model.Memory) error {
 
 	return s.db.QueryRow(ctx, `
 		UPDATE memories
-		SET memory_text = $2, session_id = $3, embedding = $4, model_id = $5, target_user_id = $6, updated_at = now()
+		SET memory_text = $2, session_id = $3, embedding = $4, model_id = $5, target_user_id = $6, user_defined = $7, updated_at = now()
 		WHERE id = $1
 		RETURNING updated_at, last_used_at, usage_count`,
-		mem.Id, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId).
+		mem.Id, mem.MemoryText, sessionId, pgvector.NewVector(mem.Embedding), mem.ModelID, mem.TargetUserId, mem.UserDefined).
 		Scan(&mem.UpdateTime, &mem.LastUsedAt, &mem.UsageCount)
 }
 
@@ -216,6 +219,182 @@ func (s *Store) DeleteMemory(ctx context.Context, id string) error {
 	}
 
 	return s.db.Exec(ctx, `DELETE FROM memories WHERE id = $1`, id)
+}
+
+const memoryColumns = `id, created_at, updated_at, last_used_at, user_id, memory_text, session_id, model_id, target_user_id, user_defined, usage_count`
+
+// Reads the memoryColumns projection; similarity is scanned only when the
+// caller selected it.
+func scanMemoryRow(rows db.Rows, similarity *float64) (*model.Memory, error) {
+	mem := &model.Memory{
+		Auditable: model.Auditable{
+			Kind: "memory",
+		},
+	}
+
+	var sessionId *string
+
+	dest := []any{&mem.Id, &mem.CreateTime, &mem.UpdateTime, &mem.LastUsedAt, &mem.UserId, &mem.MemoryText, &sessionId, &mem.ModelID, &mem.TargetUserId, &mem.UserDefined, &mem.UsageCount}
+	if similarity != nil {
+		dest = append(dest, similarity)
+	}
+
+	if err := rows.Scan(dest...); err != nil {
+		return nil, err
+	}
+
+	if sessionId != nil {
+		mem.SessionId = *sessionId
+	}
+
+	return mem, nil
+}
+
+// MemoryQuery is a listing request. Where and Args come from the caller, which
+// is responsible for limiting them to what the requestor may read. A non-nil
+// Embedding orders by similarity to it and restricts results to EmbedModelId.
+type MemoryQuery struct {
+	Where        string
+	Args         []any
+	Embedding    []float32
+	EmbedModelId string
+	Limit        int
+	Offset       int
+}
+
+func (s *Store) ListMemories(ctx context.Context, query MemoryQuery) (*model.MemoryResults, error) {
+	where := query.Where
+	args := query.Args
+	simExpr := ""
+	order := ` ORDER BY updated_at DESC, id`
+
+	countArgs := args
+
+	if query.Embedding != nil {
+		args = append(args, query.EmbedModelId)
+		where += fmt.Sprintf(` AND model_id = $%d`, len(args))
+
+		// The count shares every arg up to here; the vector is appended after so
+		// the count statement never binds a parameter it does not reference.
+		countArgs = make([]any, len(args))
+		copy(countArgs, args)
+
+		args = append(args, pgvector.NewVector(query.Embedding))
+		simExpr = fmt.Sprintf(`, 1 - (embedding <=> $%d) AS similarity`, len(args))
+		order = fmt.Sprintf(` ORDER BY embedding <=> $%d`, len(args))
+	}
+
+	total := 0
+	if err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM memories WHERE `+where, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	args = append(args, query.Limit, query.Offset)
+	stmt := `SELECT ` + memoryColumns + simExpr + ` FROM memories WHERE ` + where + order +
+		fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
+
+	rows, err := s.db.Query(ctx, stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := &model.MemoryResults{
+		Memories: []*model.MemoryRecord{},
+		Total:    total,
+		Offset:   query.Offset,
+		Limit:    query.Limit,
+	}
+
+	for rows.Next() {
+		var similarity float64
+
+		var scanned *float64
+		if simExpr != "" {
+			scanned = &similarity
+		}
+
+		mem, err := scanMemoryRow(rows, scanned)
+		if err != nil {
+			return nil, err
+		}
+
+		record := model.NewMemoryRecord(mem)
+		if scanned != nil {
+			record.Similarity = &similarity
+		}
+
+		results.Memories = append(results.Memories, record)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// GetMemory reads a single memory without any permission check; callers apply
+// the check themselves against the scope it comes back with.
+func (s *Store) GetMemory(ctx context.Context, id string) (*model.Memory, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+memoryColumns+` FROM memories WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		return nil, ErrMemoryNotFound
+	}
+
+	return scanMemoryRow(rows, nil)
+}
+
+// CountStaleMemories reports how many memories were embedded by a model other
+// than modelId. Those rows match no similarity query, since every one of them
+// filters on model_id.
+func (s *Store) CountStaleMemories(ctx context.Context, modelId string) (int, error) {
+	stale := 0
+	err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM memories WHERE model_id <> $1`, modelId).Scan(&stale)
+
+	return stale, err
+}
+
+// StaleMemoryBatch returns the next batch of memories to re-embed.
+func (s *Store) StaleMemoryBatch(ctx context.Context, modelId string, limit int) ([]*model.Memory, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id, memory_text FROM memories WHERE model_id <> $1 ORDER BY created_at LIMIT $2`, modelId, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	batch := []*model.Memory{}
+
+	for rows.Next() {
+		mem := &model.Memory{}
+		if err := rows.Scan(&mem.Id, &mem.MemoryText); err != nil {
+			return nil, err
+		}
+
+		batch = append(batch, mem)
+	}
+
+	return batch, rows.Err()
+}
+
+// SetMemoryEmbedding re-vectorizes one memory, leaving its text, counts and
+// user_defined flag alone.
+func (s *Store) SetMemoryEmbedding(ctx context.Context, id string, embedding []float32, modelId string) error {
+	return s.db.Exec(ctx, `UPDATE memories SET embedding = $2, model_id = $3 WHERE id = $1`,
+		id, pgvector.NewVector(embedding), modelId)
 }
 
 // CountMemoryUsage increments the usage count and stamps last_used_at for the

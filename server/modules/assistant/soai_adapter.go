@@ -93,6 +93,10 @@ func (a *SOAiCloudAdapter) Protocol() string {
 	return "securityonion_ai_cloud"
 }
 
+func (a *SOAiCloudAdapter) SupportsEmbeddings() bool {
+	return true
+}
+
 func buildApiKey() string {
 	key := licensing.GetLicenseKey()
 	hash := sha256.Sum256([]byte(key.Signature))

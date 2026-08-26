@@ -955,3 +955,576 @@ test('one failing delegator does not stop the others', async () => {
   expect(message).toContain('Coordinator');
   expect(message).not.toContain('Hunter');
 });
+
+// Memories are fetched rather than delivered in the client parameters, so these
+// tests drive the papi calls the Memory tab makes.
+const memoryParams = () => Object.assign(agenticParams(), { memoryEnabled: true });
+
+const memoryPage = (memories = [], total = memories.length) => ({
+  data: { memories: memories, total: total, offset: 0, limit: 25 },
+});
+
+const storedMemory = (over = {}) => Object.assign({
+  id: 'mem-1',
+  memoryText: 'prefers dark mode',
+  scope: 'user',
+  targetUserId: 'user-1',
+  userDefined: false,
+  usageCount: 3,
+  sessionId: 'sess-1',
+  updateTime: '2026-08-18T12:00:00Z',
+}, over);
+
+test('the memory tab is hidden unless the server has memory enabled', () => {
+  comp.initAssistant(agenticParams());
+  expect(comp.memoryEnabled).toBe(false);
+
+  comp.initAssistant(memoryParams());
+  expect(comp.memoryEnabled).toBe(true);
+});
+
+test('memories are not fetched while memory is disabled', async () => {
+  const get = mockPapi('get', memoryPage([storedMemory()]));
+  comp.initAssistant(agenticParams());
+
+  await comp.loadMemories();
+
+  expect(get).not.toHaveBeenCalled();
+});
+
+test('loading memories sends the scope, search and paging as query params', async () => {
+  const get = mockPapi('get', memoryPage([storedMemory()], 42));
+  comp.initAssistant(memoryParams());
+  comp.memoryScope = 'global';
+  comp.memorySearch = 'dark mode';
+  comp.memoryPage = 3;
+  comp.memoryItemsPerPage = 10;
+
+  await comp.loadMemories();
+
+  expect(get).toHaveBeenCalledWith('assistant/memories', {
+    params: { scope: 'global', q: 'dark mode', limit: 10, offset: 20 },
+  });
+  expect(comp.memories.length).toBe(1);
+  expect(comp.memoryTotal).toBe(42);
+});
+
+test('changing a filter returns to the first page', async () => {
+  mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+  comp.memoryPage = 4;
+
+  comp.onMemoryFilterChanged();
+
+  expect(comp.memoryPage).toBe(1);
+});
+
+test('table paging options drive the next fetch', async () => {
+  const get = mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+
+  comp.onMemoryOptions({ page: 2, itemsPerPage: 50 });
+
+  expect(comp.memoryPage).toBe(2);
+  expect(comp.memoryItemsPerPage).toBe(50);
+  expect(get.mock.calls[0][1].params.offset).toBe(50);
+});
+
+test('expanding a memory snapshots it into a draft that is dropped on collapse', () => {
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  const toggle = jest.fn();
+  comp.onToggleMemory(comp.memories[0], toggle, {});
+  expect(toggle).toHaveBeenCalled();
+
+  const draft = comp.draftForMemory(comp.memories[0]);
+  draft.memoryText = 'prefers light mode';
+  expect(comp.memories[0].memoryText).toBe('prefers dark mode');
+  expect(comp.memoryDirty(comp.memories[0])).toBe(true);
+
+  comp.expandedMemories = ['mem-1'];
+  comp.onToggleMemory(comp.memories[0], toggle, {});
+  expect(comp.memoryDrafts['mem-1']).toBeUndefined();
+});
+
+test('a memory with no edits is not dirty', () => {
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  comp.onToggleMemory(comp.memories[0], jest.fn(), {});
+
+  expect(comp.memoryDirty(comp.memories[0])).toBe(false);
+});
+
+test('saving a memory writes the draft and reloads the page', async () => {
+  const put = mockPapi('put', {});
+  const get = mockPapi('get', memoryPage([storedMemory({ userDefined: true })]));
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  comp.onToggleMemory(comp.memories[0], jest.fn(), {});
+  comp.draftForMemory(comp.memories[0]).memoryText = 'prefers light mode';
+
+  await comp.saveMemory(comp.memories[0]);
+
+  expect(put).toHaveBeenCalledWith('assistant/memories/mem-1', {
+    memoryText: 'prefers light mode',
+    scope: 'user',
+    targetUserId: 'user-1',
+  });
+  expect(get).toHaveBeenCalled();
+});
+
+test('moving a memory to global scope drops its owner', async () => {
+  const put = mockPapi('put', {});
+  mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  comp.onToggleMemory(comp.memories[0], jest.fn(), {});
+  comp.draftForMemory(comp.memories[0]).scope = 'global';
+
+  await comp.saveMemory(comp.memories[0]);
+
+  expect(lastSavedRow(put).row).toEqual({
+    memoryText: 'prefers dark mode',
+    scope: 'global',
+    targetUserId: '',
+  });
+});
+
+test('an empty memory is refused before any request', async () => {
+  const put = mockPapi('put', {});
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  comp.onToggleMemory(comp.memories[0], jest.fn(), {});
+  comp.draftForMemory(comp.memories[0]).memoryText = '   ';
+
+  await comp.saveMemory(comp.memories[0]);
+
+  expect(put).not.toHaveBeenCalled();
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioMemoryTextRequired);
+});
+
+test('a failed save surfaces the error and clears the overlay', async () => {
+  mockPapi('put', null, new Error('nope'));
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  comp.onToggleMemory(comp.memories[0], jest.fn(), {});
+  comp.draftForMemory(comp.memories[0]).memoryText = 'prefers light mode';
+
+  await comp.saveMemory(comp.memories[0]);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});
+
+test('deleting a memory calls the endpoint and reloads', async () => {
+  const del = mockPapi('delete', {});
+  const get = mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+  comp.memories = [storedMemory()];
+
+  await comp.removeMemory(comp.memories[0]);
+
+  expect(del).toHaveBeenCalledWith('assistant/memories/mem-1');
+  expect(get).toHaveBeenCalled();
+});
+
+test('creating a memory posts it, closes the dialog and shows the tab', async () => {
+  const post = mockPapi('post', {});
+  const get = mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+
+  comp.showAddMemory();
+  expect(comp.createMemoryDialog).toBe(true);
+  comp.newMemory.memoryText = 'the DMZ is 10.4.0.0/16';
+  comp.newMemory.scope = 'global';
+
+  await comp.saveNewMemory();
+
+  expect(post).toHaveBeenCalledWith('assistant/memories', {
+    memoryText: 'the DMZ is 10.4.0.0/16',
+    scope: 'global',
+    targetUserId: '',
+  });
+  expect(comp.createMemoryDialog).toBe(false);
+  expect(comp.tab).toBe('memories');
+  expect(get).toHaveBeenCalled();
+});
+
+test('a new memory with no text is refused before any request', async () => {
+  const post = mockPapi('post', {});
+  comp.initAssistant(memoryParams());
+
+  comp.showAddMemory();
+  await comp.saveNewMemory();
+
+  expect(post).not.toHaveBeenCalled();
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioMemoryTextRequired);
+  expect(comp.createMemoryDialog).toBe(true);
+});
+
+test('a global memory shows every user as its owner', () => {
+  comp.initAssistant(memoryParams());
+
+  expect(comp.memoryOwner(storedMemory({ scope: 'global', targetUserId: '' }))).toBe(comp.i18n.all);
+  expect(comp.memoryOwner(storedMemory())).toBe('user-1');
+});
+
+test('a memory that has never been recalled says so', () => {
+  comp.initAssistant(memoryParams());
+  comp.$root.formatDateTime = jest.fn().mockReturnValue('2026-08-18 12:00');
+
+  expect(comp.memoryLastRecalled(storedMemory())).toBe(comp.i18n.agentStudioMemoryNeverRecalled);
+  expect(comp.memoryLastRecalled(storedMemory({ lastUsedAt: '2026-08-18T12:00:00Z' }))).toBe('2026-08-18 12:00');
+});
+
+test('a non-agentic deployment with memory enabled still opens the page, on the memory tab', () => {
+  const params = memoryParams();
+  params.agentic = false;
+
+  comp.initAssistant(params);
+
+  expect(comp.assistantEnabled).toBe(true);
+  expect(comp.agentic).toBe(false);
+  expect(comp.memoryEnabled).toBe(true);
+  expect(comp.tab).toBe('memories');
+});
+
+test('an agentic deployment still opens on the agents tab', () => {
+  comp.initAssistant(memoryParams());
+
+  expect(comp.tab).toBe('agents');
+});
+
+test('a deployment with neither agentic nor memory loads nothing', () => {
+  const params = agenticParams();
+  params.agentic = false;
+
+  comp.initAssistant(params);
+
+  expect(comp.agents).toEqual([]);
+  expect(comp.skills).toEqual([]);
+  expect(comp.memoryEnabled).toBe(false);
+});
+
+test('the options dialog loads the memory tunables from the client parameters', () => {
+  const params = memoryParams();
+  params.memoryParams = {
+    useMemory: true,
+    useMemoryScanner: false,
+    scanIntervalSeconds: 60,
+    memoryProximityThreshold: 0.8,
+    messageProximityThreshold: 0.5,
+    maxUserMemoriesToInclude: 5,
+    maxGlobalMemoriesToInclude: 5,
+    maxUserMemoriesToReconcile: 20,
+    maxGlobalMemoriesToReconcile: 20,
+  };
+
+  comp.initAssistant(params);
+  comp.showOptions();
+
+  expect(comp.memoryOptions.useMemory).toBe(true);
+  expect(comp.memoryOptions.scanIntervalSeconds).toBe(60);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+test('only the changed memory tunables are written', async () => {
+  const put = mockPapi('put', {});
+  const params = memoryParams();
+  params.memoryParams = { useMemory: false, scanIntervalSeconds: 300, maxUserMemoriesToInclude: 5 };
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.useMemory = true;
+  comp.memoryOptions.scanIntervalSeconds = 60;
+
+  expect(comp.optionsDirty()).toBe(true);
+
+  await comp.persistOptions();
+
+  const written = put.mock.calls.map(c => [c[1].id, c[1].value]);
+  expect(written).toEqual([
+    ['soc.config.server.modules.assistant.useMemory', 'true'],
+    ['soc.config.server.modules.assistant.memoryScanIntervalSeconds', '60'],
+  ]);
+  expect(comp.showOptionsDialog).toBe(false);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+test('a push does not overwrite memory tunables being edited in the open dialog', () => {
+  const params = memoryParams();
+  params.memoryParams = { scanIntervalSeconds: 300 };
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.scanIntervalSeconds = 60;
+
+  const pushed = memoryParams();
+  pushed.memoryParams = { scanIntervalSeconds: 900 };
+  comp.$root.parameters = { assistant: pushed };
+  comp.onAgenticUpdate();
+
+  expect(comp.memoryOptions.scanIntervalSeconds).toBe(60, 'the draft survives the push');
+  expect(comp.savedMemoryOptions.scanIntervalSeconds).toBe(900);
+});
+
+test('a failed memory options save keeps the dialog open', async () => {
+  mockPapi('put', null, new Error('nope'));
+  const params = memoryParams();
+  params.memoryParams = { useMemory: false };
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.useMemory = true;
+
+  await comp.persistOptions();
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.showOptionsDialog).toBe(true);
+});
+
+// Turning memory off must not hide the switches that turn it back on.
+test('memory tunables are still editable after memory has been disabled', async () => {
+  const put = mockPapi('put', {});
+  const params = memoryParams();
+  params.memoryEnabled = false;
+  params.memoryParams = { useMemory: false, useMemoryScanner: false };
+
+  comp.initAssistant(params);
+  expect(comp.memoryEnabled).toBe(false);
+
+  comp.showOptions();
+  expect(comp.memoryOptions.useMemory).toBe(false);
+
+  comp.memoryOptions.useMemory = true;
+  await comp.persistOptions();
+
+  expect(put.mock.calls[0][1]).toMatchObject({
+    id: 'soc.config.server.modules.assistant.useMemory',
+    value: 'true',
+  });
+});
+
+const memoryModelParams = () => {
+  const params = memoryParams();
+  params.availableAdapters = [
+    { name: 'soai', protocol: 'securityonion_ai_cloud', supportsEmbeddings: true },
+    { name: 'anthropic', protocol: 'openai_chat', supportsEmbeddings: false },
+  ];
+  params.memoryParams = {
+    memoryModel: 'model-a@soai',
+    embedModel: 'model-a@soai',
+    reconcileModel: 'model-a@soai',
+  };
+  return params;
+};
+
+test('the embedding model list is limited to adapters that support embeddings', () => {
+  comp.initAssistant(memoryModelParams());
+
+  expect(comp.modelItems().map(i => i.value)).toEqual(['model-a@soai', 'model-b@anthropic']);
+  expect(comp.embedModelItems().map(i => i.value)).toEqual(['model-a@soai']);
+});
+
+test('a memory role whose model is missing is flagged instead of failing silently', () => {
+  const params = memoryModelParams();
+  params.memoryParams.embedModel = 'gone@soai';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+
+  expect(comp.memoryRoleResolves('memoryModel')).toBe(true);
+  expect(comp.memoryRoleResolves('embedModel')).toBe(false);
+  expect(comp.memoryRoleHint('embedModel', 'help')).toBe(comp.i18n.agentStudioMemoryRoleDisabled);
+  expect(comp.memoryRoleHint('memoryModel', 'help')).toBe('help');
+});
+
+test('an unset memory model reads as disabled', () => {
+  const params = memoryModelParams();
+  params.memoryParams.reconcileModel = '';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+
+  expect(comp.memoryRoleResolves('reconcileModel')).toBe(false);
+});
+
+test('changing a memory model writes its setting', async () => {
+  const put = mockPapi('put', {});
+
+  comp.initAssistant(memoryModelParams());
+  comp.showOptions();
+  comp.memoryOptions.embedModel = 'model-b@anthropic';
+
+  await comp.persistOptions();
+
+  expect(lastSavedRow(put).row).toMatchObject({
+    id: 'soc.config.server.modules.assistant.embedModel',
+    value: 'model-b@anthropic',
+  });
+});
+
+test('the persona popup edits the same draft the options dialog saves', async () => {
+  const put = mockPapi('put', {});
+  const params = memoryModelParams();
+  params.memoryParams.memoryPersona = '';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+
+  expect(comp.showPersonaDialog).toBe(false);
+  expect(comp.memoryPersonaDirty()).toBe(false);
+
+  comp.showPersonaDialog = true;
+  comp.memoryOptions.memoryPersona = 'never record IP addresses';
+  comp.showPersonaDialog = false;
+
+  expect(comp.memoryPersonaDirty()).toBe(true);
+  expect(comp.optionsDirty()).toBe(true, 'a persona edit makes the options dialog dirty');
+
+  await comp.persistOptions();
+
+  expect(lastSavedRow(put).row).toMatchObject({
+    id: 'soc.config.server.modules.assistant.memoryPersona',
+    value: 'never record IP addresses',
+  });
+});
+
+test('cancelling the options dialog discards a persona edit', () => {
+  const params = memoryModelParams();
+  params.memoryParams.reconcilePersona = 'original';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.reconcilePersona = 'edited';
+
+  // Cancel does not persist; reopening reloads from the last known server value.
+  comp.showOptions();
+
+  expect(comp.memoryOptions.reconcilePersona).toBe('original');
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+// The marker tracks unsaved edits, not whether a persona has content, so a saved
+// persona must not leave the button marked.
+test('an existing persona is not marked until it is edited', () => {
+  const params = memoryModelParams();
+  params.memoryParams.memoryPersona = '';
+  params.memoryParams.reconcilePersona = 'prefer the older wording';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+
+  expect(comp.memoryPersonaDirty()).toBe(false);
+
+  comp.memoryOptions.reconcilePersona = 'prefer the newer wording';
+  expect(comp.memoryPersonaDirty()).toBe(true);
+
+  comp.memoryOptions.reconcilePersona = 'prefer the older wording';
+  expect(comp.memoryPersonaDirty()).toBe(false, 'reverting the edit clears the marker');
+});
+
+test('clearing a persona counts as a pending change', () => {
+  const params = memoryModelParams();
+  params.memoryParams.memoryPersona = 'be terse';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.memoryPersona = '';
+
+  expect(comp.memoryPersonaDirty()).toBe(true);
+});
+
+test('the marker clears once the personas are saved', async () => {
+  mockPapi('put', {});
+  const params = memoryModelParams();
+  params.memoryParams.memoryPersona = '';
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.memoryPersona = 'be terse';
+
+  await comp.persistOptions();
+
+  expect(comp.memoryPersonaDirty()).toBe(false);
+});
+
+test('the memory model dropdowns group models under their adapter', () => {
+  comp.initAssistant(memoryModelParams());
+
+  const grouped = comp.groupModelItems(comp.modelItems());
+
+  expect(grouped.map(i => i.header || i.value)).toEqual([
+    'anthropic', 'model-b@anthropic',
+    'soai', 'model-a@soai',
+  ]);
+});
+
+test('the embed dropdown groups only the embedding-capable models', () => {
+  comp.initAssistant(memoryModelParams());
+
+  const grouped = comp.groupModelItems(comp.embedModelItems());
+
+  expect(grouped.map(i => i.header || i.value)).toEqual(['soai', 'model-a@soai']);
+});
+
+test('memories awaiting re-embedding are surfaced and update on a push', () => {
+  const params = memoryModelParams();
+  params.memoryParams.staleMemoryCount = 340;
+
+  comp.initAssistant(params);
+  expect(comp.staleMemoryCount).toBe(340);
+
+  // The server pushes progress as the pass runs.
+  const pushed = memoryModelParams();
+  pushed.memoryParams.staleMemoryCount = 120;
+  comp.$root.parameters = { assistant: pushed };
+  comp.onAgenticUpdate();
+
+  expect(comp.staleMemoryCount).toBe(120);
+});
+
+test('no stale count means nothing to warn about', () => {
+  comp.initAssistant(memoryModelParams());
+
+  expect(comp.staleMemoryCount).toBe(0);
+});
+
+test('the memory page size persists separately from the agent and skill tables', () => {
+  comp.initAssistant(memoryParams());
+  comp.saveSetting = jest.fn();
+
+  comp.itemsPerPage = 50;
+  comp.memoryItemsPerPage = 250;
+  comp.saveLocalSettings();
+
+  expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
+  expect(comp.saveSetting).toHaveBeenCalledWith('memoryItemsPerPage', 250, 10);
+});
+
+test('the memory page size is restored from local storage', () => {
+  mockLocalStorage['settings.agentstudio.itemsPerPage'] = '50';
+  mockLocalStorage['settings.agentstudio.memoryItemsPerPage'] = '250';
+
+  comp.initAssistant(memoryParams());
+
+  expect(comp.itemsPerPage).toBe(50);
+  expect(comp.memoryItemsPerPage).toBe(250);
+});
+
+test('changing the agent page size leaves the memory table alone', async () => {
+  const get = mockPapi('get', memoryPage());
+  comp.initAssistant(memoryParams());
+  comp.memoryItemsPerPage = 10;
+
+  comp.itemsPerPage = 250;
+
+  expect(comp.memoryItemsPerPage).toBe(10, 'the two page sizes are independent');
+  expect(get).not.toHaveBeenCalled();
+});

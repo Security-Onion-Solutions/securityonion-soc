@@ -3766,3 +3766,179 @@ func TestSaveAgentRejectsBadBody(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestGetMemoriesPassesFilterThrough(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.MemoryFilter
+	manager.EXPECT().ListMemories(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error) {
+			got = filter
+			return &model.MemoryResults{Memories: []*model.MemoryRecord{{Id: "mem-1"}}, Total: 1}, nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/memories?scope=self&userId=user-2&q=dark+mode&limit=10&offset=20", nil))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "self", got.Scope)
+	assert.Equal(t, "user-2", got.TargetUserId)
+	assert.Equal(t, "dark mode", got.Query)
+	assert.Equal(t, 10, got.Limit)
+	assert.Equal(t, 20, got.Offset)
+	assert.Contains(t, w.Body.String(), "mem-1")
+}
+
+func TestGetMemoriesMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "server", err: errors.New("boom"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().ListMemories(gomock.Any(), gomock.Any()).Return(nil, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/memories", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestCreateMemoryDefaultsTargetToRequestor(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/memories", model.MemoryRequest{
+		MemoryText: "prefers dark mode",
+		Scope:      "user",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, got.Id)
+	assert.Equal(t, "prefers dark mode", got.MemoryText)
+
+	if assert.NotNil(t, got.TargetUserId) {
+		assert.Equal(t, "test-user", *got.TargetUserId)
+	}
+}
+
+func TestCreateMemoryGlobalHasNoTarget(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/memories", model.MemoryRequest{
+		MemoryText: "the DMZ is 10.4.0.0/16",
+		Scope:      "global",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Nil(t, got.TargetUserId)
+	assert.Contains(t, w.Body.String(), `"scope":"global"`)
+}
+
+func TestUpdateMemoryUsesPathId(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/memories/mem-1", model.MemoryRequest{
+		MemoryText:   "prefers light mode",
+		Scope:        "user",
+		TargetUserId: "user-2",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "mem-1", got.Id)
+
+	if assert.NotNil(t, got.TargetUserId) {
+		assert.Equal(t, "user-2", *got.TargetUserId, "an explicit target is not replaced by the requestor")
+	}
+}
+
+func TestSaveMemoryMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "empty", err: errors.New("ERROR_MEMORY_TEXT_REQUIRED"), wantStatus: http.StatusBadRequest},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/memories/mem-1", model.MemoryRequest{MemoryText: "x"}))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestSaveMemoryRejectsInvalidBody(t *testing.T) {
+	r, _ := agentConfigRouter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/assistant/memories", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req.WithContext(agentConfigContext(req.Context())))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteMemoryMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "deleted", err: nil, wantStatus: http.StatusOK},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusUnauthorized},
+		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().RemoveMemory(gomock.Any(), "mem-1").Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/memories/mem-1", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}

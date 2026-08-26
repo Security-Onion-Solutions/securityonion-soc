@@ -14,23 +14,52 @@ loadPageTemplate('page-agentstudio', 'pages/agentstudio.html');
 const LIMIT_DEPTH_SETTING_ID = 'soc.config.server.modules.assistant.maxDelegationDepth';
 const LIMIT_TOKENS_SETTING_ID = 'soc.config.server.modules.assistant.maxSubSessionTokens';
 
+const MEMORY_SETTING_IDS = {
+  useMemory: 'soc.config.server.modules.assistant.useMemory',
+  useMemoryScanner: 'soc.config.server.modules.assistant.useMemoryScanner',
+  scanIntervalSeconds: 'soc.config.server.modules.assistant.memoryScanIntervalSeconds',
+  memoryProximityThreshold: 'soc.config.server.modules.assistant.memoryProximityThreshold',
+  messageProximityThreshold: 'soc.config.server.modules.assistant.messageProximityThreshold',
+  maxUserMemoriesToInclude: 'soc.config.server.modules.assistant.maxUserMemoriesToInclude',
+  maxGlobalMemoriesToInclude: 'soc.config.server.modules.assistant.maxGlobalMemoriesToInclude',
+  maxUserMemoriesToReconcile: 'soc.config.server.modules.assistant.maxUserMemoriesToReconcile',
+  maxGlobalMemoriesToReconcile: 'soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile',
+  memoryModel: 'soc.config.server.modules.assistant.memoryModel',
+  embedModel: 'soc.config.server.modules.assistant.embedModel',
+  reconcileModel: 'soc.config.server.modules.assistant.reconcileModel',
+  memoryPersona: 'soc.config.server.modules.assistant.memoryPersona',
+  reconcilePersona: 'soc.config.server.modules.assistant.reconcilePersona',
+};
+
 routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   template: '#page-agentstudio',
   data() { return {
     i18n: this.$root.i18n,
     tab: 'agents',
 
-    // Gating: the page renders only once the assistant client parameters have
-    // loaded, and only when the assistant is enabled (+ licensed) and running in
-    // agentic mode. Mirrors the aimetrics/assistant pages.
     paramsLoaded: false,
     assistantEnabled: false,
     agentic: false,
 
     createAgentDialog: false,
     createSkillDialog: false,
+    createMemoryDialog: false,
     newAgent: {},
     newSkill: {},
+    newMemory: {},
+
+    memoryEnabled: false,
+    memories: [],
+    memoryTotal: 0,
+    memoryScope: 'all',
+    memorySearch: '',
+    memoryPage: 1,
+    memoryItemsPerPage: 10,
+    memoryDrafts: {},
+    expandedMemories: [],
+    // Memories awaiting re-embedding; pushed by the server as the pass progresses.
+    staleMemoryCount: 0,
+    showPersonaDialog: false,
 
     // Global delegation guardrails, edited in the Options dialog. saved* is the
     // last-known server value, so Save stays disabled until something changes.
@@ -39,6 +68,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     maxSubSessionTokens: 0,
     savedMaxDelegationDepth: 0,
     savedMaxSubSessionTokens: 0,
+    memoryOptions: {},
+    savedMemoryOptions: {},
 
     sortByAgents: [{ key: 'name', order: 'asc' }],
     sortBySkills: [{ key: 'name', order: 'asc' }],
@@ -71,12 +102,31 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       { title: this.$root.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
     ],
 
+    memoryHeaders: [
+      { title: '', value: 'expand', sortable: false, width: '48px' },
+      { title: this.$root.i18n.agentStudioMemoryText, value: 'memoryText', sortable: false },
+      { title: this.$root.i18n.agentStudioMemoryScope, value: 'scope', sortable: false, width: '140px' },
+      { title: this.$root.i18n.owner, value: 'targetUserId', sortable: false },
+      { title: this.$root.i18n.agentStudioMemoryRecalled, value: 'usageCount', sortable: false, width: '110px' },
+      { title: this.$root.i18n.dateModified, value: 'updateTime', sortable: false, width: '180px' },
+    ],
+
     roleItems: [
       { title: this.$root.i18n.agentStudioOrchestrator, value: true },
       { title: this.$root.i18n.agentStudioSpecialist, value: false },
     ],
+    scopeItems: [
+      { title: this.$root.i18n.agentStudioMemoryScopeUser, value: 'user' },
+      { title: this.$root.i18n.agentStudioMemoryScopeGlobal, value: 'global' },
+    ],
+    scopeFilterItems: [
+      { title: this.$root.i18n.all, value: 'all' },
+      { title: this.$root.i18n.agentStudioMemoryScopeUser, value: 'self' },
+      { title: this.$root.i18n.agentStudioMemoryScopeGlobal, value: 'global' },
+    ],
 
     models: [],
+    adapters: [],
     skills: [],
     agents: [],
     // Tool names an admin-created skill may grant, from assistant.availableTools.
@@ -95,6 +145,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     'sortByAgents': 'saveLocalSettings',
     'sortBySkills': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
+    'memoryItemsPerPage': 'saveLocalSettings',
   },
   mounted() {
     this.reload();
@@ -113,9 +164,10 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.assistantEnabled = params.enabled && this.$root.isLicensed('oai');
       this.agentic = params.agentic || false;
       this.paramsLoaded = true;
-      if (this.assistantEnabled && this.agentic) {
+      if (this.assistantEnabled && (this.agentic || params.memoryEnabled)) {
         this.applyParams(params);
         this.loadLocalSettings();
+        if (!this.agentic) this.tab = 'memories';
       }
       this.$root.stopLoading();
     },
@@ -129,6 +181,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         contextWindow: m.contextLimitLarge || m.contextLimitSmall || 0,
       }));
       this.tools = params.availableTools || [];
+      this.adapters = params.availableAdapters || [];
+      this.memoryEnabled = !!params.memoryEnabled;
       this.setSkills(this.skillsFromParams(params));
       this.setAgents(this.agentsFromParams(params));
       this.applyLimits(params);
@@ -138,9 +192,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     applyLimits(params) {
       this.savedMaxDelegationDepth = params.maxDelegationDepth || 0;
       this.savedMaxSubSessionTokens = params.maxSubSessionTokens || 0;
+      this.savedMemoryOptions = Object.assign({}, params.memoryParams || {});
+      this.staleMemoryCount = (params.memoryParams || {}).staleMemoryCount || 0;
       if (!this.showOptionsDialog) {
         this.maxDelegationDepth = this.savedMaxDelegationDepth;
         this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
+        this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
       }
     },
     // The server pushes agentic changes over the websocket, so a save just waits for
@@ -162,6 +219,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.saveSetting('sortBySkills', this.sortBySkills[0].key, 'name');
       this.saveSetting('sortDescSkills', this.sortBySkills[0].order, 'asc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
+      this.saveSetting('memoryItemsPerPage', this.memoryItemsPerPage, 10);
     },
     loadLocalSettings() {
       if (localStorage['settings.agentstudio.sortByAgents']) this.sortByAgents[0].key = localStorage['settings.agentstudio.sortByAgents'];
@@ -171,6 +229,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (localStorage['settings.agentstudio.sortDescSkills']) this.sortBySkills[0].order = localStorage['settings.agentstudio.sortDescSkills'];
 
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
+      if (localStorage['settings.agentstudio.memoryItemsPerPage']) this.memoryItemsPerPage = parseInt(localStorage['settings.agentstudio.memoryItemsPerPage']);
     },
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};
@@ -236,6 +295,34 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     modelItems() {
       return this.models.map(m => ({ title: m.displayName, subtitle: m.adapter, value: m.selector }));
     },
+    groupModelItems(items) {
+      const byAdapter = {};
+      for (const item of items) {
+        const adapter = item.subtitle || this.i18n.statusUnknown;
+        if (!byAdapter[adapter]) byAdapter[adapter] = [];
+        byAdapter[adapter].push(item);
+      }
+
+      const grouped = [];
+      for (const adapter of Object.keys(byAdapter).sort()) {
+        grouped.push({ header: adapter });
+        grouped.push(...byAdapter[adapter]);
+      }
+      return grouped;
+    },
+    embedModelItems() {
+      const capable = (this.adapters || []).filter(a => a.supportsEmbeddings).map(a => a.name);
+      return this.modelItems().filter(item => capable.includes(item.subtitle));
+    },
+    memoryRoleResolves(field) {
+      const selector = this.memoryOptions[field];
+      if (!selector) return false;
+      const m = AssistantUtils.resolveMappedModel(this.models, selector);
+      return !!(m && m.enabled);
+    },
+    memoryRoleHint(field, help) {
+      return this.memoryRoleResolves(field) ? help : this.i18n.agentStudioMemoryRoleDisabled;
+    },
     providerFor(selector) {
       const m = AssistantUtils.resolveMappedModel(this.models, selector);
       return m ? m.adapter : '';
@@ -273,14 +360,21 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     showOptions() {
       this.maxDelegationDepth = this.savedMaxDelegationDepth;
       this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
+      this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
       this.showOptionsDialog = true;
+    },
+    dirtyMemoryOptions() {
+      return Object.keys(MEMORY_SETTING_IDS)
+        .filter(key => this.memoryOptions[key] !== this.savedMemoryOptions[key])
+        .map(key => [MEMORY_SETTING_IDS[key], this.memoryOptions[key]]);
     },
     optionsDirty() {
       return this.maxDelegationDepth !== this.savedMaxDelegationDepth ||
-        this.maxSubSessionTokens !== this.savedMaxSubSessionTokens;
+        this.maxSubSessionTokens !== this.savedMaxSubSessionTokens ||
+        this.dirtyMemoryOptions().length > 0;
     },
     // These are plain scalar settings with no merge concerns, so they go straight
-    // to config; saving either one triggers a reload and a push.
+    // to config; saving any of them triggers a reload and a push.
     async persistOptions() {
       this.$root.startLoading();
       try {
@@ -290,8 +384,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         if (this.maxSubSessionTokens !== this.savedMaxSubSessionTokens) {
           await this.saveLimit(LIMIT_TOKENS_SETTING_ID, this.maxSubSessionTokens);
         }
+        for (const [settingId, value] of this.dirtyMemoryOptions()) {
+          await this.saveLimit(settingId, value);
+        }
         this.savedMaxDelegationDepth = this.maxDelegationDepth;
         this.savedMaxSubSessionTokens = this.maxSubSessionTokens;
+        this.savedMemoryOptions = Object.assign({}, this.memoryOptions);
         this.showOptionsDialog = false;
       } catch (error) {
         this.$root.showError(error);
@@ -554,6 +652,124 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (await this.persistSkill(skill, this.skills.concat([skill]))) {
         this.createSkillDialog = false;
         this.tab = 'skills';
+      }
+    },
+
+    // v-data-table-server reports paging through options; a search is submitted
+    // explicitly because every one of them costs an embedding call.
+    onMemoryOptions(options) {
+      this.memoryPage = options.page;
+      this.memoryItemsPerPage = options.itemsPerPage;
+      this.loadMemories();
+    },
+    onMemoryFilterChanged() {
+      this.memoryPage = 1;
+      this.loadMemories();
+    },
+    async loadMemories() {
+      if (!this.memoryEnabled) return;
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.get('assistant/memories', {
+          params: {
+            scope: this.memoryScope,
+            q: this.memorySearch || '',
+            limit: this.memoryItemsPerPage,
+            offset: (this.memoryPage - 1) * this.memoryItemsPerPage,
+          },
+        });
+        const results = response.data || {};
+        this.memories = results.memories || [];
+        this.memoryTotal = results.total || 0;
+        this.memoryDrafts = {};
+        this.expandedMemories = [];
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    memoryPayload(mem) {
+      return {
+        memoryText: mem.memoryText || '',
+        scope: mem.scope === 'global' ? 'global' : 'user',
+        targetUserId: mem.scope === 'global' ? '' : (mem.targetUserId || ''),
+      };
+    },
+    draftForMemory(mem) {
+      return this.memoryDrafts[mem.id] || mem;
+    },
+    onToggleMemory(mem, toggleExpand, internalItem) {
+      if (this.expandedMemories.includes(mem.id)) {
+        delete this.memoryDrafts[mem.id];
+      } else {
+        this.memoryDrafts[mem.id] = JSON.parse(JSON.stringify(mem));
+      }
+      toggleExpand(internalItem);
+    },
+    memoryDirty(mem) {
+      const draft = this.memoryDrafts[mem.id];
+      if (!draft) return false;
+      return JSON.stringify(this.memoryPayload(draft)) !== JSON.stringify(this.memoryPayload(mem));
+    },
+    memoryOwner(mem) {
+      return mem.scope === 'global' ? this.i18n.all : (mem.targetUserId || '');
+    },
+    memoryPersonaDirty() {
+      return ['memoryPersona', 'reconcilePersona']
+        .some(key => (this.memoryOptions[key] || '') !== (this.savedMemoryOptions[key] || ''));
+    },
+    memoryLastRecalled(mem) {
+      return mem.lastUsedAt ? this.$root.formatDateTime(mem.lastUsedAt) : this.i18n.agentStudioMemoryNeverRecalled;
+    },
+    async saveMemory(mem) {
+      const draft = this.memoryDrafts[mem.id];
+      if (!draft) return;
+      if (!String(draft.memoryText || '').trim()) {
+        this.$root.showError(this.i18n.agentStudioMemoryTextRequired);
+        return;
+      }
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.put('assistant/memories/' + encodeURIComponent(mem.id), this.memoryPayload(draft));
+        await this.loadMemories();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    async removeMemory(mem) {
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.delete('assistant/memories/' + encodeURIComponent(mem.id));
+        await this.loadMemories();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    showAddMemory() {
+      this.newMemory = { memoryText: '', scope: 'user', targetUserId: '' };
+      this.createMemoryDialog = true;
+    },
+    async saveNewMemory() {
+      if (!String(this.newMemory.memoryText || '').trim()) {
+        this.$root.showError(this.i18n.agentStudioMemoryTextRequired);
+        return;
+      }
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.post('assistant/memories', this.memoryPayload(this.newMemory));
+        this.createMemoryDialog = false;
+        this.tab = 'memories';
+        this.memoryPage = 1;
+        await this.loadMemories();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
       }
     },
   }

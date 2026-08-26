@@ -67,6 +67,10 @@ func (a *OpenAIEmbeddingsAdapter) Protocol() string {
 	return "openai_embeddings"
 }
 
+func (a *OpenAIEmbeddingsAdapter) SupportsEmbeddings() bool {
+	return true
+}
+
 // Embed generates a vector embedding for each input, index-aligned with req.Input.
 func (a *OpenAIEmbeddingsAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
 	logger := log.FromContext(ctx)
