@@ -16,7 +16,17 @@ import (
 
 const (
 	MessageTagContextCompression = "context_compression"
+
+	SessionTagMemory    = "memory"
+	SessionTagEmbed     = "embed"
+	SessionTagReconcile = "reconcile"
 )
+
+// MemorySessionTags marks sessions created by the background memory pipeline
+// (and the live-chat embedding path) to hold agent usage records. Tagged
+// sessions are excluded from GetSessions unless GetSessionsWithMemorySessions
+// is passed, and are never scanned for memories themselves.
+var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
 
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
@@ -329,6 +339,9 @@ type ChatConfig struct {
 	// for this request. Used to enforce a per-sub-session output-token budget.
 	MaxTokens       int
 	IncludeMemories bool
+	// MemorySessionId is the chat session the retrieved memories serve; embedding
+	// token usage on the memory-fetch path is recorded against it.
+	MemorySessionId string
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
@@ -337,9 +350,10 @@ func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	}
 }
 
-func WithMemories() ChatOpt {
+func WithMemories(sessionId string) ChatOpt {
 	return func(config *ChatConfig) {
 		config.IncludeMemories = true
+		config.MemorySessionId = sessionId
 	}
 }
 

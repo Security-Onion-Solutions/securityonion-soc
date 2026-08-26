@@ -295,7 +295,7 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 }
 
 func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
 	if err != nil {
 		return nil, err
 	}
@@ -509,15 +509,27 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 		boolQuery["must"] = mustQuery
 	}
 
+	mustNot := []any{}
+
 	if !opt.IncludeDeleted() {
-		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
-		boolQuery["must_not"] = []any{
-			map[string]any{
-				"exists": map[string]any{
-					"field": store.schemaPrefix + "session.deleteTime",
-				},
+		mustNot = append(mustNot, map[string]any{
+			"exists": map[string]any{
+				"field": store.schemaPrefix + "session.deleteTime",
 			},
-		}
+		})
+	}
+
+	if !opt.IncludeMemorySessions() {
+		mustNot = append(mustNot, map[string]any{
+			"terms": map[string]any{
+				store.schemaPrefix + "session.tags": model.MemorySessionTags,
+			},
+		})
+	}
+
+	if len(mustNot) != 0 {
+		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+		boolQuery["must_not"] = mustNot
 	}
 
 	start, end := opt.Range()
@@ -1334,6 +1346,13 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 					map[string]any{
 						"exists": map[string]any{
 							"field": store.schemaPrefix + "session.parentSessionId",
+						},
+					},
+					// Memory-pipeline bookkeeping sessions record agent token usage
+					// and must never be scanned themselves.
+					map[string]any{
+						"terms": map[string]any{
+							store.schemaPrefix + "session.tags": model.MemorySessionTags,
 						},
 					},
 				},

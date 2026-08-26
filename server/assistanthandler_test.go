@@ -735,13 +735,22 @@ func TestManageSessionHistory(t *testing.T) {
 		},
 	}
 
-	// Set up mock expectations
+	// Set up mock expectations; the management view must include memory sessions
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).Return(mockSessions, nil)
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		assert.True(t, applied.IncludeMemorySessions())
+
+		return mockSessions, nil
+	})
 
 	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
 
@@ -793,6 +802,7 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
@@ -1589,6 +1599,65 @@ func TestUpdateSessionTagAlreadyExists(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestUpdateSessionReservedTag(t *testing.T) {
+	type testCase struct {
+		Action string
+		Tag    string
+	}
+
+	cases := []testCase{}
+	for _, tag := range model.MemorySessionTags {
+		cases = append(cases, testCase{Action: "add", Tag: tag}, testCase{Action: "remove", Tag: tag})
+	}
+
+	// guard is case-insensitive
+	cases = append(cases, testCase{Action: "add", Tag: "Memory"})
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s-%s", tc.Action, tc.Tag), func(t *testing.T) {
+			srv := &Server{
+				Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+			}
+			ctrl := gomock.NewController(t)
+			mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+			defer ctrl.Finish()
+
+			srv.Assistantstore = mockAssistantStore
+
+			handler := NewAssistantHandler(srv)
+
+			sessionId := "test-session-123"
+			requestBody := model.UpdateSessionRequest{
+				Action: tc.Action,
+				Tag:    tc.Tag,
+			}
+
+			jsonBody, _ := json.Marshal(requestBody)
+			req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Set URL params
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("sessionId", sessionId)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			// Add required context values
+			ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+			ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+			req = req.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+
+			// No store expectations: any GetSessions/UpdateSessionTags call means
+			// the guard fell through and gomock fails the test.
+			handler.UpdateSession(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
 }
 
 func TestUpdateSessionRemoveTagAttachedToCase(t *testing.T) {
@@ -2658,11 +2727,20 @@ func TestGetSessions(t *testing.T) {
 	handler := NewAssistantHandler(srv)
 
 	// A child (delegated) session must be filtered out of the top-level list.
-	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
-		{SessionId: "top-1"},
-		{SessionId: "child-1", ParentSessionId: "top-1"},
-		{SessionId: "top-2"},
-	}, nil)
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		// The user-facing list must keep the default memory-session exclusion.
+		assert.False(t, applied.IncludeMemorySessions())
+
+		return []*model.AssistantSession{
+			{SessionId: "top-1"},
+			{SessionId: "child-1", ParentSessionId: "top-1"},
+			{SessionId: "top-2"},
+		}, nil
+	})
 
 	req := withAssistantContext(httptest.NewRequest("GET", "/assistant/sessions", nil))
 	w := httptest.NewRecorder()
@@ -2676,6 +2754,38 @@ func TestGetSessions(t *testing.T) {
 	for _, s := range got {
 		assert.Empty(t, s.ParentSessionId)
 	}
+}
+
+func TestGetSessionsAdmin_IncludesMemorySessions(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		// The management view returns everything, memory sessions included.
+		assert.True(t, applied.IncludeMemorySessions())
+		assert.True(t, applied.IncludeDeleted())
+
+		return []*model.AssistantSession{{SessionId: "chat-1-memory", Tags: []string{model.SessionTagMemory}}}, nil
+	})
+
+	params := url.Values{
+		"range":    {"2025-01-01 00:00:00 - 2025-01-31 23:59:59"},
+		"format":   {"2006-01-02 15:04:05"},
+		"timezone": {"UTC"},
+	}
+	req := withAssistantContext(httptest.NewRequest("GET", "/assistant/admin/sessions?"+params.Encode(), nil))
+	w := httptest.NewRecorder()
+
+	handler.GetSessionsAdmin(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []*model.AssistantSession
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Len(t, got, 1)
 }
 
 func TestGetSessions_StoreError(t *testing.T) {

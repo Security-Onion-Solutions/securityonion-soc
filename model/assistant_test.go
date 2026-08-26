@@ -16,7 +16,8 @@ import (
 func TestApplyChatOptsWithMemories(t *testing.T) {
 	t.Parallel()
 
-	assert.True(t, ApplyChatOpts(WithMemories()).IncludeMemories)
+	assert.True(t, ApplyChatOpts(WithMemories("chat_123_abc")).IncludeMemories)
+	assert.Equal(t, "chat_123_abc", ApplyChatOpts(WithMemories("chat_123_abc")).MemorySessionId)
 	assert.False(t, ApplyChatOpts().IncludeMemories)
 }
 

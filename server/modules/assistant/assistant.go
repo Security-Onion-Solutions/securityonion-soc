@@ -839,7 +839,7 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		if strings.EqualFold(latest.Role, "user") {
 			content := messageText(latest)
 			if content != "" {
-				ac.addMemoriesToPrompt(ctx, req, content)
+				ac.addMemoriesToPrompt(ctx, req, content, config.MemorySessionId)
 			}
 		}
 	}
@@ -852,10 +852,10 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 	return req, adapter, nil
 }
 
-func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *model.ChatRequest, content string) {
+func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *model.ChatRequest, content string, sourceSessionId string) {
 	logger := log.FromContext(ctx)
 
-	user, global, err := ac.fetchMemoriesForPrompt(ctx, content)
+	user, global, err := ac.fetchMemoriesForPrompt(ctx, content, sourceSessionId)
 	if err != nil {
 		// log error but send request without memories
 		logger.WithError(err).Warnf("failed to fetch memories for prompt, sending without memories")

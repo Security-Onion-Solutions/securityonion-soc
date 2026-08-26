@@ -695,6 +695,15 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// don't allow any actions involving reserved tags
+	for _, reservedTag := range model.MemorySessionTags {
+		if strings.EqualFold(reservedTag, updateReq.Tag) {
+			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
+
+			return
+		}
+	}
+
 	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
@@ -916,6 +925,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithUsage(true),
+		model.GetSessionsWithMemorySessions(true),
 	}
 
 	if userId != "" {
@@ -958,7 +968,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
