@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -335,6 +336,17 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 	inputArtifact := model.NewArtifact()
 
+	if err := h.server.CheckAuthorized(ctx, "write", "cases"); err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	uploadLimit := int64(h.server.Config.MaxUploadSizeBytes)
+	if uploadLimit == 0 {
+		uploadLimit = config.DEFAULT_MAX_UPLOAD_SIZE_BYTES
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
+
 	contentType, ok := r.Header["Content-Type"]
 	if !ok || !strings.Contains(contentType[0], "multipart") {
 		// Fallback to plain JSON
@@ -345,7 +357,7 @@ func (h *CaseHandler) createArtifact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		err := r.ParseMultipartForm(int64(h.server.Config.MaxUploadSizeBytes))
+		err := r.ParseMultipartForm(uploadLimit)
 		if err != nil {
 			web.Respond(w, r, http.StatusBadRequest, err)
 			return
