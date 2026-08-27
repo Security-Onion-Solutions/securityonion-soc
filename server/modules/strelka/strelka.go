@@ -298,6 +298,10 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Dete
 func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterrupt()
+
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error during a Strelka sync")
+		}
 	}()
 
 	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {

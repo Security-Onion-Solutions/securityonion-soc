@@ -1005,6 +1005,31 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 	assert.Equal(t, wnr, eng.writeNoRead)
 }
 
+func TestSyncRecoversFromPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").DoAndReturn(func(ctx context.Context, publicId string) (*model.Detection, error) {
+		panic("test panic")
+	})
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: util.Ptr("123"),
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = eng.Sync(logger, false)
+	})
+	assert.NoError(t, err)
+}
+
 func TestSyncIncrementalNoChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

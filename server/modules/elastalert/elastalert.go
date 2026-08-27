@@ -601,6 +601,10 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterruptSync()
+
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error during an ElastAlert sync")
+		}
 	}()
 
 	// handle write/no-read
@@ -1635,9 +1639,14 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 			return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
 		}
 
-		detection := doc["detection"].(map[string]interface{})
-		if detection == nil {
+		detection, ok := doc["detection"].(map[string]interface{})
+		if !ok || detection == nil {
 			return "", fmt.Errorf("sigma rule does not contain a detection section")
+		}
+
+		condition, ok := detection["condition"].(string)
+		if !ok || condition == "" {
+			return "", fmt.Errorf("sigma rule does not contain a condition")
 		}
 
 		for _, f := range filters {
@@ -1651,7 +1660,6 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 			}
 		}
 
-		condition := detection["condition"].(string)
 		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
 
 		raw, err := yaml.Marshal(doc)
