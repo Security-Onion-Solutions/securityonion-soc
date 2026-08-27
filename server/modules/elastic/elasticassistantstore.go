@@ -588,6 +588,78 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 	return sessions, nil
 }
 
+// DoesUserOwnSession reports whether the session identified by sessionId is
+// recorded (soft-deleted included) as owned by userId, and whether it exists at
+// all. Only the owner id is fetched from the index — the session document is
+// never transferred or deserialized. A session that doesn't exist returns
+// (false, false, nil).
+func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (ownedByUser bool, sessionExists bool, err error) {
+	logger := log.FromContext(ctx)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []map[string]any{
+					{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "session",
+						},
+					},
+					{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+				},
+			},
+		},
+		"_source": []string{store.schemaPrefix + "session.userId"},
+		"size":    1,
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
+		return false, false, err
+	}
+
+	res, err := store.esClient.Search(
+		store.esClient.Search.WithContext(ctx),
+		store.esClient.Search.WithIndex(store.sessionIndex),
+		store.esClient.Search.WithBody(strings.NewReader(string(queryJSON))),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute Elasticsearch search")
+		return false, false, err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to read Elasticsearch response")
+		return false, false, err
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
+		return false, false, err
+	}
+
+	hits, _ := response["hits"].(map[string]any)
+	hitsArray, _ := hits["hits"].([]any)
+	if len(hitsArray) == 0 {
+		return false, false, nil
+	}
+
+	hit, _ := hitsArray[0].(map[string]any)
+	source, _ := hit["_source"].(map[string]any)
+	sess, _ := source[store.schemaPrefix+"session"].(map[string]any)
+	owner, _ := sess["userId"].(string)
+
+	return owner == userId, true, nil
+}
+
 // searchSessions executes a session-index query and deserializes the hits into
 // AssistantSession values.
 func (store *ElasticAssistantstore) searchSessions(ctx context.Context, query map[string]any) ([]*model.AssistantSession, error) {

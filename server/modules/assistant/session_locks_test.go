@@ -228,6 +228,12 @@ func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSes
 	}
 	return []*model.AssistantSession{{SessionId: "default-session"}}, nil
 }
+func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId string) (bool, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, exists := f.msgs[sessionId]
+	return exists, exists, nil
+}
 func (f *fakeAssistantstore) CreateSession(_ context.Context, _ *model.AssistantSession) error {
 	return nil
 }

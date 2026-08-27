@@ -141,6 +141,26 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check if caller owns session
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	// A nonexistent session is fine: it's created as the caller's own on first
+	// chat. Only an existing session owned by someone else is rejected.
+	if sessionExists && !ownedByUser {
+		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to post to a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, nil)
+
+		return
+	}
+
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
 
@@ -243,6 +263,29 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	// check if caller owns session
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if !sessionExists {
+		web.Respond(w, r, http.StatusNotFound, "session does not exist")
+		return
+	}
+
+	if sessionExists && !ownedByUser {
+		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, nil)
 
 		return
 	}

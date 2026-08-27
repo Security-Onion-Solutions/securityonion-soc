@@ -92,6 +92,8 @@ func TestPostChat(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, nil)
+
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
 		func(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
@@ -152,6 +154,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
 
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
@@ -263,6 +267,8 @@ func TestPostTool(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, nil)
+
 	var capturedToolReq *model.ToolRequest
 	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), "query_events").DoAndReturn(
 		func(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
@@ -347,6 +353,8 @@ func TestPostTool_StreamingTopLevelStops(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "top").Return(true, true, nil)
+
 	// The turn carries its session record; it has no parent, so the loop stops
 	// without any store lookup.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
@@ -375,6 +383,8 @@ func TestPostTool_StreamingDelegationResolves(t *testing.T) {
 	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	// First turn: the child sub-agent answers with text only. The turn carries the
 	// child's session record with its parent linkage — no store lookups needed.
@@ -422,6 +432,8 @@ func TestPostTool_StreamingDelegationResolveErrorStillCloses(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
+
 	// The child sub-agent answers with text only; its turn carries the child's
 	// session record with the parent linkage.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
@@ -456,6 +468,8 @@ func TestPostTool_StreamingToolUseStops(t *testing.T) {
 	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "delegate_to_Hunter").Return(
 		&model.StreamedTurn{
@@ -1905,6 +1919,8 @@ func TestPostChatWithEntityTypeAndId(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
+
 	// The handler should forward the entityType/entityId to ChatInSession.
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), entityType, entityId).Return([]*model.Message{{
 		Role: "assistant",
@@ -1967,6 +1983,8 @@ func TestPostChatWithEntityTypeAndIdMarkFails(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
 
 	// ChatInSession should still be called even when alert-mark fails.
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), entityType, entityId).Return([]*model.Message{{
@@ -2827,9 +2845,10 @@ func TestPostChat_NonStreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").Return(nil, tc.err)
 
 			body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
@@ -2845,9 +2864,10 @@ func TestPostChat_NonStreamingUpstreamErrors(t *testing.T) {
 }
 
 func TestPostChat_Streaming(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
 		sseTextResponse("hello"), &model.AuxMessageData{}, noopFinalize, nil)
 
@@ -2864,9 +2884,10 @@ func TestPostChat_Streaming(t *testing.T) {
 }
 
 func TestPostChat_StreamingUpstreamError(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
 		nil, nil, nil, errors.New("boom"))
 
@@ -2983,9 +3004,67 @@ func TestRespondChatError(t *testing.T) {
 	}
 }
 
-func TestPostChat_DefaultsSessionId(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+func TestPostChat_SessionNotOwned(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	// The session exists but belongs to a different user than the requestor
+	// ("test-user"), so the chat must be rejected before reaching the manager.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, true, nil)
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostChat_SessionLookupError(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, errors.New("es unavailable"))
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestPostChat_NewSessionAllowed(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// A session that doesn't exist yet isn't owned by anyone; the chat proceeds
+	// and the session is created as the caller's own.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, nil)
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").Return([]*model.Message{}, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPostChat_DefaultsSessionId(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", gomock.Any()).Return(false, false, nil)
 
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
@@ -3007,8 +3086,10 @@ func TestPostChat_DefaultsSessionId(t *testing.T) {
 }
 
 func TestPostChat_StreamingDowngradeToNonStreaming(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 
 	// The writer is not an http.Flusher, so despite the SSE Accept header the
 	// handler must fall back to the buffered ChatInSession path.
@@ -3026,8 +3107,10 @@ func TestPostChat_StreamingDowngradeToNonStreaming(t *testing.T) {
 }
 
 func TestPostChat_StreamingFinalizeCalled(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 
 	finalized := make(chan []byte, 1)
 	finalize := func(rawResponse []byte) error {
@@ -3089,9 +3172,10 @@ func TestPostTool_NonStreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), "query_events").Return(nil, tc.err)
 
 			body, _ := json.Marshal(model.ToolRequest{SessionId: "s1", ToolUseId: "tu1", Model: "m"})
@@ -3319,9 +3403,10 @@ func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(nil, tc.err)
 
 			req, w := newToolStreamRequest(t, "s1", "query_events")
@@ -3334,6 +3419,64 @@ func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
 			assert.Equal(t, tc.wantCode, w.Code)
 		})
 	}
+}
+
+// newToolRequest builds a non-streaming PostTool request for session "s1".
+func newToolRequest(t *testing.T) (*http.Request, *httptest.ResponseRecorder) {
+	t.Helper()
+	body, _ := json.Marshal(model.ToolRequest{SessionId: "s1", ToolUseId: "tu1", Model: "m"})
+	req := httptest.NewRequest("POST", "/assistant/tool/query_events", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "query_events")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	return withAssistantContext(req), httptest.NewRecorder()
+}
+
+func TestPostTool_SessionNotOwned(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// The session exists but belongs to a different user than the requestor
+	// ("test-user"), so the tool call must be rejected before reaching the manager.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, true, nil)
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostTool_SessionNotFound(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// Unlike PostChat, a tool result can never start a new session: a nonexistent
+	// session is a 404, not an implicit create.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, nil)
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestPostTool_SessionLookupError(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, errors.New("es unavailable"))
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestPostTool_Unauthorized(t *testing.T) {
@@ -3384,6 +3527,8 @@ func TestPostTool_StreamingDelegationResolveError(t *testing.T) {
 	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
 		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize,
@@ -3458,7 +3603,11 @@ func TestPostTool_StreamingClientDisconnect_PersistsTurnWithoutDelegation(t *tes
 	defer ctrl.Finish()
 
 	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	finalized := make(chan []byte, 1)
 	toolUseResp := paddedSSE(
@@ -3497,7 +3646,11 @@ func TestPostTool_StreamingClientDisconnect_ResolvesDelegation(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	textResp := paddedSSE(
 		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +

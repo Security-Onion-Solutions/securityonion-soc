@@ -2434,6 +2434,112 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 	assert.True(t, foundSessionId, "sessionId filter should be in query")
 }
 
+func TestDoesUserOwnSession(t *testing.T) {
+	ownerHitResponse := func(owner string) string {
+		return `{
+			"hits": {
+				"total": {
+					"value": 1
+				},
+				"hits": [
+					{
+						"_id": "session123",
+						"_source": {
+							"so_session": {
+								"userId": "` + owner + `"
+							}
+						}
+					}
+				]
+			}
+		}`
+	}
+
+	testCases := []struct {
+		name       string
+		statusCode int
+		response   string
+		wantOwned  bool
+		wantExists bool
+		wantErr    bool
+	}{
+		{
+			name:       "session owned by the user",
+			statusCode: 200,
+			response:   ownerHitResponse("test-user"),
+			wantOwned:  true,
+			wantExists: true,
+		},
+		{
+			name:       "session owned by another user",
+			statusCode: 200,
+			response:   ownerHitResponse("someone-else"),
+			wantOwned:  false,
+			wantExists: true,
+		},
+		{
+			name:       "nonexistent session",
+			statusCode: 200,
+			response:   `{"hits": {"total": {"value": 0}, "hits": []}}`,
+			wantOwned:  false,
+			wantExists: false,
+		},
+		{
+			name:       "elasticsearch error propagates",
+			statusCode: 500,
+			response:   `{"error": "internal server error"}`,
+			wantErr:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockEsClient, transport := modmock.NewMockClient(t)
+
+			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+			store.Init("chat-index", "session-index", "so_")
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+			addJsonResponse(transport, tc.statusCode, tc.response)
+
+			ownedByUser, sessionExists, err := store.DoesUserOwnSession(ctx, "test-user", "session123")
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantOwned, ownedByUser)
+			assert.Equal(t, tc.wantExists, sessionExists)
+
+			// Verify the query fetches only the owner id: source-filtered to the
+			// session userId field, capped to a single hit, filtered by kind and
+			// sessionId.
+			reqs := transport.GetRequests()
+			assert.Len(t, reqs, 1)
+
+			var query map[string]any
+			assert.NoError(t, json.NewDecoder(reqs[0].Body).Decode(&query))
+			assert.Equal(t, []any{"so_session.userId"}, query["_source"])
+			assert.Equal(t, float64(1), query["size"])
+
+			mustQuery := query["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any)
+			assert.Len(t, mustQuery, 2)
+			foundSessionId := false
+			for _, clause := range mustQuery {
+				if term, ok := clause.(map[string]any)["term"].(map[string]any); ok {
+					if sessionId, exists := term["so_session.sessionId"]; exists {
+						assert.Equal(t, "session123", sessionId)
+						foundSessionId = true
+					}
+				}
+			}
+			assert.True(t, foundSessionId, "sessionId filter should be in query")
+		})
+	}
+}
+
 func TestGetSessions_WithDescendants(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
