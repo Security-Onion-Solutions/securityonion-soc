@@ -42,6 +42,21 @@ func (m *MockNotificationstore) EXPECT() *MockNotificationstoreMockRecorder {
 	return m.recorder
 }
 
+// GetAuditLogs mocks base method.
+func (m *MockNotificationstore) GetAuditLogs(ctx context.Context, id string) ([]*model.NotificationAuditEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAuditLogs", ctx, id)
+	ret0, _ := ret[0].([]*model.NotificationAuditEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAuditLogs indicates an expected call of GetAuditLogs.
+func (mr *MockNotificationstoreMockRecorder) GetAuditLogs(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuditLogs", reflect.TypeOf((*MockNotificationstore)(nil).GetAuditLogs), ctx, id)
+}
+
 // GetLastUnreadTime mocks base method.
 func (m *MockNotificationstore) GetLastUnreadTime(ctx context.Context) (*time.Time, error) {
 	m.ctrl.T.Helper()
@@ -72,20 +87,6 @@ func (mr *MockNotificationstoreMockRecorder) GetNotifications(ctx, filter any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotifications", reflect.TypeOf((*MockNotificationstore)(nil).GetNotifications), ctx, filter)
 }
 
-// SetRead mocks base method.
-func (m *MockNotificationstore) SetRead(ctx context.Context, id string, isRead bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetRead", ctx, id, isRead)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetRead indicates an expected call of SetRead.
-func (mr *MockNotificationstoreMockRecorder) SetRead(ctx, id, isRead any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRead", reflect.TypeOf((*MockNotificationstore)(nil).SetRead), ctx, id, isRead)
-}
-
 // SetDismissed mocks base method.
 func (m *MockNotificationstore) SetDismissed(ctx context.Context, id string, isDismissed bool) error {
 	m.ctrl.T.Helper()
@@ -100,17 +101,16 @@ func (mr *MockNotificationstoreMockRecorder) SetDismissed(ctx, id, isDismissed a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDismissed", reflect.TypeOf((*MockNotificationstore)(nil).SetDismissed), ctx, id, isDismissed)
 }
 
-// GetAuditLogs mocks base method.
-func (m *MockNotificationstore) GetAuditLogs(ctx context.Context, id string) ([]*model.NotificationAuditEntry, error) {
+// SetRead mocks base method.
+func (m *MockNotificationstore) SetRead(ctx context.Context, id string, isRead bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAuditLogs", ctx, id)
-	ret0, _ := ret[0].([]*model.NotificationAuditEntry)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "SetRead", ctx, id, isRead)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// GetAuditLogs indicates an expected call of GetAuditLogs.
-func (mr *MockNotificationstoreMockRecorder) GetAuditLogs(ctx, id any) *gomock.Call {
+// SetRead indicates an expected call of SetRead.
+func (mr *MockNotificationstoreMockRecorder) SetRead(ctx, id, isRead any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuditLogs", reflect.TypeOf((*MockNotificationstore)(nil).GetAuditLogs), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRead", reflect.TypeOf((*MockNotificationstore)(nil).SetRead), ctx, id, isRead)
 }
