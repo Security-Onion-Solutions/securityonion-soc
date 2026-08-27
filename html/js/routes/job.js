@@ -17,6 +17,9 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     expanded: [],
     packetOptions: ['packets', 'hex', 'unwrap'],
     packets: [],
+    hasDecodeErrors: false,
+    lastLoadedUnwrap: true,
+    lastLoadedExcludeErrors: false,
     headers: [
       { title: this.$root.i18n.number, value: 'number' },
       { title: this.$root.i18n.timestamp, value: 'timestamp' },
@@ -142,7 +145,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
     disableOption(option) {
       var idx = this.packetOptions.indexOf(option);
       if (idx != -1) {
-        this.packetOptions.slice(idx, 1);
+        this.packetOptions.splice(idx, 1);
       }
     },
     isOptionEnabled(option) {
@@ -183,14 +186,33 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       const win = window.open(...openArgs);
       win.onload = () => { win.app.setInput(transcript); };
     },
-    toggleWrap() {
-      this.packets = [];
-      var unwrap = !this.isOptionEnabled('unwrap'); // option hasn't been flipped yet
-      var route = this;
-      setTimeout(function() { route.loadPackets(unwrap); }, 0); // run async to this event
+    hasDecodeFailures() {
+      return this.packets.some(packet => packet.error || packet.type === 'DecodeFailure');
     },
-    async loadPackets(unwrap) {
+    onPacketOptionsChanged(newOptions) {
+      this.saveLocalSettings();
       if (!this.job || !this.job.id) return;
+
+      const unwrap = newOptions.includes('unwrap');
+      const excludeErrors = newOptions.includes('excludeErrors');
+
+      if (this.lastLoadedUnwrap !== unwrap || this.lastLoadedExcludeErrors !== excludeErrors) {
+        this.packets = [];
+        this.loadPackets(unwrap, excludeErrors);
+      }
+    },
+    async loadPackets(unwrap, excludeErrors) {
+      if (!this.job || !this.job.id) return;
+
+      if (unwrap === undefined) {
+        unwrap = this.isOptionEnabled('unwrap');
+      }
+      if (excludeErrors === undefined) {
+        excludeErrors = this.isOptionEnabled('excludeErrors');
+      }
+
+      this.lastLoadedUnwrap = unwrap;
+      this.lastLoadedExcludeErrors = excludeErrors;
 
       this.packetsLoading = true;
       try {
@@ -198,12 +220,22 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
           jobId: this.job.id,
           offset: this.packets.length,
           count: this.count,
-          unwrap: unwrap
+          unwrap: unwrap,
+          excludeErrors: excludeErrors
         }});
+        if (response && response.headers) {
+          const hdr = response.headers['x-decode-errors-present'] ?? response.headers['X-Decode-Errors-Present'];
+          if (hdr !== undefined) {
+            this.hasDecodeErrors = String(hdr).toLowerCase() === 'true';
+          }
+        }
         if (response.data) {
           let batch = [];
           for (let i = 0; i < response.data.length; i++) {
             const pkt = response.data[i];
+            if (pkt.error || pkt.type === 'DecodeFailure') {
+              this.hasDecodeErrors = true;
+            }
             batch.push(pkt.dstIp);
             batch.push(pkt.srcIp);
           }
@@ -234,7 +266,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
         this.$root.batchLookup([this.job?.filter?.srcIp, this.job?.filter?.dstIp], this)
         this.$root.populateUserDetails(this.job, "userId", "owner");
         this.$root.setSubtitle(this.i18n.jobs + " - " + this.job.id);
-        this.loadPackets(this.isOptionEnabled('unwrap'));
+        this.loadPackets(this.isOptionEnabled('unwrap'), this.isOptionEnabled('excludeErrors'));
       } catch (error) {
         if (error.response != undefined && error.response.status == 404) {
           this.$root.showError(this.i18n.notFound);
@@ -270,7 +302,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (!job || job.id != this.job.id) return;
 
       if (this.job.status != job.status) {
-        this.loadPackets(this.isOptionEnabled('unwrap'));
+        this.loadPackets(this.isOptionEnabled('unwrap'), this.isOptionEnabled('excludeErrors'));
       }
 
       this.job = job;
@@ -282,6 +314,7 @@ routes.push({ path: '/job/:jobId', name: 'job', component: {
       if (type.startsWith("DNS")) return "accent";
       if (type.startsWith("TCP")) return "primary";
       if (type.startsWith("UDP")) return "success";
+      if (type.startsWith("DecodeFailure")) return "error";
       return "";
     },
     colorFlag(flag) {

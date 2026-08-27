@@ -26,7 +26,7 @@ type Datastore interface {
 	AddPivotJob(ctx context.Context, job *model.Job) error
 	UpdateJob(ctx context.Context, job *model.Job) error
 	DeleteJob(ctx context.Context, jobId int) (*model.Job, error)
-	GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error)
+	GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool, excludeErrors bool) ([]*model.Packet, bool, error)
 	SaveJobStream(ctx context.Context, jobId int, reader io.ReadCloser) error
 	GetJobStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, string, error)
 }

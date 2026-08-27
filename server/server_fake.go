@@ -88,9 +88,16 @@ func (impl *FakeRolestore) GetPermissions(ctx context.Context) map[string][]stri
 }
 
 type FakeDatastore struct {
-	nodes   []*model.Node
-	jobs    []*model.Job
-	packets []*model.Packet
+	nodes             []*model.Node
+	jobs              []*model.Job
+	packets           []*model.Packet
+	HasErrors         bool
+	GetPacketsErr     error
+	LastJobId         int
+	LastOffset        int
+	LastCount         int
+	LastUnwrap        bool
+	LastExcludeErrors bool
 }
 
 func NewFakeDatastore() *FakeDatastore {
@@ -164,8 +171,13 @@ func (impl *FakeDatastore) DeleteJob(ctx context.Context, jobId int) (*model.Job
 	return nil, nil
 }
 
-func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) ([]*model.Packet, error) {
-	return impl.packets, nil
+func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool, excludeErrors bool) ([]*model.Packet, bool, error) {
+	impl.LastJobId = jobId
+	impl.LastOffset = offset
+	impl.LastCount = count
+	impl.LastUnwrap = unwrap
+	impl.LastExcludeErrors = excludeErrors
+	return impl.packets, impl.HasErrors, impl.GetPacketsErr
 }
 
 func (impl *FakeDatastore) SaveJobStream(ctx context.Context, jobId int, reader io.ReadCloser) error {
