@@ -266,9 +266,33 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 		return
 	}
 
+	// One usage session per pass; per-batch recording would create hundreds of
+	// sessions and copy every memory text into chat storage. Recorded in a defer,
+	// detached from ctx, so an interrupted pass still books what it spent.
+	var passUsage model.Usage
+
+	done := 0
+
+	addUsage := func(res *model.EmbeddingResponse) {
+		if res != nil && res.Usage != nil {
+			passUsage.InputTokens += res.Usage.InputTokens
+			passUsage.OutputTokens += res.Usage.OutputTokens
+			passUsage.Credits += res.Usage.Credits
+		}
+	}
+
+	defer func() {
+		recCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second*10)
+		defer cancel()
+
+		summary := fmt.Sprintf("Re-embedded %d memories using %s", done, embedModel.Selector())
+		ac.recordEmbedUsageSummary(recCtx, summary, passUsage, embedModel.Selector())
+	}()
+
 	// model_id is whatever the provider reported, not the selector, so a probe
 	// embedding names the current model.
 	probe, err := ac.embedWithTimeout(ctx, embedModel.Selector(), []string{"probe"})
+	addUsage(probe)
 	if err != nil || len(probe.Embeddings) == 0 {
 		logger.WithError(err).Error("unable to determine the current embedding model; not re-embedding")
 		return
@@ -291,7 +315,6 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 	logger.WithFields(log.Fields{"staleCount": total, "embedModel": current}).Info("re-embedding memories after an embedding model change")
 
 	start := time.Now()
-	done := 0
 
 	for {
 		batch, err := ac.store.StaleMemoryBatch(ctx, current, MEMORY_REEMBED_BATCH_SIZE)
@@ -310,6 +333,7 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 		}
 
 		res, err := ac.embedWithTimeout(ctx, embedModel.Selector(), texts)
+		addUsage(res)
 		if err != nil {
 			logger.WithError(err).WithField("reembedded", done).Error("unable to embed; stopping re-embed pass")
 			return
@@ -419,9 +443,10 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 	logger := log.FromContext(ctx)
 
 	interval := ac.memorySnapshot().scanInterval
+	logger.WithField("interval", interval).Info("starting interval")
 	ticker := time.NewTicker(interval)
 
-	defer ticker.Stop()
+	// defer ticker.Stop()
 
 	for {
 		select {
@@ -478,14 +503,6 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Embed agent, ending scan")
 		return
-	}
-
-	// Only needed to label the Reconcile usage records; reconcileMemories
-	// re-resolves for itself and reports its own error, so a failure here just
-	// skips Reconcile usage recording.
-	var reconcileSelector string
-	if _, reconcileModel, err := ac.resolveMemoryAgent("Reconcile"); err == nil {
-		reconcileSelector = reconcileModel.Selector()
 	}
 
 	logger.Info("scanning for sessions that need memory processing")
@@ -576,7 +593,7 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			logger.Info("reconciling against existing memories")
 
 			// Reconcile
-			memChanges, reconcileExchanges, err := ac.reconcileMemories(sesOwnerCtx, mems)
+			memChanges, reconcileExchanges, reconcileSelector, err := ac.reconcileMemories(sesOwnerCtx, mems)
 			for _, exchange := range reconcileExchanges {
 				ac.recordAgentSession(ctx, model.SessionTagReconcile, sessionDetails.Session.SessionId, reconcileSelector, exchange)
 			}
@@ -779,11 +796,12 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 }
 
 // reconcileMemories also returns the request/response exchanges collected so
-// far — one per Reconcile agent call, even on a mid-loop error — so the caller
-// can record the token usage that was spent either way.
-func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*model.Memory) (ops []*model.ReconciledMemory, exchanges [][]*model.Message, err error) {
+// far — one per Reconcile agent call, even on a mid-loop error — along with the
+// resolved model selector, so the caller can record the token usage that was
+// spent either way.
+func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*model.Memory) (ops []*model.ReconciledMemory, exchanges [][]*model.Message, selector string, err error) {
 	if ac.store == nil {
-		return nil, nil, ErrNoDatabase
+		return nil, nil, "", ErrNoDatabase
 	}
 
 	logger := log.FromContext(ctx)
@@ -791,13 +809,15 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 	// retrieve agent and setup before looping
 	agentParams, modelParams, err := ac.resolveMemoryAgent("Reconcile")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
+
+	selector = modelParams.Selector()
 
 	adapter, ok := ac.adapters[modelParams.Adapter]
 	if !ok {
 		logger.WithField("adapterName", modelParams.Adapter).Error("Reconcile Agent's model references unknown adapter")
-		return nil, nil, fmt.Errorf("unknown adapter for memory model")
+		return nil, nil, selector, fmt.Errorf("unknown adapter for memory model")
 	}
 
 	canWriteSelf, canWriteGlobal := ac.memoryPerms(ctx, "write")
@@ -819,14 +839,14 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 		if canWriteGlobal && settings.maxGlobalReconcile > 0 {
 			nearby, err = ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.GlobalMemories(), database.WithMinSimilarity(settings.mem2mem), database.WithLimit(settings.maxGlobalReconcile))
 			if err != nil {
-				return nil, exchanges, err
+				return nil, exchanges, selector, err
 			}
 		}
 
 		if mem.TargetUserId != nil && settings.maxUserReconcile > 0 {
 			userNearby, err := ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.UserMemories(*mem.TargetUserId), database.WithMinSimilarity(settings.mem2mem), database.WithLimit(settings.maxUserReconcile))
 			if err != nil {
-				return nil, exchanges, err
+				return nil, exchanges, selector, err
 			}
 
 			nearby = append(nearby, userNearby...)
@@ -882,7 +902,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 
 		rawBody, err := json.Marshal(body)
 		if err != nil {
-			return nil, exchanges, err
+			return nil, exchanges, selector, err
 		}
 
 		req := &model.ChatRequest{
@@ -903,12 +923,12 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 
 		err = ac.setupAgent(ctx, req, agentParams)
 		if err != nil {
-			return nil, exchanges, err
+			return nil, exchanges, selector, err
 		}
 
 		msg, err := adapter.SendMessage(ctx, req)
 		if err != nil {
-			return nil, exchanges, err
+			return nil, exchanges, selector, err
 		}
 
 		exchanges = append(exchanges, []*model.Message{req.Messages[0], msg})
@@ -921,14 +941,14 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 		}
 
 		if len(rawResult) == 0 {
-			return nil, exchanges, fmt.Errorf("no returned content from Reconcile agent")
+			return nil, exchanges, selector, fmt.Errorf("no returned content from Reconcile agent")
 		}
 
 		changes := model.MemoryOperations{}
 
 		err = json.Unmarshal([]byte(rawResult), &changes)
 		if err != nil {
-			return nil, exchanges, err
+			return nil, exchanges, selector, err
 		}
 
 		changes.RemoveInvalid(body.Neighbors)
@@ -987,7 +1007,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 		}
 	}
 
-	return ops, exchanges, nil
+	return ops, exchanges, selector, nil
 }
 
 // memoryReadScope builds the WHERE clause limiting a listing to the memories the
@@ -1088,6 +1108,8 @@ func (ac *AssistantCoordinator) ListMemories(ctx context.Context, filter *model.
 			return nil, err
 		}
 
+		ac.recordEmbedUsageAsync(ctx, "", embedModel.Selector(), resp, []string{filter.Query})
+
 		if len(resp.Embeddings) != 1 {
 			return nil, fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))
 		}
@@ -1162,6 +1184,8 @@ func (ac *AssistantCoordinator) SaveMemory(ctx context.Context, mem *model.Memor
 	if err != nil {
 		return err
 	}
+
+	ac.recordEmbedUsageAsync(ctx, "", embedModel.Selector(), resp, []string{mem.MemoryText})
 
 	if len(resp.Embeddings) != 1 {
 		return fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))
@@ -1307,16 +1331,7 @@ func (ac *AssistantCoordinator) fetchMemoriesForPrompt(ctx context.Context, cont
 		return nil, nil, err
 	}
 
-	// Record the embedding spend off the chat hot path; the chat must not wait
-	// on, or fail because of, usage bookkeeping.
-	if sourceSessionId != "" {
-		go func() {
-			recCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second*10)
-			defer cancel()
-
-			ac.recordEmbedUsage(recCtx, sourceSessionId, embedModel.Selector(), resp, []string{content})
-		}()
-	}
+	ac.recordEmbedUsageAsync(ctx, sourceSessionId, embedModel.Selector(), resp, []string{content})
 
 	if len(resp.Embeddings) != 1 {
 		err := fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))

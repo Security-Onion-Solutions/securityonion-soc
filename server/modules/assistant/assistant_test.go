@@ -532,9 +532,6 @@ func TestAssistantCoordinator_Send(t *testing.T) {
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader(secondResponseBody)),
 				}, nil)
-
-				// Expect save chat to be called
-				mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 			},
 			expectedMessagesCount: 3, // Original response + tool result message + follow-up response
 			expectedError:         false,
@@ -2058,22 +2055,30 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 	const sessionId = "session-tool-edge"
 
 	tests := []struct {
-		name  string
-		setup func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		name    string
+		setup   func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		wantErr bool
 	}{
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
+			wantErr: true,
 		},
 		{
-			name: "save tool_result error propagates",
+			// Send already succeeded and was billed; the response is still saved
+			// and returned even when the tool_result save fails.
+			name: "save tool_result failure does not discard the billed response",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(assistantOkTextResponse("done"), nil)
-				// First persistence is the tool_result message; fail it.
-				mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save failed"))
+				// First persistence is the tool_result message; fail it. The
+				// assistant response is still saved.
+				gomock.InOrder(
+					mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save failed")),
+					mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil),
+				)
 			},
 		},
 	}
@@ -2090,10 +2095,15 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 			ac := newToolTestCoordinator(t, mockAssistantstore, mockIO, &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil)
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			_, err := ac.ToolInSession(ctx, &model.ToolRequest{
+			response, err := ac.ToolInSession(ctx, &model.ToolRequest{
 				SessionId: sessionId, ToolUseId: "tu", Params: json.RawMessage(`{}`), Model: "test-model@MyAdapter",
 			}, "query_events")
-			assert.Error(t, err)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, response)
+			}
 		})
 	}
 }
@@ -2486,14 +2496,16 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		setup func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		name    string
+		setup   func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		wantErr bool
 	}{
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
+			wantErr: true,
 		},
 		{
 			name: "upstream stream error propagates",
@@ -2501,9 +2513,12 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 			},
+			wantErr: true,
 		},
 		{
-			name: "save tool_result error propagates",
+			// SendStream already succeeded and is billing; the turn is still
+			// returned so finalize can save it and its usage.
+			name: "save tool_result failure does not abandon the billed stream",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
@@ -2527,8 +2542,16 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 			ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			_, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), nil, waitForLock)
-			assert.Error(t, err)
+			turn, err := ac.continueWithToolResult(ctx, sess(), sessionId, "test-model@MyAdapter", toolMsg(), nil, waitForLock)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if assert.NotNil(t, turn) {
+					assert.NotNil(t, turn.Response)
+					assert.NotNil(t, turn.Finalize)
+				}
+			}
 		})
 	}
 }

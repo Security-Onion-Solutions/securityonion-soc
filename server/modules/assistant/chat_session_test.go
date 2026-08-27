@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -133,6 +134,60 @@ func TestBuildNoTimeoutCtx(t *testing.T) {
 	}
 }
 
+func TestBuildDetachedCtx(t *testing.T) {
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1"))
+
+	out, outCancel := buildDetachedCtx(parent, time.Minute)
+	defer outCancel()
+
+	assert.Equal(t, "user-1", out.Value(web.ContextKeyRequestorId))
+
+	_, hasDeadline := out.Deadline()
+	assert.True(t, hasDeadline, "detached context must carry its own timeout")
+
+	// Cancelling the request context (browser refresh) must not cancel the
+	// detached context.
+	cancel()
+	assert.NoError(t, out.Err())
+}
+
+// A browser refresh cancels the request context mid-turn; the billed turn must
+// still be saved and returned.
+func TestChatInSession_SurvivesRequestCancellation(t *testing.T) {
+	const sessionId = "session-cis-cancel"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	store := servermock.NewMockAssistantstore(ctrl)
+
+	store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+		StatusCode: 200,
+		Body: io.NopCloser(strings.NewReader(
+			`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"ok"}]}`)),
+	}, nil)
+	store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(callCtx context.Context, _ *model.AssistantSession) error {
+			return callCtx.Err()
+		})
+	store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(callCtx context.Context, _ *model.StoredMessage) error {
+			return callCtx.Err()
+		}).Times(2)
+
+	ac := newChatInSessionCoordinator(t, store, mockIO, "https://api.example.com")
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user"))
+	cancel()
+
+	response, err := ac.ChatInSession(ctx, &model.IncomingMessage{Msg: "hi", SessionId: sessionId, Model: "test-model@MyAdapter"}, "", "")
+
+	assert.NoError(t, err)
+	assert.Len(t, response, 1)
+}
+
 func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 	const sessionId = "session-cis-err"
 
@@ -150,11 +205,14 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name  string
-		setup func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		name    string
+		setup   func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
+		wantErr bool
 	}{
 		{
-			name: "create session error propagates",
+			// Send already succeeded and was billed, so the response is still
+			// saved and returned.
+			name: "create session failure does not discard the billed response",
 			setup: func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
@@ -166,17 +224,23 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 						assert.Equal(t, sessionId, s.SessionId)
 						return errors.New("create failed")
 					})
+				// The user message and the assistant response are still saved.
+				store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 			},
 		},
 		{
-			name: "save user message error propagates",
+			name: "save user message failure does not discard the billed response",
 			setup: func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				// Non-empty history keeps isNew=false so CreateSession is skipped.
 				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
 					{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 				}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
-				store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save user failed"))
+				// First save (user) fails, the assistant response is still saved.
+				gomock.InOrder(
+					store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save user failed")),
+					store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil),
+				)
 			},
 		},
 		{
@@ -192,6 +256,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 					store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(errors.New("save response failed")),
 				)
 			},
+			wantErr: true,
 		},
 	}
 
@@ -208,8 +273,13 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 			ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-			_, err := ac.ChatInSession(ctx, incMsg(), "", "")
-			assert.Error(t, err)
+			response, err := ac.ChatInSession(ctx, incMsg(), "", "")
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Len(t, response, 1)
+			}
 		})
 	}
 }
@@ -227,6 +297,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		name           string
 		setup          func(store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager)
 		wantNilReturns bool
+		wantErr        bool
 	}{
 		{
 			name: "history load error propagates",
@@ -234,6 +305,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
 			},
 			wantNilReturns: true,
+			wantErr:        true,
 		},
 		{
 			name: "upstream stream error propagates",
@@ -241,9 +313,12 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 			},
+			wantErr: true,
 		},
 		{
-			name: "save user message error propagates",
+			// SendStream already succeeded and is billing; the stream and finalize
+			// are still returned so the turn's usage can be saved.
+			name: "save user message failure does not abandon the billed stream",
 			setup: func(store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				// Non-empty history keeps isNew=false so CreateSession is skipped.
 				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
@@ -272,7 +347,13 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
 			stream, _, finalize, err := ac.ChatStreamInSession(ctx, chatStreamSessionIncMsg(sessionId), "", "")
-			assert.Error(t, err)
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, stream)
+				assert.NotNil(t, finalize)
+			}
 
 			if tc.wantNilReturns {
 				assert.Nil(t, stream)

@@ -104,13 +104,34 @@ func TestRecordAgentSessionNoOps(t *testing.T) {
 
 	ac := newUsageTestCoordinator(store)
 	ac.recordAgentSession(context.Background(), model.SessionTagMemory, "src-1", "m", nil)
-	ac.recordAgentSession(context.Background(), model.SessionTagMemory, "", "m", []*model.Message{textResponse("hi")})
 
 	noSrv := &AssistantCoordinator{}
 	noSrv.recordAgentSession(context.Background(), model.SessionTagMemory, "src-1", "m", []*model.Message{textResponse("hi")})
 
 	noStore := &AssistantCoordinator{srv: &server.Server{}}
 	noStore.recordAgentSession(context.Background(), model.SessionTagMemory, "src-1", "m", []*model.Message{textResponse("hi")})
+}
+
+// AI calls with no originating chat session (re-embed passes, memory search,
+// manual memory saves) still record their spend, just without an EntityId.
+func TestRecordAgentSessionWithoutSourceSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, session *model.AssistantSession) error {
+		assert.Regexp(t, `^[A-Za-z0-9-_]{5,50}$`, session.SessionId)
+		assert.Empty(t, session.EntityId)
+		assert.Equal(t, "embed usage", session.Title)
+		assert.Equal(t, []string{model.SessionTagEmbed}, session.Tags)
+
+		return nil
+	})
+	store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
+
+	ac := newUsageTestCoordinator(store)
+
+	ac.recordAgentSession(context.Background(), model.SessionTagEmbed, "", "m", []*model.Message{textResponse("hi")})
 }
 
 func TestRecordAgentSessionSwallowsStoreErrors(t *testing.T) {
@@ -194,4 +215,41 @@ func TestRecordEmbedUsage(t *testing.T) {
 	// a nil response must not touch the store
 	ac2 := newUsageTestCoordinator(servermock.NewMockAssistantstore(ctrl))
 	ac2.recordEmbedUsage(context.Background(), "src-1", "embed-model@Adapter", nil, []string{"fact"})
+}
+
+func TestRecordEmbedUsageSummary(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	usage := model.Usage{InputTokens: 123, Credits: 4}
+
+	var saved []*model.StoredMessage
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, session *model.AssistantSession) error {
+		assert.Equal(t, []string{model.SessionTagEmbed}, session.Tags)
+		assert.Empty(t, session.EntityId)
+
+		return nil
+	})
+	store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, sm *model.StoredMessage) error {
+		saved = append(saved, sm)
+		return nil
+	})
+
+	ac := newUsageTestCoordinator(store)
+
+	ac.recordEmbedUsageSummary(context.Background(), "Re-embedded 42 memories using embed-model@Adapter", usage, "embed-model@Adapter")
+
+	if assert.Len(t, saved, 1) {
+		assert.Equal(t, "assistant", saved[0].Message.Role)
+		assert.Equal(t, &usage, saved[0].Message.Usage)
+		if assert.Len(t, saved[0].Message.ContentBlocks, 1) {
+			assert.Equal(t, "Re-embedded 42 memories using embed-model@Adapter", saved[0].Message.ContentBlocks[0].Text)
+		}
+	}
+
+	// zero usage must not touch the store
+	ac2 := newUsageTestCoordinator(servermock.NewMockAssistantstore(ctrl))
+	ac2.recordEmbedUsageSummary(context.Background(), "Re-embedded 0 memories using embed-model@Adapter", model.Usage{}, "embed-model@Adapter")
 }

@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
@@ -18,9 +19,11 @@ import (
 // recordAgentSession persists one background-agent exchange (request and
 // response messages, in order) into a new tagged session. Ownership and
 // metrics attribution follow the caller's context: the scanner records as
-// SYSTEM, the live-chat embedding path as the chatting user.
+// SYSTEM, the live-chat embedding path as the chatting user. An empty
+// sourceSessionId is allowed for AI calls with no originating chat session
+// (re-embed passes, memory search, manual memory saves).
 func (ac *AssistantCoordinator) recordAgentSession(ctx context.Context, tag string, sourceSessionId string, modelSelector string, msgs []*model.Message) {
-	if len(msgs) == 0 || sourceSessionId == "" || ac.srv == nil || ac.srv.Assistantstore == nil {
+	if len(msgs) == 0 || ac.srv == nil || ac.srv.Assistantstore == nil {
 		return
 	}
 
@@ -29,9 +32,14 @@ func (ac *AssistantCoordinator) recordAgentSession(ctx context.Context, tag stri
 		"sourceSessionId":  sourceSessionId,
 	})
 
+	title := fmt.Sprintf("%s usage", tag)
+	if sourceSessionId != "" {
+		title = fmt.Sprintf("%s usage for session %s", tag, sourceSessionId)
+	}
+
 	session := &model.AssistantSession{
 		SessionId: uuid.NewString(),
-		Title:     fmt.Sprintf("%s usage for session %s", tag, sourceSessionId),
+		Title:     title,
 		EntityId:  sourceSessionId,
 		Tags:      []string{tag},
 		Model:     modelSelector,
@@ -80,4 +88,37 @@ func (ac *AssistantCoordinator) recordEmbedUsage(ctx context.Context, sourceSess
 	}
 
 	ac.recordAgentSession(ctx, model.SessionTagEmbed, sourceSessionId, modelSelector, []*model.Message{request, response})
+}
+
+// recordEmbedUsageAsync records embedding spend off the caller's hot path; the
+// request must not wait on, or fail because of, usage bookkeeping.
+func (ac *AssistantCoordinator) recordEmbedUsageAsync(ctx context.Context, sourceSessionId string, modelSelector string, resp *model.EmbeddingResponse, inputs []string) {
+	go func() {
+		recCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second*10)
+		defer cancel()
+
+		ac.recordEmbedUsage(recCtx, sourceSessionId, modelSelector, resp, inputs)
+	}()
+}
+
+// recordEmbedUsageSummary records aggregate embedding spend for a whole pass in
+// a single session, without duplicating the embedded texts into chat storage.
+func (ac *AssistantCoordinator) recordEmbedUsageSummary(ctx context.Context, summary string, usage model.Usage, modelSelector string) {
+	if usage == (model.Usage{}) {
+		return
+	}
+
+	response := &model.Message{
+		Id:   uuid.NewString(),
+		Role: "assistant",
+		ContentBlocks: []model.ContentBlock{
+			{
+				Type: "text",
+				Text: summary,
+			},
+		},
+		Usage: &usage,
+	}
+
+	ac.recordAgentSession(ctx, model.SessionTagEmbed, "", modelSelector, []*model.Message{response})
 }

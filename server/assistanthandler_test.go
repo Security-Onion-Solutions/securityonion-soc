@@ -941,6 +941,31 @@ data: [DONE]`
 	}, *msg)
 }
 
+// Anthropic-style streams report input tokens (and credits) on message_start and
+// only output tokens on the final message_delta; the merge must keep both.
+func TestUnstreamResponseMergesUsage(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":0,"credits":42}}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: {"type":"message_delta","usage":{"output_tokens":7}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := UnstreamResponse(context.Background(), data, nil)
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, msg) && assert.NotNil(t, msg.Usage) {
+		assert.Equal(t, 500, msg.Usage.InputTokens)
+		assert.Equal(t, 7, msg.Usage.OutputTokens)
+		assert.Equal(t, 42, msg.Usage.Credits)
+	}
+}
+
 func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	// Create mock server with airgap enabled
 	srv := &Server{
@@ -2900,6 +2925,61 @@ func TestPostChat_StreamingUpstreamError(t *testing.T) {
 	handler.PostChat(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// errAfterReader serves its data then fails, simulating an upstream body that
+// dies mid-stream.
+type errAfterReader struct {
+	data []byte
+	err  error
+	pos  int
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if r.pos < len(r.data) {
+		n := copy(p, r.data[r.pos:])
+		r.pos += n
+		return n, nil
+	}
+	return 0, r.err
+}
+
+// A mid-stream upstream read error must not skip finalize: the buffered prefix
+// (which may hold a complete, billed turn) is still persisted. Mirrors the
+// PostTool loop, which fires finalize before examining the stream error.
+func TestPostChat_StreamingBodyError_StillFinalizes(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
+
+	prefix := "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"role\":\"assistant\",\"content\":[]}}\n\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"partial\"}}\n\n"
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(&errAfterReader{data: []byte(prefix), err: errors.New("upstream died")}),
+	}
+
+	finalized := make(chan []byte, 1)
+	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
+		resp, &model.AuxMessageData{}, func(raw []byte) error { finalized <- raw; return nil }, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	select {
+	case raw := <-finalized:
+		assert.Equal(t, prefix, string(raw), "finalize must receive everything buffered before the error")
+	case <-time.After(2 * time.Second):
+		t.Fatal("finalize was never called despite the buffered turn")
+	}
 }
 
 func TestDecodeIncomingMessage(t *testing.T) {

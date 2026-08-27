@@ -96,6 +96,9 @@ const (
 	// Ceiling on one embedding call; a stalled gateway would otherwise strand the
 	// pass and block every later one.
 	MEMORY_REEMBED_CALL_TIMEOUT = 2 * time.Minute
+	// Ceiling on a detached non-streaming chat turn; bounds the orphaned work
+	// after a browser refresh without racing the model on big prompts.
+	CHAT_TURN_TIMEOUT = 3 * time.Minute
 )
 
 //go:embed SOSystemPrompt.bin
@@ -1112,13 +1115,9 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 						},
 					}
 
+					// Not persisted here: callers save every returned message under their
+					// own session id, and this loop has none to offer.
 					newMessages = append(newMessages, toolMsg)
-
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
-					if err != nil {
-						logger.WithError(err).Error("unable to save tool result message")
-						return nil, err
-					}
 
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
@@ -1702,13 +1701,13 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 		return nil, err
 	}
 
+	// Send already succeeded, a failed tool_result save must not
+	// discard the response before it and its usage are saved.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message (non-streaming)")
 	}
 
 	for _, msg := range response {
@@ -2028,13 +2027,14 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		return nil, err
 	}
 
+	// SendStream already succeeded (the upstream is live and billing); a failed
+	// tool_result save must not abandon the stream before finalize can save the
+	// turn and its usage.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message")
 	}
 
 	finalize := func(rawResponse []byte) error {

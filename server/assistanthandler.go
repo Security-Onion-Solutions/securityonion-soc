@@ -210,19 +210,20 @@ func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.Respo
 		return
 	}
 
-	entireResponse, err := streamResponse(ctx, w, r, response)
-	if err != nil {
-		logger.WithError(err).Error("error streaming response")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+	entireResponse, streamErr := streamResponse(ctx, w, r, response)
 
-		return
-	}
-
+	// Persist whatever was buffered even when the stream errored — the upstream
+	// billed the turn either way. Mirrors the PostTool loop.
 	go func() {
 		if err := finalize(entireResponse); err != nil {
 			logger.WithError(err).Error("error finalizing streamed response")
 		}
 	}()
+
+	if streamErr != nil {
+		logger.WithError(streamErr).Error("error streaming response")
+		web.Respond(w, r, http.StatusInternalServerError, streamErr)
+	}
 }
 
 // @Summary      Execute Tool
@@ -1356,6 +1357,15 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 				if len(message.ContentBlocks) == 0 {
 					message.ContentBlocks = []model.ContentBlock{{}}
 				}
+				if sm.Usage != nil {
+					if message.Usage == nil {
+						message.Usage = new(*sm.Usage)
+					} else {
+						if sm.Usage.InputTokens != 0 {
+							message.Usage.InputTokens = sm.Usage.InputTokens
+						}
+					}
+				}
 			}
 		case "content_block_start":
 			if message == nil {
@@ -1415,12 +1425,24 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 			if message == nil {
 				continue // no message_start yet
 			}
+
 			if sm.Usage != nil {
-				message.Usage = sm.Usage
+				if message.Usage == nil {
+					message.Usage = sm.Usage
+				} else {
+					if sm.Usage.InputTokens != 0 {
+						message.Usage.InputTokens = sm.Usage.InputTokens
+					}
+					if sm.Usage.OutputTokens != 0 {
+						message.Usage.OutputTokens = sm.Usage.OutputTokens
+					}
+					if sm.Usage.Credits != 0 {
+						message.Usage.Credits = sm.Usage.Credits
+					}
+				}
 			}
 			if sm.Delta != nil && sm.Delta.StopReason != nil {
-				message.StopReason = new(string)
-				*message.StopReason = *sm.Delta.StopReason
+				message.StopReason = new(*sm.Delta.StopReason)
 			}
 		}
 	}

@@ -142,7 +142,7 @@ func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAda
 func TestMemoryNoDB(t *testing.T) {
 	ac := &AssistantCoordinator{srv: &server.Server{}}
 
-	_, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{{}})
+	_, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{{}})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	_, _, err = ac.fetchMemoriesForPrompt(context.Background(), "what do I like", "")
@@ -623,7 +623,7 @@ func TestReconcileMemoriesInvalidAgent(t *testing.T) {
 	ac := newReconcileTestCoordinator(&mockdb.MockDB{}, &scriptedAdapter{})
 	delete(ac.memoryAgents, "Reconcile")
 
-	_, _, err := ac.reconcileMemories(context.Background(), nil)
+	_, _, _, err := ac.reconcileMemories(context.Background(), nil)
 
 	assert.ErrorIs(t, err, ErrInvalidAgent)
 }
@@ -632,7 +632,7 @@ func TestReconcileMemoriesUnknownAdapter(t *testing.T) {
 	ac := newReconcileTestCoordinator(&mockdb.MockDB{}, &scriptedAdapter{})
 	ac.adapters = map[string]server.AssistantAdapter{}
 
-	_, _, err := ac.reconcileMemories(context.Background(), nil)
+	_, _, _, err := ac.reconcileMemories(context.Background(), nil)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown adapter for memory model")
@@ -642,7 +642,7 @@ func TestReconcileMemoriesEmptyInput(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	ac := newReconcileTestCoordinator(mDB, &scriptedAdapter{})
 
-	ops, _, err := ac.reconcileMemories(context.Background(), nil)
+	ops, _, _, err := ac.reconcileMemories(context.Background(), nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, ops)
@@ -662,7 +662,7 @@ func TestReconcileMemoriesNoNeighborsAdds(t *testing.T) {
 
 	mem := reconcileTestMem()
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	if assert.Len(t, ops, 1) {
@@ -684,7 +684,7 @@ func TestReconcileMemoriesFindNearbyError(t *testing.T) {
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(&mockdb.MockRows{}, queryErr)
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.ErrorIs(t, err, queryErr)
 	assert.Nil(t, ops)
@@ -702,7 +702,7 @@ func TestReconcileMemoriesUpdate(t *testing.T) {
 
 	mem := reconcileTestMem()
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	if assert.Len(t, ops, 1) {
@@ -746,7 +746,7 @@ func TestReconcileMemoriesUpdateSameContent(t *testing.T) {
 
 	mem := reconcileTestMem()
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	if assert.Len(t, ops, 1) {
@@ -769,7 +769,7 @@ func TestReconcileMemoriesAddChangedContent(t *testing.T) {
 
 	mem := reconcileTestMem()
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	if assert.Len(t, ops, 1) {
@@ -791,7 +791,7 @@ func TestReconcileMemoriesNoop(t *testing.T) {
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.99,
 	}))
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.NoError(t, err)
 	assert.Empty(t, ops)
@@ -814,7 +814,7 @@ func TestReconcileMemoriesDeletesAndAdd(t *testing.T) {
 
 	mem := reconcileTestMem()
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	if assert.Len(t, ops, 3) {
@@ -858,7 +858,7 @@ func TestReconcileMemoriesUserScoped(t *testing.T) {
 	mem := reconcileTestMem()
 	mem.TargetUserId = util.Ptr("user-1")
 
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	assert.Empty(t, ops)
@@ -922,7 +922,7 @@ func TestReconcileMemoriesUpdateScopeMatchesTarget(t *testing.T) {
 			mem := reconcileTestMem()
 			mem.TargetUserId = util.Ptr("user-1")
 
-			ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+			ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 			assert.NoError(t, err)
 			if assert.Len(t, ops, 1) {
@@ -962,7 +962,7 @@ func TestReconcileMemoriesWriteSelfOnlyOmitsGlobalNeighbors(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
 
-	ops, _, err := ac.reconcileMemories(ctx, []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(ctx, []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	assert.Empty(t, ops)
@@ -991,7 +991,7 @@ func TestReconcileMemoriesNoWriteGlobalSkipsGlobalCandidate(t *testing.T) {
 	ac.srv.Authorizer = &opAuthorizer{allowed: map[string]bool{"write_self": true}}
 
 	// a global candidate from a session owner without write_global is dropped
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, ops)
@@ -1014,7 +1014,7 @@ func TestReconcileMemoriesNoWriteSelfSkipsUserCandidate(t *testing.T) {
 	mem.TargetUserId = util.Ptr("user-1")
 
 	// a user-scoped candidate from a session owner without write_self is dropped
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, ops)
@@ -1034,7 +1034,7 @@ func TestReconcileMemoriesInvalidOpsRemoved(t *testing.T) {
 	}))
 
 	// the ADD is invalid (carries a TargetId) and is dropped; the DELETE still applies
-	ops, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.NoError(t, err)
 	assert.Len(t, ops, 1)
@@ -1053,7 +1053,7 @@ func TestReconcileMemoriesSendError(t *testing.T) {
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.9,
 	}))
 
-	rec, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	rec, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.Empty(t, rec)
 	assert.ErrorIs(t, err, sendErr)
@@ -1069,7 +1069,7 @@ func TestReconcileMemoriesEmptyResponse(t *testing.T) {
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.9,
 	}))
 
-	rec, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	rec, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.Empty(t, rec)
 	assert.Error(t, err)
@@ -1086,7 +1086,7 @@ func TestReconcileMemoriesTextlessResponse(t *testing.T) {
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.9,
 	}))
 
-	rec, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	rec, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.Empty(t, rec)
 	assert.Error(t, err)
@@ -1103,7 +1103,7 @@ func TestReconcileMemoriesBadJSON(t *testing.T) {
 		id: "n1", memoryText: "user likes tea", modelId: "embed-model", similarity: 0.9,
 	}))
 
-	rec, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
+	rec, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{reconcileTestMem()})
 
 	assert.Empty(t, rec)
 	assert.Error(t, err)
@@ -2716,6 +2716,62 @@ func TestReembedRewritesStaleMemories(t *testing.T) {
 
 	assert.Equal(t, int64(0), ac.staleMemories.Load(), "the published count is cleared when the pass finishes")
 	mDB.AssertExpectations(t)
+}
+
+// A pass books its aggregate embedding spend (probe + batches) as a single
+// sessionless usage session rather than one per batch.
+func TestReembedRecordsAggregateUsage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mDB := &mockdb.MockDB{}
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{0.1})
+		}
+
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: embeddings, Usage: &model.Usage{InputTokens: 10, Credits: 1}}, nil
+	}}
+
+	ac := newReembedTestCoordinator(mDB, embed)
+
+	var saved []*model.StoredMessage
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, session *model.AssistantSession) error {
+		assert.Equal(t, []string{model.SessionTagEmbed}, session.Tags)
+		assert.Empty(t, session.EntityId)
+
+		return nil
+	})
+	store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, sm *model.StoredMessage) error {
+		saved = append(saved, sm)
+		return nil
+	})
+
+	ac.srv.Assistantstore = store
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	expectStaleBatch(mDB, "embed-model", nil)
+
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding = $2, model_id = $3"),
+		"mem-1", mock.Anything, "embed-model").Return(nil).Once()
+
+	ac.reembedStaleMemories(context.Background())
+
+	// probe + one batch, summed into one message
+	if assert.Len(t, saved, 1) {
+		if assert.NotNil(t, saved[0].Message.Usage) {
+			assert.Equal(t, 20, saved[0].Message.Usage.InputTokens)
+			assert.Equal(t, 2, saved[0].Message.Usage.Credits)
+		}
+
+		if assert.Len(t, saved[0].Message.ContentBlocks, 1) {
+			assert.Contains(t, saved[0].Message.ContentBlocks[0].Text, "Re-embedded 1 memories")
+		}
+	}
 }
 
 func TestReembedStopsWhenNothingIsStale(t *testing.T) {
