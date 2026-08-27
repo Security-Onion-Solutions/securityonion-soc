@@ -282,7 +282,17 @@ describe('saveAddJobForm', () => {
 		expect(localStorageMock.getItem('settings.jobs.addJobForm.pcap.timeframe')).toBe('2025/01/01 12:00:00 AM - 2025/01/01 11:59:59 PM');
 	});
 
-	test('should not save form fields to localStorage if they are null or empty', () => {
+	test('should remove form fields from localStorage if they are null or empty', () => {
+		// Pre-populate localStorage with values
+		localStorageMock.setItem('settings.jobs.addJobForm.sensorId', 'oldSensor');
+		localStorageMock.setItem('settings.jobs.addJobForm.importId', 'oldImport');
+		localStorageMock.setItem('settings.jobs.addJobForm.protocol', 'TCP');
+		localStorageMock.setItem('settings.jobs.addJobForm.srcIp', '1.1.1.1');
+		localStorageMock.setItem('settings.jobs.addJobForm.srcPort', '80');
+		localStorageMock.setItem('settings.jobs.addJobForm.dstIp', '2.2.2.2');
+		localStorageMock.setItem('settings.jobs.addJobForm.dstPort', '443');
+		localStorageMock.setItem('settings.jobs.addJobForm.reports.timeframe', 'oldTimeframe');
+
 		comp.form = {
 			sensorId: null,
 			importId: '',

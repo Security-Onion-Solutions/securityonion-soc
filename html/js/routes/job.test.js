@@ -69,3 +69,111 @@ test('downloadUrl', () => {
   url = comp.downloadUrl();
   expect(url).toBe('https://api.example.com/stream?jobId=123&ext=pcap&unwrap=false&gridId=grid1');
 });
+
+test('colorType', () => {
+  expect(comp.colorType('TCP')).toBe('primary');
+  expect(comp.colorType('UDP')).toBe('success');
+  expect(comp.colorType('ICMP')).toBe('cyan');
+  expect(comp.colorType('DHCP')).toBe('teal');
+  expect(comp.colorType('ARP')).toBe('secondary');
+  expect(comp.colorType('DNS')).toBe('accent');
+  expect(comp.colorType('DecodeFailure')).toBe('error');
+  expect(comp.colorType('UNKNOWN')).toBe('');
+});
+
+test('loadPackets passes excludeErrors and unwrap params', async () => {
+  comp.$root.papi = { get: jest.fn().mockResolvedValue({ data: [] }) };
+  comp.$root.batchLookup = jest.fn();
+  comp.$root.showError = jest.fn();
+  comp.job = { id: 123 };
+  comp.packets = [];
+
+  // Without excludeErrors
+  comp.packetOptions = ['packets', 'hex'];
+  await comp.loadPackets(false, false);
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('packets', {
+    params: {
+      jobId: 123,
+      offset: 0,
+      count: 500,
+      unwrap: false,
+      excludeErrors: false
+    }
+  });
+
+  // With excludeErrors
+  comp.packetOptions = ['packets', 'hex', 'excludeErrors'];
+  await comp.loadPackets(false, true);
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('packets', {
+    params: {
+      jobId: 123,
+      offset: 0,
+      count: 500,
+      unwrap: false,
+      excludeErrors: true
+    }
+  });
+});
+
+test('hasDecodeFailures', () => {
+  comp.packets = [
+    { number: 1, type: 'TCP' },
+    { number: 2, type: 'UDP' },
+  ];
+  expect(comp.hasDecodeFailures()).toBe(false);
+
+  comp.packets.push({ number: 3, type: 'DecodeFailure' });
+  expect(comp.hasDecodeFailures()).toBe(true);
+
+  comp.packets = [
+    { number: 1, type: 'TCP', error: 'Decode issue' },
+  ];
+  expect(comp.hasDecodeFailures()).toBe(true);
+});
+
+test('onPacketOptionsChanged triggers loadPackets when unwrap or excludeErrors changes', () => {
+  const origLoadPackets = comp.loadPackets;
+  comp.loadPackets = jest.fn();
+  comp.job = { id: 123 };
+  comp.lastLoadedUnwrap = false;
+  comp.lastLoadedExcludeErrors = false;
+
+  // Toggle excludeErrors on
+  comp.onPacketOptionsChanged(['packets', 'hex', 'excludeErrors']);
+  expect(comp.loadPackets).toHaveBeenCalledWith(false, true);
+
+  // Toggle hex only (no reload needed)
+  comp.loadPackets.mockClear();
+  comp.lastLoadedExcludeErrors = true;
+  comp.onPacketOptionsChanged(['packets', 'excludeErrors']);
+  expect(comp.loadPackets).not.toHaveBeenCalled();
+
+  // Toggle unwrap on
+  comp.loadPackets.mockClear();
+  comp.onPacketOptionsChanged(['packets', 'unwrap', 'excludeErrors']);
+  expect(comp.loadPackets).toHaveBeenCalledWith(true, true);
+
+  comp.loadPackets = origLoadPackets;
+});
+
+test('loadPackets updates hasDecodeErrors from header and packet items', async () => {
+  comp.job = { id: 123 };
+  comp.packets = [];
+
+  // When header says true
+  comp.$root.papi = { get: jest.fn().mockResolvedValue({
+    data: [{ number: 1, type: 'TCP' }],
+    headers: { 'x-decode-errors-present': 'true' }
+  })};
+  await comp.loadPackets(false, false);
+  expect(comp.hasDecodeErrors).toBe(true);
+
+  // When header says false
+  comp.packets = [];
+  comp.$root.papi = { get: jest.fn().mockResolvedValue({
+    data: [{ number: 1, type: 'TCP' }],
+    headers: { 'x-decode-errors-present': 'false' }
+  })};
+  await comp.loadPackets(false, false);
+  expect(comp.hasDecodeErrors).toBe(false);
+});
