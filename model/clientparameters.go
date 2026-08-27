@@ -191,6 +191,8 @@ type AssistantParameters struct {
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
+	MemoryEnabled          bool                `json:"memoryEnabled"`
+	MemoryParams           MemoryParameters    `json:"memoryParams"`
 	AvailableAgents        []Agent             `json:"availableAgents"`
 	AvailableSkills        []Skill             `json:"availableSkills"`
 	// Tool names an admin-created skill may grant; delegate tools excluded.
@@ -200,6 +202,24 @@ type AssistantParameters struct {
 	// without fetching every setting. 0 disables the limit.
 	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
 	MaxSubSessionTokens int `json:"maxSubSessionTokens" example:"100000"`
+}
+
+type MemoryParameters struct {
+	UseMemory                    bool    `json:"useMemory" example:"true"`
+	UseMemoryScanner             bool    `json:"useMemoryScanner" example:"true"`
+	ScanIntervalSeconds          int     `json:"scanIntervalSeconds" example:"300"`
+	MemoryProximityThreshold     float64 `json:"memoryProximityThreshold" example:"0.8"`
+	MessageProximityThreshold    float64 `json:"messageProximityThreshold" example:"0.5"`
+	MaxUserMemoriesToInclude     int     `json:"maxUserMemoriesToInclude" example:"5"`
+	MaxGlobalMemoriesToInclude   int     `json:"maxGlobalMemoriesToInclude" example:"5"`
+	MaxUserMemoriesToReconcile   int     `json:"maxUserMemoriesToReconcile" example:"20"`
+	MaxGlobalMemoriesToReconcile int     `json:"maxGlobalMemoriesToReconcile" example:"20"`
+	MemoryModel                  string  `json:"memoryModel" example:"sonnet@SOAI"`
+	EmbedModel                   string  `json:"embedModel" example:"amazon.titan-embed-text-v2@SOAI"`
+	ReconcileModel               string  `json:"reconcileModel" example:"sonnet@SOAI"`
+	MemoryPersona                string  `json:"memoryPersona"`
+	ReconcilePersona             string  `json:"reconcilePersona"`
+	StaleMemoryCount             int     `json:"staleMemoryCount"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,
@@ -223,8 +243,9 @@ func (m *ModelParameters) Selector() string {
 }
 
 type AdapterParameters struct {
-	Name     string `json:"name"`
-	Protocol string `json:"protocol"`
+	Name               string `json:"name"`
+	Protocol           string `json:"protocol"`
+	SupportsEmbeddings bool   `json:"supportsEmbeddings"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields

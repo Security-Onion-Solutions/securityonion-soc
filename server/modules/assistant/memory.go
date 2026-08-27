@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,344 @@ func (ac *AssistantCoordinator) setupMemoryAgents(prompts map[string]string) {
 	}
 }
 
+// Re-reads the memory tunables, starting or stopping the scanner and re-arming
+// its ticker to match. An unparseable setting keeps the current value.
+func (ac *AssistantCoordinator) reloadMemoryConfiguration(ctx context.Context) {
+	logger := log.FromContext(ctx)
+	settings := ac.memorySnapshot()
+	before := settings
+
+	if ac.srv.Configstore != nil {
+		stored, err := ac.srv.Configstore.GetSettings(ctx, true)
+		if err != nil {
+			logger.WithError(err).Error("unable to load settings for memory configuration reload")
+		} else {
+			byID := make(map[string]*model.Setting, len(stored))
+			for _, s := range stored {
+				if s != nil {
+					byID[s.Id] = s
+				}
+			}
+
+			settings = applyMemorySettings(logger, settings, byID)
+		}
+	}
+
+	ac.setMemorySettings(settings)
+	ac.applyMemoryAgents(settings)
+	ac.exposeMemorySettings()
+
+	ac.applyScannerState(settings.useScanner)
+
+	if settings.scanInterval != before.scanInterval {
+		ac.wakeScanner()
+	}
+
+	// Also run on the first reload, which Start performs, to pick up a model that
+	// was changed while the process was down.
+	if settings.useMemory || settings.useScanner {
+		ac.startReembed(ctx)
+	}
+}
+
+// applyMemorySettings overlays the stored settings onto the current values.
+func applyMemorySettings(logger log.Interface, settings memorySettings, byID map[string]*model.Setting) memorySettings {
+	boolSetting := func(id string, target *bool) {
+		s, ok := byID[id]
+		if !ok || strings.TrimSpace(s.Value) == "" {
+			return
+		}
+
+		v, err := strconv.ParseBool(strings.TrimSpace(s.Value))
+		if err != nil {
+			logger.WithError(err).WithField("setting", id).Warn("invalid boolean; keeping previous value")
+			return
+		}
+
+		*target = v
+	}
+
+	intSetting := func(id string, target *int) {
+		s, ok := byID[id]
+		if !ok || strings.TrimSpace(s.Value) == "" {
+			return
+		}
+
+		v, err := parseIntSetting(s.Value)
+		if err != nil {
+			logger.WithError(err).WithField("setting", id).Warn("invalid integer; keeping previous value")
+			return
+		}
+
+		*target = v
+	}
+
+	floatSetting := func(id string, target *float64) {
+		s, ok := byID[id]
+		if !ok || strings.TrimSpace(s.Value) == "" {
+			return
+		}
+
+		v, err := strconv.ParseFloat(strings.TrimSpace(s.Value), 64)
+		if err != nil {
+			logger.WithError(err).WithField("setting", id).Warn("invalid number; keeping previous value")
+			return
+		}
+
+		*target = v
+	}
+
+	// A model selector is cleared by setting it empty, which disables its role, so
+	// an empty stored value is applied rather than ignored.
+	stringSetting := func(id string, target *string) {
+		if s, ok := byID[id]; ok {
+			*target = strings.TrimSpace(s.Value)
+		}
+	}
+
+	stringSetting(ConfigSettingMemoryModel, &settings.memoryModel)
+	stringSetting(ConfigSettingEmbedModel, &settings.embedModel)
+	stringSetting(ConfigSettingReconcileModel, &settings.reconcileModel)
+
+	// Personas keep their internal whitespace; only a stored value replaces them.
+	if s, ok := byID[ConfigSettingMemoryPersona]; ok {
+		settings.memoryPersona = s.Value
+	}
+
+	if s, ok := byID[ConfigSettingReconcilePersona]; ok {
+		settings.reconcilePersona = s.Value
+	}
+
+	boolSetting(ConfigSettingUseMemory, &settings.useMemory)
+	boolSetting(ConfigSettingUseMemoryScanner, &settings.useScanner)
+	floatSetting(ConfigSettingMemoryProximity, &settings.mem2mem)
+	floatSetting(ConfigSettingMessageProximity, &settings.mem2msg)
+	intSetting(ConfigSettingMaxUserMemoriesToInclude, &settings.maxUserInclude)
+	intSetting(ConfigSettingMaxGlobalMemoriesToInclude, &settings.maxGlobalInclude)
+	intSetting(ConfigSettingMaxUserMemoriesToReconcile, &settings.maxUserReconcile)
+	intSetting(ConfigSettingMaxGlobalMemoriesToReconcile, &settings.maxGlobalReconcile)
+
+	seconds := int(settings.scanInterval / time.Second)
+	intSetting(ConfigSettingMemoryScanInterval, &seconds)
+
+	// A zero or negative interval would panic time.NewTicker, so refuse it.
+	if seconds > 0 {
+		settings.scanInterval = time.Duration(seconds) * time.Second
+	} else {
+		logger.WithField("setting", ConfigSettingMemoryScanInterval).Warn("scan interval must be positive; keeping previous value")
+	}
+
+	return settings
+}
+
+func (ac *AssistantCoordinator) exposeMemorySettings() {
+	settings := ac.memorySnapshot()
+
+	params := &ac.srv.Config.ClientParams.AssistantParams
+	params.MemoryEnabled = settings.useMemory || settings.useScanner
+	params.MemoryParams = model.MemoryParameters{
+		UseMemory:                    settings.useMemory,
+		UseMemoryScanner:             settings.useScanner,
+		ScanIntervalSeconds:          int(settings.scanInterval / time.Second),
+		MemoryProximityThreshold:     settings.mem2mem,
+		MessageProximityThreshold:    settings.mem2msg,
+		MaxUserMemoriesToInclude:     settings.maxUserInclude,
+		MaxGlobalMemoriesToInclude:   settings.maxGlobalInclude,
+		MaxUserMemoriesToReconcile:   settings.maxUserReconcile,
+		MaxGlobalMemoriesToReconcile: settings.maxGlobalReconcile,
+		MemoryModel:                  settings.memoryModel,
+		EmbedModel:                   settings.embedModel,
+		ReconcileModel:               settings.reconcileModel,
+		MemoryPersona:                settings.memoryPersona,
+		ReconcilePersona:             settings.reconcilePersona,
+		StaleMemoryCount:             int(ac.staleMemories.Load()),
+	}
+
+	ac.broadcastAgenticUpdate()
+}
+
+// Publishes re-embed progress.
+func (ac *AssistantCoordinator) setStaleMemoryCount(stale int) {
+	ac.staleMemories.Store(int64(stale))
+	ac.exposeMemorySettings()
+}
+
+func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
+	ac.memoryWorkerMu.Lock()
+	if ac.reembedding || ac.store == nil {
+		ac.memoryWorkerMu.Unlock()
+		return
+	}
+
+	// The pass outlives the request that triggered it, so it keeps that context's
+	// values but takes its cancellation from Stop instead.
+	passCtx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
+
+	ac.reembedding = true
+	ac.terminateReembed = cancel
+	ac.memoryWorkerMu.Unlock()
+
+	go func() {
+		defer func() {
+			cancel(nil)
+
+			ac.memoryWorkerMu.Lock()
+			ac.reembedding = false
+			ac.terminateReembed = nil
+			ac.memoryWorkerMu.Unlock()
+		}()
+
+		ac.reembedStaleMemories(passCtx)
+	}()
+}
+
+// Bounds one embedding call so a stalled gateway cannot park the pass forever.
+func (ac *AssistantCoordinator) embedWithTimeout(ctx context.Context, selector string, texts []string) (*model.EmbeddingResponse, error) {
+	timeout := ac.reembedCallTimeout
+	if timeout <= 0 {
+		timeout = MEMORY_REEMBED_CALL_TIMEOUT
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	return ac.Embed(callCtx, selector, texts)
+}
+
+func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
+	logger := log.FromContext(ctx).WithField("memoryReembedId", uuid.NewString())
+
+	_, embedModel, err := ac.resolveMemoryAgent("Embed")
+	if err != nil {
+		logger.WithError(err).Error("unable to resolve Embed agent; not re-embedding")
+		return
+	}
+
+	// model_id is whatever the provider reported, not the selector, so a probe
+	// embedding names the current model.
+	probe, err := ac.embedWithTimeout(ctx, embedModel.Selector(), []string{"probe"})
+	if err != nil || len(probe.Embeddings) == 0 {
+		logger.WithError(err).Error("unable to determine the current embedding model; not re-embedding")
+		return
+	}
+
+	current := probe.Model
+
+	total, err := ac.store.CountStaleMemories(ctx, current)
+	if err != nil {
+		logger.WithError(err).Error("unable to count memories needing re-embedding")
+		return
+	}
+
+	ac.setStaleMemoryCount(total)
+
+	if total == 0 {
+		return
+	}
+
+	logger.WithFields(log.Fields{"staleCount": total, "embedModel": current}).Info("re-embedding memories after an embedding model change")
+
+	start := time.Now()
+	done := 0
+
+	for {
+		batch, err := ac.store.StaleMemoryBatch(ctx, current, MEMORY_REEMBED_BATCH_SIZE)
+		if err != nil {
+			logger.WithError(err).Error("unable to read memories needing re-embedding")
+			return
+		}
+
+		if len(batch) == 0 {
+			break
+		}
+
+		texts := make([]string, 0, len(batch))
+		for _, mem := range batch {
+			texts = append(texts, mem.MemoryText)
+		}
+
+		res, err := ac.embedWithTimeout(ctx, embedModel.Selector(), texts)
+		if err != nil {
+			logger.WithError(err).WithField("reembedded", done).Error("unable to embed; stopping re-embed pass")
+			return
+		}
+
+		if len(res.Embeddings) != len(batch) {
+			logger.WithFields(log.Fields{
+				"embeddingsCount": len(res.Embeddings),
+				"batchSize":       len(batch),
+			}).Error("unexpected number of embeddings returned; stopping re-embed pass")
+
+			return
+		}
+
+		// Storing a model the batch query does not filter on would re-read the same
+		// rows forever. The next pass re-probes and picks up the new model.
+		if res.Model != current {
+			logger.WithFields(log.Fields{
+				"expectedModel": current,
+				"embedModel":    res.Model,
+				"reembedded":    done,
+			}).Error("embedding model changed mid-pass; stopping re-embed pass")
+
+			return
+		}
+
+		for i, mem := range batch {
+			if err := ac.store.SetMemoryEmbedding(ctx, mem.Id, res.Embeddings[i], res.Model); err != nil {
+				logger.WithError(err).WithField("memoryId", mem.Id).Error("unable to store re-embedded memory")
+				return
+			}
+
+			done++
+		}
+
+		ac.setStaleMemoryCount(max(total-done, 0))
+		logger.WithFields(log.Fields{"reembedded": done, "staleCount": total}).Debug("re-embed progress")
+
+		select {
+		case <-ctx.Done():
+			logger.WithField("reembedded", done).Info("re-embed pass interrupted; remaining memories are picked up by the next pass")
+			return
+		case <-time.After(ac.reembedBatchDelay):
+		}
+	}
+
+	ac.setStaleMemoryCount(0)
+
+	logger.WithFields(log.Fields{
+		"reembedded":      done,
+		"reembedDuration": time.Since(start),
+	}).Info("re-embed pass complete")
+}
+
+// Rebuilds the memory roles and their model mapping. A rebuild, not a
+// revalidation, since validateMemoryMappings deletes the roles it disables.
+func (ac *AssistantCoordinator) applyMemoryAgents(settings memorySettings) {
+	if !settings.useMemory && !settings.useScanner {
+		ac.memoryAgents = nil
+		ac.memoryMapping = nil
+
+		return
+	}
+
+	ac.setupMemoryAgents(ac.embeddedPrompts)
+	ac.memoryMapping = map[string]string{
+		"Memory":    settings.memoryModel,
+		"Embed":     settings.embedModel,
+		"Reconcile": settings.reconcileModel,
+	}
+
+	for role, persona := range map[string]string{"Memory": settings.memoryPersona, "Reconcile": settings.reconcilePersona} {
+		if agent, ok := ac.memoryAgents[role]; ok {
+			agent.PersonaAddendum = persona
+			ac.memoryAgents[role] = agent
+		}
+	}
+
+	ac.validateMemoryMappings()
+}
+
 // validateMemoryMappings drops any memory role whose configured model
 // selector is missing or does not resolve to an enabled model.
 func (ac *AssistantCoordinator) validateMemoryMappings() {
@@ -76,10 +415,13 @@ func (ac *AssistantCoordinator) validateMemoryMappings() {
 	}
 }
 
-func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
+func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan struct{}) {
 	logger := log.FromContext(ctx)
 
-	ticker := time.NewTicker(ac.memoryScanInterval)
+	interval := ac.memorySnapshot().scanInterval
+	ticker := time.NewTicker(interval)
+
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -88,6 +430,17 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context) {
 			logger.WithField("cause", err).Info("memory worker shutting down")
 
 			return
+		case <-wake:
+			// The interval changed; re-arm and wait out the new one rather than
+			// scanning immediately.
+			if next := ac.memorySnapshot().scanInterval; next != interval {
+				interval = next
+				ticker.Reset(interval)
+
+				logger.WithField("memoryScanInterval", interval).Info("memory scan interval updated")
+			}
+
+			continue
 		case <-ticker.C:
 		}
 
@@ -448,6 +801,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 	}
 
 	canWriteSelf, canWriteGlobal := ac.memoryPerms(ctx, "write")
+	settings := ac.memorySnapshot()
 
 	ops = make([]*model.ReconciledMemory, 0, len(mems))
 
@@ -462,15 +816,15 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 		// write global, one scope per query
 		var nearby []*model.NearbyMemory
 
-		if canWriteGlobal && ac.maxGlobalMemoriesToReconcile > 0 {
-			nearby, err = ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.GlobalMemories(), database.WithMinSimilarity(ac.mem2memProximityThreshold), database.WithLimit(ac.maxGlobalMemoriesToReconcile))
+		if canWriteGlobal && settings.maxGlobalReconcile > 0 {
+			nearby, err = ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.GlobalMemories(), database.WithMinSimilarity(settings.mem2mem), database.WithLimit(settings.maxGlobalReconcile))
 			if err != nil {
 				return nil, exchanges, err
 			}
 		}
 
-		if mem.TargetUserId != nil && ac.maxUserMemoriesToReconcile > 0 {
-			userNearby, err := ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.UserMemories(*mem.TargetUserId), database.WithMinSimilarity(ac.mem2memProximityThreshold), database.WithLimit(ac.maxUserMemoriesToReconcile))
+		if mem.TargetUserId != nil && settings.maxUserReconcile > 0 {
+			userNearby, err := ac.store.FindNearbyMemories(ctx, mem.Embedding, mem.ModelID, database.UserMemories(*mem.TargetUserId), database.WithMinSimilarity(settings.mem2mem), database.WithLimit(settings.maxUserReconcile))
 			if err != nil {
 				return nil, exchanges, err
 			}
@@ -636,6 +990,217 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 	return ops, exchanges, nil
 }
 
+// memoryReadScope builds the WHERE clause limiting a listing to the memories the
+// requestor is allowed to read, returning the args the clause references.
+func (ac *AssistantCoordinator) memoryReadScope(ctx context.Context, filter *model.MemoryFilter) (string, []any, error) {
+	requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string)
+	if !ok {
+		return "", nil, errors.New("context is missing RequestorId")
+	}
+
+	canReadSelf, canReadGlobal := ac.memoryPerms(ctx, "read")
+	canReadAll := ac.srv.CheckAuthorized(ctx, "read_all", "memory") == nil
+
+	targetUserId := requestorId
+	if filter.TargetUserId != "" && filter.TargetUserId != requestorId {
+		if !canReadAll {
+			return "", nil, ErrUnauthorizedMemory
+		}
+
+		targetUserId = filter.TargetUserId
+	}
+
+	args := []any{}
+
+	switch strings.ToLower(filter.Scope) {
+	case model.MemoryScopeSelf:
+		if !canReadSelf && !canReadAll {
+			return "", nil, ErrUnauthorizedMemory
+		}
+
+		args = append(args, targetUserId)
+
+		return fmt.Sprintf(`target_user_id = $%d`, len(args)), args, nil
+	case model.MemoryScopeGlobal:
+		if !canReadGlobal {
+			return "", nil, ErrUnauthorizedMemory
+		}
+
+		return `target_user_id IS NULL`, args, nil
+	default:
+		if canReadAll && filter.TargetUserId == "" {
+			return `TRUE`, args, nil
+		}
+
+		clauses := []string{}
+
+		if canReadSelf || canReadAll {
+			args = append(args, targetUserId)
+			clauses = append(clauses, fmt.Sprintf(`target_user_id = $%d`, len(args)))
+		}
+
+		if canReadGlobal || canReadAll {
+			clauses = append(clauses, `target_user_id IS NULL`)
+		}
+
+		if len(clauses) == 0 {
+			return "", nil, ErrUnauthorizedMemory
+		}
+
+		return `(` + strings.Join(clauses, ` OR `) + `)`, args, nil
+	}
+}
+
+func (ac *AssistantCoordinator) ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error) {
+	if ac.store == nil {
+		return nil, ErrNoDatabase
+	}
+
+	if filter == nil {
+		filter = &model.MemoryFilter{}
+	}
+
+	where, args, err := ac.memoryReadScope(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = DEFAULT_MEMORY_PAGE_SIZE
+	}
+
+	query := database.MemoryQuery{
+		Where:  where,
+		Args:   args,
+		Limit:  min(limit, MAX_MEMORY_PAGE_SIZE),
+		Offset: max(filter.Offset, 0),
+	}
+
+	if strings.TrimSpace(filter.Query) != "" {
+		_, embedModel, err := ac.resolveMemoryAgent("Embed")
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := ac.Embed(ctx, embedModel.Selector(), []string{filter.Query})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(resp.Embeddings) != 1 {
+			return nil, fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))
+		}
+
+		query.Embedding = resp.Embeddings[0]
+		query.EmbedModelId = resp.Model
+	}
+
+	return ac.store.ListMemories(ctx, query)
+}
+
+func (ac *AssistantCoordinator) checkMemoryWrite(ctx context.Context, requestorId string, targetUserId *string) error {
+	op := "write_all"
+
+	switch {
+	case targetUserId == nil:
+		op = "write_global"
+	case *targetUserId == requestorId:
+		op = "write_self"
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, op, "memory"); err != nil {
+		return fmt.Errorf("%w: %s", ErrUnauthorizedMemory, err)
+	}
+
+	return nil
+}
+
+func (ac *AssistantCoordinator) SaveMemory(ctx context.Context, mem *model.Memory) error {
+	if ac.store == nil {
+		return ErrNoDatabase
+	}
+
+	requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string)
+	if !ok {
+		return errors.New("context is missing RequestorId")
+	}
+
+	mem.MemoryText = strings.Join(strings.Fields(mem.MemoryText), " ")
+	if mem.MemoryText == "" {
+		return ErrInvalidMemory
+	}
+
+	if mem.Id != "" {
+		existing, err := ac.store.GetMemory(ctx, mem.Id)
+		if err != nil {
+			return err
+		}
+
+		// The scope it is moving out of has to be writable too, so an edit cannot
+		// launder a memory through a scope the requestor could not have changed.
+		if err := ac.checkMemoryWrite(ctx, requestorId, existing.TargetUserId); err != nil {
+			return err
+		}
+
+		mem.UserId = existing.UserId
+		mem.SessionId = existing.SessionId
+	} else {
+		mem.UserId = requestorId
+	}
+
+	if err := ac.checkMemoryWrite(ctx, requestorId, mem.TargetUserId); err != nil {
+		return err
+	}
+
+	_, embedModel, err := ac.resolveMemoryAgent("Embed")
+	if err != nil {
+		return err
+	}
+
+	resp, err := ac.Embed(ctx, embedModel.Selector(), []string{mem.MemoryText})
+	if err != nil {
+		return err
+	}
+
+	if len(resp.Embeddings) != 1 {
+		return fmt.Errorf("expected 1 embedding but got %d", len(resp.Embeddings))
+	}
+
+	mem.Embedding = resp.Embeddings[0]
+	mem.ModelID = resp.Model
+	mem.UserDefined = true
+	mem.Kind = "memory"
+
+	if mem.Id == "" {
+		return ac.store.AddMemory(ctx, mem)
+	}
+
+	return ac.store.UpdateMemory(ctx, mem)
+}
+
+func (ac *AssistantCoordinator) RemoveMemory(ctx context.Context, id string) error {
+	if ac.store == nil {
+		return ErrNoDatabase
+	}
+
+	requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string)
+	if !ok {
+		return errors.New("context is missing RequestorId")
+	}
+
+	existing, err := ac.store.GetMemory(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := ac.checkMemoryWrite(ctx, requestorId, existing.TargetUserId); err != nil {
+		return err
+	}
+
+	return ac.store.DeleteMemory(ctx, id)
+}
+
 func (ac *AssistantCoordinator) applyMemories(ctx context.Context, memories []*model.ReconciledMemory) (created int, updated int, deleted int, errMap map[string]string) {
 	errMap = map[string]string{}
 
@@ -760,16 +1325,17 @@ func (ac *AssistantCoordinator) fetchMemoriesForPrompt(ctx context.Context, cont
 
 	emb := resp.Embeddings[0]
 	modelUsed := resp.Model
+	settings := ac.memorySnapshot()
 
-	if ac.maxUserMemoriesToInclude > 0 {
-		user, err = ac.store.FindNearbyMemories(ctx, emb, modelUsed, database.UserMemories(userId), database.WithMinSimilarity(ac.mem2msgProximityThreshold), database.WithLimit(ac.maxUserMemoriesToInclude))
+	if settings.maxUserInclude > 0 {
+		user, err = ac.store.FindNearbyMemories(ctx, emb, modelUsed, database.UserMemories(userId), database.WithMinSimilarity(settings.mem2msg), database.WithLimit(settings.maxUserInclude))
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if canReadGlobal && ac.maxGlobalMemoriesToInclude > 0 {
-		global, err = ac.store.FindNearbyMemories(ctx, emb, modelUsed, database.GlobalMemories(), database.WithMinSimilarity(ac.mem2msgProximityThreshold), database.WithLimit(ac.maxGlobalMemoriesToInclude))
+	if canReadGlobal && settings.maxGlobalInclude > 0 {
+		global, err = ac.store.FindNearbyMemories(ctx, emb, modelUsed, database.GlobalMemories(), database.WithMinSimilarity(settings.mem2msg), database.WithLimit(settings.maxGlobalInclude))
 		if err != nil {
 			return nil, nil, err
 		}

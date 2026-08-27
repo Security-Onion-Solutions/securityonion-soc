@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,6 +54,11 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Delete("/agents/{name}", h.DeleteAgent)
 		r.Put("/skills/{name}", h.SaveSkill)
 		r.Delete("/skills/{name}", h.DeleteSkill)
+
+		r.Get("/memories", h.GetMemories)
+		r.Post("/memories", h.CreateMemory)
+		r.Put("/memories/{id}", h.UpdateMemory)
+		r.Delete("/memories/{id}", h.DeleteMemory)
 
 		r.Get("/admin/stats", h.GetUsage)
 		r.Get("/admin/sessions", h.getAllSessions)
@@ -1645,6 +1651,169 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(r.Context(), urlParamName(r)))
+}
+
+// @Summary      List Assistant Memories
+// @Description  Retrieve a page of the memories the requestor is allowed to read. A query orders results by semantic similarity instead of recency.
+// @Tags         Assistant
+// @Security     bearer[memory/read_authored]
+// @Security     bearer[memory/read_global]
+// @Security     bearer[memory/read_all]
+// @Param        scope   query  string  false  "self, global, or all (default)" example(global)
+// @Param        userId  query  string  false  "Narrow to one user; another user requires memory/read_all" example(8beae4b5-275b-4669-b678-8cff894911b5)
+// @Param        q       query  string  false  "Order results by similarity to this text" example(preferred timezone)
+// @Param        limit   query  int     false  "Page size" example(25)
+// @Param        offset  query  int     false  "Page offset" example(0)
+// @Produce      json
+// @Success      200 {object} model.MemoryResults "A page of memories"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories [get]
+func (h *AssistantHandler) GetMemories(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+
+	results, err := h.server.AssistantManager.ListMemories(ctx, &model.MemoryFilter{
+		Scope:        query.Get("scope"),
+		TargetUserId: query.Get("userId"),
+		Query:        query.Get("q"),
+		Limit:        limit,
+		Offset:       offset,
+	})
+	if err != nil {
+		h.respondMemoryError(w, r, err, "unable to list memories")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, results)
+}
+
+// @Summary      Create an Assistant Memory
+// @Description  Store a new user-defined memory. User-defined memories are never rewritten or removed by the memory scanner.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Param        request  body  model.MemoryRequest  true  "Memory to create"
+// @Produce      json
+// @Success      200 {object} model.MemoryRecord "The created memory"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories [post]
+func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) {
+	h.saveMemory(w, r, "")
+}
+
+// @Summary      Update an Assistant Memory
+// @Description  Replace the text or scope of an existing memory, marking it user-defined so the scanner leaves it alone.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Security     bearer[memory/write_all]
+// @Param        id       path  string               true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        request  body  model.MemoryRequest  true  "Replacement memory"
+// @Produce      json
+// @Success      200 {object} model.MemoryRecord "The updated memory"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Memory not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories/{id} [put]
+func (h *AssistantHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
+	h.saveMemory(w, r, decodePathValue(chi.URLParam(r, "id")))
+}
+
+func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id string) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	req := &model.MemoryRequest{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		log.FromContext(ctx).WithError(err).Error("unable to decode memory request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	mem := &model.Memory{
+		Auditable: model.Auditable{
+			Id:   id,
+			Kind: "memory",
+		},
+		MemoryText: req.MemoryText,
+	}
+
+	if !strings.EqualFold(req.Scope, model.MemoryScopeGlobal) {
+		targetUserId := req.TargetUserId
+		if targetUserId == "" {
+			targetUserId = ctx.Value(web.ContextKeyRequestorId).(string)
+		}
+
+		mem.TargetUserId = &targetUserId
+	}
+
+	if err := h.server.AssistantManager.SaveMemory(ctx, mem); err != nil {
+		h.respondMemoryError(w, r, err, "unable to save memory")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, model.NewMemoryRecord(mem))
+}
+
+// @Summary      Delete an Assistant Memory
+// @Description  Permanently remove a memory.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Security     bearer[memory/write_all]
+// @Param        id  path  string  true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200           "Memory deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Memory not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories/{id} [delete]
+func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	if err := h.server.AssistantManager.RemoveMemory(ctx, decodePathValue(chi.URLParam(r, "id"))); err != nil {
+		h.respondMemoryError(w, r, err, "unable to delete memory")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *AssistantHandler) respondMemoryError(w http.ResponseWriter, r *http.Request, err error, logMsg string) {
+	switch {
+	case strings.Contains(err.Error(), "ERROR_MEMORY_UNAUTHORIZED"):
+		web.Respond(w, r, http.StatusForbidden, err)
+	case strings.Contains(err.Error(), "ERROR_MEMORY_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_MEMORY_TEXT_REQUIRED"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	default:
+		log.FromContext(r.Context()).WithError(err).Error(logMsg)
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
 }
 
 // decodePathValue undoes the percent-encoding a client applies to a path segment.

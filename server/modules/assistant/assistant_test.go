@@ -3123,6 +3123,10 @@ func (m *mockAdapter) Embed(context.Context, *model.EmbeddingRequest) (*model.Em
 	return nil, nil
 }
 
+func (m *mockAdapter) SupportsEmbeddings() bool {
+	return false
+}
+
 type mockTool struct {
 	name        string
 	description string
@@ -3490,6 +3494,10 @@ func (a *captureAdapter) GetHealth(ctx context.Context) (*model.HealthResponse, 
 
 func (a *captureAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
 	return nil, ErrEmbeddingsUnsupported
+}
+
+func (a *captureAdapter) SupportsEmbeddings() bool {
+	return false
 }
 
 // Selecting a model by id@adapter (or bare id) must send the bare model id

@@ -49,6 +49,9 @@ type AssistantManager interface {
 	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
 	DeleteSkill(ctx context.Context, name string) error
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
+	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
+	SaveMemory(ctx context.Context, mem *model.Memory) error
+	RemoveMemory(ctx context.Context, id string) error
 }
 
 type AssistantAdapter interface {
@@ -58,6 +61,7 @@ type AssistantAdapter interface {
 	GetBalance(ctx context.Context) (*model.BalanceResponse, error)
 	GetHealth(ctx context.Context) (*model.HealthResponse, error)
 	Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error)
+	SupportsEmbeddings() bool
 }
 
 //go:generate mockgen -destination mock/mock_assistantmanager.go -package mock . AssistantManager

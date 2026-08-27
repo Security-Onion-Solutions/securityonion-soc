@@ -42,11 +42,14 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 var protocols = map[string]ProtocolConstructor{}
 
 var (
-	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
-	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
-	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
-	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
-	ErrNoDatabase      = errors.New("no database configured")
+	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrRequestTooLarge    = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
+	ErrInvalidModel       = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
+	ErrInvalidAgent       = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase         = errors.New("no database configured")
+	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
+	ErrMemoryNotFound     = database.ErrMemoryNotFound
+	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
 )
 
 const (
@@ -80,6 +83,19 @@ const (
 
 	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
 	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
+
+	DEFAULT_MEMORY_PAGE_SIZE = 25
+	MAX_MEMORY_PAGE_SIZE     = 1000
+
+	// Memories re-embedded per batch after the embedding model changes. One
+	// Embed call carries the whole batch.
+	MEMORY_REEMBED_BATCH_SIZE = 100
+	// Pause between batches. Every user message also embeds, so the pass yields
+	// gateway headroom to live recall rather than running as fast as it can.
+	MEMORY_REEMBED_BATCH_DELAY = 2 * time.Second
+	// Ceiling on one embedding call; a stalled gateway would otherwise strand the
+	// pass and block every later one.
+	MEMORY_REEMBED_CALL_TIMEOUT = 2 * time.Minute
 )
 
 //go:embed SOSystemPrompt.bin
@@ -134,21 +150,65 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
-	store                        *database.Store
-	useMemory                    bool
-	useMemoryScanner             bool
-	maxUserMemoriesToInclude     int
-	maxGlobalMemoriesToInclude   int
-	maxUserMemoriesToReconcile   int
-	maxGlobalMemoriesToReconcile int
-	terminateMemory              context.CancelCauseFunc
-	memoryScanInterval           time.Duration
-	mem2memProximityThreshold    float64
-	mem2msgProximityThreshold    float64
-	memoryAgents                 map[string]model.Agent // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
-	memoryMapping                map[string]string      // map[roleName]modelSelector from the memoryModel/embedModel/reconcileModel config keys
+	store *database.Store
+
+	// Runtime-changeable memory tunables, guarded so a reload cannot race a read.
+	memoryMu sync.RWMutex
+	memory   memorySettings
+
+	// memoryWorkerMu guards the scanner goroutine; terminateMemory is nil when stopped.
+	memoryWorkerMu  sync.Mutex
+	terminateMemory context.CancelCauseFunc
+	// True while a re-embed pass runs, so a second one cannot start;
+	// terminateReembed interrupts it at the next batch boundary.
+	reembedding      bool
+	terminateReembed context.CancelCauseFunc
+	// Published count of memories awaiting re-embedding.
+	staleMemories atomic.Int64
+	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
+	reembedBatchDelay  time.Duration
+	reembedCallTimeout time.Duration
+	// Wakes the worker ahead of its next tick, after an interval change.
+	scanNow chan struct{}
+
+	memoryAgents  map[string]model.Agent // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
+	memoryMapping map[string]string      // map[roleName]modelSelector
+	// Decompressed embedded prompts, kept to rebuild a disabled memory role.
+	// Never serialized: Agent.Prompt and Skill.AdditionalPrompt are json:"-".
+	embeddedPrompts map[string]string
 
 	detections.IOManager
+}
+
+type memorySettings struct {
+	useMemory          bool
+	useScanner         bool
+	scanInterval       time.Duration
+	mem2mem            float64
+	mem2msg            float64
+	maxUserInclude     int
+	maxGlobalInclude   int
+	maxUserReconcile   int
+	maxGlobalReconcile int
+	memoryModel        string
+	embedModel         string
+	reconcileModel     string
+	memoryPersona      string
+	reconcilePersona   string
+}
+
+func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
+	ac.memoryMu.RLock()
+	defer ac.memoryMu.RUnlock()
+
+	return ac.memory
+}
+
+func (ac *AssistantCoordinator) setMemorySettings(settings memorySettings) {
+	ac.memoryMu.Lock()
+	defer ac.memoryMu.Unlock()
+
+	ac.memory = settings
 }
 
 // Configuration setting IDs the coordinator subscribes to for live reloads. These
@@ -169,7 +229,39 @@ const (
 	// limits that can be hot-reloaded.
 	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
 	ConfigSettingMaxSubSessionTokens = "soc.config.server.modules.assistant.maxSubSessionTokens"
+
+	ConfigSettingUseMemory                    = "soc.config.server.modules.assistant.useMemory"
+	ConfigSettingUseMemoryScanner             = "soc.config.server.modules.assistant.useMemoryScanner"
+	ConfigSettingMemoryScanInterval           = "soc.config.server.modules.assistant.memoryScanIntervalSeconds"
+	ConfigSettingMemoryProximity              = "soc.config.server.modules.assistant.memoryProximityThreshold"
+	ConfigSettingMessageProximity             = "soc.config.server.modules.assistant.messageProximityThreshold"
+	ConfigSettingMaxUserMemoriesToInclude     = "soc.config.server.modules.assistant.maxUserMemoriesToInclude"
+	ConfigSettingMaxGlobalMemoriesToInclude   = "soc.config.server.modules.assistant.maxGlobalMemoriesToInclude"
+	ConfigSettingMaxUserMemoriesToReconcile   = "soc.config.server.modules.assistant.maxUserMemoriesToReconcile"
+	ConfigSettingMaxGlobalMemoriesToReconcile = "soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile"
+	ConfigSettingMemoryModel                  = "soc.config.server.modules.assistant.memoryModel"
+	ConfigSettingEmbedModel                   = "soc.config.server.modules.assistant.embedModel"
+	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
+	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
+	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
 )
+
+var memoryConfigSettings = []string{
+	ConfigSettingUseMemory,
+	ConfigSettingUseMemoryScanner,
+	ConfigSettingMemoryScanInterval,
+	ConfigSettingMemoryProximity,
+	ConfigSettingMessageProximity,
+	ConfigSettingMaxUserMemoriesToInclude,
+	ConfigSettingMaxGlobalMemoriesToInclude,
+	ConfigSettingMaxUserMemoriesToReconcile,
+	ConfigSettingMaxGlobalMemoriesToReconcile,
+	ConfigSettingMemoryModel,
+	ConfigSettingEmbedModel,
+	ConfigSettingReconcileModel,
+	ConfigSettingMemoryPersona,
+	ConfigSettingReconcilePersona,
+}
 
 // getMaxSubSessionTokens returns the current per-sub-session output-token budget.
 func (ac *AssistantCoordinator) getMaxSubSessionTokens() int {
@@ -212,56 +304,60 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
-
-	ac.useMemory = module.GetBoolDefault(config, "useMemory", false)
-	ac.useMemoryScanner = module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER)
-	ac.maxUserMemoriesToInclude = module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE)
-	ac.maxGlobalMemoriesToInclude = module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE)
-	ac.maxUserMemoriesToReconcile = module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE)
-	ac.maxGlobalMemoriesToReconcile = module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE)
-	ac.mem2memProximityThreshold = module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD)
-	ac.mem2msgProximityThreshold = module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD)
-
-	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
-	if memScanInterval > 0 {
-		ac.memoryScanInterval = time.Second * time.Duration(memScanInterval)
-	} else if err == nil && ac.useMemoryScanner {
-		err = fmt.Errorf("memoryScanInterval must be > 0")
-	}
-
 	ac.loadAdapters(config)
 
 	ac.validateModelSelectors()
 
 	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
 
-	if ac.isAgentic || ac.useMemory || ac.useMemoryScanner {
-		prompts := ac.unzipAndUnmarshal(allPrompts)
+	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
 
-		if ac.isAgentic {
-			ac.setupAgentic(prompts)
-			ac.agentMapping = ac.loadAgentMapping(config)
-
-			ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
-			for name, selector := range ac.agentMapping {
-				ac.builtinAgentMapping[name] = selector
-			}
-
-			ac.validateAgentMappings()
-			ac.registerDelegateTools()
-			ac.exposeAgents()
-		}
-
-		if ac.useMemory || ac.useMemoryScanner {
-			ac.setupMemoryAgents(prompts)
-			ac.memoryMapping = map[string]string{
-				"Memory":    module.GetStringDefault(config, "memoryModel", ""),
-				"Embed":     module.GetStringDefault(config, "embedModel", ""),
-				"Reconcile": module.GetStringDefault(config, "reconcileModel", ""),
-			}
-			ac.validateMemoryMappings()
-		}
+	memory := memorySettings{
+		useMemory:          module.GetBoolDefault(config, "useMemory", false),
+		useScanner:         module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
+		scanInterval:       time.Second * time.Duration(memScanInterval),
+		mem2mem:            module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
+		mem2msg:            module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
+		maxUserInclude:     module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
+		maxGlobalInclude:   module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
+		maxUserReconcile:   module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
+		maxGlobalReconcile: module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
+		memoryModel:        module.GetStringDefault(config, "memoryModel", ""),
+		embedModel:         module.GetStringDefault(config, "embedModel", ""),
+		reconcileModel:     module.GetStringDefault(config, "reconcileModel", ""),
+		memoryPersona:      module.GetStringDefault(config, "memoryPersona", ""),
+		reconcilePersona:   module.GetStringDefault(config, "reconcilePersona", ""),
 	}
+
+	if memScanInterval <= 0 && err == nil && memory.useScanner {
+		err = fmt.Errorf("memoryScanInterval must be > 0")
+	}
+
+	ac.reembedBatchDelay = MEMORY_REEMBED_BATCH_DELAY
+	ac.reembedCallTimeout = MEMORY_REEMBED_CALL_TIMEOUT
+
+	ac.setMemorySettings(memory)
+	ac.exposeMemorySettings()
+
+	// Loaded even when neither agentic nor memory is on, since memory can be
+	// enabled at runtime and its roles are built from these.
+	ac.embeddedPrompts = ac.unzipAndUnmarshal(allPrompts)
+
+	if ac.isAgentic {
+		ac.setupAgentic(ac.embeddedPrompts)
+		ac.agentMapping = ac.loadAgentMapping(config)
+
+		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+		for name, selector := range ac.agentMapping {
+			ac.builtinAgentMapping[name] = selector
+		}
+
+		ac.validateAgentMappings()
+		ac.registerDelegateTools()
+		ac.exposeAgents()
+	}
+
+	ac.applyMemoryAgents(memory)
 
 	ac.getPrompt()
 
@@ -317,8 +413,9 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 			}).Info("loaded assistant adapter")
 
 			adapterArray = append(adapterArray, model.AdapterParameters{
-				Name:     name,
-				Protocol: protocol,
+				Name:               name,
+				Protocol:           protocol,
+				SupportsEmbeddings: adapt.SupportsEmbeddings(),
 			})
 		}
 
@@ -528,19 +625,52 @@ func (ac *AssistantCoordinator) Start() error {
 	// Init config. Start runs after every module's Init, so the Configstore is
 	// available now. Subscribe to the relevant settings and pull their current
 	// values on top of the Init defaults.
+	// A zero-value coordinator (used by some tests) has nothing to subscribe to.
+	if ac.srv == nil {
+		return nil
+	}
+
+	ac.registerConfigCallbacks()
+
 	if ac.isAgentic {
-		ac.registerConfigCallbacks()
 		ac.reloadAgentConfiguration(ac.srv.Context)
 	}
 
-	if ac.useMemoryScanner {
-		var memCtx context.Context
-		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
-
-		go ac.memoryWorker(memCtx)
-	}
+	ac.reloadMemoryConfiguration(ac.srv.Context)
 
 	return nil
+}
+
+func (ac *AssistantCoordinator) applyScannerState(enabled bool) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	switch {
+	case enabled && ac.terminateMemory == nil:
+		var memCtx context.Context
+		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
+		ac.scanNow = make(chan struct{}, 1)
+
+		go ac.memoryWorker(memCtx, ac.scanNow)
+	case !enabled && ac.terminateMemory != nil:
+		ac.terminateMemory(errors.New("memory scanner disabled"))
+		ac.terminateMemory = nil
+		ac.scanNow = nil
+	}
+}
+
+func (ac *AssistantCoordinator) wakeScanner() {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	if ac.scanNow == nil {
+		return
+	}
+
+	select {
+	case ac.scanNow <- struct{}{}:
+	default:
+	}
 }
 
 // registerConfigCallbacks subscribes the coordinator to changes of the config
@@ -553,12 +683,15 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 		return
 	}
 
-	for _, id := range []string{
+	ids := []string{
 		ConfigSettingAgents,
 		ConfigSettingSkills,
 		ConfigSettingMaxDelegationDepth,
 		ConfigSettingMaxSubSessionTokens,
-	} {
+	}
+	ids = append(ids, memoryConfigSettings...)
+
+	for _, id := range ids {
 		registrar.RegisterConfigSettingCallback(id, ac)
 	}
 }
@@ -568,7 +701,18 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 // configuration so its in-memory state and the client-facing parameters stay
 // consistent.
 func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
-	if !ac.isAgentic || setting == nil {
+	if setting == nil {
+		return
+	}
+
+	if slices.Contains(memoryConfigSettings, setting.Id) {
+		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading memory configuration after config change")
+		ac.reloadMemoryConfiguration(ctx)
+
+		return
+	}
+
+	if !ac.isAgentic {
 		return
 	}
 
@@ -582,9 +726,13 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 func (ac *AssistantCoordinator) Stop() error {
 	ac.isRunning = false
 
-	if ac.terminateMemory != nil {
-		ac.terminateMemory(nil)
+	ac.applyScannerState(false)
+
+	ac.memoryWorkerMu.Lock()
+	if ac.terminateReembed != nil {
+		ac.terminateReembed(errors.New("assistant stopped"))
 	}
+	ac.memoryWorkerMu.Unlock()
 
 	return nil
 }
@@ -834,7 +982,7 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		req.SystemAppend = ac.systemPromptAddendum
 	}
 
-	if ac.useMemory && config.IncludeMemories && len(clean) != 0 {
+	if ac.memorySnapshot().useMemory && config.IncludeMemories && len(clean) != 0 {
 		latest := clean[len(clean)-1]
 		if strings.EqualFold(latest.Role, "user") {
 			content := messageText(latest)

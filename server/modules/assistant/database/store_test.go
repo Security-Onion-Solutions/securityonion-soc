@@ -153,7 +153,7 @@ func TestUpdateMemory(t *testing.T) {
 	}).Return(nil)
 
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
-		"mem-1", "updated text", stringPtrTo("session-2"), mock.Anything, "embed-model", nilStringPtr()).
+		"mem-1", "updated text", stringPtrTo("session-2"), mock.Anything, "embed-model", nilStringPtr(), false).
 		Return(mRow)
 
 	err := s.UpdateMemory(context.Background(), mem)
@@ -189,7 +189,7 @@ func TestUpdateMemoryScanError(t *testing.T) {
 	mRow := &mockdb.MockRow{}
 	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(scanErr)
 
-	mDB.On("QueryRow", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mRow)
+	mDB.On("QueryRow", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mRow)
 
 	err := s.UpdateMemory(context.Background(), mem)
 

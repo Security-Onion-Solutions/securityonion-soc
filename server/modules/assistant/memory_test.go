@@ -42,6 +42,12 @@ func stringPtrTo(expected string) any {
 	})
 }
 
+func nilStringPtr() any {
+	return mock.MatchedBy(func(s *string) bool {
+		return s == nil
+	})
+}
+
 // scriptedAdapter is a captureAdapter whose SendMessage response is supplied by
 // the test, for driving the memory extraction/reconciliation paths.
 type scriptedAdapter struct {
@@ -122,12 +128,14 @@ func newReconcileTestCoordinator(mDB *mockdb.MockDB, adapter server.AssistantAda
 				}},
 			}},
 		},
-		adapters:                     map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memoryAgents:                 map[string]model.Agent{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
-		memoryMapping:                map[string]string{"Reconcile": "rec-model@TestAdapter"},
-		mem2memProximityThreshold:    0.8,
-		maxUserMemoriesToReconcile:   20,
-		maxGlobalMemoriesToReconcile: 20,
+		adapters:      map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memoryAgents:  map[string]model.Agent{"Reconcile": {Name: "Reconcile", Prompt: "reconcile prompt"}},
+		memoryMapping: map[string]string{"Reconcile": "rec-model@TestAdapter"},
+		memory: memorySettings{
+			mem2mem:            0.8,
+			maxUserReconcile:   20,
+			maxGlobalReconcile: 20,
+		},
 	}
 }
 
@@ -154,7 +162,7 @@ func TestApplyMemories(t *testing.T) {
 	updateRow := &mockdb.MockRow{}
 	updateRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(updateRow)
 
 	mDB.On("Exec", mock.Anything, sqlContains("DELETE FROM memories"), "mem-3").Return(nil)
@@ -200,7 +208,7 @@ func TestApplyMemoriesCollectsErrors(t *testing.T) {
 	updateRow := &mockdb.MockRow{}
 	updateRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(updateErr)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
-		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(updateRow)
 
 	mDB.On("Exec", mock.Anything, sqlContains("DELETE FROM memories"), "mem-3").Return(nil)
@@ -1114,6 +1122,11 @@ func (a *embedAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (
 	return a.embedFn(ctx, req)
 }
 
+// Overrides captureAdapter, which reports no embedding support.
+func (a *embedAdapter) SupportsEmbeddings() bool {
+	return true
+}
+
 // singleEmbedAdapter returns an embedAdapter that produces one fixed embedding
 // per input, the shape most tests need.
 func singleEmbedAdapter() *embedAdapter {
@@ -1165,9 +1178,11 @@ func newScanTestCoordinator(store server.Assistantstore, mDB *mockdb.MockDB, ext
 			"Embed":     "embed-model@EmbedAdapter",
 			"Reconcile": "rec-model@ReconcileAdapter",
 		},
-		mem2memProximityThreshold:    0.8,
-		maxUserMemoriesToReconcile:   20,
-		maxGlobalMemoriesToReconcile: 20,
+		memory: memorySettings{
+			mem2mem:            0.8,
+			maxUserReconcile:   20,
+			maxGlobalReconcile: 20,
+		},
 	}
 }
 
@@ -1387,7 +1402,7 @@ func TestScanForMemoriesUpdateReembeds(t *testing.T) {
 		*(args.Get(0).(**time.Time)) = &updated
 	}).Return(nil)
 	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
-		"n1", "user likes green tea", stringPtrTo("sess-1"), mock.Anything, "embed-model", stringPtrTo("user-1")).
+		"n1", "user likes green tea", stringPtrTo("sess-1"), mock.Anything, "embed-model", stringPtrTo("user-1"), false).
 		Return(mRow)
 
 	ac := newScanTestCoordinator(store, mDB, extract, embed, reconcile)
@@ -1499,13 +1514,13 @@ func TestScanForMemoriesNoEmbedAgent(t *testing.T) {
 }
 
 func TestMemoryWorkerShutdown(t *testing.T) {
-	ac := &AssistantCoordinator{memoryScanInterval: time.Hour}
+	ac := &AssistantCoordinator{memory: memorySettings{scanInterval: time.Hour}}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	done := make(chan struct{})
 	go func() {
-		ac.memoryWorker(ctx)
+		ac.memoryWorker(ctx, nil)
 		close(done)
 	}()
 
@@ -1534,13 +1549,13 @@ func TestMemoryWorkerScansOnTick(t *testing.T) {
 	}).MinTimes(1)
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
-	ac.memoryScanInterval = 5 * time.Millisecond
+	ac.memory.scanInterval = 5 * time.Millisecond
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	done := make(chan struct{})
 	go func() {
-		ac.memoryWorker(ctx)
+		ac.memoryWorker(ctx, nil)
 		close(done)
 	}()
 
@@ -1567,9 +1582,9 @@ func TestStartStopMemoryWorker(t *testing.T) {
 	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return(nil, nil).AnyTimes()
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
-	ac.useMemory = true
-	ac.useMemoryScanner = true
-	ac.memoryScanInterval = time.Hour
+	ac.memory.useMemory = true
+	ac.memory.useScanner = true
+	ac.memory.scanInterval = time.Hour
 	ac.srv.Context = context.Background()
 
 	assert.NoError(t, ac.Start())
@@ -1596,12 +1611,14 @@ func newFetchTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter, allowed ma
 				}},
 			}},
 		},
-		adapters:                   map[string]server.AssistantAdapter{"EmbedAdapter": embed},
-		memoryAgents:               map[string]model.Agent{"Embed": {Name: "Embed"}},
-		memoryMapping:              map[string]string{"Embed": "embed-model@EmbedAdapter"},
-		mem2msgProximityThreshold:  0.7,
-		maxUserMemoriesToInclude:   5,
-		maxGlobalMemoriesToInclude: 5,
+		adapters:      map[string]server.AssistantAdapter{"EmbedAdapter": embed},
+		memoryAgents:  map[string]model.Agent{"Embed": {Name: "Embed"}},
+		memoryMapping: map[string]string{"Embed": "embed-model@EmbedAdapter"},
+		memory: memorySettings{
+			mem2msg:          0.7,
+			maxUserInclude:   5,
+			maxGlobalInclude: 5,
+		},
 	}
 }
 
@@ -1740,8 +1757,8 @@ func TestFetchMemoriesForPromptZeroLimitsSkipQueries(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 
 	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_global": true})
-	ac.maxUserMemoriesToInclude = 0
-	ac.maxGlobalMemoriesToInclude = 0
+	ac.memory.maxUserInclude = 0
+	ac.memory.maxGlobalInclude = 0
 
 	user, global, err := ac.fetchMemoriesForPrompt(memoryTestCtx(), "what do I like", "")
 
@@ -1785,7 +1802,7 @@ func newMemoryPromptTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter) (*A
 	chat := &captureAdapter{}
 
 	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{"read_authored": true, "read_global": true})
-	ac.useMemory = true
+	ac.memory.useMemory = true
 	ac.systemPromptAddendum = "base-append"
 	ac.adapters["ChatAdapter"] = chat
 
@@ -1952,4 +1969,971 @@ func TestPrepareChatRequestSizeCheckCountsMemories(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrRequestTooLarge)
 	waitForSignal(t, counted, "usage count update")
+}
+
+type memoryRowFixture struct {
+	id, userId, memoryText, modelId string
+	sessionId, targetUserId         *string
+	userDefined                     bool
+	usageCount                      int
+	similarity                      float64
+}
+
+// expectMemoryRow scripts one Scan call over the memoryColumns projection, plus
+// the similarity column when the listing is a search.
+func expectMemoryRow(mRows *mockdb.MockRows, row memoryRowFixture, withSimilarity bool) {
+	count := 11
+	if withSimilarity {
+		count = 12
+	}
+
+	args := make([]any, count)
+	for i := range args {
+		args[i] = mock.Anything
+	}
+
+	mRows.On("Scan", args...).Run(func(a mock.Arguments) {
+		*(a.Get(0).(*string)) = row.id
+		*(a.Get(4).(*string)) = row.userId
+		*(a.Get(5).(*string)) = row.memoryText
+		*(a.Get(6).(**string)) = row.sessionId
+		*(a.Get(7).(*string)) = row.modelId
+		*(a.Get(8).(**string)) = row.targetUserId
+		*(a.Get(9).(*bool)) = row.userDefined
+		*(a.Get(10).(*int)) = row.usageCount
+
+		if withSimilarity {
+			*(a.Get(11).(*float64)) = row.similarity
+		}
+	}).Return(nil).Once()
+}
+
+func expectMemoryCount(mDB *mockdb.MockDB, total int, args ...any) {
+	countRow := &mockdb.MockRow{}
+	countRow.On("Scan", mock.Anything).Run(func(a mock.Arguments) {
+		*(a.Get(0).(*int)) = total
+	}).Return(nil)
+
+	on := append([]any{mock.Anything, sqlContains("SELECT COUNT(*) FROM memories")}, args...)
+	mDB.On("QueryRow", on...).Return(countRow)
+}
+
+func memoryListRows(rows ...memoryRowFixture) *mockdb.MockRows {
+	mRows := &mockdb.MockRows{}
+	for _, row := range rows {
+		mRows.On("Next").Return(true).Once()
+		expectMemoryRow(mRows, row, row.similarity != 0)
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Close").Return()
+	mRows.On("Err").Return(nil)
+
+	return mRows
+}
+
+func TestListMemoriesSelfScope(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	expectMemoryCount(mDB, 3, "user-1")
+	mDB.On("Query", mock.Anything, sqlContains("ORDER BY updated_at DESC"), "user-1", 25, 0).
+		Return(memoryListRows(memoryRowFixture{
+			id:           "mem-1",
+			memoryText:   "prefers dark mode",
+			targetUserId: new("user-1"),
+			usageCount:   4,
+		}), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{Scope: model.MemoryScopeSelf})
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, results.Total)
+	assert.Equal(t, 25, results.Limit)
+
+	if assert.Len(t, results.Memories, 1) {
+		assert.Equal(t, "user", results.Memories[0].Scope)
+		assert.Equal(t, "user-1", results.Memories[0].TargetUserId)
+		assert.Equal(t, 4, results.Memories[0].UsageCount)
+		assert.Nil(t, results.Memories[0].Similarity)
+	}
+
+	mDB.AssertExpectations(t)
+}
+
+func TestListMemoriesDefaultScopeUnionsReadableScopes(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_global": true})
+
+	expectMemoryCount(mDB, 1, "user-1")
+	mDB.On("Query", mock.Anything, sqlContains("(target_user_id = $1 OR target_user_id IS NULL)"), "user-1", 25, 0).
+		Return(memoryListRows(memoryRowFixture{id: "mem-2", memoryText: "the DMZ is 10.4.0.0/16"}), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{})
+
+	assert.NoError(t, err)
+
+	if assert.Len(t, results.Memories, 1) {
+		assert.Equal(t, "global", results.Memories[0].Scope)
+		assert.Empty(t, results.Memories[0].TargetUserId)
+	}
+
+	mDB.AssertExpectations(t)
+}
+
+func TestListMemoriesReadAllSeesEveryScope(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_all": true})
+
+	expectMemoryCount(mDB, 0)
+	mDB.On("Query", mock.Anything, sqlContains("WHERE TRUE"), 25, 0).Return(memoryListRows(), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{})
+
+	assert.NoError(t, err)
+	assert.Empty(t, results.Memories)
+	mDB.AssertExpectations(t)
+}
+
+// Naming a user without a scope narrows to that user plus global, rather than
+// falling through to every memory.
+func TestListMemoriesReadAllHonorsTargetUser(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_all": true})
+
+	expectMemoryCount(mDB, 0, "user-2")
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $1 OR target_user_id IS NULL"), "user-2", 25, 0).
+		Return(memoryListRows(), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{TargetUserId: "user-2"})
+
+	assert.NoError(t, err)
+	assert.Empty(t, results.Memories)
+	mDB.AssertExpectations(t)
+}
+
+func TestListMemoriesGlobalScopeRequiresReadGlobal(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	_, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{Scope: model.MemoryScopeGlobal})
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+}
+
+func TestListMemoriesOtherUserRequiresReadAll(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"read_authored": true, "read_global": true})
+
+	_, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{Scope: model.MemoryScopeSelf, TargetUserId: "user-2"})
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+}
+
+func TestListMemoriesNoReadPermissions(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{})
+
+	_, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{})
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+}
+
+func TestListMemoriesMissingRequestor(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	_, err := ac.ListMemories(context.Background(), &model.MemoryFilter{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing RequestorId")
+}
+
+func TestListMemoriesSearchOrdersBySimilarity(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed := singleEmbedAdapter()
+	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{"read_authored": true})
+
+	// the count query binds the scope and model args but never the vector
+	expectMemoryCount(mDB, 1, "user-1", "embed-model")
+	mDB.On("Query", mock.Anything, sqlContains("ORDER BY embedding <=> $3"), "user-1", "embed-model", mock.Anything, 25, 0).
+		Return(memoryListRows(memoryRowFixture{
+			id:           "mem-3",
+			memoryText:   "prefers Zeek for lateral movement",
+			targetUserId: new("user-1"),
+			similarity:   0.82,
+		}), nil)
+
+	results, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{Scope: model.MemoryScopeSelf, Query: "which logs"})
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"which logs"}, embed.lastEmbedReq.Input)
+
+	if assert.Len(t, results.Memories, 1) {
+		assert.NotNil(t, results.Memories[0].Similarity)
+		assert.InDelta(t, 0.82, *results.Memories[0].Similarity, 0.001)
+	}
+
+	mDB.AssertExpectations(t)
+}
+
+func TestListMemoriesLimitIsCapped(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"read_authored": true})
+
+	expectMemoryCount(mDB, 0, "user-1")
+	mDB.On("Query", mock.Anything, mock.Anything, "user-1", MAX_MEMORY_PAGE_SIZE, 0).Return(memoryListRows(), nil)
+
+	_, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{Scope: model.MemoryScopeSelf, Limit: MAX_MEMORY_PAGE_SIZE * 10})
+
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func expectGetMemory(mDB *mockdb.MockDB, id string, row memoryRowFixture, found bool) {
+	mRows := &mockdb.MockRows{}
+	if found {
+		mRows.On("Next").Return(true).Once()
+		expectMemoryRow(mRows, row, false)
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Close").Return()
+	mRows.On("Err").Return(nil)
+
+	mDB.On("Query", mock.Anything, sqlContains("FROM memories WHERE id = $1"), id).Return(mRows, nil)
+}
+
+func TestSaveMemoryCreatesPinnedMemory(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed := singleEmbedAdapter()
+	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{"write_self": true})
+
+	addRow := &mockdb.MockRow{}
+	addRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO memories"),
+		"user-1", "prefers dark mode", nilStringPtr(), mock.Anything, "embed-model", stringPtrTo("user-1"), true).
+		Return(addRow)
+
+	mem := &model.Memory{MemoryText: "  prefers   dark mode  ", TargetUserId: new("user-1")}
+
+	err := ac.SaveMemory(memoryTestCtx(), mem)
+
+	assert.NoError(t, err)
+	assert.True(t, mem.UserDefined)
+	assert.Equal(t, "embed-model", mem.ModelID)
+	mDB.AssertExpectations(t)
+}
+
+func TestSaveMemoryRequiresText(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	err := ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "   ", TargetUserId: new("user-1")})
+
+	assert.ErrorIs(t, err, ErrInvalidMemory)
+}
+
+func TestSaveMemoryGlobalRequiresWriteGlobal(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	err := ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "the DMZ is 10.4.0.0/16"})
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+}
+
+func TestSaveMemoryAnotherUserRequiresWriteAll(t *testing.T) {
+	ac := newFetchTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter(), map[string]bool{"write_self": true, "write_global": true})
+
+	err := ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "prefers light mode", TargetUserId: new("user-2")})
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+}
+
+// An edit that moves a memory out of global scope still needs write_global,
+// otherwise a user could pull an installation memory into their own.
+func TestSaveMemoryChecksTheScopeBeingLeft(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	expectGetMemory(mDB, "mem-1", memoryRowFixture{id: "mem-1", memoryText: "the DMZ is 10.4.0.0/16"}, true)
+
+	mem := &model.Memory{MemoryText: "the DMZ is 10.4.0.0/16", TargetUserId: new("user-1")}
+	mem.Id = "mem-1"
+
+	err := ac.SaveMemory(memoryTestCtx(), mem)
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+	mDB.AssertExpectations(t)
+}
+
+func TestSaveMemoryUpdateKeepsOriginAndAuthor(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	expectGetMemory(mDB, "mem-1", memoryRowFixture{
+		id:           "mem-1",
+		userId:       server.SYSTEM_ID,
+		memoryText:   "prefers dark mode",
+		sessionId:    new("sess-9"),
+		targetUserId: new("user-1"),
+	}, true)
+
+	updateRow := &mockdb.MockRow{}
+	updateRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mDB.On("QueryRow", mock.Anything, sqlContains("UPDATE memories"),
+		"mem-1", "prefers light mode", stringPtrTo("sess-9"), mock.Anything, "embed-model", stringPtrTo("user-1"), true).
+		Return(updateRow)
+
+	mem := &model.Memory{MemoryText: "prefers light mode", TargetUserId: new("user-1")}
+	mem.Id = "mem-1"
+
+	err := ac.SaveMemory(memoryTestCtx(), mem)
+
+	assert.NoError(t, err)
+	assert.Equal(t, server.SYSTEM_ID, mem.UserId)
+	mDB.AssertExpectations(t)
+}
+
+func TestRemoveMemoryChecksScope(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	expectGetMemory(mDB, "mem-1", memoryRowFixture{id: "mem-1", memoryText: "the DMZ is 10.4.0.0/16"}, true)
+
+	err := ac.RemoveMemory(memoryTestCtx(), "mem-1")
+
+	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+	mDB.AssertExpectations(t)
+}
+
+func TestRemoveMemoryDeletes(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	expectGetMemory(mDB, "mem-1", memoryRowFixture{id: "mem-1", memoryText: "prefers dark mode", targetUserId: new("user-1")}, true)
+	mDB.On("Exec", mock.Anything, sqlContains("DELETE FROM memories"), "mem-1").Return(nil)
+
+	err := ac.RemoveMemory(memoryTestCtx(), "mem-1")
+
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestRemoveMemoryNotFound(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newFetchTestCoordinator(mDB, singleEmbedAdapter(), map[string]bool{"write_self": true})
+
+	expectGetMemory(mDB, "missing", memoryRowFixture{}, false)
+
+	err := ac.RemoveMemory(memoryTestCtx(), "missing")
+
+	assert.ErrorIs(t, err, ErrMemoryNotFound)
+	mDB.AssertExpectations(t)
+}
+
+func TestMemoryManagementRequiresDatabase(t *testing.T) {
+	ac := &AssistantCoordinator{srv: &server.Server{}}
+
+	_, err := ac.ListMemories(memoryTestCtx(), &model.MemoryFilter{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	assert.ErrorIs(t, ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "x"}), ErrNoDatabase)
+	assert.ErrorIs(t, ac.RemoveMemory(memoryTestCtx(), "mem-1"), ErrNoDatabase)
+}
+
+func memorySettingsFixture() memorySettings {
+	return memorySettings{
+		useMemory:          false,
+		useScanner:         false,
+		scanInterval:       300 * time.Second,
+		mem2mem:            0.8,
+		mem2msg:            0.5,
+		maxUserInclude:     5,
+		maxGlobalInclude:   5,
+		maxUserReconcile:   20,
+		maxGlobalReconcile: 20,
+	}
+}
+
+func settingsByID(pairs map[string]string) map[string]*model.Setting {
+	byID := map[string]*model.Setting{}
+	for id, value := range pairs {
+		byID[id] = &model.Setting{Id: id, Value: value}
+	}
+
+	return byID
+}
+
+func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+		ConfigSettingUseMemory:                    "true",
+		ConfigSettingUseMemoryScanner:             "true",
+		ConfigSettingMemoryScanInterval:           "60",
+		ConfigSettingMemoryProximity:              "0.9",
+		ConfigSettingMessageProximity:             "0.35",
+		ConfigSettingMaxUserMemoriesToInclude:     "3",
+		ConfigSettingMaxGlobalMemoriesToInclude:   "7",
+		ConfigSettingMaxUserMemoriesToReconcile:   "11",
+		ConfigSettingMaxGlobalMemoriesToReconcile: "13",
+	}))
+
+	assert.True(t, applied.useMemory)
+	assert.True(t, applied.useScanner)
+	assert.Equal(t, 60*time.Second, applied.scanInterval)
+	assert.InDelta(t, 0.9, applied.mem2mem, 0.0001)
+	assert.InDelta(t, 0.35, applied.mem2msg, 0.0001)
+	assert.Equal(t, 3, applied.maxUserInclude)
+	assert.Equal(t, 7, applied.maxGlobalInclude)
+	assert.Equal(t, 11, applied.maxUserReconcile)
+	assert.Equal(t, 13, applied.maxGlobalReconcile)
+}
+
+func TestApplyMemorySettingsKeepsCurrentOnMissingOrInvalid(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+	current := memorySettingsFixture()
+
+	applied := applyMemorySettings(logger, current, settingsByID(map[string]string{
+		ConfigSettingUseMemory:                "not-a-bool",
+		ConfigSettingMemoryProximity:          "high",
+		ConfigSettingMaxUserMemoriesToInclude: "",
+	}))
+
+	assert.Equal(t, current, applied, "an unparseable or empty setting leaves the value alone")
+}
+
+// A zero interval would panic time.NewTicker, so it is refused rather than applied.
+func TestApplyMemorySettingsRefusesNonPositiveInterval(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	for _, value := range []string{"0", "-30"} {
+		applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+			ConfigSettingMemoryScanInterval: value,
+		}))
+
+		assert.Equal(t, 300*time.Second, applied.scanInterval, "interval %q should be refused", value)
+	}
+}
+
+func newMemoryReloadTestCoordinator(store *fakeConfigstore) *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			Context:     context.Background(),
+			Configstore: store,
+			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{},
+			}},
+		},
+		memory: memorySettingsFixture(),
+	}
+}
+
+func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
+	store := &fakeConfigstore{settings: []*model.Setting{
+		{Id: ConfigSettingUseMemory, Value: "true"},
+		{Id: ConfigSettingMaxUserMemoriesToInclude, Value: "9"},
+	}}
+
+	ac := newMemoryReloadTestCoordinator(store)
+
+	ac.reloadMemoryConfiguration(context.Background())
+
+	params := ac.srv.Config.ClientParams.AssistantParams
+	assert.True(t, params.MemoryEnabled)
+	assert.True(t, params.MemoryParams.UseMemory)
+	assert.False(t, params.MemoryParams.UseMemoryScanner)
+	assert.Equal(t, 9, params.MemoryParams.MaxUserMemoriesToInclude)
+	assert.Equal(t, 300, params.MemoryParams.ScanIntervalSeconds)
+	assert.Equal(t, 9, ac.memorySnapshot().maxUserInclude)
+}
+
+func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sessionStore := servermock.NewMockAssistantstore(ctrl)
+	sessionStore.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).Return(nil, nil).AnyTimes()
+
+	store := &fakeConfigstore{settings: []*model.Setting{{Id: ConfigSettingUseMemoryScanner, Value: "true"}}}
+	ac := newMemoryReloadTestCoordinator(store)
+	ac.srv.Assistantstore = sessionStore
+
+	ac.reloadMemoryConfiguration(context.Background())
+	assert.NotNil(t, ac.terminateMemory, "enabling the scanner starts its worker")
+
+	// A second reload with the scanner still on must not start a second worker.
+	running := ac.terminateMemory
+	ac.reloadMemoryConfiguration(context.Background())
+	assert.Equal(t, fmt.Sprintf("%p", running), fmt.Sprintf("%p", ac.terminateMemory))
+
+	store.settings = []*model.Setting{{Id: ConfigSettingUseMemoryScanner, Value: "false"}}
+
+	ac.reloadMemoryConfiguration(context.Background())
+	assert.Nil(t, ac.terminateMemory, "disabling the scanner stops its worker")
+}
+
+func TestOnConfigSettingUpdatedReloadsMemoryWithoutAgentic(t *testing.T) {
+	store := &fakeConfigstore{settings: []*model.Setting{{Id: ConfigSettingUseMemory, Value: "true"}}}
+	ac := newMemoryReloadTestCoordinator(store)
+	ac.isAgentic = false
+
+	ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: ConfigSettingUseMemory, Value: "true"}, false)
+
+	assert.True(t, ac.memorySnapshot().useMemory, "memory settings reload even when agentic is off")
+}
+
+func TestMemoryWorkerRearmsOnIntervalChange(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	scanned := make(chan struct{}, 1)
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any()).DoAndReturn(func(ctx context.Context) ([]*model.AssistantSessionDetails, error) {
+		select {
+		case scanned <- struct{}{}:
+		default:
+		}
+
+		return nil, nil
+	}).MinTimes(1)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memory.scanInterval = time.Hour
+
+	wake := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		ac.memoryWorker(ctx, wake)
+		close(done)
+	}()
+
+	// Shorten the interval and wake the worker; it should re-arm and scan soon.
+	ac.setMemorySettings(memorySettings{scanInterval: 5 * time.Millisecond})
+	wake <- struct{}{}
+
+	select {
+	case <-scanned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker did not pick up the shortened scan interval")
+	}
+
+	cancel(nil)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("memory worker did not shut down")
+	}
+}
+
+func TestApplyMemorySettingsOverlaysModelSelectors(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+	current := memorySettingsFixture()
+	current.memoryModel = "old@SOAI"
+
+	applied := applyMemorySettings(logger, current, settingsByID(map[string]string{
+		ConfigSettingMemoryModel:    " new@SOAI ",
+		ConfigSettingEmbedModel:     "embed@SOAI",
+		ConfigSettingReconcileModel: "",
+	}))
+
+	assert.Equal(t, "new@SOAI", applied.memoryModel, "surrounding whitespace is trimmed")
+	assert.Equal(t, "embed@SOAI", applied.embedModel)
+	assert.Empty(t, applied.reconcileModel, "an empty selector is applied, since that is how a role is disabled")
+}
+
+func newMemoryAgentTestCoordinator() *AssistantCoordinator {
+	return &AssistantCoordinator{
+		srv: &server.Server{
+			Context: context.Background(),
+			Config: &config.ServerConfig{ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{AvailableModels: []model.ModelParameters{
+					{ID: "good-model", Adapter: "TestAdapter", Enabled: true},
+				}},
+			}},
+		},
+		embeddedPrompts: map[string]string{
+			"prompt_agent_memory":    "memory prompt",
+			"prompt_agent_reconcile": "reconcile prompt",
+		},
+	}
+}
+
+func TestApplyMemoryAgentsClearsRolesWhenMemoryOff(t *testing.T) {
+	ac := newMemoryAgentTestCoordinator()
+
+	ac.applyMemoryAgents(memorySettings{})
+
+	assert.Empty(t, ac.memoryAgents)
+	assert.Empty(t, ac.memoryMapping)
+}
+
+func TestApplyMemoryAgentsDisablesRoleWithUnresolvableModel(t *testing.T) {
+	ac := newMemoryAgentTestCoordinator()
+
+	ac.applyMemoryAgents(memorySettings{
+		useMemory:      true,
+		memoryModel:    "good-model@TestAdapter",
+		embedModel:     "missing-model@TestAdapter",
+		reconcileModel: "good-model@TestAdapter",
+	})
+
+	assert.Contains(t, ac.memoryAgents, "Memory")
+	assert.Contains(t, ac.memoryAgents, "Reconcile")
+	assert.NotContains(t, ac.memoryAgents, "Embed", "an unresolvable selector disables its role")
+}
+
+// validateMemoryMappings deletes disabled roles, so a corrected selector has to
+// rebuild them; otherwise fixing the config would need a restart.
+func TestApplyMemoryAgentsRestoresRoleAfterSelectorIsFixed(t *testing.T) {
+	ac := newMemoryAgentTestCoordinator()
+
+	ac.applyMemoryAgents(memorySettings{useMemory: true, embedModel: "missing-model@TestAdapter"})
+	assert.NotContains(t, ac.memoryAgents, "Embed")
+
+	ac.applyMemoryAgents(memorySettings{
+		useMemory:      true,
+		memoryModel:    "good-model@TestAdapter",
+		embedModel:     "good-model@TestAdapter",
+		reconcileModel: "good-model@TestAdapter",
+	})
+
+	assert.Contains(t, ac.memoryAgents, "Embed")
+	assert.Equal(t, "memory prompt", ac.memoryAgents["Memory"].Prompt, "roles are rebuilt with their prompts")
+	assert.Equal(t, "good-model@TestAdapter", ac.memoryMapping["Embed"])
+}
+
+func TestReloadMemoryConfigurationPublishesModelSelectors(t *testing.T) {
+	store := &fakeConfigstore{settings: []*model.Setting{
+		{Id: ConfigSettingUseMemory, Value: "true"},
+		{Id: ConfigSettingEmbedModel, Value: "embed@SOAI"},
+	}}
+
+	ac := newMemoryReloadTestCoordinator(store)
+
+	ac.reloadMemoryConfiguration(context.Background())
+
+	assert.Equal(t, "embed@SOAI", ac.srv.Config.ClientParams.AssistantParams.MemoryParams.EmbedModel)
+	assert.Equal(t, "embed@SOAI", ac.memorySnapshot().embedModel)
+}
+
+func TestApplyMemoryAgentsAppliesPersonaAddenda(t *testing.T) {
+	ac := newMemoryAgentTestCoordinator()
+
+	ac.applyMemoryAgents(memorySettings{
+		useMemory:        true,
+		memoryModel:      "good-model@TestAdapter",
+		embedModel:       "good-model@TestAdapter",
+		reconcileModel:   "good-model@TestAdapter",
+		memoryPersona:    "never record IP addresses",
+		reconcilePersona: "prefer keeping the older wording",
+	})
+
+	// EffectivePrompt is what setupAgent sends, so the addendum has to survive it.
+	memoryRole := ac.memoryAgents["Memory"]
+	reconcileRole := ac.memoryAgents["Reconcile"]
+
+	assert.Equal(t, "memory prompt\n\nnever record IP addresses", memoryRole.EffectivePrompt())
+	assert.Equal(t, "reconcile prompt\n\nprefer keeping the older wording", reconcileRole.EffectivePrompt())
+	assert.Empty(t, ac.memoryAgents["Embed"].PersonaAddendum, "Embed never sees a prompt")
+}
+
+func TestApplyMemorySettingsKeepsPersonaWhitespace(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+		ConfigSettingMemoryPersona: "line one\n  indented line",
+	}))
+
+	assert.Equal(t, "line one\n  indented line", applied.memoryPersona)
+}
+
+func TestReloadMemoryConfigurationPublishesPersonas(t *testing.T) {
+	store := &fakeConfigstore{settings: []*model.Setting{
+		{Id: ConfigSettingUseMemory, Value: "true"},
+		{Id: ConfigSettingMemoryPersona, Value: "be terse"},
+	}}
+
+	ac := newMemoryReloadTestCoordinator(store)
+	ac.embeddedPrompts = map[string]string{"prompt_agent_memory": "memory prompt"}
+
+	ac.reloadMemoryConfiguration(context.Background())
+
+	assert.Equal(t, "be terse", ac.srv.Config.ClientParams.AssistantParams.MemoryParams.MemoryPersona)
+	assert.Equal(t, "be terse", ac.memorySnapshot().memoryPersona)
+}
+
+func newReembedTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter) *AssistantCoordinator {
+	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{})
+	ac.srv.Context = context.Background()
+
+	return ac
+}
+
+// expectStaleBatch scripts one batch query returning the given id/text pairs.
+func expectStaleBatch(mDB *mockdb.MockDB, modelId string, pairs [][2]string) {
+	mRows := &mockdb.MockRows{}
+	for _, pair := range pairs {
+		id, text := pair[0], pair[1]
+		mRows.On("Next").Return(true).Once()
+		mRows.On("Scan", mock.Anything, mock.Anything).Run(func(a mock.Arguments) {
+			*(a.Get(0).(*string)) = id
+			*(a.Get(1).(*string)) = text
+		}).Return(nil).Once()
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Close").Return()
+	mRows.On("Err").Return(nil)
+
+	mDB.On("Query", mock.Anything, sqlContains("WHERE model_id <> $1"), modelId, MEMORY_REEMBED_BATCH_SIZE).
+		Return(mRows, nil).Once()
+}
+
+func expectStaleCount(mDB *mockdb.MockDB, modelId string, total int) {
+	countRow := &mockdb.MockRow{}
+	countRow.On("Scan", mock.Anything).Run(func(a mock.Arguments) {
+		*(a.Get(0).(*int)) = total
+	}).Return(nil)
+
+	mDB.On("QueryRow", mock.Anything, sqlContains("COUNT(*) FROM memories WHERE model_id <> $1"), modelId).Return(countRow)
+}
+
+func TestReembedRewritesStaleMemories(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+
+	expectStaleCount(mDB, "embed-model", 2)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}, {"mem-2", "the DMZ is 10.4.0.0/16"}})
+	expectStaleBatch(mDB, "embed-model", nil)
+
+	// Only the vector and the model change; text, counts and user_defined stand.
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding = $2, model_id = $3"),
+		"mem-1", mock.Anything, "embed-model").Return(nil).Once()
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding = $2, model_id = $3"),
+		"mem-2", mock.Anything, "embed-model").Return(nil).Once()
+
+	ac.reembedStaleMemories(context.Background())
+
+	assert.Equal(t, int64(0), ac.staleMemories.Load(), "the published count is cleared when the pass finishes")
+	mDB.AssertExpectations(t)
+}
+
+func TestReembedStopsWhenNothingIsStale(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+
+	expectStaleCount(mDB, "embed-model", 0)
+
+	ac.reembedStaleMemories(context.Background())
+
+	// No batch query and no updates: the count alone ends the pass.
+	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// A failed embed must leave the remaining rows alone so the next pass retries them.
+func TestReembedStopsOnEmbedFailure(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		// The probe succeeds; the batch embed fails.
+		if len(req.Input) == 1 && req.Input[0] == "probe" {
+			return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}}}, nil
+		}
+
+		return nil, errors.New("embed failed")
+	}}
+
+	ac := newReembedTestCoordinator(mDB, embed)
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+
+	ac.reembedStaleMemories(context.Background())
+
+	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestReembedRequiresAnEmbedRole(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	delete(ac.memoryAgents, "Embed")
+
+	ac.reembedStaleMemories(context.Background())
+
+	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// The pass must survive the request that triggered it, but still be reachable by
+// Stop; a cancelled request context alone must not end it.
+func TestStartReembedOutlivesItsRequestButStopEndsIt(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	ac.reembedBatchDelay = time.Hour
+
+	reqCtx, cancelRequest := context.WithCancel(context.Background())
+
+	batched := make(chan struct{})
+
+	expectStaleCount(mDB, "embed-model", 2)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding"), mock.Anything, mock.Anything, mock.Anything).
+		Run(func(mock.Arguments) { close(batched) }).Return(nil)
+
+	ac.startReembed(reqCtx)
+
+	select {
+	case <-batched:
+	case <-time.After(2 * time.Second):
+		t.Fatal("re-embed pass never reached its first batch")
+	}
+
+	// The request is done, but the pass is parked in its inter-batch pause.
+	cancelRequest()
+
+	assert.Eventually(t, func() bool {
+		ac.memoryWorkerMu.Lock()
+		defer ac.memoryWorkerMu.Unlock()
+
+		return ac.reembedding
+	}, time.Second, 10*time.Millisecond, "re-embed pass ended with its request context")
+
+	assert.NoError(t, ac.Stop())
+
+	assert.Eventually(t, func() bool {
+		ac.memoryWorkerMu.Lock()
+		defer ac.memoryWorkerMu.Unlock()
+
+		return !ac.reembedding && ac.terminateReembed == nil
+	}, 2*time.Second, 10*time.Millisecond, "Stop did not end the re-embed pass")
+}
+
+// Storing a model the batch query does not filter on would re-read the same rows
+// forever, so a mid-pass model change ends the pass instead.
+func TestReembedStopsWhenTheModelChangesMidPass(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+
+	calls := 0
+	drifting := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		calls++
+
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{0.1})
+		}
+
+		// The probe names one model; the batch comes back from another.
+		if calls == 1 {
+			return &model.EmbeddingResponse{Model: req.Model, Embeddings: embeddings}, nil
+		}
+
+		return &model.EmbeddingResponse{Model: "embed-model-v2", Embeddings: embeddings}, nil
+	}}
+
+	ac := newReembedTestCoordinator(mDB, drifting)
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+
+	ac.reembedStaleMemories(context.Background())
+
+	// Nothing was written, so the next pass finds the same rows under the new model.
+	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mDB.AssertNumberOfCalls(t, "Query", 1)
+}
+
+// A stalled embedding call is bounded, so it cannot strand the pass and block
+// every later one.
+func TestReembedTimesOutAStalledEmbedCall(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+
+	stalled := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+
+	ac := newReembedTestCoordinator(mDB, stalled)
+	ac.reembedCallTimeout = 50 * time.Millisecond
+
+	done := make(chan struct{})
+	go func() {
+		ac.reembedStaleMemories(context.Background())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stalled embedding call was never bounded")
+	}
+
+	// The probe never returned a model, so nothing was counted or read.
+	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestStartReembedRunsOnlyOnePassAtATime(t *testing.T) {
+	ac := newReembedTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter())
+
+	ac.memoryWorkerMu.Lock()
+	ac.reembedding = true
+	ac.memoryWorkerMu.Unlock()
+
+	// Returns without touching the database because a pass is already running.
+	ac.startReembed(context.Background())
+}
+
+// Without a store there is nothing to re-embed, so the pass never starts.
+func TestStartReembedRequiresDatabase(t *testing.T) {
+	ac := &AssistantCoordinator{srv: &server.Server{}}
+
+	ac.startReembed(context.Background())
+
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+	assert.False(t, ac.reembedding)
+}
+
+func TestReembedPacesBetweenBatches(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	ac.reembedBatchDelay = 60 * time.Millisecond
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	expectStaleBatch(mDB, "embed-model", nil)
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding"), mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	start := time.Now()
+	ac.reembedStaleMemories(context.Background())
+
+	assert.GreaterOrEqual(t, time.Since(start), 60*time.Millisecond, "the pass yields between batches")
+}
+
+// Shutdown during the pause must not abandon work: the rows left keep their old
+// model_id, so the next pass finds them again.
+func TestReembedStopsWhenContextIsCancelledMidPass(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	ac.reembedBatchDelay = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	expectStaleCount(mDB, "embed-model", 2)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding"), mock.Anything, mock.Anything, mock.Anything).
+		Run(func(mock.Arguments) { cancel() }).Return(nil)
+
+	done := make(chan struct{})
+	go func() {
+		ac.reembedStaleMemories(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("re-embed pass did not stop on context cancellation")
+	}
+
+	// Only the first batch was requested; the second was never read.
+	mDB.AssertNumberOfCalls(t, "Query", 1)
 }
