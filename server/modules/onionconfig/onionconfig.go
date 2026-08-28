@@ -189,6 +189,31 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		logger.WithFields(log.Fields{
 			"settingId": setting.Id,
 		}).Info("Setting definition not found; assuming new, undefined setting")
+		// Strip client-provided metadata for unknown settings to prevent unauthorized control of server behavior.
+		setting.Syntax = ""
+		setting.Description = ""
+		setting.Title = ""
+		setting.Multiline = false
+		setting.Advanced = false
+		setting.ForcedType = ""
+		setting.Default = ""
+		setting.DefaultAvailable = false
+		setting.File = false
+		setting.JinjaEscaped = false
+		setting.UiElements = nil
+		setting.UiElementsDeleteMessage = ""
+		setting.Readonly = false
+		setting.ReadonlyUi = false
+		setting.Sensitive = false
+		setting.Regex = ""
+		setting.RegexFailureMessage = ""
+		setting.Required = false
+		setting.Duplicates = false
+		setting.HelpLink = ""
+		setting.Options = nil
+		setting.OptionSeparator = ""
+		setting.AllowedNodeTypes = nil
+		setting.Origin = model.SettingOriginYaml
 	} else {
 		if settingDef.Readonly {
 			return errors.New("Unable to modify or remove a readonly setting")
@@ -207,6 +232,18 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 		setting.File = settingDef.File
 		setting.JinjaEscaped = settingDef.JinjaEscaped
 		setting.UiElements = settingDef.UiElements
+		setting.UiElementsDeleteMessage = settingDef.UiElementsDeleteMessage
+		setting.Readonly = settingDef.Readonly
+		setting.ReadonlyUi = settingDef.ReadonlyUi
+		setting.Sensitive = settingDef.Sensitive
+		setting.Regex = settingDef.Regex
+		setting.RegexFailureMessage = settingDef.RegexFailureMessage
+		setting.Required = settingDef.Required
+		setting.Duplicates = settingDef.Duplicates
+		setting.HelpLink = settingDef.HelpLink
+		setting.Options = settingDef.Options
+		setting.OptionSeparator = settingDef.OptionSeparator
+		setting.AllowedNodeTypes = settingDef.AllowedNodeTypes
 		// Carry the origin forward so we know where to route the write.
 		setting.Origin = settingDef.Origin
 		if setting.DuplicatedFromID == "" {

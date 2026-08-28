@@ -277,8 +277,12 @@ func UpdatePillarSetting(saltstackDir string, setting *model.Setting, remove boo
 			setting.Value = syntax.EscapeJinja(setting.Value)
 		}
 
-		if !strings.HasPrefix(setting.ForcedType, "[]") && !setting.File {
-			err := syntax.Validate(setting.Value, setting.Syntax)
+		if !setting.File {
+			syntaxToValidate := setting.Syntax
+			if strings.HasPrefix(setting.ForcedType, "[]") {
+				syntaxToValidate = ""
+			}
+			err := syntax.Validate(setting.Value, syntaxToValidate)
 			if err != nil {
 				return err
 			}
