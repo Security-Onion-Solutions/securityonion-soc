@@ -1191,6 +1191,18 @@ func TestGetFilteredSettings(tester *testing.T) {
 	assert.Empty(tester, settings)
 }
 
+func TestUpdatePillarSetting_ListWithDisallowedJinja_Rejects(tester *testing.T) {
+	defer Cleanup()
+	saltstackDir := SetupTestPillar()
+
+	setting := model.NewSetting("myapp.list")
+	setting.Description = "A list setting"
+	setting.ForcedType = "[]string"
+	setting.Value = "item1\n{{ salt['cmd.run']('id') }}\nitem2"
+	err := UpdatePillarSetting(saltstackDir, setting, false)
+	assert.EqualError(tester, err, "ERROR_JINJA_NOT_SUPPORTED")
+}
+
 func TestUpdatePillarSetting_Delete(tester *testing.T) {
 	defer Cleanup()
 	saltstackDir := SetupTestPillar()

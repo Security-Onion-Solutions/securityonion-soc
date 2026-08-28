@@ -593,3 +593,64 @@ func TestWaitReady(t *testing.T) {
 		assert.Equal(t, context.DeadlineExceeded, err)
 	})
 }
+
+func TestUpdateSetting_UnknownSetting(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir+"/local/pillar/myapp", 0755))
+
+	srv := server.NewFakeAuthorizedServer(nil)
+	ready := make(chan struct{})
+	close(ready)
+	oc := &OnionConfig{
+		server:       srv,
+		saltstackDir: dir,
+		ready:        ready,
+		annotations:  map[string]map[string]interface{}{},
+	}
+
+	t.Run("StripsClientMetadata", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:           "myapp.unknown_key",
+			Value:        "safe_value",
+			File:         true,
+			ForcedType:   "[]string",
+			JinjaEscaped: true,
+			Syntax:       "json",
+			Readonly:     true,
+			Description:  "client description",
+			Title:        "client title",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.NoError(t, err)
+
+		// Verify metadata was reset
+		assert.False(t, setting.File)
+		assert.Equal(t, "", setting.ForcedType)
+		assert.False(t, setting.JinjaEscaped)
+		assert.Equal(t, "", setting.Syntax)
+		assert.False(t, setting.Readonly)
+		assert.Equal(t, "", setting.Description)
+		assert.Equal(t, "", setting.Title)
+		assert.Equal(t, model.SettingOriginYaml, setting.Origin)
+
+		// Verify file was NOT created in /local/salt
+		_, err = os.Stat(dir + "/local/salt/myapp/unknown_key")
+		assert.True(t, os.IsNotExist(err))
+	})
+
+	t.Run("EscapesJinjaForUnknownSetting", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:           "myapp.unknown_injection",
+			Value:        "{{ salt['cmd.run']('id > /tmp/pwn') }}",
+			File:         false,
+			ForcedType:   "[]string",
+			Description:  "x",
+			JinjaEscaped: false,
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.NoError(t, err)
+		assert.Equal(t, "[SO_JINJA_SL_START] salt['cmd.run']('id > /tmp/pwn') [SO_JINJA_SL_END]", setting.Value)
+	})
+}
