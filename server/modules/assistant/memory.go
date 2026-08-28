@@ -764,7 +764,7 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 
 	extracted := []*model.ExtractedFact{}
 
-	err = json.Unmarshal([]byte(jsn), &extracted)
+	err = json.Unmarshal([]byte(stripMarkdownWrapper(jsn)), &extracted)
 	if err != nil {
 		return nil, exchange, err
 	}
@@ -946,7 +946,7 @@ func (ac *AssistantCoordinator) reconcileMemories(ctx context.Context, mems []*m
 
 		changes := model.MemoryOperations{}
 
-		err = json.Unmarshal([]byte(rawResult), &changes)
+		err = json.Unmarshal([]byte(stripMarkdownWrapper(rawResult)), &changes)
 		if err != nil {
 			return nil, exchanges, selector, err
 		}
@@ -1273,6 +1273,40 @@ func (ac *AssistantCoordinator) applyMemories(ctx context.Context, memories []*m
 	}
 
 	return created, updated, deleted, errMap
+}
+
+// stripMarkdownWrapper removes a markdown code fence wrapping an LLM's JSON
+// response. Only a fence at the very start (with optional language indicator)
+// and very end is removed; interior markdown is untouched.
+func stripMarkdownWrapper(s string) string {
+	trimmed := strings.TrimSpace(s)
+
+	stripped := false
+
+	if strings.HasPrefix(trimmed, "```") {
+		rest := trimmed[3:]
+		if idx := strings.IndexByte(rest, '\n'); idx >= 0 {
+			rest = rest[idx+1:]
+		} else {
+			// One-line case: drop the language token too.
+			rest = strings.TrimLeft(rest, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+		}
+
+		trimmed = rest
+		stripped = true
+	}
+
+	if strings.HasSuffix(strings.TrimSpace(trimmed), "```") {
+		trimmed = strings.TrimSpace(trimmed)
+		trimmed = trimmed[:len(trimmed)-3]
+		stripped = true
+	}
+
+	if !stripped {
+		return s
+	}
+
+	return strings.TrimSpace(trimmed)
 }
 
 func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string {

@@ -572,6 +572,22 @@ func TestExtractFactsBadJSON(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestExtractFactsFencedJSON(t *testing.T) {
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse("```json\n[{\"fact\":\"prefers dark mode\",\"scope\":\"user\"}]\n```"), nil
+	}}
+	ac := &AssistantCoordinator{adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter}}
+	details, memoryAgent, memoryModel := extractTestFixtures()
+
+	facts, _, err := ac.extractFacts(context.Background(), details, memoryAgent, memoryModel)
+
+	assert.NoError(t, err)
+	if assert.Len(t, facts, 1) {
+		assert.Equal(t, "prefers dark mode", facts[0].Fact)
+		assert.Equal(t, "user", facts[0].Scope)
+	}
+}
+
 func TestExtractFactsEmptyArray(t *testing.T) {
 	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 		return textResponse("[]"), nil
@@ -732,6 +748,30 @@ func TestReconcileMemoriesUpdate(t *testing.T) {
 			assert.Equal(t, 0.95, body.Neighbors[0].Similarity)
 		}
 	}
+}
+
+func TestReconcileMemoriesFencedJSON(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse("```json\n{\"operations\":[{\"op\":\"update\",\"target_id\":\"n1\",\"content\":\"user likes green tea\"}]}\n```"), nil
+	}}
+	ac := newReconcileTestCoordinator(mDB, adapter)
+	expectReconcileQuery(mDB, neighborRows(nearbyRowFixture{
+		id: "n1", memoryText: "user drinks tea", modelId: "embed-model", similarity: 0.95,
+	}))
+
+	mem := reconcileTestMem()
+
+	ops, _, _, err := ac.reconcileMemories(context.Background(), []*model.Memory{mem})
+
+	assert.NoError(t, err)
+	if assert.Len(t, ops, 1) {
+		assert.Equal(t, "UPDATE", ops[0].Action)
+		assert.True(t, ops[0].ReEmbed)
+	}
+
+	assert.Equal(t, "user likes green tea", mem.MemoryText)
+	assert.Equal(t, "n1", mem.Id)
 }
 
 func TestReconcileMemoriesUpdateSameContent(t *testing.T) {
@@ -2992,4 +3032,89 @@ func TestReembedStopsWhenContextIsCancelledMidPass(t *testing.T) {
 
 	// Only the first batch was requested; the second was never read.
 	mDB.AssertNumberOfCalls(t, "Query", 1)
+}
+
+func TestStripMarkdownWrapper(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "no fence unchanged",
+			input:    `{"key": "value"}`,
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "json language fence",
+			input:    "```json\n{\"key\": \"value\"}\n```",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "garbage language fence",
+			input:    "```garbage\n{\"key\": \"value\"}\n```",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "fence without language",
+			input:    "```\n{\"key\": \"value\"}\n```",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "trailing newline after closing fence",
+			input:    "```json\n[{\"fact\": \"a\"}]\n```\n",
+			expected: `[{"fact": "a"}]`,
+		},
+		{
+			name:     "opening fence only",
+			input:    "```json\n{\"key\": \"value\"}",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "closing fence only",
+			input:    "{\"key\": \"value\"}\n```",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "interior backticks preserved",
+			input:    "```json\n{\"key\": \"run ```ls``` now\"}\n```",
+			expected: `{"key": "run ` + "```ls```" + ` now"}`,
+		},
+		{
+			name:     "interior markdown without wrapper unchanged",
+			input:    "{\"key\": \"```json\\ninner\\n```\"}",
+			expected: "{\"key\": \"```json\\ninner\\n```\"}",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "only a fence",
+			input:    "```",
+			expected: "",
+		},
+		{
+			name:     "only fence with language",
+			input:    "```json\n```",
+			expected: "",
+		},
+		{
+			name:     "single line fenced",
+			input:    "```json{\"key\": \"value\"}```",
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "whitespace only unchanged",
+			input:    "  \n  ",
+			expected: "  \n  ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, stripMarkdownWrapper(tt.input))
+		})
+	}
 }
