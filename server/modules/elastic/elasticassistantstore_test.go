@@ -1082,7 +1082,7 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	}`
 	addJsonResponse(transport, 200, chatResponse2)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.NoError(t, err)
 	assert.Len(t, details, 2)
 
@@ -1115,6 +1115,13 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	assert.Contains(t, string(body), `"memory"`)
 	assert.Contains(t, string(body), `"embed"`)
 	assert.Contains(t, string(body), `"reconcile"`)
+	// nil dontScanBefore adds no range clause
+	var pendingQuery map[string]any
+	assert.NoError(t, json.Unmarshal(body, &pendingQuery))
+	for _, clause := range pendingQuery["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any) {
+		_, hasRange := clause.(map[string]any)["range"]
+		assert.False(t, hasRange)
+	}
 
 	body, err = io.ReadAll(reqs[1].Body)
 	assert.NoError(t, err)
@@ -1156,7 +1163,7 @@ func TestFindSessionsPendingMemoryScan_EmptyHistorySkipped(t *testing.T) {
 	addJsonResponse(transport, 200, sessionResponse)
 	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, details)
 }
@@ -1212,7 +1219,7 @@ func TestFindSessionsPendingMemoryScan_HistoryErrorSkipsSession(t *testing.T) {
 		}
 	}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.NoError(t, err)
 	assert.Len(t, details, 1)
 	assert.Equal(t, "session2", details[0].Session.SessionId)
@@ -1228,10 +1235,49 @@ func TestFindSessionsPendingMemoryScan_NoResults(t *testing.T) {
 
 	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, details)
 	assert.Len(t, transport.GetRequests(), 1)
+}
+
+func TestFindSessionsPendingMemoryScan_DontScanBefore(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
+
+	// The caller's instant is honored verbatim, offset included, so
+	// Elasticsearch cannot reinterpret the day boundary as UTC.
+	cutoff := time.Date(2026, 8, 15, 13, 45, 0, 0, time.FixedZone("MST", -7*3600))
+	details, err := store.FindSessionsPendingMemoryScan(ctx, &cutoff)
+	assert.NoError(t, err)
+	assert.Empty(t, details)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+
+	var query map[string]any
+	err = json.NewDecoder(reqs[0].Body).Decode(&query)
+	assert.NoError(t, err)
+
+	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
+	mustQuery := boolQuery["must"].([]any)
+
+	foundRange := false
+	for _, clause := range mustQuery {
+		if rangeClause, ok := clause.(map[string]any)["range"].(map[string]any); ok {
+			if timestampRange, exists := rangeClause["@timestamp"].(map[string]any); exists {
+				assert.Equal(t, "2026-08-15T13:45:00-07:00", timestampRange["gte"])
+				foundRange = true
+			}
+		}
+	}
+	assert.True(t, foundRange, "dontScanBefore range filter should be in query")
 }
 
 func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
@@ -1244,7 +1290,7 @@ func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
 
 	addJsonResponse(transport, 500, `{"error": "internal server error"}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.Error(t, err)
 	assert.Nil(t, details)
 }
@@ -1257,7 +1303,7 @@ func TestFindSessionsPendingMemoryScan_Unauthorized(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
 	assert.Error(t, err)
 	assert.Nil(t, details)
 	assert.Empty(t, transport.GetRequests())

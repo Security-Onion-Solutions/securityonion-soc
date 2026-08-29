@@ -24,7 +24,7 @@
             <v-switch v-model="memoryOptions.useMemory" color="primary" density="compact" inset :label="i18n.agentStudioMemoryUse" :hint="i18n.agentStudioMemoryUseHelp" persistent-hint data-aid="agentstudio_options_use_memory"></v-switch>
           </v-col>
           <v-col cols="12" md="6">
-            <v-switch v-model="memoryOptions.useMemoryScanner" color="primary" density="compact" inset :label="i18n.agentStudioMemoryScanner" :hint="i18n.agentStudioMemoryScannerHelp" persistent-hint data-aid="agentstudio_options_use_scanner"></v-switch>
+            <v-switch v-model="memoryOptions.useMemoryScanner" @change="onChangeUseMemoryScanner(memoryOptions.useMemoryScanner)" color="primary" density="compact" inset :label="i18n.agentStudioMemoryScanner" :hint="i18n.agentStudioMemoryScannerHelp" persistent-hint data-aid="agentstudio_options_use_scanner"></v-switch>
           </v-col>
           <v-col cols="12" md="4">
             <v-text-field v-model.number="memoryOptions.scanIntervalSeconds" type="number" min="1" :label="i18n.agentStudioMemoryScanInterval" :title="i18n.agentStudioMemoryScanIntervalHelp" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock" hide-details data-aid="agentstudio_options_scan_interval"></v-text-field>
@@ -225,6 +225,27 @@
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="createMemoryDialog = false" data-aid="agentstudio_create_memory_cancel">{{ i18n.cancel }}</v-btn>
         <v-btn variant="text" :color="newMemory.memoryText ? 'primary' : ''" :disabled="!newMemory.memoryText" @click="saveNewMemory()" data-aid="agentstudio_create_memory_confirm">{{ i18n.create }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="scanHistoricalDialog" persistent width="500px" scrollable data-aid="agentstudio_memoryscan_history_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-clock-rotate-left</v-icon>{{ i18n.agentStudioScanHistoryTitle }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-row>
+          {{ i18n.agentStudioScanHistoryBody }}
+        </v-row>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="cancelScanHistorical()" data-aid="agentstudio_memoryscan_history_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" @click="saveScanHistorical(false)" data-aid="agentstudio_memoryscan_history_no">{{ i18n.no }}</v-btn>
+        <v-btn variant="text" @click="saveScanHistorical(true)" data-aid="agentstudio_memoryscan_history_yes">{{ i18n.yes }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

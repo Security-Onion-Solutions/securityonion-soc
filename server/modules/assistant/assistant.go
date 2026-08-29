@@ -74,6 +74,7 @@ const (
 
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
+	DEFAULT_DONT_SCAN_BEFORE             = ""
 
 	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
 	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
@@ -198,6 +199,7 @@ type memorySettings struct {
 	reconcileModel     string
 	memoryPersona      string
 	reconcilePersona   string
+	dontScanBefore     string
 }
 
 func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
@@ -247,6 +249,7 @@ const (
 	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
 	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
 	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
+	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
 )
 
 var memoryConfigSettings = []string{
@@ -264,6 +267,7 @@ var memoryConfigSettings = []string{
 	ConfigSettingReconcileModel,
 	ConfigSettingMemoryPersona,
 	ConfigSettingReconcilePersona,
+	ConfigSettingDontScanBefore,
 }
 
 // getMaxSubSessionTokens returns the current per-sub-session output-token budget.
@@ -330,6 +334,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		reconcileModel:     module.GetStringDefault(config, "reconcileModel", ""),
 		memoryPersona:      module.GetStringDefault(config, "memoryPersona", ""),
 		reconcilePersona:   module.GetStringDefault(config, "reconcilePersona", ""),
+		dontScanBefore:     module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
 	}
 
 	if memScanInterval <= 0 && err == nil && memory.useScanner {

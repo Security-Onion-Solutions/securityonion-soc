@@ -330,6 +330,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return records;
     },
     async lookupSocId(data) {
+      switch (data) {
+        case this.$root.SYSTEM_USER_ID:
+          return this.i18n.agentStudioSystem;
+        case this.$root.AGENT_USER_ID:
+          return this.i18n.agentStudioAgent;
+      }
       if (data && data.length == 36 && data.indexOf("-") == 8) {
         const user = await this.$root.getUserById(data);
         if (user && user.email) {

@@ -169,6 +169,7 @@ func applyMemorySettings(logger log.Interface, settings memorySettings, byID map
 	intSetting(ConfigSettingMaxGlobalMemoriesToInclude, &settings.maxGlobalInclude)
 	intSetting(ConfigSettingMaxUserMemoriesToReconcile, &settings.maxUserReconcile)
 	intSetting(ConfigSettingMaxGlobalMemoriesToReconcile, &settings.maxGlobalReconcile)
+	stringSetting(ConfigSettingDontScanBefore, &settings.dontScanBefore)
 
 	seconds := int(settings.scanInterval / time.Second)
 	intSetting(ConfigSettingMemoryScanInterval, &seconds)
@@ -204,6 +205,7 @@ func (ac *AssistantCoordinator) exposeMemorySettings() {
 		MemoryPersona:                settings.memoryPersona,
 		ReconcilePersona:             settings.reconcilePersona,
 		StaleMemoryCount:             int(ac.staleMemories.Load()),
+		DontScanBefore:               settings.dontScanBefore,
 	}
 
 	ac.broadcastAgenticUpdate()
@@ -507,7 +509,20 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 
 	logger.Info("scanning for sessions that need memory processing")
 
-	queryResults, err := ac.srv.Assistantstore.FindSessionsPendingMemoryScan(ctx)
+	var dsb *time.Time
+	if before := ac.memorySnapshot().dontScanBefore; before != "" {
+		// Midnight in the installation's zone, not UTC, so the day boundary
+		// matches the local calendar date the admin saved.
+		t, err := time.ParseInLocation(time.DateOnly, before, time.Local)
+		if err != nil {
+			logger.WithError(err).WithField("dontScanBefore", before).Error("unable to parse dontScanBefore config value, ending scan rather than scanning everything")
+			return
+		}
+
+		dsb = &t
+	}
+
+	queryResults, err := ac.srv.Assistantstore.FindSessionsPendingMemoryScan(ctx, dsb)
 	if err != nil {
 		logger.WithError(err).Error("unable to find sessions pending memory scan")
 		return

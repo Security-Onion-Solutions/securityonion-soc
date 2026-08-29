@@ -618,6 +618,26 @@ test('lookupSocId returns original data when user has no email', async () => {
   expect(result).toBe(userId);
 });
 
+test('lookupSocId returns System for special uuid', async () => {
+  const userId = '00000000-0000-0000-0000-000000000000';
+  comp.$root.getUserById = jest.fn();
+
+  const result = await comp.lookupSocId(userId);
+
+  expect(comp.$root.getUserById).not.toHaveBeenCalled();
+  expect(result).toBe('System');
+});
+
+test('lookupSocId returns Agent for special uuid', async () => {
+  const userId = '00000000-0000-0000-0000-000000000001';
+  comp.$root.getUserById = jest.fn();
+
+  const result = await comp.lookupSocId(userId);
+
+  expect(comp.$root.getUserById).not.toHaveBeenCalled();
+  expect(result).toBe('Agent');
+});
+
 // Link building tests
 test('buildUserLink creates correct route object', () => {
   const userId = 'user123';

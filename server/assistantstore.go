@@ -27,7 +27,7 @@ type Assistantstore interface {
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
-	FindSessionsPendingMemoryScan(context.Context) ([]*model.AssistantSessionDetails, error)
+	FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error)
 	UpdateSessionMemoryScanIndex(ctx context.Context, sessionId string, scannedIndex int) error
 }
 

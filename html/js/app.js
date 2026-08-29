@@ -296,6 +296,8 @@ $(document).ready(function () {
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
           FEAT_NTF: 'ntf',
+          SYSTEM_USER_ID: SYSTEM_USER_ID,
+          AGENT_USER_ID: AGENT_USER_ID,
           validators: {
             required: value => !!value || _i18n.required,
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
