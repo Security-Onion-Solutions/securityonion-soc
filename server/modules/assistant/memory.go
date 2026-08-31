@@ -448,7 +448,7 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 	logger.WithField("interval", interval).Info("starting interval")
 	ticker := time.NewTicker(interval)
 
-	// defer ticker.Stop()
+	defer ticker.Stop()
 
 	for {
 		select {
