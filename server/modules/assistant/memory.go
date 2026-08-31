@@ -511,9 +511,7 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 
 	var dsb *time.Time
 	if before := ac.memorySnapshot().dontScanBefore; before != "" {
-		// Midnight in the installation's zone, not UTC, so the day boundary
-		// matches the local calendar date the admin saved.
-		t, err := time.ParseInLocation(time.DateOnly, before, time.Local)
+		t, err := time.Parse(time.RFC3339, before)
 		if err != nil {
 			logger.WithError(err).WithField("dontScanBefore", before).Error("unable to parse dontScanBefore config value, ending scan rather than scanning everything")
 			return

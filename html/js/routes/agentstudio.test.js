@@ -1332,7 +1332,7 @@ test('cancelling the scan history dialog reverts the scanner switch', () => {
 });
 
 test('answering yes to scan history clears the cutoff', () => {
-  comp.memoryOptions.dontScanBefore = '2026-01-01';
+  comp.memoryOptions.dontScanBefore = '2026-01-01T00:00:00.000Z';
   comp.scanHistoricalDialog = true;
 
   comp.saveScanHistorical(true);
@@ -1341,15 +1341,15 @@ test('answering yes to scan history clears the cutoff', () => {
   expect(comp.memoryOptions.dontScanBefore).toBe('');
 });
 
-test('answering no to scan history stamps the local date, zero-padded', () => {
-  jest.useFakeTimers().setSystemTime(new Date(2026, 0, 5));
+test('answering no to scan history stamps the current timestamp', () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-01-05T12:00:00.000Z'));
   comp.scanHistoricalDialog = true;
 
   comp.saveScanHistorical(false);
   jest.useRealTimers();
 
   expect(comp.scanHistoricalDialog).toBe(false);
-  expect(comp.memoryOptions.dontScanBefore).toBe('2026-01-05');
+  expect(comp.memoryOptions.dontScanBefore).toBe('2026-01-05T12:00:00.000Z');
 });
 
 test('the scan history cutoff is written with the scanner setting', async () => {
@@ -1361,7 +1361,7 @@ test('the scan history cutoff is written with the scanner setting', async () => 
   comp.showOptions();
   comp.memoryOptions.useMemoryScanner = true;
   comp.onChangeUseMemoryScanner(true);
-  jest.useFakeTimers().setSystemTime(new Date(2026, 0, 5));
+  jest.useFakeTimers().setSystemTime(new Date('2026-01-05T12:00:00.000Z'));
   comp.saveScanHistorical(false);
   jest.useRealTimers();
 
@@ -1370,7 +1370,7 @@ test('the scan history cutoff is written with the scanner setting', async () => 
   const written = put.mock.calls.map(c => [c[1].id, c[1].value]);
   expect(written).toEqual(expect.arrayContaining([
     ['soc.config.server.modules.assistant.useMemoryScanner', 'true'],
-    ['soc.config.server.modules.assistant.dontScanBefore', '2026-01-05'],
+    ['soc.config.server.modules.assistant.dontScanBefore', '2026-01-05T12:00:00.000Z'],
   ]));
 });
 

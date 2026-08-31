@@ -788,8 +788,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (scanHistorical) {
         this.memoryOptions.dontScanBefore = '';
       } else {
-        const d = new Date();
-        this.memoryOptions.dontScanBefore = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        this.memoryOptions.dontScanBefore = new Date().toISOString();
       }
     }
   }

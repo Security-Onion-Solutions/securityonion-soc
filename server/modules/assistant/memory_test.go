@@ -1553,6 +1553,36 @@ func TestScanForMemoriesNoEmbedAgent(t *testing.T) {
 	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
 }
 
+func TestScanForMemoriesDontScanBefore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cutoff := "2026-01-05T12:00:00.000Z"
+	expected, err := time.Parse(time.RFC3339, cutoff)
+	assert.NoError(t, err)
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), &expected).Return(nil, nil)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memory.dontScanBefore = cutoff
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesInvalidDontScanBefore(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// no store expectations: an unparseable cutoff must end the scan before querying
+	store := servermock.NewMockAssistantstore(ctrl)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memory.dontScanBefore = "2026-01-05"
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
 func TestMemoryWorkerShutdown(t *testing.T) {
 	ac := &AssistantCoordinator{memory: memorySettings{scanInterval: time.Hour}}
 
