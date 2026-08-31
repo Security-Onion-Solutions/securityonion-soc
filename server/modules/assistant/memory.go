@@ -77,6 +77,11 @@ func (ac *AssistantCoordinator) reloadMemoryConfiguration(ctx context.Context) {
 	}
 
 	ac.setMemorySettings(settings)
+
+	if settings != before {
+		ac.interruptMemoryScan(errors.New("memory settings updated"))
+	}
+
 	ac.applyMemoryAgents(settings)
 	ac.exposeMemorySettings()
 
@@ -482,7 +487,19 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 
 		start := time.Now()
 
-		ac.scanForMemories(ctx, logger)
+		scanCtx, cancel := context.WithCancelCause(ctx)
+
+		ac.memoryWorkerMu.Lock()
+		ac.terminateMemoryScan = cancel
+		ac.memoryWorkerMu.Unlock()
+
+		ac.scanForMemories(scanCtx, logger)
+
+		cancel(nil)
+
+		ac.memoryWorkerMu.Lock()
+		ac.terminateMemoryScan = nil
+		ac.memoryWorkerMu.Unlock()
 
 		logger.WithField("memoryScanDuration", time.Since(start)).Info("scan completed")
 	}
@@ -529,6 +546,11 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 	logger.WithField("sessionCount", len(queryResults)).Info("query complete")
 
 	for _, sessionDetails := range queryResults {
+		if ctx.Err() != nil {
+			logger.WithField("cause", context.Cause(ctx)).Info("memory scan interrupted")
+			return
+		}
+
 		logger.WithFields(log.Fields{
 			"sessionId":              sessionDetails.Session.SessionId,
 			"lastMemoryScannedIndex": sessionDetails.Session.LastMemoryScannedIndex,

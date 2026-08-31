@@ -1365,6 +1365,37 @@ func TestScanForMemoriesExtractErrorSkipsIndexUpdate(t *testing.T) {
 	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
 }
 
+func TestScanForMemoriesInterrupted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+	// settings change as sess-1 finishes; sess-2 stays pending for the next scan
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).DoAndReturn(func(context.Context, string, int) error {
+		cancel(errors.New("memory settings updated"))
+		return nil
+	})
+	allowUsageRecording(store)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(ctx, log.WithField("test", t.Name()))
+
+	assert.Equal(t, 1, calls, "an interrupted scan must not process the next session")
+}
+
 func TestScanForMemoriesContinuesAfterFailedSession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -2537,6 +2568,27 @@ func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
 
 	ac.reloadMemoryConfiguration(context.Background())
 	assert.Nil(t, ac.terminateMemory, "disabling the scanner stops its worker")
+}
+
+func TestReloadMemoryConfigurationInterruptsScanOnChange(t *testing.T) {
+	store := &fakeConfigstore{settings: []*model.Setting{{Id: ConfigSettingMaxUserMemoriesToInclude, Value: "9"}}}
+	ac := newMemoryReloadTestCoordinator(store)
+
+	scanCtx, cancel := context.WithCancelCause(context.Background())
+	ac.terminateMemoryScan = cancel
+
+	ac.reloadMemoryConfiguration(context.Background())
+
+	assert.EqualError(t, context.Cause(scanCtx), "memory settings updated", "a settings overwrite interrupts the running scan")
+
+	// A reload that changes nothing leaves the scan running.
+	scanCtx, cancel = context.WithCancelCause(context.Background())
+	ac.terminateMemoryScan = cancel
+
+	ac.reloadMemoryConfiguration(context.Background())
+
+	assert.NoError(t, scanCtx.Err(), "a no-op reload must not interrupt the scan")
+	cancel(nil)
 }
 
 func TestOnConfigSettingUpdatedReloadsMemoryWithoutAgentic(t *testing.T) {

@@ -167,6 +167,8 @@ type AssistantCoordinator struct {
 	// terminateReembed interrupts it at the next batch boundary.
 	reembedding      bool
 	terminateReembed context.CancelCauseFunc
+	// Interrupts the scan pass currently running, if any; nil between passes.
+	terminateMemoryScan context.CancelCauseFunc
 	// Published count of memories awaiting re-embedding.
 	staleMemories atomic.Int64
 	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
@@ -678,6 +680,15 @@ func (ac *AssistantCoordinator) wakeScanner() {
 	select {
 	case ac.scanNow <- struct{}{}:
 	default:
+	}
+}
+
+func (ac *AssistantCoordinator) interruptMemoryScan(cause error) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	if ac.terminateMemoryScan != nil {
+		ac.terminateMemoryScan(cause)
 	}
 }
 
