@@ -44,6 +44,29 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
 });
 
+test('escapeHtml', () => {
+  expect(app.escapeHtml('<img src=x onerror=alert(1)> a & b')).toBe('&lt;img src=x onerror=alert(1)&gt; a &amp; b');
+  expect(app.escapeHtml(`"quoted" and 'single'`)).toBe('&quot;quoted&quot; and &#39;single&#39;');
+  expect(app.escapeHtml('')).toBe('');
+  expect(app.escapeHtml(null)).toBe('');
+});
+
+test('escapeHtml and unescapeHtml round-trip', () => {
+  const raw = `Error: <nil> & "quoted" > it's done`;
+  expect(app.unescapeHtml(app.escapeHtml(raw))).toBe(raw);
+});
+
+test('unescapeHtml decodes ampersands last', () => {
+  expect(app.unescapeHtml('&amp;lt;not a tag&amp;gt;')).toBe('&lt;not a tag&gt;');
+  expect(app.unescapeHtml(null)).toBe('');
+});
+
+test('stripHtml', () => {
+  expect(app.stripHtml('<p>This is <strong>bold</strong> text with <a href="#">link</a></p>')).toBe('This is bold text with link');
+  expect(app.stripHtml('This is plain text')).toBe('This is plain text');
+  expect(app.stripHtml(null)).toBe('');
+});
+
 test('formatMarkdown', () => {
   expect(app.formatMarkdown('```code```')).toBe('<p><code>code</code></p>\n');
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');

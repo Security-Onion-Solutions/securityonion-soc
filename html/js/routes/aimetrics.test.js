@@ -1010,12 +1010,6 @@ test('formatExpandMessage escapes markup in non-assistant text blocks', () => {
   expect(result).toBe('&lt;img src=x onerror=alert(1)&gt; a &amp; b');
 });
 
-test('escapeHtml and unescapeHtml round-trip', () => {
-  const raw = 'Error: <nil> & "quoted" > done';
-
-  expect(comp.unescapeHtml(comp.escapeHtml(raw))).toBe(raw);
-});
-
 test('expandMessagePreview strips markup and restores escaped text', () => {
   const result = comp.expandMessagePreview('<strong>Error:</strong> &lt;nil&gt; &amp; more');
 
@@ -1147,22 +1141,6 @@ test('formatExpandMessage handles missing message', () => {
   const result = comp.formatExpandMessage(data);
   
   expect(result).toBe('');
-});
-
-test('stripHtml removes HTML tags', () => {
-  const htmlString = '<p>This is <strong>bold</strong> text with <a href="#">link</a></p>';
-  
-  const result = comp.stripHtml(htmlString);
-  
-  expect(result).toBe('This is bold text with link');
-});
-
-test('stripHtml handles string without HTML', () => {
-  const plainString = 'This is plain text';
-  
-  const result = comp.stripHtml(plainString);
-  
-  expect(result).toBe('This is plain text');
 });
 
 // Breadcrumb tests

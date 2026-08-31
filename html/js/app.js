@@ -954,6 +954,29 @@ $(document).ready(function () {
           }
           return "";
         },
+        escapeHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }[char]));
+        },
+        unescapeHtml(str) {
+          if (!str) return '';
+          return String(str)
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+        },
+        stripHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/<[^>]*>/g, '');
+        },
         formatMarkdown(str, handleMermaid=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),

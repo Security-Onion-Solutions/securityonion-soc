@@ -6528,12 +6528,6 @@ test('onChatClick does not send when canChat is false', () => {
   expect(comp.sendMessage).not.toHaveBeenCalled();
 });
 
-test('stripHtml removes HTML tags', () => {
-  expect(comp.stripHtml('<p>Hello <strong>World</strong></p>')).toBe('Hello World');
-  expect(comp.stripHtml('<div><span>Test</span></div>')).toBe('Test');
-  expect(comp.stripHtml('No tags')).toBe('No tags');
-});
-
 test('stripNewlines removes leading and trailing newlines', () => {
   expect(comp.stripNewlines('\n\nHello World\n\n')).toBe('Hello World');
   expect(comp.stripNewlines('  \n\nText\n\n  ')).toBe('Text');
