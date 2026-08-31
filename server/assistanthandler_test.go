@@ -2947,6 +2947,16 @@ func TestDecodeIncomingMessage(t *testing.T) {
 	}
 }
 
+func TestDecodeIncomingMessageFiltersTags(t *testing.T) {
+	body := `{"msg":"hi","sessionId":"s1","tags":["context_compression","tool_result","anything"]}`
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBufferString(body))
+
+	incMsg, err := decodeIncomingMessage(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{model.MessageTagContextCompression}, incMsg.Tags)
+}
+
 func TestStreamingAccepted(t *testing.T) {
 	testCases := []struct {
 		name          string

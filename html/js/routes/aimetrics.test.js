@@ -992,7 +992,45 @@ test('formatExpandMessage handles legacy ToolResult text blocks', () => {
   
   const result = comp.formatExpandMessage(data);
   
-  expect(result).toContain('ToolUseId: x, Error: <nil>, Result: No events found');
+  expect(result).toContain('ToolUseId: x, Error: &lt;nil&gt;, Result: No events found');
+});
+
+test('formatExpandMessage escapes markup in non-assistant text blocks', () => {
+  const data = {
+    message: {
+      role: 'user',
+      contentBlocks: [
+        { type: 'text', text: '<img src=x onerror=alert(1)> a & b' }
+      ]
+    }
+  };
+
+  const result = comp.formatExpandMessage(data);
+
+  expect(result).toBe('&lt;img src=x onerror=alert(1)&gt; a &amp; b');
+});
+
+test('escapeHtml and unescapeHtml round-trip', () => {
+  const raw = 'Error: <nil> & "quoted" > done';
+
+  expect(comp.unescapeHtml(comp.escapeHtml(raw))).toBe(raw);
+});
+
+test('expandMessagePreview strips markup and restores escaped text', () => {
+  const result = comp.expandMessagePreview('<strong>Error:</strong> &lt;nil&gt; &amp; more');
+
+  expect(result).toBe('Error: <nil> & more');
+});
+
+test('messageAid distinguishes tool results from user messages', () => {
+  expect(comp.messageAid({ tags: ['tool_result'] })).toBe('aimetrics_message_content_toolresult');
+  expect(comp.messageAid({ tags: [] })).toBe('aimetrics_message_content_user');
+  expect(comp.messageAid({})).toBe('aimetrics_message_content_user');
+});
+
+test('expandMessagePreview handles empty input', () => {
+  expect(comp.expandMessagePreview('')).toBe('');
+  expect(comp.expandMessagePreview(null)).toBe('');
 });
 
 test('formatExpandMessage handles proper ToolResult blocks', () => {

@@ -433,7 +433,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
             expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
-            expandMessage += block.text;
+            expandMessage += this.escapeHtml(block.text);
           }
         } else if (block.type === 'tool_use') {
           if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
@@ -537,6 +537,25 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (minutes < 1) minutes = 1;
       const rawCPM = totalCredits / minutes;
       return Math.round(rawCPM);
+    },
+    sanitizeHtml(html) {
+      return html ? DOMPurify.sanitize(html) : '';
+    },
+    escapeHtml(text) {
+      if (!text) return '';
+      return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+    unescapeHtml(text) {
+      if (!text) return '';
+      return String(text).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    },
+    messageAid(item) {
+      return item?.tags?.includes('tool_result')
+        ? 'aimetrics_message_content_toolresult'
+        : 'aimetrics_message_content_user';
+    },
+    expandMessagePreview(html) {
+      return this.trimTitle(this.unescapeHtml(this.stripHtml(html || '')));
     },
     nbspRegexOp(text) {
       return text.replace(/^(&nbsp;?[\n]*)/, '');

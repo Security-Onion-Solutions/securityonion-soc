@@ -8,6 +8,7 @@ package model
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,6 +28,24 @@ const (
 // sessions are excluded from GetSessions unless GetSessionsWithMemorySessions
 // is passed, and are never scanned for memories themselves.
 var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
+
+var ClientMessageTags = []string{MessageTagContextCompression}
+
+// FilterClientTags drops any tag the client isn't allowed to assert.
+func FilterClientTags(tags []string) []string {
+	if len(tags) == 0 {
+		return tags
+	}
+
+	filtered := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if slices.Contains(ClientMessageTags, tag) {
+			filtered = append(filtered, tag)
+		}
+	}
+
+	return filtered
+}
 
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
