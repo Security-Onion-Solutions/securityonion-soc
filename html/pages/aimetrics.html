@@ -213,7 +213,7 @@
       </v-data-table>
       <!-- Messages Table -->
       <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES && isExpandedSection('aimetrics-table')" :search="searchFilter" :sort-by="sortByMessages" @update:sort-by="val => sortByMessages = val" @update:items-per-page="val => itemsPerPage = val"
-        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" class="aimetrics-messages-table" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
