@@ -187,7 +187,7 @@
             <v-text-field v-model="newSkill.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" autofocus hide-details data-aid="agentstudio_new_skill_name"></v-text-field>
           </v-col>
           <v-col cols="12">
-            <v-select v-model="newSkill.tools" :items="tools" :label="i18n.agentStudioToolsUnlocked" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint></v-select>
+            <v-select v-model="newSkill.tools" :items="tools" :label="i18n.tools" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint></v-select>
           </v-col>
           <v-col cols="12">
             <v-textarea v-model="newSkill.persona" :label="i18n.agentStudioPromptGuidance" variant="outlined" density="comfortable" rows="8" auto-grow :hint="i18n.agentStudioSkillPersonaHelp" persistent-hint></v-textarea>
@@ -479,7 +479,7 @@
                       <div class="expanded-row-wrapper pa-4">
                         <v-card variant="flat" class="agentstudio-editor">
                           <v-tabs v-model="skillTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentstudio_skill_subtabs_' + item.id">
-                            <v-tab value="tools" :data-aid="'agentstudio_skill_subtab_tools_' + item.id"><v-icon class="mr-2">fa-screwdriver-wrench</v-icon>{{ i18n.agentStudioToolsUnlocked }}</v-tab>
+                            <v-tab value="tools" :data-aid="'agentstudio_skill_subtab_tools_' + item.id"><v-icon class="mr-2">fa-screwdriver-wrench</v-icon>{{ i18n.tools }}</v-tab>
                             <v-tab value="usage" :data-aid="'agentstudio_skill_subtab_usage_' + item.id"><v-icon class="mr-2">fa-users</v-icon>{{ i18n.agentStudioUsedBy }}</v-tab>
                             <v-tab value="persona" :data-aid="'agentstudio_skill_subtab_persona_' + item.id"><v-icon class="mr-2">fa-masks-theater</v-icon>{{ i18n.agentStudioPersona }}</v-tab>
                           </v-tabs>
@@ -488,7 +488,7 @@
                             <v-tabs-window v-model="skillTabs[item.id]">
                               <v-tabs-window-item value="tools">
                                 <template v-if="item.isSystem">
-                                  <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioToolsUnlocked }}</div>
+                                  <div class="text-overline text-medium-emphasis">{{ i18n.tools }}</div>
                                   <div>
                                     <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
                                     <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
@@ -497,7 +497,7 @@
                                 </template>
                                 <v-row v-else>
                                   <v-col cols="12" md="8">
-                                    <v-select v-model="draftForSkill(item).tools" :items="tools" :label="i18n.agentStudioToolsUnlocked" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint :data-aid="'agentstudio_skill_tools_' + item.id"></v-select>
+                                    <v-select v-model="draftForSkill(item).tools" :items="tools" :label="i18n.tools" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioToolsUnlockedHelp" persistent-hint :data-aid="'agentstudio_skill_tools_' + item.id"></v-select>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>

@@ -213,7 +213,7 @@
       </v-data-table>
       <!-- Messages Table -->
       <v-data-table v-if="tableSetting == TABLE_SETTING_MESSAGES && isExpandedSection('aimetrics-table')" :search="searchFilter" :sort-by="sortByMessages" @update:sort-by="val => sortByMessages = val" @update:items-per-page="val => itemsPerPage = val"
-        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" data-aid="aimetrics_table_messages">
+        :items-per-page-options="itemsPerPageOptions" :items-per-page="itemsPerPage" must-sort :headers="headers[tableSetting]" :items="aimetrics" v-model:expanded="expanded" class="aimetrics-messages-table" data-aid="aimetrics_table_messages">
         <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
           <tr>
             <template v-for="header in columns" :key="header.key">
@@ -238,7 +238,7 @@
                 <v-icon v-else :alt="i18n.expand" :title="i18n.nodeExpandHelp" data-aid="aimetrics_details_expand">fa-angle-right</v-icon>
               </v-btn>
             </td>
-            <td>{{ (item.role === 'assistant' || item?.tags?.includes('tool_result')) ? trimTitle(stripHtml(item.expandMessage)) : trimTitle(item.expandMessage) }}</td>
+            <td>{{ expandMessagePreview(item.expandMessage) }}</td>
             <td>{{ $root.formatLocalTimestamp(item.createTime, zone) }}</td>
             <td>{{ item.role }}</td>
             <td class="text-right">{{ item.inputTokens ? formatCount(item.inputTokens) : '' }}</td>
@@ -251,8 +251,7 @@
           <tr class="expanded-row">
             <td :colspan="headers[tableSetting].length" class="px-4 py-3">
               <div v-if="item.role === 'assistant'" class="expansion va-middle hardwrap-aimetrics" v-html="formatMarkdownMermaid(item.expandMessage)" data-aid="aimetrics_message_content_assistant"></div>
-              <div v-else-if="item?.tags?.includes('tool_result')" class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_toolresult" v-html="item.expandMessage"></div>
-              <div v-else class="expansion va-middle hardwrap-aimetrics" data-aid="aimetrics_message_content_user">{{ item.expandMessage }}</div>
+              <div v-else class="expansion va-middle hardwrap-aimetrics" :data-aid="messageAid(item)" v-html="sanitizeHtml(item.expandMessage)"></div>
             </td>
           </tr>
         </template>

@@ -574,9 +574,9 @@
               </v-list-item>
             </v-list-item-group>
           </v-list>
-          <v-divider></v-divider>
-          <v-list density="compact" id="external-tools-list" :disabled="forceUserOtp">
-            <v-list-subheader data-aid="external-tools-subheader">Tools</v-list-subheader>
+          <v-divider v-if="hasEnabledTools()"></v-divider>
+          <v-list v-if="hasEnabledTools()" density="compact" id="external-tools-list" :disabled="forceUserOtp">
+            <v-list-subheader data-aid="external-tools-subheader" v-text="i18n.tools"></v-list-subheader>
             <template v-for="tool in tools">
               <v-list-item v-if="tool.enabled" :key="tool.name" :id="tool.name" :data-aid="'nav_tool_' + tool.name">
                 <template #prepend>

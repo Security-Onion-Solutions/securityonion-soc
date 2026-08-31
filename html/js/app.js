@@ -347,6 +347,9 @@ $(document).ready(function () {
       },
       methods: {
         ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        hasEnabledTools() {
+          return this.tools.some(tool => tool.enabled);
+        },
         getMetricsUrl() {
           for (var i = 0; i < this.tools.length; i++) {
             const tool = this.tools[i];
@@ -950,6 +953,29 @@ $(document).ready(function () {
             return strArray.join(", ");
           }
           return "";
+        },
+        escapeHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }[char]));
+        },
+        unescapeHtml(str) {
+          if (!str) return '';
+          return String(str)
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+        },
+        stripHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/<[^>]*>/g, '');
         },
         formatMarkdown(str, handleMermaid=false) {
           marked.setOptions({

@@ -97,7 +97,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     skillHeaders: [
       { title: '', value: 'expand', sortable: false, width: '48px' },
       { title: this.$root.i18n.agentStudioSkill, value: 'name' },
-      { title: this.$root.i18n.agentStudioToolsUnlocked, value: 'tools', sortable: false },
+      { title: this.$root.i18n.tools, value: 'tools', sortable: false },
       { title: this.$root.i18n.agentStudioUsedBy, value: 'usedBy', sortable: false },
       { title: this.$root.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
     ],

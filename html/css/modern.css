@@ -1317,6 +1317,32 @@ dfn {
   overflow-x: auto;
 }
 
+.aimetrics-messages-table .v-table__wrapper:has(.hardwrap-aimetrics) {
+  container-type: inline-size;
+}
+
+.aimetrics-messages-table tr.expanded-row > td {
+  max-width: 1px;
+  overflow: visible;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.aimetrics-messages-table .expansion {
+  max-width: min(calc(100cqw - 2px), calc(100vw - var(--v-layout-left, 0px) - 48px));
+  box-sizing: border-box;
+  padding-left: 16px;
+  padding-right: 16px;
+  overflow-x: auto;
+  position: sticky;
+  left: 0;
+}
+
+.aimetrics-messages-table .expansion pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Agent Studio inline editor card (inside an expanded data-table row). */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);

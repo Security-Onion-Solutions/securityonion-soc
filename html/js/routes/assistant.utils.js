@@ -426,15 +426,6 @@ globalThis.AssistantUtils = (function() {
         id: this.currentChatId,
       });
     },
-    escapeHtml(str) {
-      return String(str).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-      }[char]));
-    },
     applyChoiceButtons(text) {
       if (!text || typeof text !== 'string') return text;
 
@@ -442,8 +433,8 @@ globalThis.AssistantUtils = (function() {
         const label = this.stripNewlines(rawLabel).trim();
         if (!label) return '';
 
-        const cleanLabel = this.stripHtml(this.renderInlineMarkdown(label));
-        const safeChoiceAttr = this.escapeHtml(label);
+        const cleanLabel = this.$root.stripHtml(this.renderInlineMarkdown(label));
+        const safeChoiceAttr = this.$root.escapeHtml(label);
 
         return `<button type="button" class="assistant-choice-btn" data-choice="${safeChoiceAttr}">${cleanLabel}</button>`;
       });
@@ -464,9 +455,6 @@ globalThis.AssistantUtils = (function() {
         this.focusChatInput();
         this.sendMessage();
       });
-    },
-    stripHtml(str) {
-      return str.replace(/<[^>]*>/g, '');
     },
     stripNewlines(text) {
       if (typeof text !== 'string') return text;

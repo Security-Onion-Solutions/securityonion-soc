@@ -433,7 +433,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
             expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
-            expandMessage += block.text;
+            expandMessage += this.$root.escapeHtml(block.text);
           }
         } else if (block.type === 'tool_use') {
           if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
@@ -474,9 +474,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return expandMessage;
-    },
-    stripHtml(str) {
-      return str.replace(/<[^>]*>/g, '');
     },
     formatMarkdownMermaid(text) {
       text = this.$root.performMermaidRegexes(text);
@@ -537,6 +534,17 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (minutes < 1) minutes = 1;
       const rawCPM = totalCredits / minutes;
       return Math.round(rawCPM);
+    },
+    sanitizeHtml(html) {
+      return html ? DOMPurify.sanitize(html) : '';
+    },
+    messageAid(item) {
+      return item?.tags?.includes('tool_result')
+        ? 'aimetrics_message_content_toolresult'
+        : 'aimetrics_message_content_user';
+    },
+    expandMessagePreview(html) {
+      return this.trimTitle(this.$root.unescapeHtml(this.$root.stripHtml(html)));
     },
     nbspRegexOp(text) {
       return text.replace(/^(&nbsp;?[\n]*)/, '');

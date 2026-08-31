@@ -96,6 +96,8 @@ func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
 		incMsg.SessionId = uuid.NewString()
 	}
 
+	incMsg.Tags = model.FilterClientTags(incMsg.Tags)
+
 	return incMsg, nil
 }
 
