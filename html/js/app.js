@@ -347,6 +347,9 @@ $(document).ready(function () {
       },
       methods: {
         ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        hasEnabledTools() {
+          return this.tools.some(tool => tool.enabled);
+        },
         getMetricsUrl() {
           for (var i = 0; i < this.tools.length; i++) {
             const tool = this.tools[i];
