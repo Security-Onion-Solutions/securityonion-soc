@@ -35,8 +35,6 @@ func TestSyncScheduler(t *testing.T) {
 				eng.EXPECT().ResumeIntegrityChecker().DoAndReturn(func() {
 					*isRunning = false
 				})
-
-				eng.EXPECT().PauseIntegrityChecker()
 			},
 			CheckMock: func(t *testing.T, ctx context.Context, detStore *servermock.MockDetectionstore, eng *mock.MockDetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
 				assert.False(t, *isRunning)
@@ -114,6 +112,7 @@ func TestSyncScheduler(t *testing.T) {
 
 			test.InitMock(t, ctx, detStore, eng, syncParams, engineState, engName, isRunning)
 
+			syncParams.SyncThread.Add(1)
 			SyncScheduler(ctx, detStore, eng, syncParams, engineState, engName, isRunning)
 
 			test.CheckMock(t, ctx, detStore, eng, syncParams, engineState, engName, isRunning)

@@ -155,6 +155,8 @@ func (e *StrelkaEngine) Start() error {
 	e.isRunning = true
 
 	// start long running processes
+	e.SyncSchedulerParams.SyncThread.Add(1)
+	e.IntegrityCheckerData.Thread.Add(1)
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 

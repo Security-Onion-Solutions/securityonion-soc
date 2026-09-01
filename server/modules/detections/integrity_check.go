@@ -32,7 +32,6 @@ type IntegrityCheckerData struct {
 }
 
 func IntegrityChecker(engName model.EngineName, eng IntegrityChecked, data *IntegrityCheckerData, intCheckFailure *bool) {
-	data.Thread.Add(1)
 	defer func() {
 		data.Thread.Done()
 		data.IsRunning = false

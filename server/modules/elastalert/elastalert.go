@@ -328,6 +328,8 @@ func (e *ElastAlertEngine) Start() error {
 	e.IntegrityCheckerData.IsRunning = true
 
 	// start long running processes
+	e.SyncSchedulerParams.SyncThread.Add(1)
+	e.IntegrityCheckerData.Thread.Add(1)
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameElastAlert, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameElastAlert, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 

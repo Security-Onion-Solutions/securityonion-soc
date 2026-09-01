@@ -131,6 +131,8 @@ func TestElastAlertModule(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().DoesTemplateExist(gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+
 	srv := &server.Server{
 		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 		Detectionstore:   detStore,
