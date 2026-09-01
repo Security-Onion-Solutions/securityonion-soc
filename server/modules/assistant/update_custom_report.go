@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -61,11 +62,12 @@ func (t *UpdateCustomReportTool) GetSchema() model.JSONSchema {
    - .Metrics maps groupby_<n>_<fields, dots as underscores> to metric lists: an OQL ending
      "| groupby source.ip" (spaces, no colon) gives .Metrics.groupby_0_source_ip. Range that
      key, not .Metrics. Entries have .Keys, .Value, .Ratio, .Percentage; order them with
-     sortMetrics "Value" "desc".
+     sortMetrics "Value" "desc" $list -- the list is the LAST argument.
    - ASCII only (no emoji, em dashes, arrows, smart quotes); pipe dynamic text through
      stripEmoji.
-   - End row loops with {{- end }}; a plain {{ end }} blank-lines between rows and breaks
-     the table after row 1.`,
+   - An action alone on a line still emits that line's newline, and one blank line ends a
+     Markdown table early. Around table rows, trim standalone actions ({{- $n := 0 -}})
+     and close row loops with {{- end }}.`,
 				},
 				"filename": {
 					Type: "string",
@@ -271,12 +273,38 @@ func deployNoteFor(deployed bool) string {
 
 const queryDirectivePrefix = "/* query."
 
-var reportTemplateFuncs = []string{
-	"getUserDetail", "formatDateTime", "join", "lower", "upper",
-	"sortHistory", "sortComments", "sortRelatedEvents", "sortArtifacts",
-	"sortDetections", "sortMetrics", "sortAssistantMessages",
-	"sortAssistantSessionDetails", "formatNumber", "parseJSON", "toJSON",
-	"add", "stripEmoji",
+func reportTemplateFuncs() template.FuncMap {
+	return template.FuncMap{
+		"getUserDetail":     func(attr string, userId string) string { return "" },
+		"formatDateTime":    func(format string, t *time.Time) string { return "" },
+		"join":              strings.Join,
+		"lower":             strings.ToLower,
+		"upper":             strings.ToUpper,
+		"sortHistory":       func(f, d string, l []*model.Auditable) []*model.Auditable { return l },
+		"sortComments":      func(f, d string, l []*model.Comment) []*model.Comment { return l },
+		"sortRelatedEvents": func(f, d string, l []*model.RelatedEvent) []*model.RelatedEvent { return l },
+		"sortArtifacts":     func(f, d string, l []*model.Artifact) []*model.Artifact { return l },
+		"sortDetections":    func(f, d string, l []*model.Detection) []*model.Detection { return l },
+		"sortMetrics":       func(f, d string, l []*model.EventMetric) []*model.EventMetric { return l },
+		"sortAssistantMessages": func(f, d string, l []*model.StoredMessage) []*model.StoredMessage {
+			return l
+		},
+		"sortAssistantSessionDetails": func(f, d string, l []*model.AssistantSessionDetails) []*model.AssistantSessionDetails {
+			return l
+		},
+		"formatNumber": func(format string, language string, value interface{}) string { return "" },
+		"parseJSON":    func(data interface{}) map[string]interface{} { return map[string]interface{}{} },
+		"toJSON":       func(data interface{}) string { return "" },
+		"add":          func(a, b int) int { return a + b },
+		"stripEmoji":   func(text string) string { return text },
+	}
+}
+
+type reportTemplateInput struct {
+	Error     string
+	BeginDate time.Time
+	EndDate   time.Time
+	Results   map[string]*model.EventSearchResults
 }
 
 func validateReportTemplate(content string) error {
@@ -284,12 +312,8 @@ func validateReportTemplate(content string) error {
 		return errors.New("report template is empty")
 	}
 
-	funcs := template.FuncMap{}
-	for _, name := range reportTemplateFuncs {
-		funcs[name] = func(args ...interface{}) interface{} { return nil }
-	}
-
-	if _, err := template.New("custom_report").Funcs(funcs).Parse(content); err != nil {
+	tmpl, err := template.New("custom_report").Funcs(reportTemplateFuncs()).Parse(content)
+	if err != nil {
 		return fmt.Errorf("failed to parse as a Go text/template: %w", err)
 	}
 
@@ -305,7 +329,139 @@ func validateReportTemplate(content string) error {
 		return err
 	}
 
-	return validateReportASCII(content)
+	if err := validateReportASCII(content); err != nil {
+		return err
+	}
+
+	if err := validateReportResultNames(content); err != nil {
+		return err
+	}
+
+	rendered := &strings.Builder{}
+	if err := tmpl.Execute(rendered, syntheticReportInput(content)); err != nil {
+		return fmt.Errorf("template failed to render against sample data: %w", err)
+	}
+
+	return validateRenderedTables(rendered.String())
+}
+
+var tableSeparator = regexp.MustCompile(`^\|[\s\-:|]+\|$`)
+
+func isTableRow(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "|")
+}
+
+func isTableSeparator(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.Contains(trimmed, "-") && tableSeparator.MatchString(trimmed)
+}
+
+func validateRenderedTables(rendered string) error {
+	lines := strings.Split(rendered, "\n")
+
+	for i := 0; i+2 < len(lines); i++ {
+		if !isTableRow(lines[i]) || strings.TrimSpace(lines[i+1]) != "" || !isTableRow(lines[i+2]) {
+			continue
+		}
+
+		// A blank line followed by a header and its separator is a second table, not a break.
+		if i+3 < len(lines) && isTableSeparator(lines[i+3]) {
+			continue
+		}
+
+		return fmt.Errorf("a blank line splits a Markdown table before the row %q, so every row after it renders as plain text; trim the standalone action that emits that newline ({{- ... -}}) or close the row loop with {{- end }}", strings.TrimSpace(lines[i+2]))
+	}
+
+	return nil
+}
+
+var resultReference = regexp.MustCompile(`\.Results\.([A-Za-z_][A-Za-z0-9_]*)`)
+
+func validateReportResultNames(content string) error {
+	declared := map[string]bool{}
+	names := []string{}
+
+	for _, directive := range oqlDirectives(content) {
+		declared[directive.Name] = true
+		names = append(names, directive.Name)
+	}
+
+	for _, match := range resultReference.FindAllStringSubmatch(content, -1) {
+		if !declared[match[1]] {
+			return fmt.Errorf("body reads .Results.%s but no query declares %q; declared queries are: %s", match[1], match[1], strings.Join(names, ", "))
+		}
+	}
+
+	return nil
+}
+
+func syntheticReportInput(content string) *reportTemplateInput {
+	now := time.Now()
+	input := &reportTemplateInput{
+		BeginDate: now,
+		EndDate:   now,
+		Results:   map[string]*model.EventSearchResults{},
+	}
+
+	for _, directive := range oqlDirectives(content) {
+		results := &model.EventSearchResults{
+			TotalEvents: 2,
+			Events:      []*model.EventRecord{sampleEventRecord(), sampleEventRecord()},
+			Metrics:     map[string][]*model.EventMetric{},
+		}
+
+		if key := groupByMetricKey(directive.Value); key != "" {
+			results.Metrics[key] = []*model.EventMetric{sampleEventMetric(), sampleEventMetric()}
+		}
+
+		input.Results[directive.Name] = results
+	}
+
+	return input
+}
+
+func sampleEventRecord() *model.EventRecord {
+	return &model.EventRecord{
+		Source:    "sample",
+		Time:      time.Now(),
+		Timestamp: time.Now().Format(time.RFC3339),
+		Id:        "sample-id",
+		Payload:   map[string]interface{}{},
+	}
+}
+
+func sampleEventMetric() *model.EventMetric {
+	return &model.EventMetric{
+		Keys:       []interface{}{"sample", "sample", "sample", "sample"},
+		Value:      1,
+		Ratio:      0.5,
+		Percentage: 50,
+	}
+}
+
+func groupByMetricKey(oql string) string {
+	lowered := strings.ToLower(oql)
+
+	idx := strings.Index(lowered, "| groupby ")
+	if idx < 0 {
+		return ""
+	}
+
+	segment := oql[idx+len("| groupby "):]
+	if end := strings.Index(segment, "|"); end >= 0 {
+		segment = segment[:end]
+	}
+
+	fields := strings.FieldsFunc(segment, func(r rune) bool { return r == ' ' || r == ',' || r == '\t' })
+	if len(fields) == 0 {
+		return ""
+	}
+
+	for i, field := range fields {
+		fields[i] = strings.ReplaceAll(strings.TrimSuffix(field, "*"), ".", "_")
+	}
+
+	return "groupby_0_" + strings.Join(fields, "_")
 }
 
 func validateReportDirectives(content string) error {
@@ -356,6 +512,7 @@ func hasOqlQueryDirective(content string) bool {
 
 type oqlDirective struct {
 	Line  int
+	Name  string
 	Value string
 }
 
@@ -388,7 +545,7 @@ func oqlDirectives(content string) []oqlDirective {
 		}
 
 		if strings.EqualFold(strings.TrimSpace(parts[1]), "oql") && value != "" {
-			found = append(found, oqlDirective{Line: i, Value: value})
+			found = append(found, oqlDirective{Line: i, Name: strings.TrimSpace(parts[0]), Value: value})
 		}
 	}
 

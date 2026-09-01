@@ -412,6 +412,53 @@ func TestValidateReportTemplate(t *testing.T) {
 			content: "{{- /* query.alerts.oql = tags:alert AND source.ip:1.2.3.4 | groupby rule.name */ -}}\nMy Report\n===\nTotal: 5",
 		},
 		{
+			name:    "sortMetrics called with the list first",
+			content: "{{- /* query.alerts.oql = tags:alert | groupby rule.name */ -}}\nMy Report\n===\n{{ $m := index .Results.alerts.Metrics \"groupby_0_rule_name\" }}\n{{ range sortMetrics $m \"Value\" \"desc\" }}{{ .Value }}{{ end }}",
+			wantErr: "sample data",
+		},
+		{
+			name:    "sortMetrics with the list last renders",
+			content: "{{- /* query.alerts.oql = tags:alert | groupby rule.name */ -}}\nMy Report\n===\n{{ $m := index .Results.alerts.Metrics \"groupby_0_rule_name\" }}\n{{ range sortMetrics \"Value\" \"desc\" $m }}{{ index .Keys 0 }}{{ end }}",
+		},
+		{
+			name:    "indexing an event instead of its payload",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\n{{ range .Results.alerts.Events }}{{ index . \"rule.name\" }}{{ end }}",
+			wantErr: "sample data",
+		},
+		{
+			name:    "indexing the payload renders",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\n{{ range .Results.alerts.Events }}{{ index .Payload \"rule.name\" }}{{ end }}",
+		},
+		{
+			// The dry run cannot see this (a missing map key renders as "<no value>" rather
+			// than erroring), so the static name check is what catches it.
+			name:    "unknown query name",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\nTotal: {{ .Results.typo.TotalEvents }}",
+			wantErr: "no query declares",
+		},
+		{
+			name:    "dynamic Results access is not flagged",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\n{{ range $name, $r := .Results }}{{ $r.TotalEvents }}{{ end }}",
+		},
+		{
+			name:    "untrimmed action blank-lines the table",
+			content: "{{- /* query.d.oql = tags:alert */ -}}\nMy Report\n===\n| # | T |\n|---|---|\n{{ $c := 0 }}\n{{- range .Results.d.Events }}\n{{- $c = add $c 1 }}\n| {{ $c }} | x |\n{{- end }}\n",
+			wantErr: "blank line splits a Markdown table",
+		},
+		{
+			name:    "trimmed action keeps the table intact",
+			content: "{{- /* query.d.oql = tags:alert */ -}}\nMy Report\n===\n| # | T |\n|---|---|\n{{- $c := 0 -}}\n{{- range .Results.d.Events }}\n{{- $c = add $c 1 }}\n| {{ $c }} | x |\n{{- end }}\n",
+		},
+		{
+			name:    "blank lines between rows",
+			content: "{{- /* query.d.oql = tags:alert */ -}}\nMy Report\n===\n| # | T |\n|---|---|\n{{ range .Results.d.Events }}\n| x | y |\n{{ end }}",
+			wantErr: "blank line splits a Markdown table",
+		},
+		{
+			name:    "two adjacent tables are not a break",
+			content: "{{- /* query.d.oql = tags:alert */ -}}\nMy Report\n===\n| a |\n|---|\n| 1 |\n\n| b |\n|---|\n| 2 |\n",
+		},
+		{
 			name:    "non-ASCII inside a directive is allowed",
 			content: "{{- /* query.alerts.oql = message:été */ -}}\nMy Report\n===\nTotal: 5",
 		},
