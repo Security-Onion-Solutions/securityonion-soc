@@ -459,6 +459,15 @@ func TestValidateReportTemplate(t *testing.T) {
 			content: "{{- /* query.d.oql = tags:alert */ -}}\nMy Report\n===\n| a |\n|---|\n| 1 |\n\n| b |\n|---|\n| 2 |\n",
 		},
 		{
+			name:    "indexing .Keys past the grouping depth",
+			content: "{{- /* query.a.oql = tags:alert | groupby rule.name @timestamp */ -}}\nMy Report\n===\n{{ range index .Results.a.Metrics \"groupby_0_rule_name\" }}{{ index .Keys 1 }}{{ end }}",
+			wantErr: "sample data",
+		},
+		{
+			name:    "the deeper grouping key carries both bucket values",
+			content: "{{- /* query.a.oql = tags:alert | groupby rule.name @timestamp */ -}}\nMy Report\n===\n{{ range index .Results.a.Metrics \"groupby_0_rule_name_@timestamp\" }}{{ index .Keys 1 }}{{ end }}",
+		},
+		{
 			name:    "non-ASCII inside a directive is allowed",
 			content: "{{- /* query.alerts.oql = message:été */ -}}\nMy Report\n===\nTotal: 5",
 		},

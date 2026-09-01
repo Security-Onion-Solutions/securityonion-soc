@@ -410,8 +410,8 @@ func syntheticReportInput(content string) *reportTemplateInput {
 			Metrics:     map[string][]*model.EventMetric{},
 		}
 
-		if key := groupByMetricKey(directive.Value); key != "" {
-			results.Metrics[key] = []*model.EventMetric{sampleEventMetric(), sampleEventMetric()}
+		for key, arity := range groupByMetricKeys(directive.Value) {
+			results.Metrics[key] = []*model.EventMetric{sampleEventMetric(arity), sampleEventMetric(arity)}
 		}
 
 		input.Results[directive.Name] = results
@@ -430,21 +430,26 @@ func sampleEventRecord() *model.EventRecord {
 	}
 }
 
-func sampleEventMetric() *model.EventMetric {
+func sampleEventMetric(arity int) *model.EventMetric {
+	keys := make([]interface{}, arity)
+	for i := range keys {
+		keys[i] = "sample"
+	}
+
 	return &model.EventMetric{
-		Keys:       []interface{}{"sample", "sample", "sample", "sample"},
+		Keys:       keys,
 		Value:      1,
 		Ratio:      0.5,
 		Percentage: 50,
 	}
 }
 
-func groupByMetricKey(oql string) string {
-	lowered := strings.ToLower(oql)
+func groupByMetricKeys(oql string) map[string]int {
+	keys := map[string]int{}
 
-	idx := strings.Index(lowered, "| groupby ")
+	idx := strings.Index(strings.ToLower(oql), "| groupby ")
 	if idx < 0 {
-		return ""
+		return keys
 	}
 
 	segment := oql[idx+len("| groupby "):]
@@ -453,15 +458,15 @@ func groupByMetricKey(oql string) string {
 	}
 
 	fields := strings.FieldsFunc(segment, func(r rune) bool { return r == ' ' || r == ',' || r == '\t' })
-	if len(fields) == 0 {
-		return ""
-	}
-
 	for i, field := range fields {
 		fields[i] = strings.ReplaceAll(strings.TrimSuffix(field, "*"), ".", "_")
 	}
 
-	return "groupby_0_" + strings.Join(fields, "_")
+	for depth := 1; depth <= len(fields); depth++ {
+		keys["groupby_0_"+strings.Join(fields[:depth], "_")] = depth
+	}
+
+	return keys
 }
 
 func validateReportDirectives(content string) error {
