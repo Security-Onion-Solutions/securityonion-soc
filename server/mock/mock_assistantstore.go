@@ -87,18 +87,18 @@ func (mr *MockAssistantstoreMockRecorder) DoesUserOwnSession(ctx, userId, sessio
 }
 
 // FindSessionsPendingMemoryScan mocks base method.
-func (m *MockAssistantstore) FindSessionsPendingMemoryScan(arg0 context.Context) ([]*model.AssistantSessionDetails, error) {
+func (m *MockAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindSessionsPendingMemoryScan", arg0)
+	ret := m.ctrl.Call(m, "FindSessionsPendingMemoryScan", ctx, dontScanBefore)
 	ret0, _ := ret[0].([]*model.AssistantSessionDetails)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindSessionsPendingMemoryScan indicates an expected call of FindSessionsPendingMemoryScan.
-func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(arg0 any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(ctx, dontScanBefore any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), ctx, dontScanBefore)
 }
 
 // GetChatHistory mocks base method.

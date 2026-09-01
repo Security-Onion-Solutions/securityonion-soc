@@ -74,6 +74,7 @@ const (
 
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
+	DEFAULT_DONT_SCAN_BEFORE             = ""
 
 	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
 	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
@@ -96,6 +97,9 @@ const (
 	// Ceiling on one embedding call; a stalled gateway would otherwise strand the
 	// pass and block every later one.
 	MEMORY_REEMBED_CALL_TIMEOUT = 2 * time.Minute
+	// Ceiling on a detached non-streaming chat turn; bounds the orphaned work
+	// after a browser refresh without racing the model on big prompts.
+	CHAT_TURN_TIMEOUT = 3 * time.Minute
 )
 
 //go:embed SOSystemPrompt.bin
@@ -163,6 +167,8 @@ type AssistantCoordinator struct {
 	// terminateReembed interrupts it at the next batch boundary.
 	reembedding      bool
 	terminateReembed context.CancelCauseFunc
+	// Interrupts the scan pass currently running, if any; nil between passes.
+	terminateMemoryScan context.CancelCauseFunc
 	// Published count of memories awaiting re-embedding.
 	staleMemories atomic.Int64
 	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
@@ -195,6 +201,7 @@ type memorySettings struct {
 	reconcileModel     string
 	memoryPersona      string
 	reconcilePersona   string
+	dontScanBefore     string
 }
 
 func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
@@ -244,6 +251,7 @@ const (
 	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
 	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
 	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
+	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
 )
 
 var memoryConfigSettings = []string{
@@ -261,6 +269,7 @@ var memoryConfigSettings = []string{
 	ConfigSettingReconcileModel,
 	ConfigSettingMemoryPersona,
 	ConfigSettingReconcilePersona,
+	ConfigSettingDontScanBefore,
 }
 
 // getMaxSubSessionTokens returns the current per-sub-session output-token budget.
@@ -327,6 +336,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		reconcileModel:     module.GetStringDefault(config, "reconcileModel", ""),
 		memoryPersona:      module.GetStringDefault(config, "memoryPersona", ""),
 		reconcilePersona:   module.GetStringDefault(config, "reconcilePersona", ""),
+		dontScanBefore:     module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
 	}
 
 	if memScanInterval <= 0 && err == nil && memory.useScanner {
@@ -670,6 +680,15 @@ func (ac *AssistantCoordinator) wakeScanner() {
 	select {
 	case ac.scanNow <- struct{}{}:
 	default:
+	}
+}
+
+func (ac *AssistantCoordinator) interruptMemoryScan(cause error) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	if ac.terminateMemoryScan != nil {
+		ac.terminateMemoryScan(cause)
 	}
 }
 
@@ -1112,13 +1131,9 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 						},
 					}
 
+					// Not persisted here: callers save every returned message under their
+					// own session id, and this loop has none to offer.
 					newMessages = append(newMessages, toolMsg)
-
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
-					if err != nil {
-						logger.WithError(err).Error("unable to save tool result message")
-						return nil, err
-					}
 
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
@@ -1702,13 +1717,13 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 		return nil, err
 	}
 
+	// Send already succeeded, a failed tool_result save must not
+	// discard the response before it and its usage are saved.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message (non-streaming)")
 	}
 
 	for _, msg := range response {
@@ -2028,13 +2043,14 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		return nil, err
 	}
 
+	// SendStream already succeeded (the upstream is live and billing); a failed
+	// tool_result save must not abandon the stream before finalize can save the
+	// turn and its usage.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message")
 	}
 
 	finalize := func(rawResponse []byte) error {

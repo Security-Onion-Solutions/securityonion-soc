@@ -296,6 +296,8 @@ $(document).ready(function () {
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
           FEAT_NTF: 'ntf',
+          SYSTEM_USER_ID: SYSTEM_USER_ID,
+          AGENT_USER_ID: AGENT_USER_ID,
           validators: {
             required: value => !!value || _i18n.required,
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
@@ -1582,7 +1584,22 @@ $(document).ready(function () {
           }
           return [];
         },
+        // Pseudo-users resolvable by id but intentionally absent from users/ enumeration
+        getSpecialUser(id) {
+          switch (id) {
+            case SYSTEM_USER_ID:
+              return { id: id, email: this.i18n.systemUser };
+            case AGENT_USER_ID:
+            case 'agent':
+              return { id: id, email: this.i18n.agentUser };
+          }
+          return null;
+        },
         async getUserById(id) {
+          const special = this.getSpecialUser(id);
+          if (special) {
+            return special;
+          }
           const nowTime = new Date().time;
           if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.cacheRefreshIntervalMs)) {
             await this.getAllUsers();
@@ -1591,6 +1608,10 @@ $(document).ready(function () {
           return this.getUserByIdViaCache(id);
         },
         getUserByIdViaCache(id) {
+          const special = this.getSpecialUser(id);
+          if (special) {
+            return special;
+          }
           if (this.users) {
             for (var idx = 0; idx < this.users.length; idx++) {
               const user = this.users[idx];
@@ -1610,11 +1631,6 @@ $(document).ready(function () {
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
-            if (id === SYSTEM_USER_ID || id === AGENT_USER_ID || id === "agent") {
-              obj[outputField] = this.i18n.systemUser;
-              return
-            }
-
             const user = await this.$root.getUserById(id);
             if (user) {
               const displayName = this.getUserDisplayName(user);

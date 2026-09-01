@@ -9,6 +9,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -23,6 +24,11 @@ import (
 // write back to the requester.
 func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
+
+	// Detach up front: a browser refresh cancels the request context, which
+	// would otherwise abort a billed in-flight turn before it can be saved.
+	ctx, cancel := buildDetachedCtx(ctx, CHAT_TURN_TIMEOUT)
+	defer cancel()
 
 	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
 	if err != nil {
@@ -44,16 +50,16 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 		return nil, err
 	}
 
+	// Send already succeeded (and was billed), so bookkeeping failures below must
+	// not discard the response before it and its usage are saved.
 	if isNewSession {
 		if err := ac.createSessionIfNeeded(ctx, incMsg, entityType, entityId); err != nil {
 			logger.WithError(err).Error("unable to create session for non-streaming chat")
-			return nil, err
 		}
 	}
 
 	if err := ac.srv.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
 		logger.WithError(err).Error("unable to save user message for non-streaming chat")
-		return nil, err
 	}
 
 	for _, msg := range response {
@@ -97,16 +103,17 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 		return nil, nil, nil, err
 	}
 
+	// SendStream already succeeded (the upstream is live and billing), so
+	// bookkeeping failures below must not abandon the stream before finalize can
+	// save the turn and its usage.
 	if isNewSession {
 		if err := ac.createSessionIfNeeded(noTimeOutCtx, incMsg, entityType, entityId); err != nil {
 			logger.WithError(err).Error("unable to create session for streaming chat")
-			return nil, nil, nil, err
 		}
 	}
 
 	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
 		logger.WithError(err).Error("unable to save user message before streaming response")
-		return nil, nil, nil, err
 	}
 
 	finalize := func(rawResponse []byte) error {
@@ -177,4 +184,11 @@ func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	}
 	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 	return noTimeOutCtx
+}
+
+// buildDetachedCtx returns a context detached from the request's cancellation —
+// so a browser refresh cannot abort a billed in-flight turn before it is saved —
+// but bounded by its own timeout, carrying the requestor identity and logger.
+func buildDetachedCtx(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(buildNoTimeoutCtx(ctx), timeout)
 }

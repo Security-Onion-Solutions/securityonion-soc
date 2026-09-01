@@ -29,6 +29,7 @@ const MEMORY_SETTING_IDS = {
   reconcileModel: 'soc.config.server.modules.assistant.reconcileModel',
   memoryPersona: 'soc.config.server.modules.assistant.memoryPersona',
   reconcilePersona: 'soc.config.server.modules.assistant.reconcilePersona',
+  dontScanBefore: 'soc.config.server.modules.assistant.dontScanBefore',
 };
 
 routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
@@ -44,6 +45,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     createAgentDialog: false,
     createSkillDialog: false,
     createMemoryDialog: false,
+    scanHistoricalDialog: false,
     newAgent: {},
     newSkill: {},
     newMemory: {},
@@ -772,5 +774,22 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
     },
+    onChangeUseMemoryScanner(newValue) {
+      if (newValue) {
+        this.scanHistoricalDialog = true;
+      }
+    },
+    cancelScanHistorical() {
+      this.scanHistoricalDialog = false;
+      this.memoryOptions.useMemoryScanner = false;
+    },
+    saveScanHistorical(scanHistorical) {
+      this.scanHistoricalDialog = false;
+      if (scanHistorical) {
+        this.memoryOptions.dontScanBefore = '';
+      } else {
+        this.memoryOptions.dontScanBefore = new Date().toISOString();
+      }
+    }
   }
 }});

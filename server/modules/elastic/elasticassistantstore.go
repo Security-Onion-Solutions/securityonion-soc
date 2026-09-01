@@ -1370,7 +1370,7 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 // FindSessionsPendingMemoryScan returns non-deleted root sessions whose
 // messageCount is ahead of lastMemoryScannedIndex (or whose count is not yet
 // recorded), with full History populated, for the memory scanner.
-func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context) ([]*model.AssistantSessionDetails, error) {
+func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error) {
 	if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
 		return nil, err
 	}
@@ -1380,33 +1380,47 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 	countField := store.schemaPrefix + "session.messageCount"
 	scannedField := store.schemaPrefix + "session.lastMemoryScannedIndex"
 
+	must := []map[string]any{
+		{
+			"term": map[string]any{
+				store.schemaPrefix + "kind": "session",
+			},
+		},
+		{
+			// A session is pending when more messages have been saved than
+			// scanned. A missing lastMemoryScannedIndex means never scanned
+			// (0); a missing messageCount means the session predates the
+			// field, so its count is unknown and it is treated as pending
+			// until the scanner records the true count.
+			"script": map[string]any{
+				"script": map[string]any{
+					"source": "long c = doc.containsKey(params.cf) && doc[params.cf].size() > 0 ? doc[params.cf].value : -1L; long s = doc.containsKey(params.sf) && doc[params.sf].size() > 0 ? doc[params.sf].value : 0L; return c == -1L || c > s;",
+					"lang":   "painless",
+					"params": map[string]any{
+						"cf": countField,
+						"sf": scannedField,
+					},
+				},
+			},
+		},
+	}
+
+	if dontScanBefore != nil {
+		must = append(must, map[string]any{
+			"range": map[string]any{
+				"@timestamp": map[string]any{
+					// The explicit offset keeps Elasticsearch from reinterpreting
+					// the instant as UTC and shifting the day boundary.
+					"gte": dontScanBefore.Format("2006-01-02T15:04:05-07:00"),
+				},
+			},
+		})
+	}
+
 	query := map[string]any{
 		"query": map[string]any{
 			"bool": map[string]any{
-				"must": []map[string]any{
-					{
-						"term": map[string]any{
-							store.schemaPrefix + "kind": "session",
-						},
-					},
-					{
-						// A session is pending when more messages have been saved than
-						// scanned. A missing lastMemoryScannedIndex means never scanned
-						// (0); a missing messageCount means the session predates the
-						// field, so its count is unknown and it is treated as pending
-						// until the scanner records the true count.
-						"script": map[string]any{
-							"script": map[string]any{
-								"source": "long c = doc.containsKey(params.cf) && doc[params.cf].size() > 0 ? doc[params.cf].value : -1L; long s = doc.containsKey(params.sf) && doc[params.sf].size() > 0 ? doc[params.sf].value : 0L; return c == -1L || c > s;",
-								"lang":   "painless",
-								"params": map[string]any{
-									"cf": countField,
-									"sf": scannedField,
-								},
-							},
-						},
-					},
-				},
+				"must": must,
 				"must_not": []any{
 					map[string]any{
 						"exists": map[string]any{

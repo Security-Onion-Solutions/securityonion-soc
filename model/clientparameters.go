@@ -220,6 +220,7 @@ type MemoryParameters struct {
 	MemoryPersona                string  `json:"memoryPersona"`
 	ReconcilePersona             string  `json:"reconcilePersona"`
 	StaleMemoryCount             int     `json:"staleMemoryCount"`
+	DontScanBefore               string  `json:"dontScanBefore"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,

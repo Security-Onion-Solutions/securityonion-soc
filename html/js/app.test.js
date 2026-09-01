@@ -221,7 +221,7 @@ test('populateUserDetailsSystem', async () => {
   app.users = [{id:'123',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(app.i18n.systemUser);
+  expect(obj.owner).toBe(app.i18n.agentUser);
 });
 
 test('populateUserDetailsAgent', async () => {
@@ -229,7 +229,30 @@ test('populateUserDetailsAgent', async () => {
   app.users = [{id:'123',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(app.i18n.systemUser);
+  expect(obj.owner).toBe(app.i18n.agentUser);
+});
+
+test('getSpecialUser', () => {
+  expect(app.getSpecialUser('00000000-0000-0000-0000-000000000000').email).toBe(app.i18n.systemUser);
+  expect(app.getSpecialUser('00000000-0000-0000-0000-000000000001').email).toBe(app.i18n.agentUser);
+  expect(app.getSpecialUser('agent').email).toBe(app.i18n.agentUser);
+  expect(app.getSpecialUser('12345678-1234-1234-1234-123456789012')).toBe(null);
+  expect(app.getSpecialUser(null)).toBe(null);
+});
+
+test('getUserById resolves special users without fetching or caching them', async () => {
+  app.users = [];
+  app.getAllUsers = jest.fn();
+  const user = await app.getUserById('00000000-0000-0000-0000-000000000000');
+  expect(user.email).toBe(app.i18n.systemUser);
+  expect(app.getAllUsers).not.toHaveBeenCalled();
+  expect(app.users.length).toBe(0);
+});
+
+test('getUserByIdViaCache resolves special users', () => {
+  app.users = [];
+  expect(app.getUserByIdViaCache('00000000-0000-0000-0000-000000000001').email).toBe(app.i18n.agentUser);
+  expect(app.getUserByIdViaCache('123')).toBe(null);
 });
 
 test('getUserDisplayName', () => {

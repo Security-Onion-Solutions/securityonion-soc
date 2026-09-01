@@ -1311,6 +1311,69 @@ test('memory tunables are still editable after memory has been disabled', async 
   });
 });
 
+test('turning the scanner on asks about historical conversations', () => {
+  comp.onChangeUseMemoryScanner(true);
+  expect(comp.scanHistoricalDialog).toBe(true);
+});
+
+test('turning the scanner off asks nothing', () => {
+  comp.onChangeUseMemoryScanner(false);
+  expect(comp.scanHistoricalDialog).toBe(false);
+});
+
+test('cancelling the scan history dialog reverts the scanner switch', () => {
+  comp.memoryOptions.useMemoryScanner = true;
+  comp.scanHistoricalDialog = true;
+
+  comp.cancelScanHistorical();
+
+  expect(comp.scanHistoricalDialog).toBe(false);
+  expect(comp.memoryOptions.useMemoryScanner).toBe(false);
+});
+
+test('answering yes to scan history clears the cutoff', () => {
+  comp.memoryOptions.dontScanBefore = '2026-01-01T00:00:00.000Z';
+  comp.scanHistoricalDialog = true;
+
+  comp.saveScanHistorical(true);
+
+  expect(comp.scanHistoricalDialog).toBe(false);
+  expect(comp.memoryOptions.dontScanBefore).toBe('');
+});
+
+test('answering no to scan history stamps the current timestamp', () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-01-05T12:00:00.000Z'));
+  comp.scanHistoricalDialog = true;
+
+  comp.saveScanHistorical(false);
+  jest.useRealTimers();
+
+  expect(comp.scanHistoricalDialog).toBe(false);
+  expect(comp.memoryOptions.dontScanBefore).toBe('2026-01-05T12:00:00.000Z');
+});
+
+test('the scan history cutoff is written with the scanner setting', async () => {
+  const put = mockPapi('put', {});
+  const params = memoryParams();
+  params.memoryParams = { useMemoryScanner: false, dontScanBefore: '' };
+
+  comp.initAssistant(params);
+  comp.showOptions();
+  comp.memoryOptions.useMemoryScanner = true;
+  comp.onChangeUseMemoryScanner(true);
+  jest.useFakeTimers().setSystemTime(new Date('2026-01-05T12:00:00.000Z'));
+  comp.saveScanHistorical(false);
+  jest.useRealTimers();
+
+  await comp.persistOptions();
+
+  const written = put.mock.calls.map(c => [c[1].id, c[1].value]);
+  expect(written).toEqual(expect.arrayContaining([
+    ['soc.config.server.modules.assistant.useMemoryScanner', 'true'],
+    ['soc.config.server.modules.assistant.dontScanBefore', '2026-01-05T12:00:00.000Z'],
+  ]));
+});
+
 const memoryModelParams = () => {
   const params = memoryParams();
   params.availableAdapters = [

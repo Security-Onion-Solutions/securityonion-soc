@@ -241,7 +241,7 @@ func (f *fakeAssistantstore) UpdateSessionTags(_ context.Context, _ string, _ []
 	return nil
 }
 func (f *fakeAssistantstore) DeleteSession(_ context.Context, _ string) error { return nil }
-func (f *fakeAssistantstore) FindSessionsPendingMemoryScan(_ context.Context) ([]*model.AssistantSessionDetails, error) {
+func (f *fakeAssistantstore) FindSessionsPendingMemoryScan(_ context.Context, _ *time.Time) ([]*model.AssistantSessionDetails, error) {
 	return nil, nil
 }
 func (f *fakeAssistantstore) UpdateSessionMemoryScanIndex(_ context.Context, _ string, _ int) error {
