@@ -95,18 +95,23 @@ func customReportSlotNumber(filename string) (int, bool) {
 	return n, true
 }
 
-func parseReportTitle(content []byte, deflt string) string {
-	title := deflt
-
+func titleUnderlineIndex(lines []string) int {
 	prevLine := ""
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
+	for i, line := range lines {
 		if strings.HasPrefix(line, "===") && prevLine != "" {
-			title = strings.TrimSpace(prevLine)
-			break
+			return i
 		}
 		prevLine = strings.TrimSpace(line)
 	}
+	return -1
+}
 
-	return title
+func parseReportTitle(content []byte, deflt string) string {
+	lines := strings.Split(string(content), "\n")
+
+	if i := titleUnderlineIndex(lines); i > 0 {
+		return strings.TrimSpace(lines[i-1])
+	}
+
+	return deflt
 }

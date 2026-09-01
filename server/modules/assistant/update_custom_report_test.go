@@ -24,7 +24,7 @@ func jsonEscape(s string) string {
 	return string(b[1 : len(b)-1])
 }
 
-const validReportTemplate = "My Report\n===\n/* query.alerts.oql = tags:alert */\nTotal: {{ .Results.alerts.TotalEvents }}"
+const validReportTemplate = "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\nTotal: {{ .Results.alerts.TotalEvents }}"
 
 const reportIDPrefix = "sensoroni.files.templates.reports."
 
@@ -118,9 +118,16 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 				assert.Contains(t, msg, "Cleared")
 				assert.Contains(t, msg, "generic_report2.md")
 
+				// Cleared with remove=true, so the override is dropped rather than saved as empty;
+				// the mem store discards the whole entry where the real store reverts to the default.
 				settings, _ := store.GetSettings(context.Background(), false)
-				assert.Equal(t, "", settingByIDSuffix(settings, "generic_report2__md").Value)
+				assert.Nil(t, settingByIDSuffix(settings, "generic_report2__md"))
 			},
+		},
+		{
+			name:          "clear the shipped example slot",
+			params:        `{"content": "", "filename": "generic_report1.md"}`,
+			expectedError: true,
 		},
 		{
 			name:   "clear an already empty slot",
@@ -130,8 +137,8 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:   "author without admin store reports not deployed",
-			params: `{"content": "` + jsonEscape(validReportTemplate) + `"}`,
+			name:    "author without admin store reports not deployed",
+			params:  `{"content": "` + jsonEscape(validReportTemplate) + `"}`,
 			noAdmin: true,
 			assertResult: func(t *testing.T, result *model.ToolResponse, store *server.MemConfigStore) {
 				assert.Contains(t, result.Result.(string), "Synchronize the grid")
@@ -229,7 +236,7 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			tool := &UpdateCustomReportTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, ``)
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -330,4 +337,97 @@ func TestSelectReportSlot(t *testing.T) {
 func TestDeployNoteFor(t *testing.T) {
 	assert.Contains(t, deployNoteFor(true), "sync was started")
 	assert.Contains(t, deployNoteFor(false), "Synchronize the grid")
+}
+
+func TestValidateReportTemplate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{
+			name:    "valid template",
+			content: validReportTemplate,
+		},
+		{
+			name:    "multiple directives on their own lines",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\n{{- /* query.alerts.metricLimit = 50 */ -}}\nMy Report\n===\nTotal: {{ .Results.alerts.TotalEvents }}",
+		},
+		{
+			name:    "directive below the title block",
+			content: "My Report\n===\n{{- /* query.alerts.oql = tags:alert */ -}}\nTotal: 5",
+			wantErr: "below the title block",
+		},
+		{
+			name:    "empty content",
+			content: "   ",
+			wantErr: "empty",
+		},
+		{
+			name:    "unparsable template",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\n{{ .Unclosed ",
+			wantErr: "text/template",
+		},
+		{
+			name:    "no query directive",
+			content: "My Report\n===\nTotal: 5",
+			wantErr: "must define at least one",
+		},
+		{
+			name:    "bare directive renders as text",
+			content: "/* query.alerts.oql = tags:alert */\nMy Report\n===\nTotal: 5",
+			wantErr: "template comment",
+		},
+		{
+			name:    "two directives on one line",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}} {{- /* query.alerts.metricLimit = 50 */ -}}\nMy Report\n===\nTotal: 5",
+			wantErr: "more than one query directive",
+		},
+		{
+			name:    "emoji in body",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\n\U0001F4CB Alerts: 5",
+			wantErr: "non-ASCII",
+		},
+		{
+			name:    "em dash in body",
+			content: "{{- /* query.alerts.oql = tags:alert */ -}}\nMy Report\n===\nAlerts — recent",
+			wantErr: "non-ASCII",
+		},
+		{
+			name:    "groupby with a colon",
+			content: "{{- /* query.alerts.oql = tags:alert | groupby:source.ip */ -}}\nMy Report\n===\nTotal: 5",
+			wantErr: "separated by a space",
+		},
+		{
+			name:    "sortby with a colon",
+			content: "{{- /* query.alerts.oql = tags:alert | sortby:@timestamp */ -}}\nMy Report\n===\nTotal: 5",
+			wantErr: "separated by a space",
+		},
+		{
+			name:    "space separated groupby is allowed",
+			content: "{{- /* query.alerts.oql = tags:alert | groupby source.ip destination.ip */ -}}\nMy Report\n===\nTotal: 5",
+		},
+		{
+			name:    "colons elsewhere in the query are allowed",
+			content: "{{- /* query.alerts.oql = tags:alert AND source.ip:1.2.3.4 | groupby rule.name */ -}}\nMy Report\n===\nTotal: 5",
+		},
+		{
+			name:    "non-ASCII inside a directive is allowed",
+			content: "{{- /* query.alerts.oql = message:été */ -}}\nMy Report\n===\nTotal: 5",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateReportTemplate(tc.content)
+
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
 }

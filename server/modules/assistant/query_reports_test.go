@@ -7,6 +7,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -172,7 +173,7 @@ func TestQueryReportsTool_Execute(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			tool := &QueryReportsTool{}
-			result, err := tool.Execute(ctx, mockServer, tc.params, ``)
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(tc.params)})
 
 			if tc.expectedError {
 				assert.Error(t, err)

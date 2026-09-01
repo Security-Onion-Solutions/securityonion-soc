@@ -265,6 +265,7 @@ globalThis.AssistantUtils = (function() {
             'get_playbooks',
             'query_cases',
             'query_detections',
+            'query_reports',
           ].includes(toolName) ||
           /^delegate_to_.+$/.test(toolName)
         )

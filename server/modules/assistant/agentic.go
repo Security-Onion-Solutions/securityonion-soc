@@ -383,6 +383,11 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 			Tools:            []string{"add_overrides", "create_detection", "toggle_detections", "update_detection_content", "update_overrides"},
 			AdditionalPrompt: prompts["prompt_skill_tuning"],
 		},
+		"Reports": {
+			Name:             "Reports",
+			Tools:            []string{"query_reports", "update_custom_report"},
+			AdditionalPrompt: prompts["prompt_skill_reports"],
+		},
 	}
 
 	// Everything above ships with the product and starts enabled.
