@@ -294,6 +294,8 @@ func (e *SuricataEngine) Start() error {
 	}
 
 	// start long running processes
+	e.SyncSchedulerParams.SyncThread.Add(1)
+	e.IntegrityCheckerData.Thread.Add(1)
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
