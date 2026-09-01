@@ -354,7 +354,7 @@ const i18n = {
       agentStudioMemoryThresholdHelp: 'How close a new memory must be to an existing one to be reconciled with it, and how close a memory must be to the message to be included.',
       agentStudioMemoryModel: 'Memory model',
       agentStudioMemoryModelHelp: 'Extracts memories from sessions.',
-      agentStudioEmbedModel: 'Embed model',
+      agentStudioEmbedModel: 'Embed agent',
       agentStudioEmbedModelHelp: 'Vectorizes memories. Changing it re-embeds all stored memories.',
       agentStudioReconcileModel: 'Reconcile model',
       agentStudioReconcileModelHelp: 'Merges near-duplicate memories.',

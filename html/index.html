@@ -562,7 +562,7 @@
                   <v-list-item-title v-text="i18n.aiMetrics"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_agentstudio" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic">
+              <v-list-item data-aid="nav_admin_agentstudio" v-if="$root.isUserAdmin() && isLicensed('oai') && ($root.parameters.assistant?.agentic || $root.parameters.assistant?.memoryEnabled)">
                 <template #prepend>
                   <router-link to="/agentstudio" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                     <v-icon>fa-user-tie</v-icon>
