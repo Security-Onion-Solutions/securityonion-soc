@@ -284,7 +284,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	e.useEsql = module.GetBoolDefault(config, "useEsql", false)
-	// EQL is already case-insensitive, so this is gated on useEsql below.
+	// EQL is already case-insensitive, this is for useEsql
 	e.caseInsensitive = module.GetBoolDefault(config, "caseInsensitive", true)
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
