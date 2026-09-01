@@ -416,7 +416,6 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	query, err := engine.sigmaToElastAlert(context.Background(), det)
 	assert.NoError(t, err)
 
-	// Verify ecs_windows pipeline is included when useEsql is false
 	hasEcsWindows := false
 	for i, arg := range capturedArgs {
 		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
@@ -424,7 +423,9 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, hasEcsWindows, "ecs_windows pipeline should be included when useEsql is false")
+	assert.True(t, hasEcsWindows, "ecs_windows pipeline should always be included")
+
+	assert.Contains(t, capturedArgs, "--disable-pipeline-check", "--disable-pipeline-check should always be included")
 
 	// No license
 	wrappedRule, err := engine.wrapRule(det, query)
@@ -596,8 +597,9 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 	})
 
 	engine := ElastAlertEngine{
-		IOManager: iom,
-		useEsql:   true,
+		IOManager:       iom,
+		useEsql:         true,
+		caseInsensitive: true,
 	}
 
 	det := &model.Detection{
@@ -611,7 +613,6 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "<esql>", query)
 
-	// Verify ecs_windows pipeline is NOT included when useEsql is true
 	hasEcsWindows := false
 	for i, arg := range capturedArgs {
 		if arg == "-p" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "ecs_windows" {
@@ -619,7 +620,12 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 			break
 		}
 	}
-	assert.False(t, hasEcsWindows, "ecs_windows pipeline should NOT be included when useEsql is true")
+	assert.True(t, hasEcsWindows, "ecs_windows pipeline should always be included")
+
+	assert.Contains(t, capturedArgs, "--disable-pipeline-check", "--disable-pipeline-check should always be included")
+	assert.Contains(t, capturedArgs, "esql")
+
+	assert.Contains(t, capturedArgs, "case_insensitive=true")
 
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -2827,4 +2833,68 @@ func TestWriteFileWithCleanup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSigmaToElastAlertCaseInsensitiveDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<esql>"), 0, time.Duration(0), nil
+	})
+
+	engine := ElastAlertEngine{
+		IOManager:       iom,
+		useEsql:         true,
+		caseInsensitive: false,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	_, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	assert.NotContains(t, capturedArgs, "case_insensitive=true")
+	assert.NotContains(t, capturedArgs, "case_insensitive=false")
+}
+
+func TestSigmaToElastAlertCaseInsensitiveNotSentForEql(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<eql>"), 0, time.Duration(0), nil
+	})
+
+	engine := ElastAlertEngine{
+		IOManager:       iom,
+		useEsql:         false,
+		caseInsensitive: true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"condition": "*"}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+	}
+
+	_, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.NoError(t, err)
+
+	assert.Contains(t, capturedArgs, "eql")
+	assert.NotContains(t, capturedArgs, "case_insensitive=true")
 }
