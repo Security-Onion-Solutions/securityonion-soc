@@ -1015,11 +1015,15 @@ test('hasSubgrids', () => {
   expect(app.hasSubgrids()).toBe(false);
 
   app.subgrids = [{}];
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.user = { roles: ['subgrid-superuser'] };
   expect(app.hasSubgrids()).toBe(true);
 });
 
 test('adjustSubgridColVisibility', () => {
   const origFn = app.updateColumnClass;
+  const origHasSubgrids = app.hasSubgrids;
   const headers = [
     { title: 'Grid ID', value: 'gridId', align: 'd-none' },
     { title: 'Other Column', value: 'other', align: 'd-none' },
@@ -1038,6 +1042,7 @@ test('adjustSubgridColVisibility', () => {
 
   expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', false);
   app.updateColumnClass = origFn;
+  app.hasSubgrids = origHasSubgrids;
 });
 
 test('updateColumnClass', () => {
@@ -1072,8 +1077,11 @@ test('loadGridInfo', async () => {
   app.papi.get = mock;
 
   app.gridInfo = {};
+  app.user = { roles: ['subgrid-superuser'] };
   app.subgrids = [{id: 'g1'},{id: 'g2'}];
-  await expect(() => app.loadSubgridInfo()).rejects.toThrow(Error);
+  await expect(() => 
+    app.loadSubgridInfo()
+  ).rejects.toThrow(Error);
 
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});

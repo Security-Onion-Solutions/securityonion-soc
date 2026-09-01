@@ -711,7 +711,7 @@ $(document).ready(function () {
           }
         },
         async loadSubgridInfo() {
-          if (!this.subgrids) return;
+          if (!this.hasSubgrids()) return;
           var deferredError;
           for (var idx = 0; idx < this.subgrids.length; idx++) {
             const grid = this.subgrids[idx];
@@ -1096,6 +1096,9 @@ $(document).ready(function () {
           return node.gridId != null && node.gridId.trim().length > 0;
         },
         hasSubgrids() {
+          if (!(this.userHasRole('superuser') || this.userHasRole('subgrid-superuser') || this.userHasRole('subgrid-auditor'))) {
+            return false;
+          }
           return this.subgrids != null && this.subgrids.length > 0;
         },
         getSelectedGrid() {
@@ -1533,6 +1536,9 @@ $(document).ready(function () {
         },
         getAllGrids() {
           const grids = [{id: LOCAL_GRID_ID, name: this.i18n.gridLocal}];
+          if (!this.hasSubgrids()) {
+            return grids;
+          }
           this.subgrids.forEach((grid) => {
             grid.name = grid.id;
             grids.push(grid);

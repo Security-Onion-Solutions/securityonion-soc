@@ -49,7 +49,7 @@
             <span v-text="i18n.licenseExpiringSoon" class="d-none d-md-inline text-white" data-aid="license_expiring_notice"></span>
           </div>
           <v-spacer></v-spacer>
-          <v-select v-if="hasSubgrids() && (userHasRole('superuser') || userHasRole('subgrid-superuser') || userHasRole('subgrid-auditor'))"
+          <v-select v-if="hasSubgrids()"
             id="subgrid-selector" 
             :disabled="!subgridSelectorEnabled"
             v-model="selectedGridId" 
