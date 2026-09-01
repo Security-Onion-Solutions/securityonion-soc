@@ -5129,6 +5129,14 @@ test('shouldAutoApproveTool returns true for get_playbooks when setting enabled'
   expect(result).toBe(true);
 });
 
+test('shouldAutoApproveTool returns true for query_reports when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+
+  const result = comp.shouldAutoApproveTool('query_reports');
+
+  expect(result).toBe(true);
+});
+
 test('shouldAutoApproveTool returns false for other tools when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   

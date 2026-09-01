@@ -91,8 +91,19 @@ func TestBuildNoTimeoutCtx(t *testing.T) {
 		ctxBuilder      func() context.Context
 		wantRequestorId any
 		wantRunAs       any
+		wantRequestId   any
 		checkNoDeadline bool
 	}{
+		{
+			name: "preserves request id when present",
+			ctxBuilder: func() context.Context {
+				ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+				return context.WithValue(ctx, web.ContextKeyRequestId, "req-1")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       nil,
+			wantRequestId:   "req-1",
+		},
 		{
 			name: "preserves requestor id and drops any deadline",
 			ctxBuilder: func() context.Context {
@@ -125,6 +136,7 @@ func TestBuildNoTimeoutCtx(t *testing.T) {
 
 			assert.Equal(t, tc.wantRequestorId, out.Value(web.ContextKeyRequestorId))
 			assert.Equal(t, tc.wantRunAs, out.Value(web.ContextKeyRunAsUsername))
+			assert.Equal(t, tc.wantRequestId, out.Value(web.ContextKeyRequestId))
 
 			if tc.checkNoDeadline {
 				_, hasDeadline := out.Deadline()

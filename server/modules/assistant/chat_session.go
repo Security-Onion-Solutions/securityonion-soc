@@ -171,7 +171,7 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 }
 
 // buildNoTimeoutCtx returns a context detached from the request's cancellation and
-// timeout, carrying over the requestor identity and request-scoped logger.
+// timeout, carrying over the requestor identity, request id, and request-scoped logger.
 func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	noTimeOutCtx := context.Background()
 	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
@@ -181,6 +181,11 @@ func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	}
 	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
 		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, requestorId)
+	}
+	// Carried so downstream stores that key work off the request id (e.g. the salt
+	// relay's queue filename) still find it on a detached turn.
+	if requestId, ok := ctx.Value(web.ContextKeyRequestId).(string); ok {
+		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestId, requestId)
 	}
 	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 	return noTimeOutCtx
