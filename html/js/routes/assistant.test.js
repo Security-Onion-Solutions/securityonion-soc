@@ -7931,6 +7931,11 @@ test('isToolAlreadyResolvedError is false when the streamed body cannot be read'
 test('an agentic push refreshes the agent picker without a page reload', async () => {
   comp.agentic = true;
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.$root.disclaimer = false;
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
   comp.$root.parameters = {
     assistant: {
       enabled: true,
@@ -7947,6 +7952,21 @@ test('an agentic push refreshes the agent picker without a page reload', async (
   // The agent added elsewhere is now selectable here.
   expect(comp.availableAgents.map(a => a.name)).toEqual(['Coordinator', 'Triage']);
   expect(comp.availableModels.map(m => m.key)).toEqual(['Coordinator', 'Triage']);
+  // The open chat is left alone: reloading it would rebuild the message tree and
+  // scroll the user back to the bottom. The sidebar refreshes without the spinner.
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+  expect(comp.loadStoredChats).toHaveBeenCalledWith(false);
+  expect(comp.loadCredits).toHaveBeenCalled();
+});
+
+test('initAssistant still loads the session when not driven by an agentic push', async () => {
+  stubInitDeps();
+
+  await comp.initAssistant(agenticParams());
+
+  expect(comp.handleRouteSessionId).toHaveBeenCalled();
+  expect(comp.loadStoredChats).toHaveBeenCalledWith();
+  expect(comp.focusChatInput).toHaveBeenCalled();
 });
 
 test('an agentic push is ignored when not in agentic mode', async () => {

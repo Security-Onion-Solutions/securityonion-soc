@@ -1695,3 +1695,51 @@ test('a server settings reload republishes the assistant params so open pages re
 
   expect(handler).toHaveBeenCalledWith(app.parameters.assistant);
 });
+
+const stubServerSettings = (assistant) => {
+  app.subgrids = [];
+  app.gridInfo = {};
+  app.parameterCallback = null;
+  app.loadServerSettingsTime = 0;
+  global.document.getElementById = jest.fn().mockReturnValue(true);
+  resetPapi();
+  app.papi.get = jest.fn().mockResolvedValue({ data: { parameters: { assistant: assistant }, userId: 'myUserId' } });
+};
+
+test('a server settings reload only republishes assistant params that actually changed', async () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.lastAgenticParamsJson = null;
+
+  const agents = [{ name: 'Triage' }];
+  stubServerSettings({ enabled: true, availableAgents: agents });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(1);
+
+  stubServerSettings({ enabled: true, availableAgents: agents });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(1);
+
+  stubServerSettings({ enabled: true, availableAgents: [{ name: 'Triage' }, { name: 'Hunter' }] });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(2);
+});
+
+test('a live agentic push is not republished again by the next settings reload', async () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.parameters = { assistant: { availableAgents: [{ name: 'Old' }] } };
+  app.lastAgenticParamsJson = null;
+
+  const pushed = { enabled: true, availableAgents: [{ name: 'Triage' }] };
+  app.updateAgenticParams(pushed);
+
+  stubServerSettings(pushed);
+  await app.loadServerSettings();
+
+  expect(handler).not.toHaveBeenCalled();
+});

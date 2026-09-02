@@ -97,6 +97,15 @@ html, body, * {
   border-radius: var(--so-radius-panel) !important;
 }
 
+.v-alert__prepend > .v-icon {
+  display: inline-flex;
+}
+
+.v-alert__prepend {
+  align-self: center;
+  grid-row: 1 / -1;
+}
+
 .options-dialog {
   border-radius: var(--so-radius-panel) !important;
   padding: 8px

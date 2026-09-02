@@ -111,7 +111,7 @@
       </v-card-title>
       <v-divider></v-divider>
       <v-card-text class="agentstudio-dialog-body">
-        <v-alert type="info" variant="tonal" density="compact" class="mb-4">
+        <v-alert type="info" icon="fa-info" variant="tonal" density="compact" class="mb-4">
           {{ i18n.agentStudioSystemPersonaNote }}
         </v-alert>
         <v-textarea v-model="memoryOptions.memoryPersona" :label="i18n.agentStudioMemoryModel" variant="outlined" density="comfortable" rows="8" auto-grow
@@ -418,7 +418,7 @@
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="persona">
-                                <v-alert v-if="item.isSystem" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_agent_persona_note_' + item.id">
+                                <v-alert v-if="item.isSystem" type="info" icon="fa-info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_agent_persona_note_' + item.id">
                                   {{ i18n.agentStudioSystemPersonaNote }}
                                 </v-alert>
                                 <v-row>
@@ -532,7 +532,7 @@
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="persona">
-                                <v-alert v-if="item.isSystem" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_skill_persona_note_' + item.id">
+                                <v-alert v-if="item.isSystem" type="info" icon="fa-info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_skill_persona_note_' + item.id">
                                   {{ i18n.agentStudioSystemSkillPersonaNote }}
                                 </v-alert>
                                 <v-row>
@@ -599,7 +599,7 @@
                       <div class="expanded-row-wrapper pa-4">
                         <v-card variant="flat" class="agentstudio-editor">
                           <v-card-text>
-                            <v-alert v-if="!item.userDefined" type="info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_memory_scanned_note_' + item.id">
+                            <v-alert v-if="!item.userDefined" type="info" icon="fa-info" variant="tonal" density="compact" class="mb-4" :data-aid="'agentstudio_memory_scanned_note_' + item.id">
                               {{ i18n.agentStudioMemoryScanned }}
                             </v-alert>
                             <v-row>

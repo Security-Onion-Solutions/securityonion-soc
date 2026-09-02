@@ -274,6 +274,7 @@ $(document).ready(function () {
           users: [],
           cacheRefreshIntervalMs: 300000,
           loadServerSettingsTime: 0,
+          lastAgenticParamsJson: null,
           user: null,
           username: '',
           maximizedParent: null,
@@ -637,9 +638,13 @@ $(document).ready(function () {
                     this.parameterCallback = null;
                   }
                   this.parametersLoaded = true;
-                  // These params just changed underneath any open page; this reload is
-                  // also what heals a push missed while the websocket was down.
-                  this.publish('assistant:agentic', this.parameters.assistant);
+                  // Heals a push missed while the websocket was down, but only when the
+                  // params actually differ from what subscribers already have.
+                  const agenticJson = JSON.stringify(this.parameters.assistant || null);
+                  if (agenticJson !== this.lastAgenticParamsJson) {
+                    this.lastAgenticParamsJson = agenticJson;
+                    this.publish('assistant:agentic', this.parameters.assistant);
+                  }
                   if (this.parameters.webSocketTimeoutMs > 0) {
                     this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
                   }
@@ -1295,6 +1300,7 @@ $(document).ready(function () {
         updateAgenticParams(update) {
           if (!update || !this.parameters) return;
           this.parameters.assistant = update;
+          this.lastAgenticParamsJson = JSON.stringify(update);
         },
         subscribe(kind, fn) {
           this.ensureConnected();
