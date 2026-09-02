@@ -15,9 +15,9 @@ globalThis.AssistantSessions = (function() {
   return {
     onAgenticUpdate() {
       if (!this.agentic) return;
-      this.initAssistant((this.$root.parameters || {}).assistant || {});
+      this.initAssistant((this.$root.parameters || {}).assistant || {}, false);
     },
-    async initAssistant(params) {
+    async initAssistant(params, loadSession = true) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
       this.compressContextMsg = params["compressContextPrompt"];
@@ -87,10 +87,15 @@ globalThis.AssistantSessions = (function() {
 
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
-          await this.loadStoredChats();
-          await this.handleRouteSessionId();
-          await this.loadCredits();
-          this.focusChatInput();
+          if (loadSession) {
+            await this.loadStoredChats();
+            await this.handleRouteSessionId();
+            await this.loadCredits();
+            this.focusChatInput();
+          } else {
+            await this.loadStoredChats(false);
+            await this.loadCredits();
+          }
         }
       } else {
         this.$root.disclaimer = false;
