@@ -1528,7 +1528,7 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	// Create a simple query to match the soc_id
 	updateCriteria.ParsedQuery = model.NewQuery()
 	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
 
@@ -1609,7 +1609,7 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 	// Create a query to match the soc_id
 	updateCriteria.ParsedQuery = model.NewQuery()
 	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
 

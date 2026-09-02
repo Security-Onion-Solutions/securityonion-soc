@@ -2067,6 +2067,64 @@ func TestMarkAlertAsInvestigated(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAlertUpdateQuotesSocId(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error
+	}{
+		{
+			name: "markAlertAsInvestigated",
+			call: func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error {
+				return h.markAlertAsInvestigated(ctx, socId, sessionId)
+			},
+		},
+		{
+			name: "clearInvestigationSessionFromAlert",
+			call: func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error {
+				return h.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := &Server{
+				Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+			}
+			ctrl := gomock.NewController(t)
+			mockBaseEventStore := mock.NewMockEventstore(ctrl)
+			defer ctrl.Finish()
+
+			var capturedQuery string
+			mockEventStore := &MockElasticEventstore{
+				MockEventstore: mockBaseEventStore,
+				updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+					capturedQuery = criteria.ParsedQuery.String()
+					return &model.EventUpdateResults{
+						UpdatedCount:   1,
+						UnchangedCount: 0,
+					}, nil
+				},
+			}
+
+			srv.Eventstore = mockEventStore
+
+			handler := NewAssistantHandler(srv)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+			// Injection-shaped socId must end up quoted and escaped, not spliced into the query raw
+			socId := `abc" OR soc_id:"*`
+			sessionId := "session-456"
+
+			err := tt.call(handler, ctx, socId, sessionId)
+
+			assert.NoError(t, err)
+			assert.Equal(t, `_id:"abc\" OR soc_id:\"*"`, capturedQuery)
+		})
+	}
+}
+
 func TestMarkAlertAsInvestigatedUnauthorized(t *testing.T) {
 	// Create mock server with unauthorized user
 	srv := &Server{
