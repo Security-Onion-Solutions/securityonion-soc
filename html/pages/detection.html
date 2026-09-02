@@ -27,9 +27,10 @@
 								<v-combobox id="detection-license-create" v-if="isPresetCustomEnabled('license')" v-model="detect.license" :items="getPresets('license')" :label="i18n.license" :rules="[$root.validators.required]" required></v-combobox>
 							</span>
 
-							<div id="signature-label" class="font-weight-bold mb-1">{{ i18n.signature }}:</div>
+							<div id="signature-label" class="font-weight-bold">{{ i18n.signature }}:</div>
+							<div id="escape-editor-label-create" class="text-secondary mb-1">{{ i18n.prismEscapeEditor }}</div>
 							<span data-aid="detection_signature_input">
-								<prism-editor v-aria-textarea class="prism" :highlight="highlighter" v-model="detect.content" aria-labelledby="signature-label"></prism-editor>
+								<prism-editor v-aria-textarea class="prism" :highlight="highlighter" v-model="detect.content" aria-labelledby="signature-label" aria-describedby="escape-editor-label-create"></prism-editor>
 							</span>
 						</div>
 						<div class="d-flex align-center align-self-end text-body-2 mt-2">
@@ -240,8 +241,9 @@
 					</v-tabs-window-item>
 					<v-tabs-window-item value="source" data-aid="detection_source">
 						<v-col class="contrast-bg rounded rounded-md pa-4">
+							<div id="escape-editor-label-signature" class="text-secondary mb-1">{{ i18n.prismEscapeEditor}}</div>
 							<span data-aid="detection_source_input">
-								<prism-editor v-aria-textarea class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity" :aria-label="i18n.signature"></prism-editor>
+								<prism-editor v-aria-textarea class="prism" :highlight="highlighter" v-model="detect.content" :readonly="detect.isCommunity" :aria-label="i18n.signature" aria-describedby="escape-editor-label-signature"></prism-editor>
 							</span>
 							<div class="d-flex align-self-end justify-end detection-source-button-row">
 								<div class="d-inline-flex">
@@ -593,8 +595,9 @@
 								<v-icon class="mr-3" data-aid="detection_playbook_ai_indicator">fa-flask</v-icon>
 								<span v-html="i18n.detectionPlaybooksAi" data-aid="detection_playbook_ai_text"></span>
 							</div>
+							<div id="escape-editor-label-playbook" class="text-secondary mb-1">{{ i18n.prismEscapeEditor }}</div>
 							<span data-aid="detection_source_input">
-								<prism-editor v-aria-textarea class="prism" :highlight="playbookHighlighter" v-model="joinedPlaybookSource" readonly :aria-label="i18n.playbooks"></prism-editor>
+								<prism-editor v-aria-textarea class="prism" :highlight="playbookHighlighter" v-model="joinedPlaybookSource" readonly :aria-label="i18n.playbooks" aria-describedby="escape-editor-label-playbook"></prism-editor>
 							</span>
 						</v-col>
 					</v-tabs-window-item>
