@@ -1298,6 +1298,7 @@ const i18n = {
       playbooksPivot: 'Pivot to Playbooks in Alerts',
       premiumSupport: 'Premium Support',
       preparing: 'Preparing',
+      prismEscapeEditor: 'Note: To tab away from the editor, press Escape.',
       pro: 'Security Onion Pro',
       product: 'Security Onion',
       profile: 'Profile',
