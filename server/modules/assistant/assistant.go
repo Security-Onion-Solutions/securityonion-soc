@@ -69,8 +69,8 @@ const (
 	// DEFAULT_TOOL_USE_TURN_ATTEMPTS and DEFAULT_TOOL_USE_TURN_DELAY_MS bound
 	// awaitToolUseTurn's polling for an asynchronously-persisted tool_use turn,
 	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
-	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
-	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
+	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 12
+	DEFAULT_TOOL_USE_TURN_DELAY_MS = 175
 
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
