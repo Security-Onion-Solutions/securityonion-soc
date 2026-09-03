@@ -1340,6 +1340,7 @@ test('sessionTools lazily creates one state record per session and reuses it', (
   expect(s.indexToId).toBeInstanceOf(Map);
   expect(s.queue).toEqual([]);
   expect(s.busy).toBe(false);
+  expect(s.held).toBe(0);
   expect(s.floatingTool).toBeNull();
 
   // Same session returns the same record; other sessions get their own.
@@ -3626,6 +3627,40 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end with missi
   expect(toolUse.sessionId).toBe('missing_input_session');
 });
 
+test('dedupeToolUseBlocks keeps the last block per id in the first block position', () => {
+  const a1 = { id: 'a' };
+  const b = { id: 'b' };
+  const a2 = { id: 'a', input: { x: 1 } };
+  const anon = { name: 'no-id' };
+
+  expect(comp.dedupeToolUseBlocks([a1, b, a2, anon])).toEqual([a2, b, anon]);
+});
+
+test('convertBackendMessagesToFrontend collapses stored tool_use blocks sharing an id into one card', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'dup_session';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'tool_use', id: 'tu-dup', name: 'query_events' },
+          { type: 'tool_use', id: 'tu-other', name: 'query_cases', input: { c: 1 } },
+          { type: 'tool_use', id: 'tu-dup', name: 'query_events', input: { q: 'dns' } },
+        ]
+      }
+    }
+  ];
+
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+
+  expect(result[0].toolUses.map(t => t.id)).toEqual(['tu-dup', 'tu-other']);
+  expect(result[0].toolUses[0].input).toEqual({ q: 'dns' });
+  expect(result[0].toolUses[0].status).toBe('pending_approval');
+});
+
 test('convertBackendMessagesToFrontend handles tool_use blocks at end with missing id/name', () => {
   comp.resetContextLength = jest.fn();
   comp.currentChatId = 'missing_props_session';
@@ -5586,6 +5621,65 @@ test('applyBlockStart with no target message still registers the tool and does n
   expect(comp.scrollIfPinned).not.toHaveBeenCalled();
 });
 
+test('applyBlockStart folds a repeated header for the same id into the awaiting card', () => {
+  comp.scrollIfPinned = jest.fn();
+  const message = { toolUses: [] };
+  const target = { message, sessionId: 's1', visible: true };
+  comp.applyBlockStart({ index: 1, content_block: { type: 'tool_use', id: 'tu-1', name: 'query_events', input: {} } }, target);
+  const card = message.toolUses[0];
+  // The first (argument-less) block already stopped and was auto-approved.
+  card.approved = true;
+
+  comp.applyBlockStart({ index: 2, content_block: { type: 'tool_use', id: 'tu-1', name: 'query_events', input: {} } }, target);
+
+  expect(message.toolUses).toHaveLength(1);
+  expect(comp.getSessionToolMap('s1').get('tu-1')).toBe(card);
+  expect(comp.getIndexMap('s1').get(2)).toBe('tu-1');
+  expect(card.status).toBe('preparing');
+  expect(card.approved).toBeNull();
+  expect(card.blockIndex).toBe(2);
+
+  // Arguments that ride the repeated block land on the same card and settle it once.
+  comp.applyBlockDelta({ index: 2, delta: { type: 'input_json_delta', partial_json: '{"q":"dns"}' } }, target);
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.queueTool = jest.fn();
+  comp.applyBlockStop({ index: 2 }, { sessionId: 's1', visible: true });
+
+  expect(card.input).toEqual({ q: 'dns' });
+  expect(card.approved).toBe(true);
+  expect(comp.queueTool).toHaveBeenCalledTimes(1);
+});
+
+test('applyBlockStart rebinding a pending_approval card clears the floating prompt', () => {
+  const message = { toolUses: [] };
+  const target = { message, sessionId: 's1', visible: false };
+  comp.applyBlockStart({ index: 0, content_block: { type: 'tool_use', id: 'tu-2', name: 'dangerous_tool' } }, target);
+  const card = message.toolUses[0];
+  card.status = 'pending_approval';
+  comp.sessionTools('s1').floatingTool = card;
+
+  comp.applyBlockStart({ index: 1, content_block: { type: 'tool_use', id: 'tu-2', name: 'dangerous_tool' } }, target);
+
+  expect(message.toolUses).toHaveLength(1);
+  expect(card.status).toBe('preparing');
+  expect(comp.sessionTools('s1').floatingTool).toBeNull();
+});
+
+test('applyBlockStart leaves a settled card alone when its id reappears', () => {
+  const message = { toolUses: [] };
+  const target = { message, sessionId: 's1', visible: false };
+  comp.applyBlockStart({ index: 0, content_block: { type: 'tool_use', id: 'tu-3', name: 'query_events' } }, target);
+  const first = message.toolUses[0];
+  first.status = 'completed';
+
+  comp.applyBlockStart({ index: 1, content_block: { type: 'tool_use', id: 'tu-3', name: 'query_events' } }, target);
+
+  expect(message.toolUses).toHaveLength(2);
+  expect(first.status).toBe('completed');
+  expect(comp.getSessionToolMap('s1').get('tu-3')).toBe(message.toolUses[1]);
+});
+
 test('applyBlockDelta routes text, input_json, and thought deltas to their targets', () => {
   comp.scrollIfPinned = jest.fn();
   const message = { content: 'Hello', thoughts: 'hmm', toolUses: [] };
@@ -5948,6 +6042,17 @@ test('queueTool adds to existing queue', () => {
   expect(comp.runToolQueue).toHaveBeenCalledWith(sessionId);
 });
 
+test('queueTool ignores an id that is already queued', () => {
+  comp.sessionToolState = new Map();
+  comp.runToolQueue = jest.fn();
+
+  comp.queueTool('s1', 'tool_123');
+  comp.queueTool('s1', 'tool_123');
+
+  expect(comp.sessionTools('s1').queue).toEqual(['tool_123']);
+  expect(comp.runToolQueue).toHaveBeenCalledTimes(2);
+});
+
 test('runToolQueue processes tools in queue', async () => {
   const sessionId = 'test-session';
   const toolUse1 = { id: 'tool_123', status: 'preparing' };
@@ -6003,6 +6108,124 @@ test('runToolQueue skips completed/error/rejected tools', async () => {
   expect(comp.executeTool).toHaveBeenCalledTimes(1);
   expect(comp.executeTool).toHaveBeenCalledWith(preparingTool);
   expect(preparingTool.status).toBe('executing');
+});
+
+// --- stream holds: approvals wait for the producing stream to close ---
+
+test('runToolQueue does not drain while the session is held', async () => {
+  const sessionId = 'test-session';
+  const toolUse = { id: 'tool_123', status: 'preparing' };
+  comp.sessionToolState = new Map();
+  const s = comp.sessionTools(sessionId);
+  s.queue.push('tool_123');
+  s.toolsById.set('tool_123', toolUse);
+  comp.executeTool = jest.fn().mockResolvedValue();
+
+  comp.holdToolQueue(sessionId);
+  await comp.runToolQueue(sessionId);
+
+  expect(comp.executeTool).not.toHaveBeenCalled();
+  expect(toolUse.status).toBe('preparing');
+  expect(s.queue).toEqual(['tool_123']);
+  expect(s.busy).toBe(false);
+});
+
+test('releaseToolQueue drains only once every hold is released', () => {
+  const sessionId = 'test-session';
+  const toolUse = { id: 'tool_123', status: 'preparing' };
+  comp.sessionToolState = new Map();
+  const s = comp.sessionTools(sessionId);
+  s.toolsById.set('tool_123', toolUse);
+  comp.executeTool = jest.fn().mockResolvedValue();
+
+  // Two streams render into the same session (a sibling tool's continuation while a
+  // resumed delegation parent streams); the queue waits for both.
+  comp.holdToolQueue(sessionId);
+  comp.holdToolQueue(sessionId);
+  comp.queueTool(sessionId, 'tool_123');
+  expect(comp.executeTool).not.toHaveBeenCalled();
+
+  comp.releaseToolQueue(sessionId);
+  expect(s.held).toBe(1);
+  expect(comp.executeTool).not.toHaveBeenCalled();
+
+  comp.releaseToolQueue(sessionId);
+  expect(s.held).toBe(0);
+  expect(comp.executeTool).toHaveBeenCalledWith(toolUse);
+  expect(toolUse.status).toBe('executing');
+});
+
+test('runToolQueue stops mid-drain when a hold arrives and resumes on release', async () => {
+  const sessionId = 'test-session';
+  const first = { id: 'tool_1', status: 'preparing' };
+  const second = { id: 'tool_2', status: 'preparing' };
+  comp.sessionToolState = new Map();
+  const s = comp.sessionTools(sessionId);
+  s.queue.push('tool_1', 'tool_2');
+  s.toolsById.set('tool_1', first);
+  s.toolsById.set('tool_2', second);
+  // A stream that started during the first tool holds the session, as executeTool does.
+  comp.executeTool = jest.fn(async () => { comp.holdToolQueue(sessionId); });
+
+  await comp.runToolQueue(sessionId);
+
+  expect(comp.executeTool).toHaveBeenCalledTimes(1);
+  expect(comp.executeTool).toHaveBeenCalledWith(first);
+  expect(second.status).toBe('preparing');
+  expect(s.queue).toEqual(['tool_2']);
+  expect(s.busy).toBe(false);
+
+  comp.releaseToolQueue(sessionId);
+  await new Promise((r) => setTimeout(r, 0));
+
+  expect(comp.executeTool).toHaveBeenCalledWith(second);
+  expect(s.queue).toEqual([]);
+});
+
+test('releaseToolQueue ignores a session whose state was torn down', () => {
+  comp.sessionToolState = new Map();
+  comp.runToolQueue = jest.fn();
+
+  expect(() => comp.releaseToolQueue('missing')).not.toThrow();
+
+  expect(comp.sessionToolState.has('missing')).toBe(false);
+  expect(comp.runToolQueue).not.toHaveBeenCalled();
+});
+
+test('releaseToolQueue never drives the hold count negative', () => {
+  comp.sessionToolState = new Map();
+  comp.executeTool = jest.fn().mockResolvedValue();
+  const s = comp.sessionTools('s1');
+
+  comp.releaseToolQueue('s1');
+  expect(s.held).toBe(0);
+
+  // A later hold must still block the queue.
+  comp.holdToolQueue('s1');
+  s.toolsById.set('t1', { id: 't1', status: 'preparing' });
+  comp.queueTool('s1', 't1');
+  expect(comp.executeTool).not.toHaveBeenCalled();
+});
+
+test('approveTool during a live stream is deferred until the stream ends', async () => {
+  comp.sessionToolState = new Map();
+  comp.currentChatId = fakeSessionId;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.scrollToBottom = jest.fn();
+  comp.executeTool = jest.fn().mockResolvedValue();
+  const toolUse = { ...fakeToolUse, sessionId: fakeSessionId };
+  comp.getSessionToolMap(fakeSessionId).set(toolUse.id, toolUse);
+
+  comp.holdToolQueue(fakeSessionId);
+  await comp.approveTool(toolUse);
+
+  expect(toolUse.approved).toBe(true);
+  expect(comp.executeTool).not.toHaveBeenCalled();
+
+  comp.releaseToolQueue(fakeSessionId);
+
+  expect(comp.executeTool).toHaveBeenCalledWith(toolUse);
+  expect(toolUse.status).toBe('executing');
 });
 
 test('checkForActivity returns true when streaming', () => {
@@ -7203,6 +7426,155 @@ test('executeTool reports a top-level error when the stream dies after resolutio
   expect(lastMsg.content).toContain('late failure');
 });
 
+// --- stream holds end-to-end: no tool POST until the producing stream closes ---
+
+// Wrap the mocked reader so a test can tell whether the stream had closed when a
+// held tool finally started.
+function trackStreamClose(response) {
+  const reader = response.data.pipeThrough().getReader();
+  const state = { closed: false };
+  const read = reader.read;
+  reader.read = async () => {
+    const r = await read();
+    if (r.done) state.closed = true;
+    return r;
+  };
+  return state;
+}
+
+function autoApproveSetup() {
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.sessionToolState = new Map();
+  comp.messages = [];
+  comp.scrollIfPinned = jest.fn();
+  comp.scrollToBottom = jest.fn();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.shouldAutoApproveTool = jest.fn().mockReturnValue(true);
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+}
+
+function toolUseBlocks(index, id, name) {
+  return [
+    sseChunk({ type: 'content_block_start', index, content_block: { type: 'tool_use', id, name, input: {} } }),
+    sseChunk({ type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json: '{"q":1}' } }),
+    sseChunk({ type: 'content_block_stop', index }),
+  ];
+}
+
+test('callAIAPI holds auto-approved tools until the chat stream closes', async () => {
+  autoApproveSetup();
+  const response = mockToolStream([
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    ...toolUseBlocks(0, 'tu-1', 'query_events'),
+    ...toolUseBlocks(1, 'tu-2', 'query_cases'),
+    sseChunk({ type: 'message_stop' }),
+    'data: [DONE]\n\n',
+  ]);
+  const stream = trackStreamClose(response);
+  const startedAfterClose = [];
+  comp.executeTool = jest.fn(async () => { startedAfterClose.push(stream.closed); });
+  mockPapi('post', response);
+
+  await comp.callAIAPI('find things');
+  await new Promise((r) => setTimeout(r, 0)); // let the released queue drain
+
+  const s = comp.sessionTools(fakeSessionId);
+  expect(s.toolsById.get('tu-1').approved).toBe(true);
+  expect(s.toolsById.get('tu-2').approved).toBe(true);
+  expect(comp.executeTool.mock.calls.map(([t]) => t.id)).toEqual(['tu-1', 'tu-2']);
+  expect(startedAfterClose).toEqual([true, true]);
+  expect(s.held).toBe(0);
+});
+
+test('callAIAPI releases its hold when the chat stream fails', async () => {
+  autoApproveSetup();
+  comp.executeTool = jest.fn().mockResolvedValue();
+  comp.$root.showError = jest.fn();
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    ...toolUseBlocks(0, 'tu-1', 'query_events'),
+  ], { failWith: new Error('stream died') }));
+
+  await comp.callAIAPI('find things');
+
+  const s = comp.sessionTools(fakeSessionId);
+  expect(s.held).toBe(0);
+  expect(comp.executeTool).toHaveBeenCalledWith(s.toolsById.get('tu-1'));
+});
+
+test('executeTool holds a sub-agent tool until the delegate stream closes', async () => {
+  autoApproveSetup();
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter', sessionId: fakeSessionId };
+  const response = mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    ...toolUseBlocks(0, 'child-tu', 'query_events'),
+    sseChunk({ type: 'message_stop' }),
+    'data: [DONE]\n\n',
+  ]);
+  const stream = trackStreamClose(response);
+  mockPapi('post', response);
+
+  const realExecuteTool = comp.executeTool;
+  const childStartedAfterClose = [];
+  comp.executeTool = jest.fn(function(t) {
+    if (t === toolUse) return realExecuteTool.call(comp, t);
+    childStartedAfterClose.push(stream.closed);
+    return Promise.resolve();
+  });
+
+  await comp.executeTool(toolUse);
+  await new Promise((r) => setTimeout(r, 0));
+
+  const child = comp.sessionTools('child-1');
+  expect(child.toolsById.get('child-tu').approved).toBe(true);
+  expect(comp.executeTool).toHaveBeenCalledWith(child.toolsById.get('child-tu'));
+  expect(childStartedAfterClose).toEqual([true]);
+  expect(child.held).toBe(0);
+  expect(comp.sessionTools(fakeSessionId).held).toBe(0);
+  // The delegation is parked on the child's tool, not resolved.
+  expect(comp.delegationChildren.has('child-1')).toBe(true);
+});
+
+test('executeTool holds the resumed parent turn after delegation_resolved until the stream closes', async () => {
+  autoApproveSetup();
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter', sessionId: fakeSessionId };
+  const response = mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    sseChunk({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'done' } }),
+    sseChunk({ type: 'message_stop' }),
+    sseChunk({ type: 'delegation_resolved', parentSessionId: fakeSessionId, parentToolUseId: toolUse.id }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+    ...toolUseBlocks(0, 'parent-tu', 'query_cases'),
+    sseChunk({ type: 'message_stop' }),
+    'data: [DONE]\n\n',
+  ]);
+  const stream = trackStreamClose(response);
+  mockPapi('post', response);
+
+  const realExecuteTool = comp.executeTool;
+  const parentStartedAfterClose = [];
+  comp.executeTool = jest.fn(function(t) {
+    if (t === toolUse) return realExecuteTool.call(comp, t);
+    parentStartedAfterClose.push(stream.closed);
+    return Promise.resolve();
+  });
+
+  await comp.executeTool(toolUse);
+  await new Promise((r) => setTimeout(r, 0));
+
+  const parent = comp.sessionTools(fakeSessionId);
+  expect(parent.toolsById.get('parent-tu').approved).toBe(true);
+  expect(comp.executeTool).toHaveBeenCalledWith(parent.toolsById.get('parent-tu'));
+  expect(parentStartedAfterClose).toEqual([true]);
+  // Held at stream start and again at resolution; both released.
+  expect(parent.held).toBe(0);
+  // The child's record was torn down at resolution; its release is a no-op, not a recreation.
+  expect(comp.sessionToolState.has('child-1')).toBe(false);
+});
+
 // --- Reload reconstruction of an in-flight delegation (backend-driven) ---
 // On refresh, GET /sessions/{id} returns sub-sessions each with a backend-derived
 // `pendingApproval`. The reload must render the delegate as running, the sub-agent's
@@ -7323,6 +7695,31 @@ test('reconstructChildSession renders the sub-agent turn and attaches each tool_
 
   // Settled delegate: no live delegation linkage is registered.
   expect(comp.delegationChildren.has('child-1')).toBe(false);
+});
+
+test('reconstructChildSession collapses stored tool_use blocks sharing an id into one card', () => {
+  const sub = {
+    session: { sessionId: 'child-1', delegateAgent: 'Hunter' },
+    history: [
+      { createTime: '2025-01-01T12:00:01.000Z', message: { role: 'assistant', contentBlocks: [
+        { type: 'text', text: 'one tool' },
+        { type: 'tool_use', id: 'c1', name: 'query_events' },
+        { type: 'tool_use', id: 'c1', name: 'query_events', input: { q: 1 } },
+      ] } },
+      { createTime: '2025-01-01T12:00:02.000Z', tags: ['tool_result'], message: { contentBlocks: [
+        { toolResult: { toolUseId: 'c1', content: [{ json: { hits: 2 } }] } },
+      ] } },
+    ],
+  };
+  const delegate = { id: 'd1', name: 'delegate_to_Hunter', status: 'completed' };
+
+  comp.reconstructChildSession(delegate, sub, comp.indexSubSessions([sub]), 'parent-1');
+
+  const msg = delegate.childSession.messages[0];
+  expect(msg.content).toBe('one tool');
+  expect(msg.toolUses).toHaveLength(1);
+  expect(msg.toolUses[0].input).toEqual({ q: 1 });
+  expect(msg.toolUses[0].status).toBe('completed');
 });
 
 test('reconstructChildSession marks the flagged turn pending and abandons earlier unresolved tools', () => {

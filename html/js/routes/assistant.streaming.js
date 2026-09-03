@@ -178,6 +178,21 @@ globalThis.AssistantStreaming = (function() {
     // handle*ContentBlock* are thin adapters that build `target`; apply* do the work.
     applyBlockStart(c, target) {
       if (!(c.content_block && c.content_block.type === 'tool_use')) return;
+      // A repeated header for the same id (provider quirk) folds into the card still
+      // awaiting that call instead of orphaning a duplicate the id-keyed map can't reach.
+      const existing = this.getSessionToolMap(target.sessionId).get(c.content_block.id);
+      if (existing && ['preparing', 'pending_approval'].includes(existing.status)) {
+        existing.input = c.content_block.input || {};
+        existing.inputJson = '';
+        existing.status = 'preparing';
+        existing.approved = null;
+        existing.error = null;
+        existing.blockIndex = c.index;
+        this.getIndexMap(target.sessionId).set(c.index, existing.id);
+        const s = this.sessionTools(target.sessionId);
+        if (s.floatingTool === existing) s.floatingTool = null;
+        return;
+      }
       const toolUse = {
         id: c.content_block.id,
         name: c.content_block.name,
@@ -287,6 +302,7 @@ globalThis.AssistantStreaming = (function() {
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
       let reader = null;
+      let held = false;
 
       try {
         let url = '/assistant/chat';
@@ -323,6 +339,10 @@ globalThis.AssistantStreaming = (function() {
 
         const stream = response.data;
         reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+
+        // Approvals for this turn's tools wait for the stream to close (see holdToolQueue).
+        this.holdToolQueue(streamingSessionId);
+        held = true;
 
         this.isStreaming = true;
         let output = 0;
@@ -474,6 +494,7 @@ globalThis.AssistantStreaming = (function() {
             // already closed; nothing to release
           }
         }
+        if (held) this.releaseToolQueue(streamingSessionId);
       }
     },
 

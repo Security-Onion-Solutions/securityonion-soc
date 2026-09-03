@@ -1291,6 +1291,45 @@ func TestOpenAIChatAdapter_SendMessageStream(t *testing.T) {
 			},
 		},
 		{
+			name: "repeated tool call headers collapse to one block",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallStartDelta(0, "call_123", "search"),
+				newChatToolCallHeaderWithArgs(0, "call_123", "search", `{"query":`),
+				newChatToolCallHeaderWithArgs(0, "call_123", "search", `"cats"}`),
+			},
+			finalUsage:     createChatCompletionUsage(12, 8),
+			expectedStatus: 200,
+			expectedEvents: []expectedSSEEvent{
+				{eventType: "message_start"},
+				{
+					eventType: "content_block_start",
+					validate: func(t *testing.T, e map[string]interface{}) {
+						block := e["content_block"].(map[string]interface{})
+						assert.Equal(t, "call_123", block["id"])
+					},
+				},
+				{
+					eventType: "content_block_delta",
+					validate: func(t *testing.T, e map[string]interface{}) {
+						delta := e["delta"].(map[string]interface{})
+						assert.Equal(t, `{"query":`, delta["partial_json"])
+					},
+				},
+				{
+					eventType: "content_block_delta",
+					validate: func(t *testing.T, e map[string]interface{}) {
+						delta := e["delta"].(map[string]interface{})
+						assert.Equal(t, `"cats"}`, delta["partial_json"])
+					},
+				},
+				{eventType: "content_block_stop"},
+				{eventType: "message_delta"},
+				{eventType: "message_delta"},
+				{eventType: "message_stop"},
+				{eventType: "[DONE]"},
+			},
+		},
+		{
 			name:             "initial stream error",
 			initialStreamErr: errors.New("stream connection failed"),
 			expectedStatus:   500,

@@ -2753,6 +2753,7 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 		// Collapse internal tool_result statuses (e.g. "rejected") onto the success/error
 		// vocabulary every model provider accepts. Done once here so no adapter has to.
 		m.ContentBlocks = wireCanonicalToolResults(m.ContentBlocks)
+		m.ContentBlocks = dedupeToolUses(m.ContentBlocks)
 
 		// Coalesce parallel tool calls: the results answering one multi-tool assistant
 		// turn are persisted as separate messages (one per tool, executed by its own
@@ -2781,6 +2782,31 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 	}
 
 	return msgs
+}
+
+// dedupeToolUses collapses tool_use blocks sharing an id: a provider that repeats a
+// call's header can persist the same id more than once, usually with only the later
+// block carrying input. The last block with input wins and lands in the first block's
+// position, so every provider sees one call per id and a header-only repeat can't
+// erase the arguments (mirrors the UI's dedupeToolUseBlocks).
+func dedupeToolUses(blocks []model.ContentBlock) []model.ContentBlock {
+	first := make(map[string]int)
+	out := make([]model.ContentBlock, 0, len(blocks))
+	for _, b := range blocks {
+		if b.Type != "tool_use" || b.Id == "" {
+			out = append(out, b)
+			continue
+		}
+		if i, seen := first[b.Id]; seen {
+			if len(b.Input) > 0 {
+				out[i] = b
+			}
+			continue
+		}
+		first[b.Id] = len(out)
+		out = append(out, b)
+	}
+	return out
 }
 
 // wireCanonicalToolResults returns content blocks whose tool_result statuses are

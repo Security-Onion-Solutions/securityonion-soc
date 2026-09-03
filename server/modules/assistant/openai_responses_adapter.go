@@ -302,44 +302,51 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 					}
 				}
 
+				// A stored call whose stream never delivered arguments must still
+				// round-trip as JSON; proxies reject an empty arguments string.
+				arguments := string(block.Input)
+				if len(args) == 0 {
+					if len(block.Input) == 0 {
+						logger.WithField("toolUseId", block.Id).Warn("tool_use has no input; sending empty arguments")
+					}
+					arguments = "{}"
+				}
+
 				items = append(items, responses.ResponseInputItemUnionParam{
 					OfFunctionCall: &responses.ResponseFunctionToolCallParam{
 						CallID:    block.Id,
 						Name:      block.Name,
-						Arguments: string(block.Input),
+						Arguments: arguments,
 					},
 				})
 			case "tool_result":
-				// Handle tool results (responses from user with tool execution results)
-				if block.ToolResult != nil && len(block.ToolResult.Content) != 0 {
+				if block.ToolResult == nil {
+					break
+				}
+				// Every function_call needs an output, even a result with no content.
+				output := "{}"
+				if len(block.ToolResult.Content) != 0 {
 					if block.ToolResult.IsError {
 						errText, _ := json.Marshal(block.ToolResult.Content[0].Text)
-						items = append(items, responses.ResponseInputItemUnionParam{
-							OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-								CallID: block.ToolResult.ToolUseId,
-								Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-									OfString: openai.String(fmt.Sprintf(`{"error": %s}`, string(errText))),
-								},
-								Status: "completed",
-							},
-						})
+						output = fmt.Sprintf(`{"error": %s}`, string(errText))
 					} else {
 						jsonBytes, err := json.Marshal(block.ToolResult.Content[0].Json)
 						if err != nil {
 							jsonBytes = []byte(`{ "error": "failed to marshal tool result content" }`)
 						}
-
-						items = append(items, responses.ResponseInputItemUnionParam{
-							OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-								CallID: block.ToolResult.ToolUseId,
-								Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-									OfString: openai.String(string(jsonBytes)),
-								},
-								Status: "completed",
-							},
-						})
+						output = string(jsonBytes)
 					}
 				}
+
+				items = append(items, responses.ResponseInputItemUnionParam{
+					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+						CallID: block.ToolResult.ToolUseId,
+						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+							OfString: openai.String(output),
+						},
+						Status: "completed",
+					},
+				})
 			default:
 				// For any other type, try to use text if available
 				if block.Text != "" {
@@ -367,12 +374,20 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 					},
 				}
 			} else {
+				// Strict gateways (LiteLLM, vLLM) reject the item unless id, status, and
+				// annotations are all present; the SDK omits each when zero. OpenAI
+				// also requires the msg_ prefix. Minted per item: streamed turns are
+				// stored with the fixed id "assistant" (writeMessageStart), so msg.Id
+				// can't serve as a unique item id.
 				textItem = responses.ResponseInputItemUnionParam{
 					OfOutputMessage: &responses.ResponseOutputMessageParam{
+						ID:     "msg_" + uuid.NewString(),
+						Status: responses.ResponseOutputMessageStatusCompleted,
 						Content: []responses.ResponseOutputMessageContentUnionParam{
 							{
 								OfOutputText: &responses.ResponseOutputTextParam{
-									Text: content,
+									Text:        content,
+									Annotations: []responses.ResponseOutputTextAnnotationUnionParam{},
 								},
 							},
 						},
@@ -386,6 +401,8 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 		history = append(history, items...)
 	}
 
+	history = pairToolOutputs(history)
+
 	result := responses.ResponseNewParamsInputUnion{
 		OfInputItemList: responses.ResponseInputParam{},
 	}
@@ -395,6 +412,37 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 	}
 
 	return result
+}
+
+// pairToolOutputs moves each function_call_output directly behind its function_call:
+// a chat-template gateway (LiteLLM over gemma) rejects several calls followed by a
+// batch of outputs but accepts each call answered in place.
+func pairToolOutputs(items []responses.ResponseInputItemUnionParam) []responses.ResponseInputItemUnionParam {
+	outputs := make(map[string]int, len(items))
+	for i, it := range items {
+		if it.OfFunctionCallOutput != nil {
+			if _, seen := outputs[it.OfFunctionCallOutput.CallID]; !seen {
+				outputs[it.OfFunctionCallOutput.CallID] = i
+			}
+		}
+	}
+
+	moved := make(map[int]bool, len(outputs))
+	paired := make([]responses.ResponseInputItemUnionParam, 0, len(items))
+	for i, it := range items {
+		if moved[i] {
+			continue
+		}
+		paired = append(paired, it)
+		if it.OfFunctionCall == nil {
+			continue
+		}
+		if j, ok := outputs[it.OfFunctionCall.CallID]; ok && j > i && !moved[j] {
+			paired = append(paired, items[j])
+			moved[j] = true
+		}
+	}
+	return paired
 }
 
 func (a *OpenAIResponsesAdapter) GetBalance(ctx context.Context) (*model.BalanceResponse, error) {

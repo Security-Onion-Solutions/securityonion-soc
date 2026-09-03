@@ -966,6 +966,24 @@ data: [DONE]`
 	}
 }
 
+// Some models return an empty message; no content block should be fabricated.
+func TestUnstreamResponseEmptyMessage(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := UnstreamResponse(context.Background(), data, nil)
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, msg) {
+		assert.Empty(t, msg.ContentBlocks)
+	}
+}
+
 func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
 	// Create mock server with airgap enabled
 	srv := &Server{

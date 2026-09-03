@@ -319,6 +319,10 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, item.OfOutputMessage.Content, 1)
 				require.NotNil(t, item.OfOutputMessage.Content[0].OfOutputText)
 				assert.Equal(t, "Hi there!", item.OfOutputMessage.Content[0].OfOutputText.Text)
+				// Strict gateways require all three on an assistant message item.
+				assert.True(t, strings.HasPrefix(item.OfOutputMessage.ID, "msg_"))
+				assert.Equal(t, responses.ResponseOutputMessageStatusCompleted, item.OfOutputMessage.Status)
+				assert.NotNil(t, item.OfOutputMessage.Content[0].OfOutputText.Annotations)
 			},
 		},
 		{
@@ -349,6 +353,8 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				// Second message
 				assert.NotNil(t, resp.OfInputItemList[1].OfOutputMessage)
 				assert.Equal(t, "Second message", resp.OfInputItemList[1].OfOutputMessage.Content[0].OfOutputText.Text)
+				assert.NotEmpty(t, resp.OfInputItemList[1].OfOutputMessage.ID)
+				assert.Equal(t, responses.ResponseOutputMessageStatusCompleted, resp.OfInputItemList[1].OfOutputMessage.Status)
 			},
 		},
 		{
@@ -396,6 +402,26 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				assert.Equal(t, "call_123", item.OfFunctionCall.CallID)
 				assert.Equal(t, "get_weather", item.OfFunctionCall.Name)
 				assert.JSONEq(t, `{"location": "San Francisco"}`, item.OfFunctionCall.Arguments)
+			},
+		},
+		{
+			name: "tool use with empty input sends empty-object arguments",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_use", Id: "call_123", Name: "query_events"},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resp := result.(responses.ResponseNewParamsInputUnion)
+				require.Len(t, resp.OfInputItemList, 1)
+				item := resp.OfInputItemList[0]
+				require.NotNil(t, item.OfFunctionCall)
+				assert.Equal(t, "{}", item.OfFunctionCall.Arguments)
 			},
 		},
 		{
@@ -485,7 +511,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 		},
 		{
-			name: "tool result with empty content array should be skipped",
+			name: "tool result with empty content array still answers its call",
 			req: &model.ChatRequest{
 				Messages: []*model.Message{
 					{
@@ -505,7 +531,11 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
-				require.Len(t, resp.OfInputItemList, 0)
+				require.Len(t, resp.OfInputItemList, 1)
+				item := resp.OfInputItemList[0]
+				require.NotNil(t, item.OfFunctionCallOutput)
+				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID)
+				assert.Equal(t, "{}", item.OfFunctionCallOutput.Output.OfString.Or(""))
 			},
 		},
 		{
@@ -577,6 +607,9 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				// First item: text as output message
 				require.NotNil(t, resp.OfInputItemList[0].OfOutputMessage)
 				assert.Equal(t, "Let me check that for you", resp.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Text)
+				assert.NotEmpty(t, resp.OfInputItemList[0].OfOutputMessage.ID)
+				assert.Equal(t, responses.ResponseOutputMessageStatusCompleted, resp.OfInputItemList[0].OfOutputMessage.Status)
+				assert.NotNil(t, resp.OfInputItemList[0].OfOutputMessage.Content[0].OfOutputText.Annotations)
 				assert.Nil(t, resp.OfInputItemList[0].OfFunctionCall)
 				// Second item: function call
 				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
@@ -614,6 +647,76 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 			validate: func(t *testing.T, result interface{}) {
 				resp := result.(responses.ResponseNewParamsInputUnion)
 				require.Len(t, resp.OfInputItemList, 0)
+			},
+		},
+		{
+			name: "parallel tool results are placed directly after their calls",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "text", Text: "Running two searches."},
+							{Type: "tool_use", Id: "call_1", Name: "search", Input: json.RawMessage(`{"q":1}`)},
+							{Type: "tool_use", Id: "call_2", Name: "search", Input: json.RawMessage(`{"q":2}`)},
+						},
+					},
+					{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_result", ToolResult: &model.ToolResult{ToolUseId: "call_1", Content: []model.ToolResultContent{{Json: map[string]any{"hits": 1}}}}},
+							{Type: "tool_result", ToolResult: &model.ToolResult{ToolUseId: "call_2", Content: []model.ToolResultContent{{Json: map[string]any{"hits": 2}}}}},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resp := result.(responses.ResponseNewParamsInputUnion)
+				require.Len(t, resp.OfInputItemList, 5)
+				require.NotNil(t, resp.OfInputItemList[0].OfOutputMessage)
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "call_1", resp.OfInputItemList[1].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[2].OfFunctionCallOutput)
+				assert.Equal(t, "call_1", resp.OfInputItemList[2].OfFunctionCallOutput.CallID)
+				require.NotNil(t, resp.OfInputItemList[3].OfFunctionCall)
+				assert.Equal(t, "call_2", resp.OfInputItemList[3].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[4].OfFunctionCallOutput)
+				assert.Equal(t, "call_2", resp.OfInputItemList[4].OfFunctionCallOutput.CallID)
+			},
+		},
+		{
+			name: "unmatched calls and outputs keep their positions",
+			req: &model.ChatRequest{
+				Messages: []*model.Message{
+					{
+						Role: "assistant",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_use", Id: "call_1", Name: "search", Input: json.RawMessage(`{"q":1}`)},
+							{Type: "tool_use", Id: "call_2", Name: "search", Input: json.RawMessage(`{"q":2}`)},
+						},
+					},
+					{
+						Role: "user",
+						ContentBlocks: []model.ContentBlock{
+							{Type: "tool_result", ToolResult: &model.ToolResult{ToolUseId: "call_2", Content: []model.ToolResultContent{{Json: map[string]any{"hits": 2}}}}},
+							{Type: "tool_result", ToolResult: &model.ToolResult{ToolUseId: "call_orphan", Content: []model.ToolResultContent{{Json: map[string]any{"hits": 0}}}}},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resp := result.(responses.ResponseNewParamsInputUnion)
+				require.Len(t, resp.OfInputItemList, 4)
+				// call_1 has no output and stays first; call_2 is answered in place; the
+				// orphan output stays at the end.
+				require.NotNil(t, resp.OfInputItemList[0].OfFunctionCall)
+				assert.Equal(t, "call_1", resp.OfInputItemList[0].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
+				assert.Equal(t, "call_2", resp.OfInputItemList[1].OfFunctionCall.CallID)
+				require.NotNil(t, resp.OfInputItemList[2].OfFunctionCallOutput)
+				assert.Equal(t, "call_2", resp.OfInputItemList[2].OfFunctionCallOutput.CallID)
+				require.NotNil(t, resp.OfInputItemList[3].OfFunctionCallOutput)
+				assert.Equal(t, "call_orphan", resp.OfInputItemList[3].OfFunctionCallOutput.CallID)
 			},
 		},
 		{
@@ -1204,9 +1307,9 @@ func createMockTextOutput(text string) responses.ResponseOutputItemUnion {
 
 func createMockFunctionCallOutput(callId, name string, args string) responses.ResponseOutputItemUnion {
 	rawJSON, err := json.Marshal(map[string]any{
-		"type": "function_call",
-		"call_id": callId,
-		"name": name,
+		"type":      "function_call",
+		"call_id":   callId,
+		"name":      name,
 		"arguments": args,
 	})
 	if err != nil {
@@ -2082,6 +2185,82 @@ func TestOpenAIAdapter_SendMessageStream(t *testing.T) {
 
 // SendMessage maps ChatRequest.MaxTokens (the per-sub-session budget cap) onto the
 // Responses API MaxOutputTokens param, leaving it unset when zero.
+func TestPairToolOutputs(t *testing.T) {
+	call := func(id string) responses.ResponseInputItemUnionParam {
+		return responses.ResponseInputItemUnionParam{OfFunctionCall: &responses.ResponseFunctionToolCallParam{CallID: id, Name: "search", Arguments: "{}"}}
+	}
+	output := func(id string) responses.ResponseInputItemUnionParam {
+		return responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{CallID: id}}
+	}
+	text := responses.ResponseInputItemUnionParam{OfInputMessage: &responses.ResponseInputItemMessageParam{Role: "user"}}
+	shape := func(items []responses.ResponseInputItemUnionParam) []string {
+		out := make([]string, 0, len(items))
+		for _, it := range items {
+			switch {
+			case it.OfFunctionCall != nil:
+				out = append(out, "call:"+it.OfFunctionCall.CallID)
+			case it.OfFunctionCallOutput != nil:
+				out = append(out, "out:"+it.OfFunctionCallOutput.CallID)
+			default:
+				out = append(out, "text")
+			}
+		}
+		return out
+	}
+
+	// An output that precedes its call stays put.
+	assert.Equal(t, []string{"out:a", "call:a"},
+		shape(pairToolOutputs([]responses.ResponseInputItemUnionParam{output("a"), call("a")})))
+	// Only the first output for a call id is paired; a duplicate keeps its place.
+	assert.Equal(t, []string{"call:a", "out:a", "call:b", "out:b", "out:a"},
+		shape(pairToolOutputs([]responses.ResponseInputItemUnionParam{call("a"), call("b"), output("a"), output("b"), output("a")})))
+	// Lists without tool items are unchanged.
+	assert.Equal(t, []string{"text"}, shape(pairToolOutputs([]responses.ResponseInputItemUnionParam{text})))
+	assert.Empty(t, pairToolOutputs(nil))
+}
+
+// The wire form is what strict gateways validate: an assistant message item must
+// carry id and status, and its output_text an annotations array, even when empty.
+func TestConvertHistoryToOpenAI_AssistantTextWireShape(t *testing.T) {
+	req := &model.ChatRequest{
+		Messages: []*model.Message{
+			{
+				Id:   "stored-msg-1",
+				Role: "assistant",
+				ContentBlocks: []model.ContentBlock{
+					{Type: "text", Text: "Checking."},
+					{Type: "tool_use", Id: "call_1", Name: "query_events", Input: json.RawMessage(`{"q":"x"}`)},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(convertHistoryToOpenAI(log.Log, req))
+	require.NoError(t, err)
+
+	wire := string(body)
+	assert.Contains(t, wire, `"id":"msg_`)
+	assert.Contains(t, wire, `"status":"completed"`)
+	assert.Contains(t, wire, `"annotations":[]`)
+	assert.Contains(t, wire, `"type":"function_call"`)
+}
+
+// Streamed turns are persisted with the fixed id "assistant" (writeMessageStart), so
+// the item id must be minted per item rather than derived from the stored message.
+func TestConvertHistoryToOpenAI_AssistantTextIdsUnique(t *testing.T) {
+	text := func(s string) *model.Message {
+		return &model.Message{Id: "assistant", Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: s}}}
+	}
+	resp := convertHistoryToOpenAI(log.Log, &model.ChatRequest{Messages: []*model.Message{text("one"), text("two")}})
+
+	require.Len(t, resp.OfInputItemList, 2)
+	first := resp.OfInputItemList[0].OfOutputMessage.ID
+	second := resp.OfInputItemList[1].OfOutputMessage.ID
+	assert.True(t, strings.HasPrefix(first, "msg_"))
+	assert.NotEqual(t, "msg_assistant", first)
+	assert.NotEqual(t, first, second)
+}
+
 func TestOpenAIResponsesAdapter_SendMessage_MaxTokens(t *testing.T) {
 	cases := []struct {
 		name      string

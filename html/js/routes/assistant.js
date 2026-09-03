@@ -26,7 +26,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     creditsLoaded: false,
     // Per-session tool-execution state (one record per session id); replaces five
     // parallel structures. Read/create a record with sessionTools(id).
-    sessionToolState: new Map(), // Map<sessionId, {toolsById:Map, indexToId:Map, queue:[], busy:bool, floatingTool}>
+    sessionToolState: new Map(), // Map<sessionId, {toolsById:Map, indexToId:Map, queue:[], busy:bool, held:number, floatingTool}>
     delegationChildren: new Map(), // Map<childSessionId, {parentToolUse, parentSessionId, parentToolUseId, agentName}>
     contextLength: 0,
     creditsUsed: 0,
