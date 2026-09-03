@@ -2578,6 +2578,37 @@ func TestCleanupMessages_CanonicalizesToolResultStatus(t *testing.T) {
 	}
 }
 
+// A provider that repeats a call's header persists the same tool_use id more than
+// once. Only one call per id may reach a provider, with the last block carrying input
+// in the first block's position; a header-only repeat doesn't erase the arguments, and
+// id-less blocks are left alone.
+func TestCleanupMessages_DedupesToolUsesById(t *testing.T) {
+	in := []*model.Message{
+		{Role: "assistant", ContentBlocks: []model.ContentBlock{
+			{Type: "text", Text: "Running."},
+			{Type: "tool_use", Id: "c1", Name: "query_events"},
+			{Type: "tool_use", Id: "c2", Name: "query_cases", Input: []byte(`{"c":1}`)},
+			{Type: "tool_use", Id: "c1", Name: "query_events", Input: []byte(`{"q":"dns"}`)},
+			{Type: "tool_use", Id: "c2", Name: "query_cases"},
+			{Type: "tool_use", Name: "anon"},
+			{Type: "tool_use", Name: "anon"},
+		}},
+	}
+
+	out := cleanupMessages(in)
+	blocks := out[0].ContentBlocks
+	if !assert.Len(t, blocks, 5) {
+		return
+	}
+	assert.Equal(t, "c1", blocks[1].Id)
+	assert.Equal(t, `{"q":"dns"}`, string(blocks[1].Input))
+	assert.Equal(t, "c2", blocks[2].Id)
+	assert.Equal(t, `{"c":1}`, string(blocks[2].Input))
+	assert.Equal(t, "anon", blocks[3].Name)
+	assert.Equal(t, "anon", blocks[4].Name)
+	assert.Len(t, in[0].ContentBlocks, 7, "stored blocks must be left untouched")
+}
+
 func TestCleanupMessages(t *testing.T) {
 	testCases := []struct {
 		name            string

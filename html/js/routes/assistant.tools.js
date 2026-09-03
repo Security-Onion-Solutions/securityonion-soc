@@ -50,6 +50,7 @@ globalThis.AssistantTools = (function() {
 
       let childMsg = null;
       let reader = null;
+      const heldSessions = [];
 
       try {
         // A rejected tool is not executed: the backend records an error tool_result so the turn resolves.
@@ -72,6 +73,10 @@ globalThis.AssistantTools = (function() {
         if (!rejected && this.currentChatId === toolStreamingSessionId) {
           toolUse.status = 'executing';
         }
+
+        // Held after the POST so a 409 retry wait doesn't hold the queue.
+        this.holdToolQueue(toolStreamingSessionId);
+        heldSessions.push(toolStreamingSessionId);
 
         const stream = response.data;
         reader = stream.pipeThrough(new TextDecoderStream()).getReader();
@@ -149,6 +154,8 @@ globalThis.AssistantTools = (function() {
               });
               this.ensureChildSession(owner, c.agentName);
               toolStreamingSessionId = c.childSessionId;
+              this.holdToolQueue(toolStreamingSessionId);
+              heldSessions.push(toolStreamingSessionId);
               childMsg = null;
               continue;
             }
@@ -168,6 +175,8 @@ globalThis.AssistantTools = (function() {
               childMsg = null;
               assistantMessage = null;
               toolStreamingSessionId = c.parentSessionId;
+              this.holdToolQueue(toolStreamingSessionId);
+              heldSessions.push(toolStreamingSessionId);
               continue;
             }
 
@@ -329,6 +338,9 @@ globalThis.AssistantTools = (function() {
             // already closed; nothing to release
           }
         }
+        for (const sessionId of heldSessions) {
+          this.releaseToolQueue(sessionId);
+        }
       }
     },
     // Render status can differ from raw status: a delegate stays 'executing' while its sub-agent
@@ -438,7 +450,7 @@ globalThis.AssistantTools = (function() {
     sessionTools(sessionId) {
       let s = this.sessionToolState.get(sessionId);
       if (!s) {
-        s = { toolsById: new Map(), indexToId: new Map(), queue: [], busy: false, floatingTool: null };
+        s = { toolsById: new Map(), indexToId: new Map(), queue: [], busy: false, held: 0, floatingTool: null };
         this.sessionToolState.set(sessionId, s);
       }
       return s;
@@ -456,19 +468,35 @@ globalThis.AssistantTools = (function() {
       if (s) s.floatingTool = null;
     },
     queueTool(sessionId, toolUseId) {
-      this.sessionTools(sessionId).queue.push(toolUseId);
+      const s = this.sessionTools(sessionId);
+      if (!s.queue.includes(toolUseId)) s.queue.push(toolUseId);
+      this.runToolQueue(sessionId);
+    },
+    // The backend persists a turn's tool_use only after its stream ends, so approvals
+    // wait for the producing stream to close. The backend also polls for the persisted
+    // turn before executing; this hold keeps the request from landing in that wait (and
+    // the 409 retry path) in the first place. `held` counts streams because two can
+    // render into one session (a sibling tool's continuation and a resumed delegation).
+    holdToolQueue(sessionId) {
+      this.sessionTools(sessionId).held++;
+    },
+    releaseToolQueue(sessionId) {
+      const s = this.sessionToolState.get(sessionId);
+      if (!s) return;
+      s.held = Math.max(0, s.held - 1);
       this.runToolQueue(sessionId);
     },
     async runToolQueue(sessionId) {
       const s = this.sessionTools(sessionId);
-      if (s.busy) return;
+      if (s.busy || s.held > 0) return;
       s.busy = true;
       try {
         // Re-read the record each iteration: a session's state can be torn down mid-run
-        // (e.g. a resolved delegation), which ends the loop.
+        // (e.g. a resolved delegation) or held by a stream that started during the
+        // previous tool; either ends the loop, and releaseToolQueue resumes it.
         while (true) {
           const cur = this.sessionToolState.get(sessionId);
-          if (!cur || cur.queue.length === 0) break;
+          if (!cur || cur.queue.length === 0 || cur.held > 0) break;
           const toolUseId = cur.queue[0];
           const toolUse = cur.toolsById.get(toolUseId);
           // A rejected tool still needs its declination submitted, so it bypasses the terminal

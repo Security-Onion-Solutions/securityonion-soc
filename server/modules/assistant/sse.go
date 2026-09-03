@@ -27,7 +27,7 @@ func newSSEEventWriter(logger log.Interface, writer io.Writer) *sseEventWriter {
 }
 
 func (w *sseEventWriter) writeMessageStart(model string) error {
-	_, err := fmt.Fprintf(w.writer, `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":%s,"stop_reason":null,"stop_sequence":null}}`+"\n\n", strconv.Quote(model))
+	_, err := fmt.Fprintf(w.writer, `data: {"type":"message_start","message":{"type":"message","role":"assistant","content":[],"model":%s,"stop_reason":null,"stop_sequence":null}}`+"\n\n", strconv.Quote(model))
 	return err
 }
 
@@ -94,6 +94,20 @@ type streamProcessor struct {
 	firstSend            bool
 	writingOpenAIToolUse bool
 	receivedFnArgs       bool
+	// Identity of the open tool_use block (Responses output index / chat tool-call
+	// index, and the call id); a repeated header for the same call must not reopen it.
+	// The id is only consulted on the chat-completions path.
+	openToolCallIndex int64
+	openToolCallId    string
+	// An announced Responses function_call whose header is not written until it
+	// proves real (arguments arrive or it finishes typed as a function_call).
+	pending *pendingCall
+}
+
+type pendingCall struct {
+	index int64
+	id    string
+	name  string
 }
 
 func newStreamProcessor(writer *sseEventWriter, model string, wg *sync.WaitGroup) *streamProcessor {
@@ -169,41 +183,101 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 		}
 	case "response.output_item.added":
 		if resp.Item.Type == "function_call" {
-			if p.hasOpenBlock {
+			toolOpen := p.hasOpenBlock && p.writingOpenAIToolUse
+			// A proxy may announce the same item more than once; only a different
+			// output index is a new call.
+			if (toolOpen && resp.OutputIndex == p.openToolCallIndex) || (p.pending != nil && resp.OutputIndex == p.pending.index) {
+				break
+			}
+			if toolOpen {
 				p.closeOpenBlock()
 			}
-
-			callId := resp.Item.CallID
-			name := resp.Item.Name
-
-			p.receivedFnArgs = false
-			p.writeOpenAIFunctionHeader(callId, name)
+			// Announce only: some proxies emit phantom function_call items they later
+			// close as message items, so the header waits for arguments to prove the
+			// call real.
+			p.dropPendingFunction()
+			p.pending = &pendingCall{index: resp.OutputIndex, id: resp.Item.CallID, name: resp.Item.Name}
 		}
 	case "response.function_call_arguments.delta":
 		if content == "" && resp.Arguments != "" {
 			content = resp.Arguments
 		}
-		if p.hasOpenBlock && content != "" {
+		if content == "" {
+			break
+		}
+		p.openPendingFunction()
+		if p.hasOpenBlock && p.writingOpenAIToolUse {
 			p.receivedFnArgs = true
-			p.writeOpenAIFunctionInput(content)
+			p.writeFunctionInput(content)
 		}
 	case "response.function_call_arguments.done":
 		// Only use .done arguments if no deltas were received (some models skip deltas)
-		if !p.receivedFnArgs {
-			if content == "" && resp.Arguments != "" {
-				content = resp.Arguments
-			}
-			if p.hasOpenBlock && content != "" {
-				p.writeOpenAIFunctionInput(content)
-			}
+		if content == "" && resp.Arguments != "" {
+			content = resp.Arguments
+		}
+		if content == "" {
+			break
+		}
+		p.openPendingFunction()
+		if p.hasOpenBlock && p.writingOpenAIToolUse && !p.receivedFnArgs {
+			p.receivedFnArgs = true
+			p.writeFunctionInput(content)
 		}
 	case "response.output_item.done":
-		if p.writingOpenAIToolUse {
-			p.writeOpenAIFunctionStop()
+		isFn := resp.Item.Type == "function_call"
+		if p.hasOpenBlock && p.writingOpenAIToolUse {
+			// Only this call finishing closes it: another item (message, reasoning) or a
+			// late done for an earlier index must not.
+			if isFn && resp.OutputIndex == p.openToolCallIndex {
+				// Some proxies carry the arguments only on the finished item.
+				if !p.receivedFnArgs && resp.Item.Arguments.OfString != "" {
+					p.writeFunctionInput(resp.Item.Arguments.OfString)
+				}
+				p.closeOpenBlock()
+			}
+			break
+		}
+		if p.pending != nil && resp.OutputIndex == p.pending.index {
+			if isFn {
+				// A real call that streamed no arguments (or carries them here).
+				p.openPendingFunction()
+				if resp.Item.Arguments.OfString != "" {
+					p.writeFunctionInput(resp.Item.Arguments.OfString)
+				}
+				p.closeOpenBlock()
+			} else {
+				p.dropPendingFunction()
+			}
 		}
 	}
 
 	return thoughtSigs, nil
+}
+
+// openPendingFunction writes the header for an announced call once it has proven
+// real. A text/thought block still open closes here rather than at announcement.
+func (p *streamProcessor) openPendingFunction() {
+	if p.pending == nil {
+		return
+	}
+	p.closeOpenBlock()
+	p.writeFunctionHeader(p.pending.index, p.pending.id, p.pending.name)
+	p.pending = nil
+}
+
+func (p *streamProcessor) dropPendingFunction() {
+	if p.pending == nil {
+		return
+	}
+	p.pendingEntry().Debug("function_call announcement never received arguments; dropped")
+	p.pending = nil
+}
+
+func (p *streamProcessor) pendingEntry() *log.Entry {
+	return p.writer.logger.WithFields(log.Fields{
+		"callId":      p.pending.id,
+		"outputIndex": p.pending.index,
+	})
 }
 
 // writeError writes an error event and done message
@@ -219,8 +293,12 @@ func (p *streamProcessor) writeError(err error) {
 func (p *streamProcessor) finalize(finishReason string) {
 	p.ensureFirstSend()
 
-	if p.hasOpenBlock {
-		p.closeOpenBlock()
+	p.closeOpenBlock()
+	if p.pending != nil {
+		// A phantom is closed as a message item mid-stream; one still pending here was
+		// announced but never given arguments or finished, so it is lost.
+		p.pendingEntry().Warn("stream ended with an announced function_call that never received arguments; dropped")
+		p.pending = nil
 	}
 
 	if finishReason == "" {
@@ -339,7 +417,8 @@ func (p *streamProcessor) writeGeminiFunctionCalls(parts []*genai.Part) map[stri
 	return thoughtSigs
 }
 
-func (p *streamProcessor) writeOpenAIFunctionHeader(id string, name string) {
+// writeFunctionHeader opens a tool_use block for a Responses or ChatCompletion call.
+func (p *streamProcessor) writeFunctionHeader(index int64, id string, name string) {
 	p.ensureFirstSend()
 
 	if id == "" {
@@ -356,27 +435,28 @@ func (p *streamProcessor) writeOpenAIFunctionHeader(id string, name string) {
 	p.writer.writeContentBlockStart(p.contentBlockIndex, toolUseBlock)
 	p.hasOpenBlock = true
 	p.writingOpenAIToolUse = true
+	p.receivedFnArgs = false
+	p.openToolCallIndex = index
+	p.openToolCallId = id
 }
 
-func (p *streamProcessor) writeOpenAIFunctionInput(input string) {
+func (p *streamProcessor) writeFunctionInput(input string) {
 	p.writer.writeInputJsonDelta(p.contentBlockIndex, input)
 }
 
-func (p *streamProcessor) writeOpenAIFunctionStop() {
+// closeOpenBlock closes the open text, thought, or tool_use block, if any. It also
+// drops the tool-call state so a later item event can't act on a closed block.
+func (p *streamProcessor) closeOpenBlock() {
+	if !p.hasOpenBlock {
+		return
+	}
 	p.writer.writeContentBlockStop(p.contentBlockIndex)
 	p.contentBlockIndex++
 	p.hasOpenBlock = false
 	p.writingOpenAIToolUse = false
 	p.receivedFnArgs = false
-}
-
-// closeOpenBlock closes the currently open text/thought block
-func (p *streamProcessor) closeOpenBlock() {
-	if p.hasOpenBlock {
-		p.writer.writeContentBlockStop(p.contentBlockIndex)
-		p.contentBlockIndex++
-		p.hasOpenBlock = false
-	}
+	p.openToolCallIndex = 0
+	p.openToolCallId = ""
 }
 
 // processChatCompletionChunk processes a ChatCompletionChunk and writes appropriate events
@@ -399,59 +479,23 @@ func (p *streamProcessor) processChatCompletionChunk(chunk openai.ChatCompletion
 		p.writeText(delta.Content)
 	}
 
-	// Handle tool calls
-	if len(delta.ToolCalls) > 0 {
-		for _, toolCall := range delta.ToolCalls {
-			// Check if this is a new tool call (has ID and Name)
-			if toolCall.ID != "" && toolCall.Function.Name != "" {
-				// Close any open text block
-				if p.hasOpenBlock {
-					p.closeOpenBlock()
-				}
-
-				p.writeChatCompletionFunctionHeader(toolCall.ID, toolCall.Function.Name)
-			}
-			if toolCall.Function.Arguments != "" {
-				// This is a delta for function arguments
-				p.writeChatCompletionFunctionInput(toolCall.Function.Arguments)
-			}
+	for _, toolCall := range delta.ToolCalls {
+		// Some providers repeat id+name on every argument chunk (or send a header-only
+		// chunk first), so a header opens a block only when it names a different call:
+		// a new non-empty id, or a new index under the same or absent id.
+		toolOpen := p.hasOpenBlock && p.writingOpenAIToolUse
+		isHeader := toolCall.ID != "" || toolCall.Function.Name != ""
+		sameCall := toolOpen && (toolCall.ID == "" || toolCall.ID == p.openToolCallId) && toolCall.Index == p.openToolCallIndex
+		if isHeader && !sameCall {
+			p.closeOpenBlock()
+			p.writeFunctionHeader(toolCall.Index, toolCall.ID, toolCall.Function.Name)
+		}
+		if toolCall.Function.Arguments != "" {
+			p.writeFunctionInput(toolCall.Function.Arguments)
 		}
 	}
 
 	return nil
-}
-
-// writeChatCompletionFunctionHeader writes the start of a function call for ChatCompletion streaming
-func (p *streamProcessor) writeChatCompletionFunctionHeader(id string, name string) {
-	p.ensureFirstSend()
-
-	if id == "" {
-		id = "toolu_" + uuid.NewString()
-	}
-
-	toolUseBlock := map[string]any{
-		"type":  "tool_use",
-		"id":    id,
-		"name":  name,
-		"input": map[string]any{},
-	}
-
-	p.writer.writeContentBlockStart(p.contentBlockIndex, toolUseBlock)
-	p.hasOpenBlock = true
-	p.writingOpenAIToolUse = true
-}
-
-// writeChatCompletionFunctionInput writes function arguments delta for ChatCompletion streaming
-func (p *streamProcessor) writeChatCompletionFunctionInput(arguments string) {
-	p.writer.writeInputJsonDelta(p.contentBlockIndex, arguments)
-}
-
-// writeChatCompletionFunctionStop closes a function call block for ChatCompletion streaming
-func (p *streamProcessor) writeChatCompletionFunctionStop() {
-	p.writer.writeContentBlockStop(p.contentBlockIndex)
-	p.contentBlockIndex++
-	p.hasOpenBlock = false
-	p.writingOpenAIToolUse = false
 }
 
 // finalizeChatCompletion closes any open blocks and writes final events for ChatCompletion streaming
@@ -460,13 +504,7 @@ func (p *streamProcessor) finalizeChatCompletion(finishReason string, usage *ope
 	// a well-formed message_start.
 	p.ensureFirstSend()
 
-	if p.hasOpenBlock {
-		if p.writingOpenAIToolUse {
-			p.writeChatCompletionFunctionStop()
-		} else {
-			p.closeOpenBlock()
-		}
-	}
+	p.closeOpenBlock()
 
 	if finishReason == "" || finishReason == "stop" {
 		finishReason = "end_turn"

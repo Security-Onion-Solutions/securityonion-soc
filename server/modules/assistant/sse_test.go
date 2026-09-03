@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -990,6 +991,7 @@ func newFunctionArgumentsDone(jsonContent string) responses.ResponseStreamEventU
 func newFunctionCallDone() responses.ResponseStreamEventUnion {
 	return responses.ResponseStreamEventUnion{
 		Type: "response.output_item.done",
+		Item: responses.ResponseOutputItemUnion{Type: "function_call"},
 	}
 }
 
@@ -1179,6 +1181,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 			name: "function call initialization",
 			events: []responses.ResponseStreamEventUnion{
 				newFunctionCallStart("call_123", "get_weather"),
+				newFunctionArgumentsDelta(`{"city":`),
 			},
 			expectedInOutput: []string{
 				`"type":"message_start"`,
@@ -1236,6 +1239,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 			events: []responses.ResponseStreamEventUnion{
 				newTextDelta("Here's the result:"),
 				newFunctionCallStart("call_abc", "lookup"),
+				newFunctionArgumentsDelta(`{"id":`),
 			},
 			expectedInOutput: []string{
 				`"type":"text_delta"`,
@@ -1251,6 +1255,7 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 			name: "missing call ID generates ID",
 			events: []responses.ResponseStreamEventUnion{
 				newFunctionCallStart("", "unnamed_func"),
+				newFunctionArgumentsDelta(`{}`),
 			},
 			expectedInOutput: []string{
 				`"id":"toolu_`, // Generated unique ID (uuid suffix)
@@ -1362,6 +1367,404 @@ func TestProcessOpenAIChunk_FunctionCalls(t *testing.T) {
 	}
 }
 
+func newChatToolCallHeaderWithArgs(index int, id, name, args string) openai.ChatCompletionChunk {
+	return openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Delta: openai.ChatCompletionChunkChoiceDelta{
+					ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+						{
+							Index: int64(index),
+							ID:    id,
+							Type:  "function",
+							Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
+								Name:      name,
+								Arguments: args,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// A chat-completions provider may repeat a call's id+name on every argument chunk, or
+// send a header-only chunk before the arguments. Only a different call (a new id, or a
+// new index under the same or absent id) may open another tool_use block.
+func TestProcessChatCompletionChunk_ToolCallFraming(t *testing.T) {
+	tests := []struct {
+		name       string
+		chunks     []openai.ChatCompletionChunk
+		wantStarts int
+		wantIds    []string
+		wantArgs   []string
+		wantIndex  int
+	}{
+		{
+			name: "spec shape: header once, arguments by index",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallStartDelta(0, "call_1", "search"),
+				newChatToolCallArgumentsDelta(0, `{"q":`),
+				newChatToolCallArgumentsDelta(0, `"x"}`),
+			},
+			wantStarts: 1,
+			wantIds:    []string{"call_1"},
+			wantArgs:   []string{`{"q":`, `"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "id and name repeated on every argument chunk",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallHeaderWithArgs(0, "call_1", "search", `{"q":`),
+				newChatToolCallHeaderWithArgs(0, "call_1", "search", `"x"}`),
+			},
+			wantStarts: 1,
+			wantIds:    []string{"call_1"},
+			wantArgs:   []string{`{"q":`, `"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "header-only chunk then header with arguments",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallStartDelta(0, "call_1", "search"),
+				newChatToolCallHeaderWithArgs(0, "call_1", "search", `{"q":"x"}`),
+			},
+			wantStarts: 1,
+			wantIds:    []string{"call_1"},
+			wantArgs:   []string{`{"q":"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "two calls with distinct index and id",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallStartDelta(0, "call_1", "search"),
+				newChatToolCallArgumentsDelta(0, `{"a":1}`),
+				newChatToolCallStartDelta(1, "call_2", "calculate"),
+				newChatToolCallArgumentsDelta(1, `{"b":2}`),
+			},
+			wantStarts: 2,
+			wantIds:    []string{"call_1", "call_2"},
+			wantArgs:   []string{`{"a":1}`, `{"b":2}`},
+			wantIndex:  2,
+		},
+		{
+			name: "two calls distinguished only by id",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallHeaderWithArgs(0, "call_1", "search", `{"a":1}`),
+				newChatToolCallHeaderWithArgs(0, "call_2", "calculate", `{"b":2}`),
+			},
+			wantStarts: 2,
+			wantIds:    []string{"call_1", "call_2"},
+			wantArgs:   []string{`{"a":1}`, `{"b":2}`},
+			wantIndex:  2,
+		},
+		{
+			name: "two calls distinguished only by index",
+			chunks: []openai.ChatCompletionChunk{
+				newChatToolCallStartDelta(0, "", "search"),
+				newChatToolCallArgumentsDelta(0, `{"a":1}`),
+				newChatToolCallStartDelta(1, "", "calculate"),
+				newChatToolCallArgumentsDelta(1, `{"b":2}`),
+			},
+			wantStarts: 2,
+			wantArgs:   []string{`{"a":1}`, `{"b":2}`},
+			wantIndex:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "test-model", wg)
+
+			for _, chunk := range tt.chunks {
+				assert.NoError(t, processor.processChatCompletionChunk(chunk))
+			}
+			processor.finalizeChatCompletion("tool_calls", nil)
+			wg.Wait()
+
+			out := buf.String()
+			assert.Equal(t, tt.wantStarts, strings.Count(out, `"type":"tool_use"`))
+			assert.Equal(t, tt.wantStarts, strings.Count(out, `"type":"content_block_stop"`))
+			for _, id := range tt.wantIds {
+				assert.Contains(t, out, `"id":`+strconv.Quote(id))
+			}
+			prev := -1
+			for _, args := range tt.wantArgs {
+				pos := strings.Index(out, `"partial_json":`+strconv.Quote(args))
+				assert.Greater(t, pos, prev, "arguments %q missing or out of order", args)
+				prev = pos
+			}
+			if tt.wantStarts == 2 {
+				// The first block is closed before the second opens.
+				assert.Less(t, strings.Index(out, `"type":"content_block_stop"`), strings.LastIndex(out, `"type":"tool_use"`))
+			}
+			assert.Equal(t, tt.wantIndex, processor.contentBlockIndex)
+			assert.False(t, processor.hasOpenBlock)
+			assert.False(t, processor.writingOpenAIToolUse)
+			assert.False(t, processor.receivedFnArgs)
+		})
+	}
+}
+
+func newFunctionCallStartAt(index int64, id, name string) responses.ResponseStreamEventUnion {
+	e := newFunctionCallStart(id, name)
+	e.OutputIndex = index
+	return e
+}
+
+func newOutputItemDone(itemType, args string) responses.ResponseStreamEventUnion {
+	return responses.ResponseStreamEventUnion{
+		Type: "response.output_item.done",
+		Item: responses.ResponseOutputItemUnion{
+			Type:      itemType,
+			Arguments: responses.ResponseOutputItemUnionArguments{OfString: args},
+		},
+	}
+}
+
+func newOutputItemDoneAt(index int64, itemType, args string) responses.ResponseStreamEventUnion {
+	e := newOutputItemDone(itemType, args)
+	e.OutputIndex = index
+	return e
+}
+
+// The item-level events some proxies can emit for one request: five
+// function_call announcements each closed as a message item with no arguments,
+// then the real call.
+func proxyPhantomSequence() []responses.ResponseStreamEventUnion {
+	var events []responses.ResponseStreamEventUnion
+	for i := int64(0); i < 5; i++ {
+		events = append(events,
+			newFunctionCallStartAt(i, fmt.Sprintf("call_%d", i), "query_events"),
+			newOutputItemDoneAt(i, "message", ""),
+		)
+	}
+	return append(events,
+		newFunctionCallStartAt(5, "call_bad", "query_events"),
+		newFunctionArgumentsDelta(`{"q":`),
+		newFunctionArgumentsDelta(`"x"}`),
+		newFunctionArgumentsDone(`{"q":"x"}`),
+		newOutputItemDoneAt(5, "function_call", `{"q":"x"}`),
+	)
+}
+
+func TestProcessOpenAIChunk_AnnouncementDefersHeader(t *testing.T) {
+	var buf strings.Builder
+	writer := newSSEEventWriter(log.Log, &buf)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	processor := newStreamProcessor(writer, "test-model", wg)
+
+	_, err := processor.processOpenAIChunk(newFunctionCallStartAt(3, "call_a", "query_events"))
+	assert.NoError(t, err)
+
+	assert.Empty(t, buf.String())
+	assert.False(t, processor.hasOpenBlock)
+	assert.False(t, processor.writingOpenAIToolUse)
+	assert.Equal(t, 0, processor.contentBlockIndex)
+	assert.Equal(t, &pendingCall{index: 3, id: "call_a", name: "query_events"}, processor.pending)
+
+	// Finalizing with the announcement still empty drops it rather than emitting a
+	// tool_use with no input.
+	processor.finalizeOpenAI("tool_calls", createMockUsage(1, 1))
+	wg.Wait()
+	assert.NotContains(t, buf.String(), `"type":"tool_use"`)
+	assert.Contains(t, buf.String(), `"type":"message_stop"`)
+	assert.Nil(t, processor.pending)
+	assert.Equal(t, 0, processor.contentBlockIndex)
+}
+
+// A Responses proxy may announce the same function item more than once, finish
+// unrelated items while a call is open, or carry the arguments only on the
+// finished item. None of those may split or empty a call.
+func TestProcessOpenAIChunk_ToolCallFraming(t *testing.T) {
+	tests := []struct {
+		name       string
+		events     []responses.ResponseStreamEventUnion
+		wantStarts int
+		wantStops  int
+		wantIds    []string
+		absentIds  []string
+		wantArgs   []string
+		wantIndex  int
+	}{
+		{
+			name: "repeated output_item.added for the same output index",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionCallStartAt(0, "call_b", "query_events"),
+				newFunctionArgumentsDelta(`{"q":"x"}`),
+				newOutputItemDone("function_call", ""),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantIds:    []string{"call_a"},
+			absentIds:  []string{"call_b"},
+			wantArgs:   []string{`{"q":"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "a finishing message item does not close the open call",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionArgumentsDelta(`{"q":"x"}`),
+				newOutputItemDone("message", ""),
+				newOutputItemDone("function_call", ""),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantArgs:   []string{`{"q":"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "arguments carried only on the finished item",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newOutputItemDone("function_call", `{"q":"x"}`),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantArgs:   []string{`{"q":"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "arguments.done then a finished item with arguments writes them once",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionArgumentsDone(`{"q":"x"}`),
+				newOutputItemDone("function_call", `{"q":"x"}`),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantArgs:   []string{`{"q":"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "text then a call closes the text block once",
+			events: []responses.ResponseStreamEventUnion{
+				newTextDelta("hi"),
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionArgumentsDelta(`{}`),
+				newOutputItemDone("function_call", ""),
+			},
+			wantStarts: 1,
+			wantStops:  2,
+			wantArgs:   []string{`{}`},
+			wantIndex:  2,
+		},
+		{
+			name: "two calls at distinct output indexes",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionArgumentsDelta(`{"a":1}`),
+				newFunctionCallStartAt(1, "call_b", "query_cases"),
+				newFunctionArgumentsDelta(`{"b":2}`),
+				newOutputItemDoneAt(1, "function_call", ""),
+			},
+			wantStarts: 2,
+			wantStops:  2,
+			wantIds:    []string{"call_a", "call_b"},
+			wantArgs:   []string{`{"a":1}`, `{"b":2}`},
+			wantIndex:  2,
+		},
+		{
+			name: "a late done for an earlier index does not close the open call",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionArgumentsDelta(`{"a":1}`),
+				newFunctionCallStartAt(1, "call_b", "query_cases"),
+				newFunctionArgumentsDelta(`{"b":`),
+				newOutputItemDoneAt(0, "function_call", ""),
+				newFunctionArgumentsDelta(`2}`),
+				newOutputItemDoneAt(1, "function_call", ""),
+			},
+			wantStarts: 2,
+			wantStops:  2,
+			wantIds:    []string{"call_a", "call_b"},
+			wantArgs:   []string{`{"a":1}`, `{"b":`, `2}`},
+			wantIndex:  2,
+		},
+		{
+			name:       "proxy phantom announcements closed as message items are dropped",
+			events:     proxyPhantomSequence(),
+			wantStarts: 1,
+			wantStops:  1,
+			wantIds:    []string{"call_bad"},
+			absentIds:  []string{"call_0", "call_1", "call_2", "call_3", "call_4"},
+			wantArgs:   []string{`{"q":`, `"x"}`},
+			wantIndex:  1,
+		},
+		{
+			name: "an announcement superseded before any arguments is dropped",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newFunctionCallStartAt(1, "call_b", "query_cases"),
+				newFunctionArgumentsDelta(`{"b":2}`),
+				newOutputItemDoneAt(1, "function_call", ""),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantIds:    []string{"call_b"},
+			absentIds:  []string{"call_a"},
+			wantArgs:   []string{`{"b":2}`},
+			wantIndex:  1,
+		},
+		{
+			name: "a call finished as function_call with no arguments is still emitted",
+			events: []responses.ResponseStreamEventUnion{
+				newFunctionCallStartAt(0, "call_a", "query_events"),
+				newOutputItemDone("function_call", ""),
+			},
+			wantStarts: 1,
+			wantStops:  1,
+			wantIds:    []string{"call_a"},
+			wantIndex:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf strings.Builder
+			writer := newSSEEventWriter(log.Log, &buf)
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			processor := newStreamProcessor(writer, "test-model", wg)
+
+			for _, e := range tt.events {
+				_, err := processor.processOpenAIChunk(e)
+				assert.NoError(t, err)
+			}
+			wg.Wait()
+
+			out := buf.String()
+			assert.Equal(t, tt.wantStarts, strings.Count(out, `"type":"tool_use"`))
+			assert.Equal(t, tt.wantStops, strings.Count(out, `"type":"content_block_stop"`))
+			for _, id := range tt.wantIds {
+				assert.Contains(t, out, `"id":`+strconv.Quote(id))
+			}
+			for _, id := range tt.absentIds {
+				assert.NotContains(t, out, id)
+			}
+			assert.Equal(t, len(tt.wantArgs), strings.Count(out, `"type":"input_json_delta"`))
+			prev := -1
+			for _, args := range tt.wantArgs {
+				pos := strings.Index(out, `"partial_json":`+strconv.Quote(args))
+				assert.Greater(t, pos, prev, "arguments %q missing or out of order", args)
+				prev = pos
+			}
+			assert.Equal(t, tt.wantIndex, processor.contentBlockIndex)
+			assert.False(t, processor.hasOpenBlock)
+			assert.False(t, processor.writingOpenAIToolUse)
+			assert.False(t, processor.receivedFnArgs)
+		})
+	}
+}
+
 func TestProcessOpenAIChunk_FunctionArgsDedupCount(t *testing.T) {
 	// Verify that when deltas are sent, the done event does NOT add another input_json_delta
 	var buf strings.Builder
@@ -1422,6 +1825,7 @@ func TestFinalizeOpenAI(t *testing.T) {
 			name: "with open function block",
 			setupEvents: []responses.ResponseStreamEventUnion{
 				newFunctionCallStart("call_1", "test_func"),
+				newFunctionArgumentsDelta(`{"a":1}`),
 			},
 			finishReason: "tool_calls",
 			usage:        createMockUsage(200, 75),
@@ -1544,7 +1948,7 @@ func newTestStreamProcessor(t *testing.T) (*streamProcessor, *strings.Builder, *
 	return processor, &buf, wg
 }
 
-func TestWriteOpenAIFunctionHeader(t *testing.T) {
+func TestWriteFunctionHeader(t *testing.T) {
 	tests := []struct {
 		name            string
 		id              string
@@ -1579,7 +1983,7 @@ func TestWriteOpenAIFunctionHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			processor, buf, _ := newTestStreamProcessor(t)
 
-			processor.writeOpenAIFunctionHeader(tt.id, tt.functionName)
+			processor.writeFunctionHeader(0, tt.id, tt.functionName)
 
 			output := buf.String()
 			for _, expected := range tt.wantContains {
@@ -1593,13 +1997,13 @@ func TestWriteOpenAIFunctionHeader(t *testing.T) {
 	}
 }
 
-func TestWriteOpenAIFunctionHeaderFallbackIdsUnique(t *testing.T) {
+func TestWriteFunctionHeaderFallbackIdsUnique(t *testing.T) {
 	// Each generated fallback id must be globally unique, not reset per turn:
 	// the frontend keys lookups by tool_use id, so two delegations across turns
 	// must not collide (regression test for repeat-delegation rendering bug).
 	idFor := func() string {
 		processor, buf, _ := newTestStreamProcessor(t)
-		processor.writeOpenAIFunctionHeader("", "unnamed")
+		processor.writeFunctionHeader(0, "", "unnamed")
 
 		var ev struct {
 			ContentBlock struct {
@@ -1625,26 +2029,26 @@ func TestWriteOpenAIFunctionHeaderFallbackIdsUnique(t *testing.T) {
 	assert.NotEqual(t, first, second, "fallback tool_use ids must be unique across responses")
 }
 
-func TestWriteOpenAIFunctionInput(t *testing.T) {
+func TestWriteFunctionInput(t *testing.T) {
 	processor, buf, _ := newTestStreamProcessor(t)
 
-	processor.writeOpenAIFunctionHeader("call_1", "test")
+	processor.writeFunctionHeader(0, "call_1", "test")
 	buf.Reset() // Clear header output
 
-	processor.writeOpenAIFunctionInput(`{"key": "value"}`)
+	processor.writeFunctionInput(`{"key": "value"}`)
 
 	output := buf.String()
 	assert.Contains(t, output, `"type":"input_json_delta"`)
 	assert.Contains(t, output, `"partial_json":"{\"key\": \"value\"}"`)
 }
 
-func TestWriteOpenAIFunctionStop(t *testing.T) {
+func TestWriteFunctionStop(t *testing.T) {
 	processor, buf, _ := newTestStreamProcessor(t)
 
-	processor.writeOpenAIFunctionHeader("call_1", "test")
+	processor.writeFunctionHeader(0, "call_1", "test")
 	initialIndex := processor.contentBlockIndex
 
-	processor.writeOpenAIFunctionStop()
+	processor.closeOpenBlock()
 
 	output := buf.String()
 	assert.Contains(t, output, `"type":"content_block_stop"`)

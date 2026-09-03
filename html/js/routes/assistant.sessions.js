@@ -536,7 +536,7 @@ globalThis.AssistantSessions = (function() {
     },
     
     processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
-      const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
+      const toolBlocks = this.dedupeToolUseBlocks(msg.message.contentBlocks.filter(block => block.type === 'tool_use'));
       if (toolBlocks.length === 0) return;
 
       // Status is decided per tool: one turn can request parallel tools saved as separate
@@ -701,33 +701,33 @@ globalThis.AssistantSessions = (function() {
         // (thoughts only show when "show thinking" is on).
         let contentText = '';
         const thoughtText = m.thoughts || '';
-        for (const b of (m.contentBlocks || [])) {
-          if (b.type === 'text' && b.text) {
-            contentText += b.text;
-          } else if (b.type === 'tool_use') {
-            const childTool = {
-              id: b.id || 'unknown',
-              name: b.name || 'unknown',
-              input: b.input || {},
-              // Default 'skipped' for a tool_use with no result; finalized below to
-              // completed/error/executing/pending_approval. Must NOT default to
-              // 'completed' -- that would show a false checkmark for a tool that never ran.
-              status: 'skipped',
-              result: null,
-              error: null,
-              rawResult: null,
-              timestamp: sm.createTime || new Date().toISOString(),
-              approved: true,
-              sessionId: childSessionId,
-            };
-            childMsg.toolUses.push(childTool);
-            toolUseById.set(childTool.id, childTool);
+        const blocks = m.contentBlocks || [];
+        for (const b of blocks) {
+          if (b.type === 'text' && b.text) contentText += b.text;
+        }
+        for (const b of this.dedupeToolUseBlocks(blocks.filter(b => b.type === 'tool_use'))) {
+          const childTool = {
+            id: b.id || 'unknown',
+            name: b.name || 'unknown',
+            input: b.input || {},
+            // Default 'skipped' for a tool_use with no result; finalized below to
+            // completed/error/executing/pending_approval. Must NOT default to
+            // 'completed' -- that would show a false checkmark for a tool that never ran.
+            status: 'skipped',
+            result: null,
+            error: null,
+            rawResult: null,
+            timestamp: sm.createTime || new Date().toISOString(),
+            approved: true,
+            sessionId: childSessionId,
+          };
+          childMsg.toolUses.push(childTool);
+          toolUseById.set(childTool.id, childTool);
 
-            // Defer grandchild recursion until this tool's status is finalized below.
-            if (childTool.name.startsWith('delegate_to_')) {
-              const gchild = index.byParentToolUseId.get(childTool.id);
-              if (gchild) delegateChildTools.push({ childTool, gchild });
-            }
+          // Defer grandchild recursion until this tool's status is finalized below.
+          if (childTool.name.startsWith('delegate_to_')) {
+            const gchild = index.byParentToolUseId.get(childTool.id);
+            if (gchild) delegateChildTools.push({ childTool, gchild });
           }
         }
         childMsg.thoughts = thoughtText;

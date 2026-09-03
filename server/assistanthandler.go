@@ -1355,7 +1355,7 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 			if sm.Message != nil {
 				message = sm.Message
 				if len(message.ContentBlocks) == 0 {
-					message.ContentBlocks = []model.ContentBlock{{}}
+					message.ContentBlocks = []model.ContentBlock{}
 				}
 				if sm.Usage != nil {
 					if message.Usage == nil {
@@ -1400,6 +1400,10 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 
 					message.ContentBlocks[sm.Index].Content = message.ContentBlocks[sm.Index].Content.(string) + sm.Delta.Text
 				case "input_json_delta":
+					for len(message.ContentBlocks) <= sm.Index {
+						message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
+					}
+
 					message.ContentBlocks[sm.Index].Input = json.RawMessage(string(message.ContentBlocks[sm.Index].Input) + *sm.Delta.PartialJson)
 				case "thought_delta":
 					message.Thoughts += sm.Delta.Text
