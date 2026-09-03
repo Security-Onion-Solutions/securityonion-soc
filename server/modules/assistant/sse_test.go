@@ -28,14 +28,14 @@ func TestSSEEventWriter_SingleEvents(t *testing.T) {
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeMessageStart("gemini-2.0-flash-exp")
 			},
-			expected: `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"gemini-2.0-flash-exp","stop_reason":null,"stop_sequence":null}}` + "\n\n",
+			expected: `data: {"type":"message_start","message":{"type":"message","role":"assistant","content":[],"model":"gemini-2.0-flash-exp","stop_reason":null,"stop_sequence":null}}` + "\n\n",
 		},
 		{
 			name: "writeMessageStart with quotes in model",
 			writeOp: func(w *sseEventWriter) error {
 				return w.writeMessageStart(`model"with"quotes`)
 			},
-			expected: `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"model\"with\"quotes","stop_reason":null,"stop_sequence":null}}` + "\n\n",
+			expected: `data: {"type":"message_start","message":{"type":"message","role":"assistant","content":[],"model":"model\"with\"quotes","stop_reason":null,"stop_sequence":null}}` + "\n\n",
 		},
 		{
 			name: "writeContentBlockDelta text",
