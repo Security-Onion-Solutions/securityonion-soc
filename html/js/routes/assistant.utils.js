@@ -272,9 +272,9 @@ globalThis.AssistantUtils = (function() {
       );
     },
 
-    // One tool_use per id: a provider that repeats a call's header can persist the
-    // same id more than once with only the later block carrying input, so keep the
-    // last block's content in the first block's position.
+    // One tool_use per id: a provider that repeats a call's header can leave the
+    // same id stored more than once with only the later block carrying input, so keep
+    // the last block's content in the first block's position.
     dedupeToolUseBlocks(blocks) {
       const byId = new Map();
       // An id-less block keys on itself so it is never merged with another.

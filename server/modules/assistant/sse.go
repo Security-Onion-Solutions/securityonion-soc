@@ -192,8 +192,9 @@ func (p *streamProcessor) processOpenAIChunk(resp responses.ResponseStreamEventU
 			if toolOpen {
 				p.closeOpenBlock()
 			}
-			// Announce only: LiteLLM emits phantom function_call items it then closes as
-			// message items, so the header waits for arguments to prove the call real.
+			// Announce only: some proxies emit phantom function_call items they later
+			// close as message items, so the header waits for arguments to prove the
+			// call real.
 			p.dropPendingFunction()
 			p.pending = &pendingCall{index: resp.OutputIndex, id: resp.Item.CallID, name: resp.Item.Name}
 		}
@@ -294,8 +295,8 @@ func (p *streamProcessor) finalize(finishReason string) {
 
 	p.closeOpenBlock()
 	if p.pending != nil {
-		// A phantom is closed as a message item mid-stream; one still pending here means
-		// the provider announced a call it never argued or finished, and it is lost.
+		// A phantom is closed as a message item mid-stream; one still pending here was
+		// announced but never given arguments or finished, so it is lost.
 		p.pendingEntry().Warn("stream ended with an announced function_call that never received arguments; dropped")
 		p.pending = nil
 	}

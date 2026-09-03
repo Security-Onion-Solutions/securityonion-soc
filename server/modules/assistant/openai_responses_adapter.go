@@ -374,11 +374,9 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 					},
 				}
 			} else {
-				// Strict gateways (LiteLLM, vLLM) reject the item unless id, status, and
-				// annotations are all present; the SDK omits each when zero. OpenAI
-				// also requires the msg_ prefix. Minted per item: streamed turns are
-				// stored with the fixed id "assistant" (writeMessageStart), so msg.Id
-				// can't serve as a unique item id.
+				// Strict gateways reject the item unless id, status, and annotations
+				// are all present; the SDK omits each when zero. OpenAI also requires
+				// the msg_ prefix.
 				textItem = responses.ResponseInputItemUnionParam{
 					OfOutputMessage: &responses.ResponseOutputMessageParam{
 						ID:     "msg_" + uuid.NewString(),
@@ -415,8 +413,8 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 }
 
 // pairToolOutputs moves each function_call_output directly behind its function_call:
-// a chat-template gateway (LiteLLM over gemma) rejects several calls followed by a
-// batch of outputs but accepts each call answered in place.
+// some chat-template gateways reject a batch of calls followed by a batch of outputs
+// but accept each call answered in place.
 func pairToolOutputs(items []responses.ResponseInputItemUnionParam) []responses.ResponseInputItemUnionParam {
 	outputs := make(map[string]int, len(items))
 	for i, it := range items {

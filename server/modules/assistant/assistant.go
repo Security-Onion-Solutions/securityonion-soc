@@ -2785,10 +2785,10 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 }
 
 // dedupeToolUses collapses tool_use blocks sharing an id: a provider that repeats a
-// call's header can persist the same id more than once, usually with only the later
-// block carrying input. The last block with input wins and lands in the first block's
-// position, so every provider sees one call per id and a header-only repeat can't
-// erase the arguments (mirrors the UI's dedupeToolUseBlocks).
+// call's header can leave the same id stored more than once, usually with only the
+// later block carrying input. The last block with input wins and lands in the first
+// block's position, so every provider sees one call per id and a header-only repeat
+// can't erase the arguments. The UI's dedupeToolUseBlocks does the same for rendering.
 func dedupeToolUses(blocks []model.ContentBlock) []model.ContentBlock {
 	first := make(map[string]int)
 	out := make([]model.ContentBlock, 0, len(blocks))

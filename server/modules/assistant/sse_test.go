@@ -1533,9 +1533,10 @@ func newOutputItemDoneAt(index int64, itemType, args string) responses.ResponseS
 	return e
 }
 
-// The item-level events LiteLLM emitted for one gemma request: five function_call
-// announcements each closed as a message item with no arguments, then the real call.
-func litellmPhantomSequence() []responses.ResponseStreamEventUnion {
+// The item-level events some proxies can emit for one request: five
+// function_call announcements each closed as a message item with no arguments,
+// then the real call.
+func proxyPhantomSequence() []responses.ResponseStreamEventUnion {
 	var events []responses.ResponseStreamEventUnion
 	for i := int64(0); i < 5; i++ {
 		events = append(events,
@@ -1578,9 +1579,9 @@ func TestProcessOpenAIChunk_AnnouncementDefersHeader(t *testing.T) {
 	assert.Equal(t, 0, processor.contentBlockIndex)
 }
 
-// A Responses proxy (e.g. LiteLLM fronting a chat model) may announce the same
-// function item more than once, finish unrelated items while a call is open, or carry
-// the arguments only on the finished item. None of those may split or empty a call.
+// A Responses proxy may announce the same function item more than once, finish
+// unrelated items while a call is open, or carry the arguments only on the
+// finished item. None of those may split or empty a call.
 func TestProcessOpenAIChunk_ToolCallFraming(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -1689,8 +1690,8 @@ func TestProcessOpenAIChunk_ToolCallFraming(t *testing.T) {
 			wantIndex:  2,
 		},
 		{
-			name:       "LiteLLM phantom announcements closed as message items are dropped",
-			events:     litellmPhantomSequence(),
+			name:       "proxy phantom announcements closed as message items are dropped",
+			events:     proxyPhantomSequence(),
 			wantStarts: 1,
 			wantStops:  1,
 			wantIds:    []string{"call_bad"},

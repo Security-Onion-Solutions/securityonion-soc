@@ -2245,8 +2245,8 @@ func TestConvertHistoryToOpenAI_AssistantTextWireShape(t *testing.T) {
 	assert.Contains(t, wire, `"type":"function_call"`)
 }
 
-// Streamed turns are persisted with the fixed id "assistant" (writeMessageStart), so
-// the item id must be minted per item rather than derived from the stored message.
+// Stored message ids can be absent or shared across turns, so the item id must be
+// minted per item rather than derived from the stored message.
 func TestConvertHistoryToOpenAI_AssistantTextIdsUnique(t *testing.T) {
 	text := func(s string) *model.Message {
 		return &model.Message{Id: "assistant", Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: s}}}
