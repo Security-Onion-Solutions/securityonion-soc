@@ -86,7 +86,7 @@ const (
 	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
 
 	// Unscanned session messages sent to the Memory agent per request.
-	DEFAULT_RECONCILE_MESSAGES_COUNT = 5
+	DEFAULT_MEMORY_EXTRACT_BATCH_SIZE = 5
 
 	// Failed memory scans a session may accumulate before it is excluded.
 	DEFAULT_MAX_MEMORY_RETRIES = 2
@@ -202,7 +202,7 @@ type memorySettings struct {
 	maxGlobalInclude       int
 	maxUserReconcile       int
 	maxGlobalReconcile     int
-	reconcileMessagesCount int
+	memoryExtractBatchSize int
 	maxMemoryRetries       int
 	memoryModel            string
 	embedModel             string
@@ -254,13 +254,13 @@ const (
 	ConfigSettingMaxGlobalMemoriesToInclude   = "soc.config.server.modules.assistant.maxGlobalMemoriesToInclude"
 	ConfigSettingMaxUserMemoriesToReconcile   = "soc.config.server.modules.assistant.maxUserMemoriesToReconcile"
 	ConfigSettingMaxGlobalMemoriesToReconcile = "soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile"
-	ConfigSettingReconcileMessagesCount       = "soc.config.server.modules.assistant.reconcileMessagesCount"
 	ConfigSettingMemoryModel                  = "soc.config.server.modules.assistant.memoryModel"
 	ConfigSettingEmbedModel                   = "soc.config.server.modules.assistant.embedModel"
 	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
 	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
 	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
 	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
+	ConfigSettingMemoryExtractBatchSize       = "soc.config.server.modules.assistant.memoryExtractBatchSize"
 	ConfigSettingMaxMemoryRetries             = "soc.config.server.modules.assistant.maxMemoryRetries"
 )
 
@@ -274,13 +274,13 @@ var memoryConfigSettings = []string{
 	ConfigSettingMaxGlobalMemoriesToInclude,
 	ConfigSettingMaxUserMemoriesToReconcile,
 	ConfigSettingMaxGlobalMemoriesToReconcile,
-	ConfigSettingReconcileMessagesCount,
 	ConfigSettingMemoryModel,
 	ConfigSettingEmbedModel,
 	ConfigSettingReconcileModel,
 	ConfigSettingMemoryPersona,
 	ConfigSettingReconcilePersona,
 	ConfigSettingDontScanBefore,
+	ConfigSettingMemoryExtractBatchSize,
 	ConfigSettingMaxMemoryRetries,
 }
 
@@ -333,10 +333,10 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
 
-	reconcileMessagesCount := module.GetIntDefault(config, "reconcileMessagesCount", DEFAULT_RECONCILE_MESSAGES_COUNT)
-	if reconcileMessagesCount < 1 {
-		log.FromContext(ac.srv.Context).WithField("reconcileMessagesCount", reconcileMessagesCount).Warn("reconcileMessagesCount must be at least 1; using 1")
-		reconcileMessagesCount = 1
+	memoryExtractBatchSize := module.GetIntDefault(config, "memoryExtractBatchSize", DEFAULT_MEMORY_EXTRACT_BATCH_SIZE)
+	if memoryExtractBatchSize < 1 {
+		log.FromContext(ac.srv.Context).WithField("memoryExtractBatchSize", memoryExtractBatchSize).Warn("memoryExtractBatchSize must be at least 1; using 1")
+		memoryExtractBatchSize = 1
 	}
 
 	maxMemoryRetries := module.GetIntDefault(config, "maxMemoryRetries", DEFAULT_MAX_MEMORY_RETRIES)
@@ -355,7 +355,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		maxGlobalInclude:       module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
 		maxUserReconcile:       module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
 		maxGlobalReconcile:     module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
-		reconcileMessagesCount: reconcileMessagesCount,
+		memoryExtractBatchSize: memoryExtractBatchSize,
 		maxMemoryRetries:       maxMemoryRetries,
 		memoryModel:            module.GetStringDefault(config, "memoryModel", ""),
 		embedModel:             module.GetStringDefault(config, "embedModel", ""),

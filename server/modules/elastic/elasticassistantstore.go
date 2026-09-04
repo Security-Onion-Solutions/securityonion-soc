@@ -235,9 +235,11 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 
 // incrementSessionMessageCount bumps the denormalized messageCount on the
 // session document so the memory scanner can find sessions with unscanned
-// messages in a single query. Not scoped to the requestor's userId: the write
-// authorization was already checked by the caller, and messages legitimately
-// land in shared or delegated sessions owned by other users.
+// messages in a single query. It also clears memoryErrors so new activity gives
+// a session excluded for repeated scan failures another chance. Not scoped to
+// the requestor's userId: the write authorization was already checked by the
+// caller, and messages legitimately land in shared or delegated sessions owned
+// by other users.
 func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Context, sessionId string) error {
 	logger := log.FromContext(ctx)
 
@@ -259,7 +261,7 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 			},
 		},
 		"script": map[string]any{
-			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.messageCount = (s.messageCount != null ? s.messageCount : 0) + 1;",
+			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.messageCount = (s.messageCount != null ? s.messageCount : 0) + 1; s.memoryErrors = 0;",
 			"lang":   "painless",
 		},
 	}
@@ -290,6 +292,11 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 		return err
 	}
 	defer res.Body.Close()
+
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to increment session message count")
+		return err
+	}
 
 	return nil
 }
@@ -1580,6 +1587,11 @@ func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Con
 	}
 	defer res.Body.Close()
 
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to update session memory scan index")
+		return err
+	}
+
 	return nil
 }
 
@@ -1642,6 +1654,11 @@ func (store *ElasticAssistantstore) IncrementSessionMemoryErrors(ctx context.Con
 		return err
 	}
 	defer res.Body.Close()
+
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to increment session memory errors")
+		return err
+	}
 
 	return nil
 }

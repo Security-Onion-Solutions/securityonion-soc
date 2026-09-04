@@ -73,9 +73,9 @@
 
         <v-row class="my-2">
           <v-col cols="6">
-            <div class="text-overline my-4">{{ i18n.agentStudioMemoryReconcileMessages }}</div>
-            <v-text-field v-model.number="memoryOptions.reconcileMessagesCount" type="number" min="1" :label="i18n.agentStudioMemoryReconcileMessagesLabel" hide-details data-aid="agentstudio_options_reconcile_messages"></v-text-field>
-            <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryReconcileMessagesHelp"></div>
+            <div class="text-overline my-4">{{ i18n.agentStudioMemoryExtractBatchSize }}</div>
+            <v-text-field v-model.number="memoryOptions.memoryExtractBatchSize" type="number" min="1" :label="i18n.agentStudioMemoryExtractBatchSizeLabel" hide-details data-aid="agentstudio_options_memory_extract_batch_size"></v-text-field>
+            <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryExtractBatchSizeHelp"></div>
           </v-col>
           <v-col cols="6">
             <div class="text-overline my-4">{{ i18n.agentStudioMemoryMaxRetries }}</div>

@@ -1224,7 +1224,7 @@ test('the options dialog loads the memory tunables from the client parameters', 
     maxGlobalMemoriesToInclude: 5,
     maxUserMemoriesToReconcile: 20,
     maxGlobalMemoriesToReconcile: 20,
-    reconcileMessagesCount: 5,
+    memoryExtractBatchSize: 5,
     maxMemoryRetries: 2,
   };
 
@@ -1233,7 +1233,7 @@ test('the options dialog loads the memory tunables from the client parameters', 
 
   expect(comp.memoryOptions.useMemory).toBe(true);
   expect(comp.memoryOptions.scanIntervalSeconds).toBe(60);
-  expect(comp.memoryOptions.reconcileMessagesCount).toBe(5);
+  expect(comp.memoryOptions.memoryExtractBatchSize).toBe(5);
   expect(comp.memoryOptions.maxMemoryRetries).toBe(2);
   expect(comp.optionsDirty()).toBe(false);
 });

@@ -658,7 +658,7 @@ func TestExtractFactsBatches(t *testing.T) {
 	}}
 	ac := &AssistantCoordinator{
 		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memory:   memorySettings{reconcileMessagesCount: 2},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
 	}
 	_, memoryAgent, memoryModel := extractTestFixtures()
 
@@ -697,7 +697,7 @@ func TestExtractFactsBatchSendErrorReturnsEarlierExchanges(t *testing.T) {
 	}}
 	ac := &AssistantCoordinator{
 		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memory:   memorySettings{reconcileMessagesCount: 2},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
 	}
 	_, memoryAgent, memoryModel := extractTestFixtures()
 
@@ -720,7 +720,7 @@ func TestExtractFactsBatchBadResponseKeepsItsExchange(t *testing.T) {
 	}}
 	ac := &AssistantCoordinator{
 		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memory:   memorySettings{reconcileMessagesCount: 2},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
 	}
 	_, memoryAgent, memoryModel := extractTestFixtures()
 
@@ -741,7 +741,7 @@ func TestExtractFactsCancelledContextStopsBatches(t *testing.T) {
 	}}
 	ac := &AssistantCoordinator{
 		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memory:   memorySettings{reconcileMessagesCount: 2},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
 	}
 	_, memoryAgent, memoryModel := extractTestFixtures()
 
@@ -781,7 +781,7 @@ func TestExtractFactsDedupesAcrossBatches(t *testing.T) {
 	}}
 	ac := &AssistantCoordinator{
 		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
-		memory:   memorySettings{reconcileMessagesCount: 2},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
 	}
 	_, memoryAgent, memoryModel := extractTestFixtures()
 
@@ -1588,7 +1588,7 @@ func TestScanForMemoriesRecordsEachExtractBatch(t *testing.T) {
 	}}
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, embed, reconcile)
-	ac.memory.reconcileMessagesCount = 2
+	ac.memory.memoryExtractBatchSize = 2
 
 	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
 
@@ -1649,6 +1649,34 @@ func TestScanForMemoriesInterrupted(t *testing.T) {
 	ac.scanForMemories(ctx, log.WithField("test", t.Name()))
 
 	assert.Equal(t, 1, calls, "an interrupted scan must not process the next session")
+}
+
+func TestScanForMemoriesCancelledMidSessionDoesNotCountError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// no IncrementSessionMemoryErrors expectation: an interrupted scan is not
+	// the session's fault
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		cancel()
+		return nil, ctx.Err()
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(ctx, log.WithField("test", t.Name()))
+
+	assert.Equal(t, 1, calls)
 }
 
 func TestScanForMemoriesContinuesAfterFailedSession(t *testing.T) {
@@ -2857,7 +2885,7 @@ func memorySettingsFixture() memorySettings {
 		maxUserReconcile:   20,
 		maxGlobalReconcile: 20,
 
-		reconcileMessagesCount: 5,
+		memoryExtractBatchSize: 5,
 		maxMemoryRetries:       2,
 	}
 }
@@ -2884,7 +2912,7 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 		ConfigSettingMaxGlobalMemoriesToInclude:   "7",
 		ConfigSettingMaxUserMemoriesToReconcile:   "11",
 		ConfigSettingMaxGlobalMemoriesToReconcile: "13",
-		ConfigSettingReconcileMessagesCount:       "4",
+		ConfigSettingMemoryExtractBatchSize:       "4",
 		ConfigSettingMaxMemoryRetries:             "5",
 	}))
 
@@ -2897,7 +2925,7 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 	assert.Equal(t, 7, applied.maxGlobalInclude)
 	assert.Equal(t, 11, applied.maxUserReconcile)
 	assert.Equal(t, 13, applied.maxGlobalReconcile)
-	assert.Equal(t, 4, applied.reconcileMessagesCount)
+	assert.Equal(t, 4, applied.memoryExtractBatchSize)
 	assert.Equal(t, 5, applied.maxMemoryRetries)
 }
 
@@ -2914,15 +2942,15 @@ func TestApplyMemorySettingsClampsMaxMemoryRetries(t *testing.T) {
 
 // A batch size below 1 would never advance through the history, so it is
 // clamped rather than kept.
-func TestApplyMemorySettingsClampsReconcileMessagesCount(t *testing.T) {
+func TestApplyMemorySettingsClampsMemoryExtractBatchSize(t *testing.T) {
 	logger := log.WithField("test", t.Name())
 
 	for _, value := range []string{"0", "-3"} {
 		applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
-			ConfigSettingReconcileMessagesCount: value,
+			ConfigSettingMemoryExtractBatchSize: value,
 		}))
 
-		assert.Equal(t, 1, applied.reconcileMessagesCount, "count %q should clamp to 1", value)
+		assert.Equal(t, 1, applied.memoryExtractBatchSize, "count %q should clamp to 1", value)
 	}
 }
 
@@ -2969,7 +2997,7 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 	store := &fakeConfigstore{settings: []*model.Setting{
 		{Id: ConfigSettingUseMemory, Value: "true"},
 		{Id: ConfigSettingMaxUserMemoriesToInclude, Value: "9"},
-		{Id: ConfigSettingReconcileMessagesCount, Value: "7"},
+		{Id: ConfigSettingMemoryExtractBatchSize, Value: "7"},
 		{Id: ConfigSettingMaxMemoryRetries, Value: "4"},
 	}}
 
@@ -2983,10 +3011,10 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 	assert.False(t, params.MemoryParams.UseMemoryScanner)
 	assert.Equal(t, 9, params.MemoryParams.MaxUserMemoriesToInclude)
 	assert.Equal(t, 300, params.MemoryParams.ScanIntervalSeconds)
-	assert.Equal(t, 7, params.MemoryParams.ReconcileMessagesCount)
+	assert.Equal(t, 7, params.MemoryParams.MemoryExtractBatchSize)
 	assert.Equal(t, 4, params.MemoryParams.MaxMemoryRetries)
 	assert.Equal(t, 9, ac.memorySnapshot().maxUserInclude)
-	assert.Equal(t, 7, ac.memorySnapshot().reconcileMessagesCount)
+	assert.Equal(t, 7, ac.memorySnapshot().memoryExtractBatchSize)
 	assert.Equal(t, 4, ac.memorySnapshot().maxMemoryRetries)
 }
 

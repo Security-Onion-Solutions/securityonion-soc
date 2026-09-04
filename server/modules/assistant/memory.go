@@ -176,10 +176,10 @@ func applyMemorySettings(logger log.Interface, settings memorySettings, byID map
 	intSetting(ConfigSettingMaxGlobalMemoriesToReconcile, &settings.maxGlobalReconcile)
 	stringSetting(ConfigSettingDontScanBefore, &settings.dontScanBefore)
 
-	intSetting(ConfigSettingReconcileMessagesCount, &settings.reconcileMessagesCount)
-	if settings.reconcileMessagesCount < 1 {
-		logger.WithField("setting", ConfigSettingReconcileMessagesCount).Warn("reconcileMessagesCount must be at least 1; using 1")
-		settings.reconcileMessagesCount = 1
+	intSetting(ConfigSettingMemoryExtractBatchSize, &settings.memoryExtractBatchSize)
+	if settings.memoryExtractBatchSize < 1 {
+		logger.WithField("setting", ConfigSettingMemoryExtractBatchSize).Warn("memoryExtractBatchSize must be at least 1; using 1")
+		settings.memoryExtractBatchSize = 1
 	}
 
 	intSetting(ConfigSettingMaxMemoryRetries, &settings.maxMemoryRetries)
@@ -216,7 +216,7 @@ func (ac *AssistantCoordinator) exposeMemorySettings() {
 		MaxGlobalMemoriesToInclude:   settings.maxGlobalInclude,
 		MaxUserMemoriesToReconcile:   settings.maxUserReconcile,
 		MaxGlobalMemoriesToReconcile: settings.maxGlobalReconcile,
-		ReconcileMessagesCount:       settings.reconcileMessagesCount,
+		MemoryExtractBatchSize:       settings.memoryExtractBatchSize,
 		MaxMemoryRetries:             settings.maxMemoryRetries,
 		MemoryModel:                  settings.memoryModel,
 		EmbedModel:                   settings.embedModel,
@@ -732,6 +732,13 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 // scan. Best effort: a failed increment only delays exclusion by one scan.
 func (ac *AssistantCoordinator) recordMemoryScanError(ctx context.Context, logger log.Interface, sessionId string, msg string) {
 	logger = logger.WithField("sessionId", sessionId)
+
+	// An interrupted scan is not the session's fault.
+	if ctx.Err() != nil {
+		logger.Warn("scan interrupted")
+		return
+	}
+
 	logger.Error(msg)
 
 	if err := ac.srv.Assistantstore.IncrementSessionMemoryErrors(ctx, sessionId); err != nil {
@@ -794,7 +801,7 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 		return nil, nil, fmt.Errorf("unknown adapter for memory model")
 	}
 
-	batches := buildMemoryExtractTranscripts(details, ac.memorySnapshot().reconcileMessagesCount)
+	batches := buildMemoryExtractTranscripts(details, ac.memorySnapshot().memoryExtractBatchSize)
 	if len(batches) == 0 {
 		return nil, nil, nil
 	}
