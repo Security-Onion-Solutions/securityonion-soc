@@ -87,18 +87,18 @@ func (mr *MockAssistantstoreMockRecorder) DoesUserOwnSession(ctx, userId, sessio
 }
 
 // FindSessionsPendingMemoryScan mocks base method.
-func (m *MockAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error) {
+func (m *MockAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time, maxMemoryRetries int) ([]*model.AssistantSessionDetails, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindSessionsPendingMemoryScan", ctx, dontScanBefore)
+	ret := m.ctrl.Call(m, "FindSessionsPendingMemoryScan", ctx, dontScanBefore, maxMemoryRetries)
 	ret0, _ := ret[0].([]*model.AssistantSessionDetails)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindSessionsPendingMemoryScan indicates an expected call of FindSessionsPendingMemoryScan.
-func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(ctx, dontScanBefore any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(ctx, dontScanBefore, maxMemoryRetries any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), ctx, dontScanBefore)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), ctx, dontScanBefore, maxMemoryRetries)
 }
 
 // GetChatHistory mocks base method.
@@ -164,6 +164,20 @@ func (m *MockAssistantstore) GetUsage(arg0 context.Context, arg1, arg2 time.Time
 func (mr *MockAssistantstoreMockRecorder) GetUsage(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsage", reflect.TypeOf((*MockAssistantstore)(nil).GetUsage), arg0, arg1, arg2)
+}
+
+// IncrementSessionMemoryErrors mocks base method.
+func (m *MockAssistantstore) IncrementSessionMemoryErrors(ctx context.Context, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IncrementSessionMemoryErrors", ctx, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IncrementSessionMemoryErrors indicates an expected call of IncrementSessionMemoryErrors.
+func (mr *MockAssistantstoreMockRecorder) IncrementSessionMemoryErrors(ctx, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementSessionMemoryErrors", reflect.TypeOf((*MockAssistantstore)(nil).IncrementSessionMemoryErrors), ctx, sessionId)
 }
 
 // SaveChat mocks base method.

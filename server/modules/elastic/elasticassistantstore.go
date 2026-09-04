@@ -235,9 +235,11 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 
 // incrementSessionMessageCount bumps the denormalized messageCount on the
 // session document so the memory scanner can find sessions with unscanned
-// messages in a single query. Not scoped to the requestor's userId: the write
-// authorization was already checked by the caller, and messages legitimately
-// land in shared or delegated sessions owned by other users.
+// messages in a single query. It also clears memoryErrors so new activity gives
+// a session excluded for repeated scan failures another chance. Not scoped to
+// the requestor's userId: the write authorization was already checked by the
+// caller, and messages legitimately land in shared or delegated sessions owned
+// by other users.
 func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Context, sessionId string) error {
 	logger := log.FromContext(ctx)
 
@@ -259,7 +261,7 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 			},
 		},
 		"script": map[string]any{
-			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.messageCount = (s.messageCount != null ? s.messageCount : 0) + 1;",
+			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.messageCount = (s.messageCount != null ? s.messageCount : 0) + 1; s.memoryErrors = 0;",
 			"lang":   "painless",
 		},
 	}
@@ -290,6 +292,11 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 		return err
 	}
 	defer res.Body.Close()
+
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to increment session message count")
+		return err
+	}
 
 	return nil
 }
@@ -1369,8 +1376,9 @@ func (store *ElasticAssistantstore) DeleteSession(ctx context.Context, sessionId
 
 // FindSessionsPendingMemoryScan returns non-deleted root sessions whose
 // messageCount is ahead of lastMemoryScannedIndex (or whose count is not yet
-// recorded), with full History populated, for the memory scanner.
-func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error) {
+// recorded) and whose memoryErrors is at most maxMemoryRetries, with full
+// History populated, for the memory scanner.
+func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time, maxMemoryRetries int) ([]*model.AssistantSessionDetails, error) {
 	if err := store.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
 		return nil, err
 	}
@@ -1379,6 +1387,7 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 
 	countField := store.schemaPrefix + "session.messageCount"
 	scannedField := store.schemaPrefix + "session.lastMemoryScannedIndex"
+	errorsField := store.schemaPrefix + "session.memoryErrors"
 
 	must := []map[string]any{
 		{
@@ -1401,6 +1410,30 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 						"sf": scannedField,
 					},
 				},
+			},
+		},
+		{
+			// A missing memoryErrors means no failures yet (0).
+			"bool": map[string]any{
+				"should": []any{
+					map[string]any{
+						"range": map[string]any{
+							errorsField: map[string]any{
+								"lte": maxMemoryRetries,
+							},
+						},
+					},
+					map[string]any{
+						"bool": map[string]any{
+							"must_not": map[string]any{
+								"exists": map[string]any{
+									"field": errorsField,
+								},
+							},
+						},
+					},
+				},
+				"minimum_should_match": 1,
 			},
 		},
 	}
@@ -1490,8 +1523,9 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 // session's messages up to scannedIndex. It also raises messageCount to
 // scannedIndex when the stored count is missing or lower, healing legacy
 // sessions and lost increments; a higher stored count is left alone so messages
-// that arrived mid-scan stay pending. Not scoped to the requestor's userId: the
-// scanner runs as SYSTEM over sessions owned by real users.
+// that arrived mid-scan stay pending. A successful scan also clears memoryErrors.
+// Not scoped to the requestor's userId: the scanner runs as SYSTEM over sessions
+// owned by real users.
 func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Context, sessionId string, scannedIndex int) error {
 	if err := store.server.CheckAuthorized(ctx, "write_all", "assistant"); err != nil {
 		return err
@@ -1517,7 +1551,7 @@ func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Con
 			},
 		},
 		"script": map[string]any{
-			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.lastMemoryScannedIndex = params.scanned; if (s.messageCount == null || s.messageCount < params.scanned) { s.messageCount = params.scanned; }",
+			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.lastMemoryScannedIndex = params.scanned; s.memoryErrors = 0; if (s.messageCount == null || s.messageCount < params.scanned) { s.messageCount = params.scanned; }",
 			"lang":   "painless",
 			"params": map[string]any{
 				"scanned": scannedIndex,
@@ -1552,6 +1586,79 @@ func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Con
 		return err
 	}
 	defer res.Body.Close()
+
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to update session memory scan index")
+		return err
+	}
+
+	return nil
+}
+
+// IncrementSessionMemoryErrors bumps the session's memoryErrors after a failed
+// memory scan so a session that keeps failing is eventually excluded from the
+// scan. Not scoped to the requestor's userId, for the same reason as
+// UpdateSessionMemoryScanIndex.
+func (store *ElasticAssistantstore) IncrementSessionMemoryErrors(ctx context.Context, sessionId string) error {
+	if err := store.server.CheckAuthorized(ctx, "write_all", "assistant"); err != nil {
+		return err
+	}
+
+	logger := log.FromContext(ctx)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "session",
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.sessionId": sessionId,
+						},
+					},
+				},
+			},
+		},
+		"script": map[string]any{
+			"source": "def s = ctx._source." + store.schemaPrefix + "session; s.memoryErrors = (s.memoryErrors != null ? s.memoryErrors : 0) + 1;",
+			"lang":   "painless",
+		},
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
+		return err
+	}
+
+	logger.WithFields(log.Fields{
+		"sessionId": sessionId,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("Incrementing session memory errors using UpdateByQuery")
+
+	res, err := store.esClient.UpdateByQuery(
+		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
+		store.esClient.UpdateByQuery.WithContext(ctx),
+		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
+		store.esClient.UpdateByQuery.WithRefresh(true),
+		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
+		// A lost increment only delays exclusion by one more failed scan.
+		store.esClient.UpdateByQuery.WithConflicts("proceed"),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to increment session memory errors")
+		return err
+	}
+	defer res.Body.Close()
+
+	if _, err := readJsonFromResponse(res); err != nil {
+		logger.WithError(err).Error("Failed to increment session memory errors")
+		return err
+	}
 
 	return nil
 }

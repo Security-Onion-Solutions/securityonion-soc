@@ -181,6 +181,31 @@ func TestAssistantCoordinator_InitNonAgenticMemoryUnmapped(t *testing.T) {
 	}
 }
 
+func TestAssistantCoordinator_InitMemoryExtractBatchSize(t *testing.T) {
+	stubEmbeddedSystemPrompt(t)
+
+	testCases := []struct {
+		name     string
+		cfg      module.ModuleConfig
+		expected int
+	}{
+		// module config numbers arrive as float64 from the JSON loader
+		{name: "default", cfg: module.ModuleConfig{}, expected: DEFAULT_MEMORY_EXTRACT_BATCH_SIZE},
+		{name: "configured", cfg: module.ModuleConfig{"memoryExtractBatchSize": 12.0}, expected: 12},
+		{name: "zero clamps to one", cfg: module.ModuleConfig{"memoryExtractBatchSize": 0.0}, expected: 1},
+		{name: "negative clamps to one", cfg: module.ModuleConfig{"memoryExtractBatchSize": -4.0}, expected: 1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ac, _ := newAgenticTestCoordinator()
+
+			assert.NoError(t, ac.Init(tc.cfg))
+			assert.Equal(t, tc.expected, ac.memorySnapshot().memoryExtractBatchSize)
+		})
+	}
+}
+
 func TestAssistantCoordinator_InitAgenticWithMemory(t *testing.T) {
 	stubEmbeddedSystemPrompt(t)
 

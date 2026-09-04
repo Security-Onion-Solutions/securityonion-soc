@@ -244,100 +244,135 @@ func storedText(role string, texts ...string) *model.StoredMessage {
 	return &model.StoredMessage{Message: &model.Message{Role: role, ContentBlocks: blocks}}
 }
 
-func TestBuildMemoryExtractTranscript(t *testing.T) {
+func TestBuildMemoryExtractTranscripts(t *testing.T) {
+	six := []*model.StoredMessage{
+		storedText("user", "0"),
+		storedText("assistant", "1"),
+		storedText("user", "2"),
+		storedText("assistant", "3"),
+		storedText("user", "4"),
+		storedText("assistant", "5"),
+	}
+
 	tests := []struct {
 		name        string
 		lastScanned int
+		batchSize   int
 		history     []*model.StoredMessage
-		expected    string
+		expected    []string
 	}{
 		{
 			name:        "empty history",
 			lastScanned: 0,
+			batchSize:   5,
 			history:     []*model.StoredMessage{},
-			expected:    "",
+			expected:    nil,
 		},
 		{
-			name:        "index zero includes all messages",
+			name:        "index zero includes all messages with no context message",
 			lastScanned: 0,
-			history: []*model.StoredMessage{
-				storedText("user", "hi"),
-				storedText("assistant", "hello"),
-			},
-			expected: "user: hi\n\nassistant: hello",
+			batchSize:   5,
+			history:     six[:2],
+			expected:    []string{"user: 0\n\nassistant: 1"},
 		},
 		{
-			name:        "starts two messages before the scanned index",
+			name:        "starts one message before the scanned index",
 			lastScanned: 5,
-			history: []*model.StoredMessage{
-				storedText("user", "0"),
-				storedText("assistant", "1"),
-				storedText("user", "2"),
-				storedText("assistant", "3"),
-				storedText("user", "4"),
-				storedText("assistant", "5"),
-			},
-			expected: "assistant: 3\n\nuser: 4\n\nassistant: 5",
+			batchSize:   5,
+			history:     six,
+			expected:    []string{"user: 4\n\nassistant: 5"},
 		},
 		{
 			name:        "negative index clamps to zero",
 			lastScanned: -5,
-			history: []*model.StoredMessage{
-				storedText("user", "hi"),
-			},
-			expected: "user: hi",
+			batchSize:   5,
+			history:     six[:1],
+			expected:    []string{"user: 0"},
 		},
 		{
-			name:        "index at end of history keeps the two-message overlap",
+			name:        "index at end of history yields nothing",
 			lastScanned: 5,
-			history: []*model.StoredMessage{
-				storedText("user", "0"),
-				storedText("assistant", "1"),
-				storedText("user", "2"),
-				storedText("assistant", "3"),
-				storedText("user", "4"),
-			},
-			expected: "assistant: 3\n\nuser: 4",
+			batchSize:   5,
+			history:     six[:5],
+			expected:    nil,
 		},
 		{
 			name:        "index far beyond history",
 			lastScanned: 10,
-			history: []*model.StoredMessage{
-				storedText("user", "0"),
-				storedText("assistant", "1"),
-				storedText("user", "2"),
+			batchSize:   5,
+			history:     six[:3],
+			expected:    nil,
+		},
+		{
+			name:        "batches carry one context message each",
+			lastScanned: 2,
+			batchSize:   2,
+			history:     six,
+			expected: []string{
+				"assistant: 1\n\nuser: 2\n\nassistant: 3",
+				"assistant: 3\n\nuser: 4\n\nassistant: 5",
 			},
-			expected: "",
+		},
+		{
+			name:        "batch size one",
+			lastScanned: 0,
+			batchSize:   1,
+			history:     six[:3],
+			expected: []string{
+				"user: 0",
+				"user: 0\n\nassistant: 1",
+				"assistant: 1\n\nuser: 2",
+			},
+		},
+		{
+			name:        "batch size zero behaves as one",
+			lastScanned: 1,
+			batchSize:   0,
+			history:     six[:3],
+			expected: []string{
+				"user: 0\n\nassistant: 1",
+				"assistant: 1\n\nuser: 2",
+			},
+		},
+		{
+			name:        "batch larger than remaining",
+			lastScanned: 3,
+			batchSize:   100,
+			history:     six,
+			expected:    []string{"user: 2\n\nassistant: 3\n\nuser: 4\n\nassistant: 5"},
 		},
 		{
 			name:        "multiple text blocks concatenated",
 			lastScanned: 0,
+			batchSize:   5,
 			history: []*model.StoredMessage{
 				storedText("assistant", "part one, ", "part two"),
 			},
-			expected: "assistant: part one, part two",
+			expected: []string{"assistant: part one, part two"},
 		},
 		{
 			name:        "non-text blocks dropped, text case-insensitive",
 			lastScanned: 0,
+			batchSize:   5,
 			history: []*model.StoredMessage{
 				{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
 					{Type: "tool_use", Text: "ignored"},
 					{Type: "Text", Text: "kept"},
 				}}},
 			},
-			expected: "assistant: kept",
+			expected: []string{"assistant: kept"},
 		},
 		{
 			name:        "message with only non-text blocks still emits its role",
 			lastScanned: 0,
+			batchSize:   5,
 			history: []*model.StoredMessage{
 				{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
 					{Type: "tool_use", Text: "ignored"},
 				}}},
 				storedText("user", "next"),
 			},
-			expected: "assistant: \n\nuser: next",
+			expected: []string{"assistant: \n\nuser: next"},
 		},
 	}
 
@@ -348,7 +383,7 @@ func TestBuildMemoryExtractTranscript(t *testing.T) {
 				History: tc.history,
 			}
 
-			assert.Equal(t, tc.expected, buildMemoryExtractTranscript(details))
+			assert.Equal(t, tc.expected, buildMemoryExtractTranscripts(details, tc.batchSize))
 		})
 	}
 }
@@ -600,6 +635,172 @@ func TestExtractFactsEmptyArray(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, facts)
 	assert.Empty(t, facts)
+}
+
+func batchedExtractDetails() *model.AssistantSessionDetails {
+	return &model.AssistantSessionDetails{
+		Session: &model.AssistantSession{LastMemoryScannedIndex: 1},
+		History: []*model.StoredMessage{
+			storedText("user", "0"),
+			storedText("assistant", "1"),
+			storedText("user", "2"),
+			storedText("assistant", "3"),
+			storedText("user", "4"),
+		},
+	}
+}
+
+func TestExtractFactsBatches(t *testing.T) {
+	var sent []string
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		sent = append(sent, req.Messages[0].ContentBlocks[0].Text)
+		return textResponse(fmt.Sprintf(`[{"fact":"fact %d","scope":"user"}]`, len(sent))), nil
+	}}
+	ac := &AssistantCoordinator{
+		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
+	}
+	_, memoryAgent, memoryModel := extractTestFixtures()
+
+	facts, exchanges, err := ac.extractFacts(context.Background(), batchedExtractDetails(), memoryAgent, memoryModel)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"user: 0\n\nassistant: 1\n\nuser: 2",
+		"user: 2\n\nassistant: 3\n\nuser: 4",
+	}, sent)
+
+	if assert.Len(t, exchanges, 2) {
+		for i, exchange := range exchanges {
+			if assert.Len(t, exchange, 2) {
+				assert.Equal(t, sent[i], exchange[0].ContentBlocks[0].Text)
+				assert.Equal(t, "memory prompt", adapter.lastReq.System)
+			}
+		}
+	}
+
+	if assert.Len(t, facts, 2) {
+		assert.Equal(t, "fact 1", facts[0].Fact)
+		assert.Equal(t, "fact 2", facts[1].Fact)
+	}
+}
+
+func TestExtractFactsBatchSendErrorReturnsEarlierExchanges(t *testing.T) {
+	sendErr := errors.New("model unavailable")
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		if calls == 2 {
+			return nil, sendErr
+		}
+		return textResponse(`[{"fact":"first","scope":"user"}]`), nil
+	}}
+	ac := &AssistantCoordinator{
+		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
+	}
+	_, memoryAgent, memoryModel := extractTestFixtures()
+
+	facts, exchanges, err := ac.extractFacts(context.Background(), batchedExtractDetails(), memoryAgent, memoryModel)
+
+	assert.ErrorIs(t, err, sendErr)
+	assert.Nil(t, facts)
+	assert.Len(t, exchanges, 1, "the failed send has no response to record")
+	assert.Equal(t, 2, calls)
+}
+
+func TestExtractFactsBatchBadResponseKeepsItsExchange(t *testing.T) {
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		if calls == 2 {
+			return textResponse("not json"), nil
+		}
+		return textResponse(`[{"fact":"first","scope":"user"}]`), nil
+	}}
+	ac := &AssistantCoordinator{
+		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
+	}
+	_, memoryAgent, memoryModel := extractTestFixtures()
+
+	facts, exchanges, err := ac.extractFacts(context.Background(), batchedExtractDetails(), memoryAgent, memoryModel)
+
+	assert.Error(t, err)
+	assert.Nil(t, facts)
+	assert.Len(t, exchanges, 2, "usage was spent on the unusable response too")
+}
+
+func TestExtractFactsCancelledContextStopsBatches(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		cancel()
+		return textResponse(`[{"fact":"first","scope":"user"}]`), nil
+	}}
+	ac := &AssistantCoordinator{
+		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
+	}
+	_, memoryAgent, memoryModel := extractTestFixtures()
+
+	_, exchanges, err := ac.extractFacts(ctx, batchedExtractDetails(), memoryAgent, memoryModel)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Len(t, exchanges, 1)
+	assert.Equal(t, 1, calls)
+}
+
+func TestExtractFactsNothingUnscannedSendsNothing(t *testing.T) {
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		t.Error("no request expected")
+		return nil, errors.New("unexpected call")
+	}}
+	ac := &AssistantCoordinator{adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter}}
+	details, memoryAgent, memoryModel := extractTestFixtures()
+	details.Session.LastMemoryScannedIndex = len(details.History)
+
+	facts, exchanges, err := ac.extractFacts(context.Background(), details, memoryAgent, memoryModel)
+
+	assert.NoError(t, err)
+	assert.Nil(t, facts)
+	assert.Nil(t, exchanges)
+}
+
+func TestExtractFactsDedupesAcrossBatches(t *testing.T) {
+	responses := []string{
+		`[{"fact":"Likes  tea","scope":"user"},{"fact":"likes tea","scope":"global"}]`,
+		`[{"fact":"likes TEA","scope":"user"},{"fact":"new","scope":"user"}]`,
+	}
+	calls := 0
+	adapter := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		res := textResponse(responses[calls])
+		calls++
+		return res, nil
+	}}
+	ac := &AssistantCoordinator{
+		adapters: map[string]server.AssistantAdapter{"TestAdapter": adapter},
+		memory:   memorySettings{memoryExtractBatchSize: 2},
+	}
+	_, memoryAgent, memoryModel := extractTestFixtures()
+
+	facts, _, err := ac.extractFacts(context.Background(), batchedExtractDetails(), memoryAgent, memoryModel)
+
+	assert.NoError(t, err)
+
+	got := make([][2]string, 0, len(facts))
+	for _, fact := range facts {
+		got = append(got, [2]string{fact.Fact, fact.Scope})
+	}
+
+	// same text differing only in case or whitespace collapses within a scope,
+	// but the same text in another scope is a distinct memory
+	assert.Equal(t, [][2]string{
+		{"Likes tea", "user"},
+		{"likes tea", "global"},
+		{"new", "user"},
+	}, got)
 }
 
 // reconcileTestMem returns a fresh candidate memory per test, since
@@ -1249,7 +1450,7 @@ func TestScanForMemoriesAddsExtractedFact(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
 
 	// each agent call lands its exchange in its own new tagged session linked
@@ -1347,14 +1548,68 @@ func TestScanForMemoriesAddsExtractedFact(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+func TestScanForMemoriesRecordsEachExtractBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	session := scanTestSession("sess-1")
+	session.History = []*model.StoredMessage{
+		storedText("user", "0"),
+		storedText("assistant", "1"),
+		storedText("user", "2"),
+	}
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{session}, nil)
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 3).Return(nil)
+
+	memorySessions := 0
+	store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, s *model.AssistantSession) error {
+		if assert.Len(t, s.Tags, 1) && s.Tags[0] == model.SessionTagMemory {
+			memorySessions++
+			assert.Equal(t, "sess-1", s.EntityId)
+		}
+		return nil
+	}).AnyTimes()
+	store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	var sent []string
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		sent = append(sent, req.Messages[0].ContentBlocks[0].Text)
+		return textResponse("[]"), nil
+	}}
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		t.Error("nothing to embed when no facts were extracted")
+		return nil, errors.New("unexpected call")
+	}}
+	reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		t.Error("nothing to reconcile when no facts were extracted")
+		return nil, errors.New("unexpected call")
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, embed, reconcile)
+	ac.memory.memoryExtractBatchSize = 2
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	// two batches of two, the second led by its context message, each booked
+	// as its own Memory usage session
+	assert.Equal(t, []string{
+		"user: 0\n\nassistant: 1",
+		"assistant: 1\n\nuser: 2",
+	}, sent)
+	assert.Equal(t, 2, memorySessions)
+}
+
 func TestScanForMemoriesExtractErrorSkipsIndexUpdate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	// no UpdateSessionMemoryScanIndex expectation: a failed session must stay
-	// pending so the next scan retries it
+	// pending so the next scan retries it, with the failure counted against it
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 		return nil, errors.New("model unavailable")
@@ -1372,7 +1627,7 @@ func TestScanForMemoriesInterrupted(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
 		scanTestSession("sess-1"),
 		scanTestSession("sess-2"),
 	}, nil)
@@ -1396,16 +1651,46 @@ func TestScanForMemoriesInterrupted(t *testing.T) {
 	assert.Equal(t, 1, calls, "an interrupted scan must not process the next session")
 }
 
+func TestScanForMemoriesCancelledMidSessionDoesNotCountError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// no IncrementSessionMemoryErrors expectation: an interrupted scan is not
+	// the session's fault
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		cancel()
+		return nil, ctx.Err()
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(ctx, log.WithField("test", t.Name()))
+
+	assert.Equal(t, 1, calls)
+}
+
 func TestScanForMemoriesContinuesAfterFailedSession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
 		scanTestSession("sess-1"),
 		scanTestSession("sess-2"),
 	}, nil)
-	// only the session that scanned cleanly advances its index
+	// only the session that scanned cleanly advances its index; the failure is
+	// counted against the other
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-2", 1).Return(nil)
 	allowUsageRecording(store)
 
@@ -1431,7 +1716,7 @@ func TestScanForMemoriesUpdateReembeds(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
 
 	// collect where usage records land: extract, both embed rounds, and reconcile
@@ -1505,7 +1790,8 @@ func TestScanForMemoriesEmbedErrorSkipsSession(t *testing.T) {
 
 	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	allowUsageRecording(store)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
@@ -1526,7 +1812,8 @@ func TestScanForMemoriesEmbedCountMismatchSkipsSession(t *testing.T) {
 
 	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	allowUsageRecording(store)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
@@ -1541,12 +1828,160 @@ func TestScanForMemoriesEmbedCountMismatchSkipsSession(t *testing.T) {
 	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
 }
 
+// reconcileScanDB mocks the neighbor lookups reconcile makes for a single
+// user-scoped candidate fact, returning one nearby memory "n1".
+func reconcileScanDB() *mockdb.MockDB {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20).
+		Return(neighborRows(), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
+		Return(neighborRows(nearbyRowFixture{
+			id: "n1", memoryText: "user drinks tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+
+	return mDB
+}
+
+func TestScanForMemoriesReconcileErrorCountsAgainstSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+	allowUsageRecording(store)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return nil, errors.New("reconcile model unavailable")
+	}}
+
+	ac := newScanTestCoordinator(store, reconcileScanDB(), extract, singleEmbedAdapter(), reconcile)
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesReembedErrorCountsAgainstSession(t *testing.T) {
+	for name, embedFn := range map[string]func(*model.EmbeddingRequest) (*model.EmbeddingResponse, error){
+		"error": func(req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+			return nil, errors.New("embedding provider down")
+		},
+		"count mismatch": func(req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+			return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}, {0.2}}}, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := servermock.NewMockAssistantstore(ctrl)
+			store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+			store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+			allowUsageRecording(store)
+
+			extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+				return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+			}}
+			reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+				return textResponse(`{"operations":[{"op":"UPDATE","target_id":"n1","content":"user likes green tea"}]}`), nil
+			}}
+
+			// the first embed (of the extracted fact) succeeds; the re-embed of the
+			// reconciled content fails
+			embedCalls := 0
+			embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+				embedCalls++
+				if embedCalls == 1 {
+					return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}}}, nil
+				}
+
+				return embedFn(req)
+			}}
+
+			mDB := reconcileScanDB()
+			ac := newScanTestCoordinator(store, mDB, extract, embed, reconcile)
+
+			ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+			assert.Equal(t, 2, embedCalls)
+			mDB.AssertNotCalled(t, "QueryRow", mock.Anything, sqlContains("UPDATE memories"), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestScanForMemoriesIndexUpdateErrorCountsAgainstSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(errors.New("update failed"))
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+	allowUsageRecording(store)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesIncrementErrorDoesNotStopScan(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(errors.New("store unavailable"))
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-2", 1).Return(nil)
+	allowUsageRecording(store)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("model unavailable")
+		}
+
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	assert.Equal(t, 2, calls)
+}
+
+func TestScanForMemoriesPassesMaxMemoryRetries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, 3).Return(nil, nil)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memory.maxMemoryRetries = 3
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
 func TestScanForMemoriesStoreError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, errors.New("connection lost"))
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, errors.New("connection lost"))
 
 	extract := &scriptedAdapter{}
 
@@ -1593,7 +2028,7 @@ func TestScanForMemoriesDontScanBefore(t *testing.T) {
 	assert.NoError(t, err)
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), &expected).Return(nil, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), &expected, gomock.Any()).Return(nil, nil)
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.memory.dontScanBefore = cutoff
@@ -1640,7 +2075,7 @@ func TestMemoryWorkerScansOnTick(t *testing.T) {
 
 	scanned := make(chan struct{}, 1)
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).DoAndReturn(func(ctx context.Context, _ *time.Time) ([]*model.AssistantSessionDetails, error) {
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).DoAndReturn(func(ctx context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
 		select {
 		case scanned <- struct{}{}:
 		default:
@@ -1680,7 +2115,7 @@ func TestStartStopMemoryWorker(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, nil).AnyTimes()
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, nil).AnyTimes()
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.memory.useMemory = true
@@ -2449,6 +2884,9 @@ func memorySettingsFixture() memorySettings {
 		maxGlobalInclude:   5,
 		maxUserReconcile:   20,
 		maxGlobalReconcile: 20,
+
+		memoryExtractBatchSize: 5,
+		maxMemoryRetries:       2,
 	}
 }
 
@@ -2474,6 +2912,8 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 		ConfigSettingMaxGlobalMemoriesToInclude:   "7",
 		ConfigSettingMaxUserMemoriesToReconcile:   "11",
 		ConfigSettingMaxGlobalMemoriesToReconcile: "13",
+		ConfigSettingMemoryExtractBatchSize:       "4",
+		ConfigSettingMaxMemoryRetries:             "5",
 	}))
 
 	assert.True(t, applied.useMemory)
@@ -2485,6 +2925,33 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 	assert.Equal(t, 7, applied.maxGlobalInclude)
 	assert.Equal(t, 11, applied.maxUserReconcile)
 	assert.Equal(t, 13, applied.maxGlobalReconcile)
+	assert.Equal(t, 4, applied.memoryExtractBatchSize)
+	assert.Equal(t, 5, applied.maxMemoryRetries)
+}
+
+// A negative retry threshold would exclude every session, so it is clamped.
+func TestApplyMemorySettingsClampsMaxMemoryRetries(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+		ConfigSettingMaxMemoryRetries: "-1",
+	}))
+
+	assert.Equal(t, 0, applied.maxMemoryRetries)
+}
+
+// A batch size below 1 would never advance through the history, so it is
+// clamped rather than kept.
+func TestApplyMemorySettingsClampsMemoryExtractBatchSize(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	for _, value := range []string{"0", "-3"} {
+		applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+			ConfigSettingMemoryExtractBatchSize: value,
+		}))
+
+		assert.Equal(t, 1, applied.memoryExtractBatchSize, "count %q should clamp to 1", value)
+	}
 }
 
 func TestApplyMemorySettingsKeepsCurrentOnMissingOrInvalid(t *testing.T) {
@@ -2530,6 +2997,8 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 	store := &fakeConfigstore{settings: []*model.Setting{
 		{Id: ConfigSettingUseMemory, Value: "true"},
 		{Id: ConfigSettingMaxUserMemoriesToInclude, Value: "9"},
+		{Id: ConfigSettingMemoryExtractBatchSize, Value: "7"},
+		{Id: ConfigSettingMaxMemoryRetries, Value: "4"},
 	}}
 
 	ac := newMemoryReloadTestCoordinator(store)
@@ -2542,7 +3011,11 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 	assert.False(t, params.MemoryParams.UseMemoryScanner)
 	assert.Equal(t, 9, params.MemoryParams.MaxUserMemoriesToInclude)
 	assert.Equal(t, 300, params.MemoryParams.ScanIntervalSeconds)
+	assert.Equal(t, 7, params.MemoryParams.MemoryExtractBatchSize)
+	assert.Equal(t, 4, params.MemoryParams.MaxMemoryRetries)
 	assert.Equal(t, 9, ac.memorySnapshot().maxUserInclude)
+	assert.Equal(t, 7, ac.memorySnapshot().memoryExtractBatchSize)
+	assert.Equal(t, 4, ac.memorySnapshot().maxMemoryRetries)
 }
 
 func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
@@ -2550,7 +3023,7 @@ func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
 	defer ctrl.Finish()
 
 	sessionStore := servermock.NewMockAssistantstore(ctrl)
-	sessionStore.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, nil).AnyTimes()
+	sessionStore.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, nil).AnyTimes()
 
 	store := &fakeConfigstore{settings: []*model.Setting{{Id: ConfigSettingUseMemoryScanner, Value: "true"}}}
 	ac := newMemoryReloadTestCoordinator(store)
@@ -2607,7 +3080,7 @@ func TestMemoryWorkerRearmsOnIntervalChange(t *testing.T) {
 
 	scanned := make(chan struct{}, 1)
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).DoAndReturn(func(ctx context.Context, _ *time.Time) ([]*model.AssistantSessionDetails, error) {
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).DoAndReturn(func(ctx context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
 		select {
 		case scanned <- struct{}{}:
 		default:

@@ -3158,6 +3158,47 @@ func TestAssistantCoordinator_Init_ToolUseTurnPollingConfig(t *testing.T) {
 	}
 }
 
+func TestAssistantCoordinator_Init_MaxMemoryRetries(t *testing.T) {
+	tests := []struct {
+		name         string
+		moduleConfig module.ModuleConfig
+		want         int
+	}{
+		{
+			name:         "defaults when unconfigured",
+			moduleConfig: module.ModuleConfig{},
+			want:         DEFAULT_MAX_MEMORY_RETRIES,
+		},
+		{
+			name:         "configured value overrides the default",
+			moduleConfig: module.ModuleConfig{"maxMemoryRetries": float64(5)},
+			want:         5,
+		},
+		{
+			// A negative threshold would exclude every session from the scan.
+			name:         "negative clamps to zero",
+			moduleConfig: module.ModuleConfig{"maxMemoryRetries": float64(-1)},
+			want:         0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := NewAssistantCoordinator(&server.Server{
+				Context: context.Background(),
+				Config: &config.ServerConfig{
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{},
+					},
+				},
+			})
+			assert.NoError(t, ac.Init(tc.moduleConfig))
+			assert.Equal(t, tc.want, ac.memorySnapshot().maxMemoryRetries)
+			assert.Equal(t, tc.want, ac.srv.Config.ClientParams.AssistantParams.MemoryParams.MaxMemoryRetries)
+		})
+	}
+}
+
 // Helper types and functions for testing
 
 type mockAdapter struct {

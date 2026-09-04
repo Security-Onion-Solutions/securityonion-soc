@@ -71,6 +71,19 @@
           </v-col>
         </v-row>
 
+        <v-row class="my-2">
+          <v-col cols="6">
+            <div class="text-overline my-4">{{ i18n.agentStudioMemoryExtractBatchSize }}</div>
+            <v-text-field v-model.number="memoryOptions.memoryExtractBatchSize" type="number" min="1" :label="i18n.agentStudioMemoryExtractBatchSizeLabel" hide-details data-aid="agentstudio_options_memory_extract_batch_size"></v-text-field>
+            <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryExtractBatchSizeHelp"></div>
+          </v-col>
+          <v-col cols="6">
+            <div class="text-overline my-4">{{ i18n.agentStudioMemoryMaxRetries }}</div>
+            <v-text-field v-model.number="memoryOptions.maxMemoryRetries" type="number" min="0" :label="i18n.agentStudioMemoryMaxRetriesLabel" hide-details data-aid="agentstudio_options_max_memory_retries"></v-text-field>
+            <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryMaxRetriesHelp"></div>
+          </v-col>
+        </v-row>
+
         <div class="text-overline mb-4 mt-2">{{ i18n.agentStudioMemoryIncludeLimits }}</div>
         <v-row>
           <v-col cols="6">

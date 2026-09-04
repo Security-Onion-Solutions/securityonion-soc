@@ -861,6 +861,20 @@ func TestSaveChat(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, string(body), "messageCount")
 	assert.Contains(t, string(body), "chat_123456")
+	// New activity gives a session excluded for repeated scan failures another chance.
+	assert.Contains(t, string(body), "s.memoryErrors = 0;")
+}
+
+func TestIncrementSessionMessageCount_ElasticsearchErrorResponse(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	addJsonResponse(transport, 500, `{"error":{"type":"script_exception","reason":"runtime error"},"status":500}`)
+
+	err := store.incrementSessionMessageCount(context.Background(), "chat_123456")
+	assert.ErrorContains(t, err, "script_exception")
 }
 
 func TestSaveChat_IncrementFailureNonFatal(t *testing.T) {
@@ -1082,7 +1096,7 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	}`
 	addJsonResponse(transport, 200, chatResponse2)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.NoError(t, err)
 	assert.Len(t, details, 2)
 
@@ -1108,6 +1122,10 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	assert.Contains(t, string(body), "script")
 	assert.Contains(t, string(body), "so_session.messageCount")
 	assert.Contains(t, string(body), "so_session.lastMemoryScannedIndex")
+	// sessions past the retry threshold are excluded; a missing memoryErrors
+	// counts as zero
+	assert.Contains(t, string(body), `"so_session.memoryErrors":{"lte":2}`)
+	assert.Contains(t, string(body), `"must_not":{"exists":{"field":"so_session.memoryErrors"}}`)
 	assert.Contains(t, string(body), "so_session.deleteTime")
 	assert.Contains(t, string(body), "so_session.parentSessionId")
 	// memory-usage bookkeeping sessions are never scanned themselves
@@ -1163,7 +1181,7 @@ func TestFindSessionsPendingMemoryScan_EmptyHistorySkipped(t *testing.T) {
 	addJsonResponse(transport, 200, sessionResponse)
 	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.NoError(t, err)
 	assert.Empty(t, details)
 }
@@ -1219,7 +1237,7 @@ func TestFindSessionsPendingMemoryScan_HistoryErrorSkipsSession(t *testing.T) {
 		}
 	}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.NoError(t, err)
 	assert.Len(t, details, 1)
 	assert.Equal(t, "session2", details[0].Session.SessionId)
@@ -1235,7 +1253,7 @@ func TestFindSessionsPendingMemoryScan_NoResults(t *testing.T) {
 
 	addJsonResponse(transport, 200, `{"hits": {"total": {"value": 0}, "hits": []}}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.NoError(t, err)
 	assert.Empty(t, details)
 	assert.Len(t, transport.GetRequests(), 1)
@@ -1254,7 +1272,7 @@ func TestFindSessionsPendingMemoryScan_DontScanBefore(t *testing.T) {
 	// The caller's instant is honored verbatim, offset included, so
 	// Elasticsearch cannot reinterpret the day boundary as UTC.
 	cutoff := time.Date(2026, 8, 15, 13, 45, 0, 0, time.FixedZone("MST", -7*3600))
-	details, err := store.FindSessionsPendingMemoryScan(ctx, &cutoff)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, &cutoff, 2)
 	assert.NoError(t, err)
 	assert.Empty(t, details)
 
@@ -1290,7 +1308,7 @@ func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
 
 	addJsonResponse(transport, 500, `{"error": "internal server error"}`)
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.Error(t, err)
 	assert.Nil(t, details)
 }
@@ -1303,7 +1321,7 @@ func TestFindSessionsPendingMemoryScan_Unauthorized(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	details, err := store.FindSessionsPendingMemoryScan(ctx, nil)
+	details, err := store.FindSessionsPendingMemoryScan(ctx, nil, 2)
 	assert.Error(t, err)
 	assert.Nil(t, details)
 	assert.Empty(t, transport.GetRequests())
@@ -1336,6 +1354,62 @@ func TestUpdateSessionMemoryScanIndex(t *testing.T) {
 	// The scanner also heals a missing or undercounted messageCount.
 	assert.Contains(t, string(body), "messageCount")
 	assert.Contains(t, string(body), `"scanned":7`)
+	// A successful scan clears the failure counter.
+	assert.Contains(t, string(body), "s.memoryErrors = 0;")
+}
+
+func TestIncrementSessionMemoryErrors(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "version_conflicts": 0, "failures": []}`)
+
+	err := store.IncrementSessionMemoryErrors(ctx, "chat_123456")
+	assert.NoError(t, err)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+	assert.Contains(t, reqs[0].URL.Path, "session-index")
+	assert.Contains(t, reqs[0].URL.Path, "_update_by_query")
+	assert.Contains(t, reqs[0].URL.RawQuery, "conflicts=proceed")
+	assert.Contains(t, reqs[0].URL.RawQuery, "refresh=true")
+
+	body, err := io.ReadAll(reqs[0].Body)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "chat_123456")
+	// A missing counter starts from zero.
+	assert.Contains(t, string(body), "s.memoryErrors = (s.memoryErrors != null ? s.memoryErrors : 0) + 1;")
+}
+
+func TestIncrementSessionMemoryErrors_ElasticsearchError(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	transport.AddResponse(nil, errors.New("update by query failed"))
+
+	err := store.IncrementSessionMemoryErrors(ctx, "chat_123456")
+	assert.Error(t, err)
+}
+
+func TestIncrementSessionMemoryErrors_Unauthorized(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	err := store.IncrementSessionMemoryErrors(ctx, "chat_123456")
+	assert.Error(t, err)
+	assert.Empty(t, transport.GetRequests())
 }
 
 func TestUpdateSessionMemoryScanIndex_ElasticsearchError(t *testing.T) {
@@ -1350,6 +1424,34 @@ func TestUpdateSessionMemoryScanIndex_ElasticsearchError(t *testing.T) {
 
 	err := store.UpdateSessionMemoryScanIndex(ctx, "chat_123456", 7)
 	assert.Error(t, err)
+}
+
+func TestUpdateSessionMemoryScanIndex_ElasticsearchErrorResponse(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 500, `{"error":{"type":"script_exception","reason":"runtime error"},"status":500}`)
+
+	err := store.UpdateSessionMemoryScanIndex(ctx, "chat_123456", 7)
+	assert.ErrorContains(t, err, "script_exception")
+}
+
+func TestIncrementSessionMemoryErrors_ElasticsearchErrorResponse(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	addJsonResponse(transport, 500, `{"error":{"type":"script_exception","reason":"runtime error"},"status":500}`)
+
+	err := store.IncrementSessionMemoryErrors(ctx, "chat_123456")
+	assert.ErrorContains(t, err, "script_exception")
 }
 
 func TestUpdateSessionMemoryScanIndex_Unauthorized(t *testing.T) {

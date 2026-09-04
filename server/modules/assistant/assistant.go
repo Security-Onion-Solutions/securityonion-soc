@@ -85,6 +85,12 @@ const (
 	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
 	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
 
+	// Unscanned session messages sent to the Memory agent per request.
+	DEFAULT_MEMORY_EXTRACT_BATCH_SIZE = 5
+
+	// Failed memory scans a session may accumulate before it is excluded.
+	DEFAULT_MAX_MEMORY_RETRIES = 2
+
 	DEFAULT_MEMORY_PAGE_SIZE = 25
 	MAX_MEMORY_PAGE_SIZE     = 1000
 
@@ -187,21 +193,23 @@ type AssistantCoordinator struct {
 }
 
 type memorySettings struct {
-	useMemory          bool
-	useScanner         bool
-	scanInterval       time.Duration
-	mem2mem            float64
-	mem2msg            float64
-	maxUserInclude     int
-	maxGlobalInclude   int
-	maxUserReconcile   int
-	maxGlobalReconcile int
-	memoryModel        string
-	embedModel         string
-	reconcileModel     string
-	memoryPersona      string
-	reconcilePersona   string
-	dontScanBefore     string
+	useMemory              bool
+	useScanner             bool
+	scanInterval           time.Duration
+	mem2mem                float64
+	mem2msg                float64
+	maxUserInclude         int
+	maxGlobalInclude       int
+	maxUserReconcile       int
+	maxGlobalReconcile     int
+	memoryExtractBatchSize int
+	maxMemoryRetries       int
+	memoryModel            string
+	embedModel             string
+	reconcileModel         string
+	memoryPersona          string
+	reconcilePersona       string
+	dontScanBefore         string
 }
 
 func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
@@ -252,6 +260,8 @@ const (
 	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
 	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
 	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
+	ConfigSettingMemoryExtractBatchSize       = "soc.config.server.modules.assistant.memoryExtractBatchSize"
+	ConfigSettingMaxMemoryRetries             = "soc.config.server.modules.assistant.maxMemoryRetries"
 )
 
 var memoryConfigSettings = []string{
@@ -270,6 +280,8 @@ var memoryConfigSettings = []string{
 	ConfigSettingMemoryPersona,
 	ConfigSettingReconcilePersona,
 	ConfigSettingDontScanBefore,
+	ConfigSettingMemoryExtractBatchSize,
+	ConfigSettingMaxMemoryRetries,
 }
 
 // getMaxSubSessionTokens returns the current per-sub-session output-token budget.
@@ -321,22 +333,36 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
 
+	memoryExtractBatchSize := module.GetIntDefault(config, "memoryExtractBatchSize", DEFAULT_MEMORY_EXTRACT_BATCH_SIZE)
+	if memoryExtractBatchSize < 1 {
+		log.FromContext(ac.srv.Context).WithField("memoryExtractBatchSize", memoryExtractBatchSize).Warn("memoryExtractBatchSize must be at least 1; using 1")
+		memoryExtractBatchSize = 1
+	}
+
+	maxMemoryRetries := module.GetIntDefault(config, "maxMemoryRetries", DEFAULT_MAX_MEMORY_RETRIES)
+	if maxMemoryRetries < 0 {
+		log.FromContext(ac.srv.Context).WithField("maxMemoryRetries", maxMemoryRetries).Warn("maxMemoryRetries must be at least 0; using 0")
+		maxMemoryRetries = 0
+	}
+
 	memory := memorySettings{
-		useMemory:          module.GetBoolDefault(config, "useMemory", false),
-		useScanner:         module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
-		scanInterval:       time.Second * time.Duration(memScanInterval),
-		mem2mem:            module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
-		mem2msg:            module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
-		maxUserInclude:     module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
-		maxGlobalInclude:   module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
-		maxUserReconcile:   module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
-		maxGlobalReconcile: module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
-		memoryModel:        module.GetStringDefault(config, "memoryModel", ""),
-		embedModel:         module.GetStringDefault(config, "embedModel", ""),
-		reconcileModel:     module.GetStringDefault(config, "reconcileModel", ""),
-		memoryPersona:      module.GetStringDefault(config, "memoryPersona", ""),
-		reconcilePersona:   module.GetStringDefault(config, "reconcilePersona", ""),
-		dontScanBefore:     module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
+		useMemory:              module.GetBoolDefault(config, "useMemory", false),
+		useScanner:             module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
+		scanInterval:           time.Second * time.Duration(memScanInterval),
+		mem2mem:                module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
+		mem2msg:                module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
+		maxUserInclude:         module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
+		maxGlobalInclude:       module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
+		maxUserReconcile:       module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
+		maxGlobalReconcile:     module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
+		memoryExtractBatchSize: memoryExtractBatchSize,
+		maxMemoryRetries:       maxMemoryRetries,
+		memoryModel:            module.GetStringDefault(config, "memoryModel", ""),
+		embedModel:             module.GetStringDefault(config, "embedModel", ""),
+		reconcileModel:         module.GetStringDefault(config, "reconcileModel", ""),
+		memoryPersona:          module.GetStringDefault(config, "memoryPersona", ""),
+		reconcilePersona:       module.GetStringDefault(config, "reconcilePersona", ""),
+		dontScanBefore:         module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
 	}
 
 	if memScanInterval <= 0 && err == nil && memory.useScanner {
