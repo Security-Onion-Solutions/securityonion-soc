@@ -176,6 +176,12 @@ func applyMemorySettings(logger log.Interface, settings memorySettings, byID map
 	intSetting(ConfigSettingMaxGlobalMemoriesToReconcile, &settings.maxGlobalReconcile)
 	stringSetting(ConfigSettingDontScanBefore, &settings.dontScanBefore)
 
+	intSetting(ConfigSettingReconcileMessagesCount, &settings.reconcileMessagesCount)
+	if settings.reconcileMessagesCount < 1 {
+		logger.WithField("setting", ConfigSettingReconcileMessagesCount).Warn("reconcileMessagesCount must be at least 1; using 1")
+		settings.reconcileMessagesCount = 1
+	}
+
 	seconds := int(settings.scanInterval / time.Second)
 	intSetting(ConfigSettingMemoryScanInterval, &seconds)
 
@@ -204,6 +210,7 @@ func (ac *AssistantCoordinator) exposeMemorySettings() {
 		MaxGlobalMemoriesToInclude:   settings.maxGlobalInclude,
 		MaxUserMemoriesToReconcile:   settings.maxUserReconcile,
 		MaxGlobalMemoriesToReconcile: settings.maxGlobalReconcile,
+		ReconcileMessagesCount:       settings.reconcileMessagesCount,
 		MemoryModel:                  settings.memoryModel,
 		EmbedModel:                   settings.embedModel,
 		ReconcileModel:               settings.reconcileModel,
@@ -557,8 +564,10 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 		}).Info("scanning for memories to add")
 
 		// Extract
-		facts, extractExchange, err := ac.extractFacts(ctx, sessionDetails, memoryAgent, memoryModel)
-		ac.recordAgentSession(ctx, model.SessionTagMemory, sessionDetails.Session.SessionId, memoryModel.Selector(), extractExchange)
+		facts, extractExchanges, err := ac.extractFacts(ctx, sessionDetails, memoryAgent, memoryModel)
+		for _, exchange := range extractExchanges {
+			ac.recordAgentSession(ctx, model.SessionTagMemory, sessionDetails.Session.SessionId, memoryModel.Selector(), exchange)
+		}
 		if err != nil {
 			logger.WithError(err).Error("unable to extract facts")
 			continue
@@ -745,33 +754,13 @@ func (ac *AssistantCoordinator) filterFactsByUserPerms(ctx context.Context, fact
 	return filtered
 }
 
-// extractFacts also returns the request/response exchange whenever the send
-// itself succeeded — even when the response content is unusable — so the
-// caller can record the token usage that was spent either way.
-func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.Agent, memoryModel *model.ModelParameters) ([]*model.ExtractedFact, []*model.Message, error) {
+// extractFacts runs the Memory agent over the unscanned transcript one batch
+// at a time and merges the facts. It also returns the request/response
+// exchanges collected so far — one per Memory agent call, even on a mid-loop
+// error or an unusable response — so the caller can record the token usage
+// that was spent either way.
+func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model.AssistantSessionDetails, memoryAgent *model.Agent, memoryModel *model.ModelParameters) (facts []*model.ExtractedFact, exchanges [][]*model.Message, err error) {
 	logger := log.FromContext(ctx)
-	ts := buildMemoryExtractTranscript(details)
-
-	req := &model.ChatRequest{
-		Messages: []*model.Message{
-			{
-				Role: "user",
-				ContentBlocks: []model.ContentBlock{
-					{
-						Type: "text",
-						Text: ts,
-					},
-				},
-			},
-		},
-		UserId: server.SYSTEM_ID,
-		Model:  memoryModel.ID,
-	}
-
-	err := ac.setupAgent(ctx, req, memoryAgent)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	adapter, ok := ac.adapters[memoryModel.Adapter]
 	if !ok {
@@ -779,55 +768,96 @@ func (ac *AssistantCoordinator) extractFacts(ctx context.Context, details *model
 		return nil, nil, fmt.Errorf("unknown adapter for memory model")
 	}
 
-	msg, err := adapter.SendMessage(ctx, req)
-	if err != nil {
-		return nil, nil, err
+	batches := buildMemoryExtractTranscripts(details, ac.memorySnapshot().reconcileMessagesCount)
+	if len(batches) == 0 {
+		return nil, nil, nil
 	}
 
-	exchange := []*model.Message{req.Messages[0], msg}
+	facts = make([]*model.ExtractedFact, 0)
+	// The context message can surface the same fact in adjacent batches, and
+	// reconcile only compares against stored memories, not siblings in this pass.
+	seen := map[string]bool{}
 
-	var jsn string
-	for _, cb := range msg.ContentBlocks {
-		if strings.EqualFold(cb.Type, "Text") {
-			jsn = cb.Text
+	for _, ts := range batches {
+		if err := ctx.Err(); err != nil {
+			return nil, exchanges, err
+		}
+
+		req := &model.ChatRequest{
+			Messages: []*model.Message{
+				{
+					Role: "user",
+					ContentBlocks: []model.ContentBlock{
+						{
+							Type: "text",
+							Text: ts,
+						},
+					},
+				},
+			},
+			UserId: server.SYSTEM_ID,
+			Model:  memoryModel.ID,
+		}
+
+		if err := ac.setupAgent(ctx, req, memoryAgent); err != nil {
+			return nil, exchanges, err
+		}
+
+		msg, err := adapter.SendMessage(ctx, req)
+		if err != nil {
+			return nil, exchanges, err
+		}
+
+		exchanges = append(exchanges, []*model.Message{req.Messages[0], msg})
+
+		var jsn string
+		for _, cb := range msg.ContentBlocks {
+			if strings.EqualFold(cb.Type, "Text") {
+				jsn = cb.Text
+			}
+		}
+
+		if len(jsn) == 0 {
+			return nil, exchanges, fmt.Errorf("no returned content from Extraction agent")
+		}
+
+		extracted := []*model.ExtractedFact{}
+
+		if err := json.Unmarshal([]byte(stripMarkdownWrapper(jsn)), &extracted); err != nil {
+			return nil, exchanges, err
+		}
+
+		for _, fact := range extracted {
+			if fact == nil {
+				continue
+			}
+
+			// Collapse all interior whitespace
+			fact.Fact = strings.Join(strings.Fields(fact.Fact), " ")
+
+			// The prompt allows only "user" and "global" and says to default to
+			// "user" when unsure; normalize anything unexpected the same way.
+			if strings.EqualFold(fact.Scope, "global") {
+				fact.Scope = "global"
+			} else {
+				fact.Scope = "user"
+			}
+
+			if len(fact.Fact) == 0 {
+				continue
+			}
+
+			key := strings.ToLower(fact.Fact) + "\x00" + fact.Scope
+			if seen[key] {
+				continue
+			}
+
+			seen[key] = true
+			facts = append(facts, fact)
 		}
 	}
 
-	if len(jsn) == 0 {
-		return nil, exchange, fmt.Errorf("no returned content from Extraction agent")
-	}
-
-	extracted := []*model.ExtractedFact{}
-
-	err = json.Unmarshal([]byte(stripMarkdownWrapper(jsn)), &extracted)
-	if err != nil {
-		return nil, exchange, err
-	}
-
-	normalized := make([]*model.ExtractedFact, 0, len(extracted))
-	// normalize
-	for _, fact := range extracted {
-		if fact == nil {
-			continue
-		}
-
-		// Collapse all interior whitespace
-		fact.Fact = strings.Join(strings.Fields(fact.Fact), " ")
-
-		// The prompt allows only "user" and "global" and says to default to
-		// "user" when unsure; normalize anything unexpected the same way.
-		if strings.EqualFold(fact.Scope, "global") {
-			fact.Scope = "global"
-		} else {
-			fact.Scope = "user"
-		}
-
-		if len(fact.Fact) > 0 {
-			normalized = append(normalized, fact)
-		}
-	}
-
-	return normalized, exchange, nil
+	return facts, exchanges, nil
 }
 
 // reconcileMemories also returns the request/response exchanges collected so
@@ -1344,16 +1374,10 @@ func stripMarkdownWrapper(s string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string {
-	lines := []string{}
+func renderMemoryTranscript(msgs []*model.StoredMessage) string {
+	lines := make([]string, 0, len(msgs))
 
-	begin := max(details.Session.LastMemoryScannedIndex-2, 0)
-
-	if begin >= len(details.History) {
-		return ""
-	}
-
-	for _, msg := range details.History[begin:] {
+	for _, msg := range msgs {
 		line := strings.Builder{}
 		line.WriteString(msg.Message.Role)
 		line.WriteString(": ")
@@ -1367,6 +1391,30 @@ func buildMemoryExtractTranscript(details *model.AssistantSessionDetails) string
 	}
 
 	return strings.Join(lines, "\n\n")
+}
+
+// buildMemoryExtractTranscripts splits the unscanned history into batches of
+// batchSize messages, each led by the message before it (when there is one) so
+// the Memory agent sees what the batch is replying to.
+func buildMemoryExtractTranscripts(details *model.AssistantSessionDetails, batchSize int) []string {
+	history := details.History
+
+	start := max(details.Session.LastMemoryScannedIndex, 0)
+	if start >= len(history) {
+		return nil
+	}
+
+	batchSize = max(batchSize, 1)
+
+	var batches []string
+
+	for start < len(history) {
+		end := min(start+batchSize, len(history))
+		batches = append(batches, renderMemoryTranscript(history[max(start-1, 0):end]))
+		start = end
+	}
+
+	return batches
 }
 
 func (ac *AssistantCoordinator) fetchMemoriesForPrompt(ctx context.Context, content string, sourceSessionId string) (user []*model.NearbyMemory, global []*model.NearbyMemory, err error) {

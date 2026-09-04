@@ -24,6 +24,7 @@ const MEMORY_SETTING_IDS = {
   maxGlobalMemoriesToInclude: 'soc.config.server.modules.assistant.maxGlobalMemoriesToInclude',
   maxUserMemoriesToReconcile: 'soc.config.server.modules.assistant.maxUserMemoriesToReconcile',
   maxGlobalMemoriesToReconcile: 'soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile',
+  reconcileMessagesCount: 'soc.config.server.modules.assistant.reconcileMessagesCount',
   memoryModel: 'soc.config.server.modules.assistant.memoryModel',
   embedModel: 'soc.config.server.modules.assistant.embedModel',
   reconcileModel: 'soc.config.server.modules.assistant.reconcileModel',

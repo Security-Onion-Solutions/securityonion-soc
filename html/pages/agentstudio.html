@@ -91,6 +91,14 @@
           </v-col>
         </v-row>
         <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryLimitsHelp"></div>
+
+        <div class="text-overline my-4">{{ i18n.agentStudioMemoryReconcileMessages }}</div>
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field v-model.number="memoryOptions.reconcileMessagesCount" type="number" min="1" :label="i18n.agentStudioMemoryReconcileMessagesLabel" hide-details data-aid="agentstudio_options_reconcile_messages"></v-text-field>
+          </v-col>
+        </v-row>
+        <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryReconcileMessagesHelp"></div>
       </v-card-text>
       <v-card-actions>
         <v-btn variant="text" class="ml-2" color="primary" @click.stop="showPersonaDialog = true" data-aid="agentstudio_options_personas">

@@ -85,6 +85,9 @@ const (
 	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
 	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
 
+	// Unscanned session messages sent to the Memory agent per request.
+	DEFAULT_RECONCILE_MESSAGES_COUNT = 5
+
 	DEFAULT_MEMORY_PAGE_SIZE = 25
 	MAX_MEMORY_PAGE_SIZE     = 1000
 
@@ -187,21 +190,22 @@ type AssistantCoordinator struct {
 }
 
 type memorySettings struct {
-	useMemory          bool
-	useScanner         bool
-	scanInterval       time.Duration
-	mem2mem            float64
-	mem2msg            float64
-	maxUserInclude     int
-	maxGlobalInclude   int
-	maxUserReconcile   int
-	maxGlobalReconcile int
-	memoryModel        string
-	embedModel         string
-	reconcileModel     string
-	memoryPersona      string
-	reconcilePersona   string
-	dontScanBefore     string
+	useMemory              bool
+	useScanner             bool
+	scanInterval           time.Duration
+	mem2mem                float64
+	mem2msg                float64
+	maxUserInclude         int
+	maxGlobalInclude       int
+	maxUserReconcile       int
+	maxGlobalReconcile     int
+	reconcileMessagesCount int
+	memoryModel            string
+	embedModel             string
+	reconcileModel         string
+	memoryPersona          string
+	reconcilePersona       string
+	dontScanBefore         string
 }
 
 func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
@@ -246,6 +250,7 @@ const (
 	ConfigSettingMaxGlobalMemoriesToInclude   = "soc.config.server.modules.assistant.maxGlobalMemoriesToInclude"
 	ConfigSettingMaxUserMemoriesToReconcile   = "soc.config.server.modules.assistant.maxUserMemoriesToReconcile"
 	ConfigSettingMaxGlobalMemoriesToReconcile = "soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile"
+	ConfigSettingReconcileMessagesCount       = "soc.config.server.modules.assistant.reconcileMessagesCount"
 	ConfigSettingMemoryModel                  = "soc.config.server.modules.assistant.memoryModel"
 	ConfigSettingEmbedModel                   = "soc.config.server.modules.assistant.embedModel"
 	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
@@ -264,6 +269,7 @@ var memoryConfigSettings = []string{
 	ConfigSettingMaxGlobalMemoriesToInclude,
 	ConfigSettingMaxUserMemoriesToReconcile,
 	ConfigSettingMaxGlobalMemoriesToReconcile,
+	ConfigSettingReconcileMessagesCount,
 	ConfigSettingMemoryModel,
 	ConfigSettingEmbedModel,
 	ConfigSettingReconcileModel,
@@ -321,22 +327,29 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
 
+	reconcileMessagesCount := module.GetIntDefault(config, "reconcileMessagesCount", DEFAULT_RECONCILE_MESSAGES_COUNT)
+	if reconcileMessagesCount < 1 {
+		log.FromContext(ac.srv.Context).WithField("reconcileMessagesCount", reconcileMessagesCount).Warn("reconcileMessagesCount must be at least 1; using 1")
+		reconcileMessagesCount = 1
+	}
+
 	memory := memorySettings{
-		useMemory:          module.GetBoolDefault(config, "useMemory", false),
-		useScanner:         module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
-		scanInterval:       time.Second * time.Duration(memScanInterval),
-		mem2mem:            module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
-		mem2msg:            module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
-		maxUserInclude:     module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
-		maxGlobalInclude:   module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
-		maxUserReconcile:   module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
-		maxGlobalReconcile: module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
-		memoryModel:        module.GetStringDefault(config, "memoryModel", ""),
-		embedModel:         module.GetStringDefault(config, "embedModel", ""),
-		reconcileModel:     module.GetStringDefault(config, "reconcileModel", ""),
-		memoryPersona:      module.GetStringDefault(config, "memoryPersona", ""),
-		reconcilePersona:   module.GetStringDefault(config, "reconcilePersona", ""),
-		dontScanBefore:     module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
+		useMemory:              module.GetBoolDefault(config, "useMemory", false),
+		useScanner:             module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
+		scanInterval:           time.Second * time.Duration(memScanInterval),
+		mem2mem:                module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
+		mem2msg:                module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
+		maxUserInclude:         module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
+		maxGlobalInclude:       module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
+		maxUserReconcile:       module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
+		maxGlobalReconcile:     module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
+		reconcileMessagesCount: reconcileMessagesCount,
+		memoryModel:            module.GetStringDefault(config, "memoryModel", ""),
+		embedModel:             module.GetStringDefault(config, "embedModel", ""),
+		reconcileModel:         module.GetStringDefault(config, "reconcileModel", ""),
+		memoryPersona:          module.GetStringDefault(config, "memoryPersona", ""),
+		reconcilePersona:       module.GetStringDefault(config, "reconcilePersona", ""),
+		dontScanBefore:         module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
 	}
 
 	if memScanInterval <= 0 && err == nil && memory.useScanner {
