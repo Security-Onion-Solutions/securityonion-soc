@@ -79,7 +79,6 @@ query-monitor:      query-admin
 subgrid-monitor:    subgrid-admin
 user-monitor:       user-admin
 playbook-monitor:   playbook-admin
-detections-monitor: playbook-monitor
 assistant-user:     assistant-admin
 assistant-monitor:  assistant-admin
 memory-user:        memory-curator
