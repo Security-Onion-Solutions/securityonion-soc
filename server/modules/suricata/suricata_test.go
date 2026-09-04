@@ -249,6 +249,40 @@ func TestIndexRules(t *testing.T) {
 	assert.Equal(t, output["1100000"], 2)
 }
 
+func TestIsSingleLine(t *testing.T) {
+	t.Parallel()
+
+	table := []struct {
+		Name     string
+		Input    string
+		Expected bool
+	}{
+		{Name: "Simple Rule", Input: SimpleRule, Expected: true},
+		{Name: "Trailing Newline", Input: SimpleRule + "\n", Expected: true},
+		{Name: "Leading Newline", Input: "\n" + SimpleRule, Expected: true},
+		{Name: "Surrounding Blank Lines", Input: "\n\n" + SimpleRule + "\n\n", Expected: true},
+		{Name: "Whitespace-Only Extra Lines", Input: "  \t\n" + SimpleRule + "\n \t ", Expected: true},
+		{Name: "CRLF Line Ending", Input: SimpleRule + "\r\n", Expected: true},
+		{Name: "Empty String", Input: "", Expected: false},
+		{Name: "Whitespace Only", Input: " \n\t\n ", Expected: false},
+		{Name: "Only Newlines", Input: "\n\n\n", Expected: false},
+		{Name: "Two Rules", Input: FlowbitsRuleA + "\n" + FlowbitsRuleB, Expected: false},
+		{Name: "Comment Then Rule", Input: "# comment\n" + SimpleRule, Expected: false},
+		{Name: "Rule Split Mid-Option", Input: `alert tcp any any -> any any (msg:"Test";` + "\n" + `sid:1001;)`, Expected: false},
+		{Name: "Two Rules Separated By Blank Line", Input: SimpleRule + "\n\n" + SimpleRule, Expected: false},
+		{Name: "Two Rules On One Line", Input: FlowbitsRuleA + " " + FlowbitsRuleB, Expected: true},
+	}
+
+	for _, test := range table {
+		test := test
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.Expected, isSingleLine(test.Input))
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	table := []struct {
 		Name        string
@@ -3410,6 +3444,43 @@ func TestWriteAllRulesFileAdditionalCoverage(t *testing.T) {
 		err := eng.writeAllRulesFile(detections)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported backreference")
+		assert.Contains(t, err.Error(), "SID 1001")
+	})
+
+	t.Run("Modify override producing multi-line rule returns error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		iom := mock.NewMockIOManager(ctrl)
+
+		eng := &SuricataEngine{
+			IOManager:       iom,
+			allRulesFile:    "/test/all.rules",
+			flowbitRequired: map[string]*FlowbitDependency{},
+		}
+
+		detections := []*model.Detection{
+			{
+				PublicID:  "1001",
+				Content:   `alert tcp any any -> any any (msg:"Test"; sid:1001;)`,
+				IsEnabled: true,
+				Ruleset:   "test",
+				Overrides: []*model.Override{
+					{
+						Type:      model.OverrideTypeModify,
+						IsEnabled: true,
+						OverrideParameters: model.OverrideParameters{
+							Regex: util.Ptr(`msg:"Test"`),
+							Value: util.Ptr("msg:\"Test\";\nsid:9999"),
+						},
+					},
+				},
+			},
+		}
+
+		err := eng.writeAllRulesFile(detections)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "multi-line")
 		assert.Contains(t, err.Error(), "SID 1001")
 	})
 
