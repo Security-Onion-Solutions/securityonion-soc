@@ -1225,6 +1225,7 @@ test('the options dialog loads the memory tunables from the client parameters', 
     maxUserMemoriesToReconcile: 20,
     maxGlobalMemoriesToReconcile: 20,
     reconcileMessagesCount: 5,
+    maxMemoryRetries: 2,
   };
 
   comp.initAssistant(params);
@@ -1233,18 +1234,20 @@ test('the options dialog loads the memory tunables from the client parameters', 
   expect(comp.memoryOptions.useMemory).toBe(true);
   expect(comp.memoryOptions.scanIntervalSeconds).toBe(60);
   expect(comp.memoryOptions.reconcileMessagesCount).toBe(5);
+  expect(comp.memoryOptions.maxMemoryRetries).toBe(2);
   expect(comp.optionsDirty()).toBe(false);
 });
 
 test('only the changed memory tunables are written', async () => {
   const put = mockPapi('put', {});
   const params = memoryParams();
-  params.memoryParams = { useMemory: false, scanIntervalSeconds: 300, maxUserMemoriesToInclude: 5 };
+  params.memoryParams = { useMemory: false, scanIntervalSeconds: 300, maxUserMemoriesToInclude: 5, maxMemoryRetries: 2 };
 
   comp.initAssistant(params);
   comp.showOptions();
   comp.memoryOptions.useMemory = true;
   comp.memoryOptions.scanIntervalSeconds = 60;
+  comp.memoryOptions.maxMemoryRetries = 4;
 
   expect(comp.optionsDirty()).toBe(true);
 
@@ -1254,6 +1257,7 @@ test('only the changed memory tunables are written', async () => {
   expect(written).toEqual([
     ['soc.config.server.modules.assistant.useMemory', 'true'],
     ['soc.config.server.modules.assistant.memoryScanIntervalSeconds', '60'],
+    ['soc.config.server.modules.assistant.maxMemoryRetries', '4'],
   ]);
   expect(comp.showOptionsDialog).toBe(false);
   expect(comp.optionsDirty()).toBe(false);

@@ -440,6 +440,9 @@ type AssistantSession struct {
 	// 0; sessions created before this field existed have no value, which the
 	// scanner treats as pending until its index update heals it.
 	MessageCount int `json:"messageCount" example:"7"`
+	// How many consecutive memory scans of this session have failed. Reset to 0
+	// by a successful scan
+	MemoryErrors int `json:"memoryErrors,omitempty" example:"1"`
 }
 
 const (

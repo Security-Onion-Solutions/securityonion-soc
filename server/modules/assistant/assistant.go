@@ -88,6 +88,9 @@ const (
 	// Unscanned session messages sent to the Memory agent per request.
 	DEFAULT_RECONCILE_MESSAGES_COUNT = 5
 
+	// Failed memory scans a session may accumulate before it is excluded.
+	DEFAULT_MAX_MEMORY_RETRIES = 2
+
 	DEFAULT_MEMORY_PAGE_SIZE = 25
 	MAX_MEMORY_PAGE_SIZE     = 1000
 
@@ -200,6 +203,7 @@ type memorySettings struct {
 	maxUserReconcile       int
 	maxGlobalReconcile     int
 	reconcileMessagesCount int
+	maxMemoryRetries       int
 	memoryModel            string
 	embedModel             string
 	reconcileModel         string
@@ -257,6 +261,7 @@ const (
 	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
 	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
 	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
+	ConfigSettingMaxMemoryRetries             = "soc.config.server.modules.assistant.maxMemoryRetries"
 )
 
 var memoryConfigSettings = []string{
@@ -276,6 +281,7 @@ var memoryConfigSettings = []string{
 	ConfigSettingMemoryPersona,
 	ConfigSettingReconcilePersona,
 	ConfigSettingDontScanBefore,
+	ConfigSettingMaxMemoryRetries,
 }
 
 // getMaxSubSessionTokens returns the current per-sub-session output-token budget.
@@ -333,6 +339,12 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		reconcileMessagesCount = 1
 	}
 
+	maxMemoryRetries := module.GetIntDefault(config, "maxMemoryRetries", DEFAULT_MAX_MEMORY_RETRIES)
+	if maxMemoryRetries < 0 {
+		log.FromContext(ac.srv.Context).WithField("maxMemoryRetries", maxMemoryRetries).Warn("maxMemoryRetries must be at least 0; using 0")
+		maxMemoryRetries = 0
+	}
+
 	memory := memorySettings{
 		useMemory:              module.GetBoolDefault(config, "useMemory", false),
 		useScanner:             module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
@@ -344,6 +356,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 		maxUserReconcile:       module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
 		maxGlobalReconcile:     module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
 		reconcileMessagesCount: reconcileMessagesCount,
+		maxMemoryRetries:       maxMemoryRetries,
 		memoryModel:            module.GetStringDefault(config, "memoryModel", ""),
 		embedModel:             module.GetStringDefault(config, "embedModel", ""),
 		reconcileModel:         module.GetStringDefault(config, "reconcileModel", ""),

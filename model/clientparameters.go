@@ -215,6 +215,7 @@ type MemoryParameters struct {
 	MaxUserMemoriesToReconcile   int     `json:"maxUserMemoriesToReconcile" example:"20"`
 	MaxGlobalMemoriesToReconcile int     `json:"maxGlobalMemoriesToReconcile" example:"20"`
 	ReconcileMessagesCount       int     `json:"reconcileMessagesCount" example:"5"`
+	MaxMemoryRetries             int     `json:"maxMemoryRetries" example:"2"`
 	MemoryModel                  string  `json:"memoryModel" example:"sonnet@SOAI"`
 	EmbedModel                   string  `json:"embedModel" example:"amazon.titan-embed-text-v2@SOAI"`
 	ReconcileModel               string  `json:"reconcileModel" example:"sonnet@SOAI"`

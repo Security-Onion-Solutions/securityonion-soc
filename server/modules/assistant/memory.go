@@ -182,6 +182,12 @@ func applyMemorySettings(logger log.Interface, settings memorySettings, byID map
 		settings.reconcileMessagesCount = 1
 	}
 
+	intSetting(ConfigSettingMaxMemoryRetries, &settings.maxMemoryRetries)
+	if settings.maxMemoryRetries < 0 {
+		logger.WithField("setting", ConfigSettingMaxMemoryRetries).Warn("maxMemoryRetries must be at least 0; using 0")
+		settings.maxMemoryRetries = 0
+	}
+
 	seconds := int(settings.scanInterval / time.Second)
 	intSetting(ConfigSettingMemoryScanInterval, &seconds)
 
@@ -211,6 +217,7 @@ func (ac *AssistantCoordinator) exposeMemorySettings() {
 		MaxUserMemoriesToReconcile:   settings.maxUserReconcile,
 		MaxGlobalMemoriesToReconcile: settings.maxGlobalReconcile,
 		ReconcileMessagesCount:       settings.reconcileMessagesCount,
+		MaxMemoryRetries:             settings.maxMemoryRetries,
 		MemoryModel:                  settings.memoryModel,
 		EmbedModel:                   settings.embedModel,
 		ReconcileModel:               settings.reconcileModel,
@@ -544,13 +551,18 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 		dsb = &t
 	}
 
-	queryResults, err := ac.srv.Assistantstore.FindSessionsPendingMemoryScan(ctx, dsb)
+	maxMemoryRetries := ac.memorySnapshot().maxMemoryRetries
+
+	queryResults, err := ac.srv.Assistantstore.FindSessionsPendingMemoryScan(ctx, dsb, maxMemoryRetries)
 	if err != nil {
 		logger.WithError(err).Error("unable to find sessions pending memory scan")
 		return
 	}
 
-	logger.WithField("sessionCount", len(queryResults)).Info("query complete")
+	logger.WithFields(log.Fields{
+		"sessionCount":     len(queryResults),
+		"maxMemoryRetries": maxMemoryRetries,
+	}).Info("query complete")
 
 	for _, sessionDetails := range queryResults {
 		if ctx.Err() != nil {
@@ -558,18 +570,21 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			return
 		}
 
+		sessionId := sessionDetails.Session.SessionId
+
 		logger.WithFields(log.Fields{
-			"sessionId":              sessionDetails.Session.SessionId,
+			"sessionId":              sessionId,
 			"lastMemoryScannedIndex": sessionDetails.Session.LastMemoryScannedIndex,
+			"memoryErrors":           sessionDetails.Session.MemoryErrors,
 		}).Info("scanning for memories to add")
 
 		// Extract
 		facts, extractExchanges, err := ac.extractFacts(ctx, sessionDetails, memoryAgent, memoryModel)
 		for _, exchange := range extractExchanges {
-			ac.recordAgentSession(ctx, model.SessionTagMemory, sessionDetails.Session.SessionId, memoryModel.Selector(), exchange)
+			ac.recordAgentSession(ctx, model.SessionTagMemory, sessionId, memoryModel.Selector(), exchange)
 		}
 		if err != nil {
-			logger.WithError(err).Error("unable to extract facts")
+			ac.recordMemoryScanError(ctx, logger.WithError(err), sessionId, "unable to extract facts")
 			continue
 		}
 
@@ -593,22 +608,22 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 				justFacts = append(justFacts, f.Fact)
 			}
 
-			logger.WithField("sessionId", sessionDetails.Session.SessionId).Info("embedding facts")
+			logger.WithField("sessionId", sessionId).Info("embedding facts")
 
 			// Embed
 			res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
 			if err != nil {
-				logger.WithError(err).Error("unable to embed")
+				ac.recordMemoryScanError(ctx, logger.WithError(err), sessionId, "unable to embed")
 				continue
 			}
 
-			ac.recordEmbedUsage(ctx, sessionDetails.Session.SessionId, embedModel.Selector(), res, justFacts)
+			ac.recordEmbedUsage(ctx, sessionId, embedModel.Selector(), res, justFacts)
 
 			if len(res.Embeddings) != len(facts) {
-				logger.WithFields(log.Fields{
+				ac.recordMemoryScanError(ctx, logger.WithFields(log.Fields{
 					"embeddingsCount": len(res.Embeddings),
 					"factsCount":      len(facts),
-				}).Error("unexpected number of embeddings returned")
+				}), sessionId, "unexpected number of embeddings returned")
 
 				continue
 			}
@@ -627,7 +642,7 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 						Kind:   "memory",
 					},
 					MemoryText:   fact.Fact,
-					SessionId:    sessionDetails.Session.SessionId,
+					SessionId:    sessionId,
 					Embedding:    res.Embeddings[i],
 					ModelID:      res.Model,
 					TargetUserId: target,
@@ -639,10 +654,10 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			// Reconcile
 			memChanges, reconcileExchanges, reconcileSelector, err := ac.reconcileMemories(sesOwnerCtx, mems)
 			for _, exchange := range reconcileExchanges {
-				ac.recordAgentSession(ctx, model.SessionTagReconcile, sessionDetails.Session.SessionId, reconcileSelector, exchange)
+				ac.recordAgentSession(ctx, model.SessionTagReconcile, sessionId, reconcileSelector, exchange)
 			}
 			if err != nil {
-				logger.WithError(err).Error("unable to reconcile memories")
+				ac.recordMemoryScanError(ctx, logger.WithError(err), sessionId, "unable to reconcile memories")
 				continue
 			}
 
@@ -666,17 +681,17 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 
 				res, err := ac.Embed(ctx, embedModel.Selector(), justFacts)
 				if err != nil {
-					logger.WithError(err).Error("unable to embed")
+					ac.recordMemoryScanError(ctx, logger.WithError(err), sessionId, "unable to embed")
 					continue
 				}
 
-				ac.recordEmbedUsage(ctx, sessionDetails.Session.SessionId, embedModel.Selector(), res, justFacts)
+				ac.recordEmbedUsage(ctx, sessionId, embedModel.Selector(), res, justFacts)
 
 				if len(res.Embeddings) != len(reembed) {
-					logger.WithFields(log.Fields{
+					ac.recordMemoryScanError(ctx, logger.WithFields(log.Fields{
 						"embeddingsCount": len(res.Embeddings),
 						"reembedCount":    len(reembed),
-					}).Error("unexpected number of embeddings returned")
+					}), sessionId, "unexpected number of embeddings returned")
 
 					continue
 				}
@@ -705,11 +720,22 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 			}
 		}
 
-		err = ac.srv.Assistantstore.UpdateSessionMemoryScanIndex(ctx, sessionDetails.Session.SessionId, len(sessionDetails.History))
+		err = ac.srv.Assistantstore.UpdateSessionMemoryScanIndex(ctx, sessionId, len(sessionDetails.History))
 		if err != nil {
-			logger.WithError(err).WithField("sessionId", sessionDetails.Session.SessionId).Error("unable to update session with new memory scan count")
-			continue
+			ac.recordMemoryScanError(ctx, logger.WithError(err), sessionId, "unable to update session with new memory scan count")
 		}
+	}
+}
+
+// recordMemoryScanError logs a failed scan of a session and bumps its
+// memoryErrors so a session that keeps failing is eventually excluded from the
+// scan. Best effort: a failed increment only delays exclusion by one scan.
+func (ac *AssistantCoordinator) recordMemoryScanError(ctx context.Context, logger log.Interface, sessionId string, msg string) {
+	logger = logger.WithField("sessionId", sessionId)
+	logger.Error(msg)
+
+	if err := ac.srv.Assistantstore.IncrementSessionMemoryErrors(ctx, sessionId); err != nil {
+		logger.WithError(err).Error("unable to increment session memory errors")
 	}
 }
 

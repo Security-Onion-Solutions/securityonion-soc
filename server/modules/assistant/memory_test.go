@@ -1450,7 +1450,7 @@ func TestScanForMemoriesAddsExtractedFact(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
 
 	// each agent call lands its exchange in its own new tagged session linked
@@ -1560,7 +1560,7 @@ func TestScanForMemoriesRecordsEachExtractBatch(t *testing.T) {
 	}
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{session}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{session}, nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 3).Return(nil)
 
 	memorySessions := 0
@@ -1606,9 +1606,10 @@ func TestScanForMemoriesExtractErrorSkipsIndexUpdate(t *testing.T) {
 	defer ctrl.Finish()
 
 	// no UpdateSessionMemoryScanIndex expectation: a failed session must stay
-	// pending so the next scan retries it
+	// pending so the next scan retries it, with the failure counted against it
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 		return nil, errors.New("model unavailable")
@@ -1626,7 +1627,7 @@ func TestScanForMemoriesInterrupted(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
 		scanTestSession("sess-1"),
 		scanTestSession("sess-2"),
 	}, nil)
@@ -1655,11 +1656,13 @@ func TestScanForMemoriesContinuesAfterFailedSession(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
 		scanTestSession("sess-1"),
 		scanTestSession("sess-2"),
 	}, nil)
-	// only the session that scanned cleanly advances its index
+	// only the session that scanned cleanly advances its index; the failure is
+	// counted against the other
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-2", 1).Return(nil)
 	allowUsageRecording(store)
 
@@ -1685,7 +1688,7 @@ func TestScanForMemoriesUpdateReembeds(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
 	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(nil)
 
 	// collect where usage records land: extract, both embed rounds, and reconcile
@@ -1759,7 +1762,8 @@ func TestScanForMemoriesEmbedErrorSkipsSession(t *testing.T) {
 
 	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	allowUsageRecording(store)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
@@ -1780,7 +1784,8 @@ func TestScanForMemoriesEmbedCountMismatchSkipsSession(t *testing.T) {
 
 	// no UpdateSessionMemoryScanIndex expectation: the session must stay pending
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
 	allowUsageRecording(store)
 
 	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
@@ -1795,12 +1800,160 @@ func TestScanForMemoriesEmbedCountMismatchSkipsSession(t *testing.T) {
 	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
 }
 
+// reconcileScanDB mocks the neighbor lookups reconcile makes for a single
+// user-scoped candidate fact, returning one nearby memory "n1".
+func reconcileScanDB() *mockdb.MockDB {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id IS NULL"),
+		mock.Anything, "embed-model", 0.8, 20).
+		Return(neighborRows(), nil)
+	mDB.On("Query", mock.Anything, sqlContains("target_user_id = $3"),
+		mock.Anything, "embed-model", "user-1", 0.8, 20).
+		Return(neighborRows(nearbyRowFixture{
+			id: "n1", memoryText: "user drinks tea", modelId: "embed-model",
+			targetUserId: util.Ptr("user-1"), similarity: 0.9,
+		}), nil)
+
+	return mDB
+}
+
+func TestScanForMemoriesReconcileErrorCountsAgainstSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+	allowUsageRecording(store)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+	}}
+	reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return nil, errors.New("reconcile model unavailable")
+	}}
+
+	ac := newScanTestCoordinator(store, reconcileScanDB(), extract, singleEmbedAdapter(), reconcile)
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesReembedErrorCountsAgainstSession(t *testing.T) {
+	for name, embedFn := range map[string]func(*model.EmbeddingRequest) (*model.EmbeddingResponse, error){
+		"error": func(req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+			return nil, errors.New("embedding provider down")
+		},
+		"count mismatch": func(req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+			return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}, {0.2}}}, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := servermock.NewMockAssistantstore(ctrl)
+			store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+			store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+			allowUsageRecording(store)
+
+			extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+				return textResponse(`[{"fact":"prefers dark mode","scope":"user"}]`), nil
+			}}
+			reconcile := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+				return textResponse(`{"operations":[{"op":"UPDATE","target_id":"n1","content":"user likes green tea"}]}`), nil
+			}}
+
+			// the first embed (of the extracted fact) succeeds; the re-embed of the
+			// reconciled content fails
+			embedCalls := 0
+			embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+				embedCalls++
+				if embedCalls == 1 {
+					return &model.EmbeddingResponse{Model: req.Model, Embeddings: [][]float32{{0.1}}}, nil
+				}
+
+				return embedFn(req)
+			}}
+
+			mDB := reconcileScanDB()
+			ac := newScanTestCoordinator(store, mDB, extract, embed, reconcile)
+
+			ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+			assert.Equal(t, 2, embedCalls)
+			mDB.AssertNotCalled(t, "QueryRow", mock.Anything, sqlContains("UPDATE memories"), mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestScanForMemoriesIndexUpdateErrorCountsAgainstSession(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{scanTestSession("sess-1")}, nil)
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-1", 1).Return(errors.New("update failed"))
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(nil)
+	allowUsageRecording(store)
+
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
+func TestScanForMemoriesIncrementErrorDoesNotStopScan(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return([]*model.AssistantSessionDetails{
+		scanTestSession("sess-1"),
+		scanTestSession("sess-2"),
+	}, nil)
+	store.EXPECT().IncrementSessionMemoryErrors(gomock.Any(), "sess-1").Return(errors.New("store unavailable"))
+	store.EXPECT().UpdateSessionMemoryScanIndex(gomock.Any(), "sess-2", 1).Return(nil)
+	allowUsageRecording(store)
+
+	calls := 0
+	extract := &scriptedAdapter{send: func(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("model unavailable")
+		}
+
+		return textResponse("[]"), nil
+	}}
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, extract, singleEmbedAdapter(), &scriptedAdapter{})
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+
+	assert.Equal(t, 2, calls)
+}
+
+func TestScanForMemoriesPassesMaxMemoryRetries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, 3).Return(nil, nil)
+
+	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	ac.memory.maxMemoryRetries = 3
+
+	ac.scanForMemories(context.Background(), log.WithField("test", t.Name()))
+}
+
 func TestScanForMemoriesStoreError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, errors.New("connection lost"))
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, errors.New("connection lost"))
 
 	extract := &scriptedAdapter{}
 
@@ -1847,7 +2000,7 @@ func TestScanForMemoriesDontScanBefore(t *testing.T) {
 	assert.NoError(t, err)
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), &expected).Return(nil, nil)
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), &expected, gomock.Any()).Return(nil, nil)
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.memory.dontScanBefore = cutoff
@@ -1894,7 +2047,7 @@ func TestMemoryWorkerScansOnTick(t *testing.T) {
 
 	scanned := make(chan struct{}, 1)
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).DoAndReturn(func(ctx context.Context, _ *time.Time) ([]*model.AssistantSessionDetails, error) {
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).DoAndReturn(func(ctx context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
 		select {
 		case scanned <- struct{}{}:
 		default:
@@ -1934,7 +2087,7 @@ func TestStartStopMemoryWorker(t *testing.T) {
 	defer ctrl.Finish()
 
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, nil).AnyTimes()
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, nil).AnyTimes()
 
 	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.memory.useMemory = true
@@ -2705,6 +2858,7 @@ func memorySettingsFixture() memorySettings {
 		maxGlobalReconcile: 20,
 
 		reconcileMessagesCount: 5,
+		maxMemoryRetries:       2,
 	}
 }
 
@@ -2731,6 +2885,7 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 		ConfigSettingMaxUserMemoriesToReconcile:   "11",
 		ConfigSettingMaxGlobalMemoriesToReconcile: "13",
 		ConfigSettingReconcileMessagesCount:       "4",
+		ConfigSettingMaxMemoryRetries:             "5",
 	}))
 
 	assert.True(t, applied.useMemory)
@@ -2743,6 +2898,18 @@ func TestApplyMemorySettingsOverlaysStoredValues(t *testing.T) {
 	assert.Equal(t, 11, applied.maxUserReconcile)
 	assert.Equal(t, 13, applied.maxGlobalReconcile)
 	assert.Equal(t, 4, applied.reconcileMessagesCount)
+	assert.Equal(t, 5, applied.maxMemoryRetries)
+}
+
+// A negative retry threshold would exclude every session, so it is clamped.
+func TestApplyMemorySettingsClampsMaxMemoryRetries(t *testing.T) {
+	logger := log.WithField("test", t.Name())
+
+	applied := applyMemorySettings(logger, memorySettingsFixture(), settingsByID(map[string]string{
+		ConfigSettingMaxMemoryRetries: "-1",
+	}))
+
+	assert.Equal(t, 0, applied.maxMemoryRetries)
 }
 
 // A batch size below 1 would never advance through the history, so it is
@@ -2803,6 +2970,7 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 		{Id: ConfigSettingUseMemory, Value: "true"},
 		{Id: ConfigSettingMaxUserMemoriesToInclude, Value: "9"},
 		{Id: ConfigSettingReconcileMessagesCount, Value: "7"},
+		{Id: ConfigSettingMaxMemoryRetries, Value: "4"},
 	}}
 
 	ac := newMemoryReloadTestCoordinator(store)
@@ -2816,8 +2984,10 @@ func TestReloadMemoryConfigurationExposesSettings(t *testing.T) {
 	assert.Equal(t, 9, params.MemoryParams.MaxUserMemoriesToInclude)
 	assert.Equal(t, 300, params.MemoryParams.ScanIntervalSeconds)
 	assert.Equal(t, 7, params.MemoryParams.ReconcileMessagesCount)
+	assert.Equal(t, 4, params.MemoryParams.MaxMemoryRetries)
 	assert.Equal(t, 9, ac.memorySnapshot().maxUserInclude)
 	assert.Equal(t, 7, ac.memorySnapshot().reconcileMessagesCount)
+	assert.Equal(t, 4, ac.memorySnapshot().maxMemoryRetries)
 }
 
 func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
@@ -2825,7 +2995,7 @@ func TestReloadMemoryConfigurationStartsAndStopsScanner(t *testing.T) {
 	defer ctrl.Finish()
 
 	sessionStore := servermock.NewMockAssistantstore(ctrl)
-	sessionStore.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).Return(nil, nil).AnyTimes()
+	sessionStore.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, nil).AnyTimes()
 
 	store := &fakeConfigstore{settings: []*model.Setting{{Id: ConfigSettingUseMemoryScanner, Value: "true"}}}
 	ac := newMemoryReloadTestCoordinator(store)
@@ -2882,7 +3052,7 @@ func TestMemoryWorkerRearmsOnIntervalChange(t *testing.T) {
 
 	scanned := make(chan struct{}, 1)
 	store := servermock.NewMockAssistantstore(ctrl)
-	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil).DoAndReturn(func(ctx context.Context, _ *time.Time) ([]*model.AssistantSessionDetails, error) {
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).DoAndReturn(func(ctx context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
 		select {
 		case scanned <- struct{}{}:
 		default:

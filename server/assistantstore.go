@@ -27,8 +27,9 @@ type Assistantstore interface {
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
-	FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time) ([]*model.AssistantSessionDetails, error)
+	FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time, maxMemoryRetries int) ([]*model.AssistantSessionDetails, error)
 	UpdateSessionMemoryScanIndex(ctx context.Context, sessionId string, scannedIndex int) error
+	IncrementSessionMemoryErrors(ctx context.Context, sessionId string) error
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore
