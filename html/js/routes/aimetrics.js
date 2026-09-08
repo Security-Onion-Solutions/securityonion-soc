@@ -283,6 +283,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       this.saveSetting('relativeTimeValue', this.relativeTimeValue, 24);
       this.saveSetting('relativeTimeUnit', this.relativeTimeUnit, RELATIVE_TIME_HOURS);
       this.saveSetting('autoRefreshInterval', this.autoRefreshInterval, 0);
+      this.saveSetting('collapsedSections', JSON.stringify(this.collapsedSections), '[]');
       localStorage['timezone'] = this.zone;
     },
     loadLocalSettings() {
@@ -300,6 +301,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (localStorage['settings.aimetrics.relativeTimeUnit']) this.relativeTimeUnit = parseInt(localStorage['settings.aimetrics.relativeTimeUnit']);
       if (localStorage['timezone']) this.zone = localStorage['timezone'];
       if (localStorage['settings.aimetrics.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.aimetrics.autoRefreshInterval']);
+      if (localStorage['settings.aimetrics.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.aimetrics.collapsedSections']);
     },
     buildUserLink(userId) {
       return { name: 'aimetrics', params: { userId: userId } };
@@ -431,7 +433,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             }
             expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
-            expandMessage += block.text;
+            expandMessage += this.$root.escapeHtml(block.text);
           }
         } else if (block.type === 'tool_use') {
           if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
@@ -472,9 +474,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return expandMessage;
-    },
-    stripHtml(str) {
-      return str.replace(/<[^>]*>/g, '');
     },
     formatMarkdownMermaid(text) {
       text = this.$root.performMermaidRegexes(text);
@@ -536,6 +535,17 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       const rawCPM = totalCredits / minutes;
       return Math.round(rawCPM);
     },
+    sanitizeHtml(html) {
+      return html ? DOMPurify.sanitize(html) : '';
+    },
+    messageAid(item) {
+      return item?.tags?.includes('tool_result')
+        ? 'aimetrics_message_content_toolresult'
+        : 'aimetrics_message_content_user';
+    },
+    expandMessagePreview(html) {
+      return this.trimTitle(this.$root.unescapeHtml(this.$root.stripHtml(html)));
+    },
     nbspRegexOp(text) {
       return text.replace(/^(&nbsp;?[\n]*)/, '');
     },
@@ -545,6 +555,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else {
         this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
       }
+      this.saveLocalSettings();
     },
     isExpandedSection(item) {
       return (this.collapsedSections.indexOf(item) == -1);

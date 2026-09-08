@@ -9,6 +9,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -129,6 +131,8 @@ func TestElastAlertModule(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().DoesTemplateExist(gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+
 	srv := &server.Server{
 		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
 		Detectionstore:   detStore,
@@ -448,6 +452,54 @@ filter:
 timestamp_field: '@timestamp'
 `
 	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestSigmaToElastAlertMissingDetection(t *testing.T) {
+	engine := ElastAlertEngine{}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `title: Test Detection`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
+	assert.ErrorContains(t, err, "does not contain a detection section")
+}
+
+func TestSigmaToElastAlertMissingCondition(t *testing.T) {
+	engine := ElastAlertEngine{}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  `{"detection": {"selection": {"a": "b"}}}`,
+		Title:    "Test Detection",
+		Severity: model.SeverityHigh,
+		Overrides: []*model.Override{
+			{
+				Type:      model.OverrideTypeCustomFilter,
+				IsEnabled: true,
+				OverrideParameters: model.OverrideParameters{
+					CustomFilter: util.Ptr(`{"this": ["that"]}`),
+				},
+			},
+		},
+	}
+
+	query, err := engine.sigmaToElastAlert(context.Background(), det)
+	assert.Empty(t, query)
+	assert.ErrorContains(t, err, "does not contain a condition")
 }
 
 func TestElastAlertInitUseEsql(t *testing.T) {
@@ -1725,6 +1777,31 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 	assert.Equal(t, wnr, eng.writeNoRead)
 }
 
+func TestSyncRecoversFromPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").DoAndReturn(func(ctx context.Context, publicId string) (*model.Detection, error) {
+		panic("test panic")
+	})
+
+	eng := &ElastAlertEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: util.Ptr("123"),
+	}
+
+	logger := log.WithField("detectionEngine", "test-elastalert")
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = eng.Sync(logger, false)
+	})
+	assert.NoError(t, err)
+}
+
 func TestSyncIncrementalNoChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1739,6 +1816,11 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, writer.Close())
+
+	// the zip's bytes vary by Go toolchain, so the fingerprint can't be hardcoded;
+	// hash before Sync drains the buffer through the mocked response body
+	zipHash := sha256.Sum256(buf.Bytes())
+	fingerprint := base64.StdEncoding.EncodeToString(zipHash[:])
 
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
@@ -1793,7 +1875,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	}, nil)
 	iom.EXPECT().PullRepo(gomock.Any(), "repos/repo", nil).Return(false, false, false)
 	// check for changes before sync
-	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "GwJvQmt07Ma9kvq2D8bpbQfXW+IRe0nN4fITj9Ghxis="}`), nil)
+	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte(`{"core+": "`+fingerprint+`"}`), nil)
 	// WriteStateFile
 	iom.EXPECT().WriteFile("stateFilePath", gomock.Any(), fs.FileMode(0644)).Return(nil)
 	// IntegrityCheck

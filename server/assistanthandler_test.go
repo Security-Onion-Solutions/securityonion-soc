@@ -29,6 +29,7 @@ import (
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -91,6 +92,8 @@ func TestPostChat(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, nil)
+
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
 		func(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
@@ -151,6 +154,8 @@ func TestPostChatWithoutHistory(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
 
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
@@ -262,6 +267,8 @@ func TestPostTool(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, nil)
+
 	var capturedToolReq *model.ToolRequest
 	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), "query_events").DoAndReturn(
 		func(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
@@ -346,6 +353,8 @@ func TestPostTool_StreamingTopLevelStops(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "top").Return(true, true, nil)
+
 	// The turn carries its session record; it has no parent, so the loop stops
 	// without any store lookup.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
@@ -374,6 +383,8 @@ func TestPostTool_StreamingDelegationResolves(t *testing.T) {
 	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	// First turn: the child sub-agent answers with text only. The turn carries the
 	// child's session record with its parent linkage — no store lookups needed.
@@ -421,6 +432,8 @@ func TestPostTool_StreamingDelegationResolveErrorStillCloses(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
+
 	// The child sub-agent answers with text only; its turn carries the child's
 	// session record with the parent linkage.
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
@@ -455,6 +468,8 @@ func TestPostTool_StreamingToolUseStops(t *testing.T) {
 	mockStore := mock.NewMockAssistantstore(ctrl)
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "delegate_to_Hunter").Return(
 		&model.StreamedTurn{
@@ -734,13 +749,22 @@ func TestManageSessionHistory(t *testing.T) {
 		},
 	}
 
-	// Set up mock expectations
+	// Set up mock expectations; the management view must include memory sessions
 	mockAssistantStore.EXPECT().GetSessions(
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
-	).Return(mockSessions, nil)
+		gomock.Any(),
+	).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		assert.True(t, applied.IncludeMemorySessions())
+
+		return mockSessions, nil
+	})
 
 	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
 
@@ -792,6 +816,7 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(
+		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
 		gomock.Any(),
@@ -914,6 +939,49 @@ data: [DONE]`
 			Credits:      3586,
 		},
 	}, *msg)
+}
+
+// Anthropic-style streams report input tokens (and credits) on message_start and
+// only output tokens on the final message_delta; the merge must keep both.
+func TestUnstreamResponseMergesUsage(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"id":"assistant","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":500,"output_tokens":0,"credits":42}}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+data: {"type":"content_block_stop","index":0}
+
+data: {"type":"message_delta","usage":{"output_tokens":7}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := UnstreamResponse(context.Background(), data, nil)
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, msg) && assert.NotNil(t, msg.Usage) {
+		assert.Equal(t, 500, msg.Usage.InputTokens)
+		assert.Equal(t, 7, msg.Usage.OutputTokens)
+		assert.Equal(t, 42, msg.Usage.Credits)
+	}
+}
+
+// Some models return an empty message; no content block should be fabricated.
+func TestUnstreamResponseEmptyMessage(t *testing.T) {
+	data := `data: {"type":"message_start","message":{"type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}
+
+data: {"type":"message_stop"}
+
+data: [DONE]`
+
+	msg, err := UnstreamResponse(context.Background(), data, nil)
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, msg) {
+		assert.Empty(t, msg.ContentBlocks)
+	}
 }
 
 func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
@@ -1590,6 +1658,65 @@ func TestUpdateSessionTagAlreadyExists(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
 
+func TestUpdateSessionReservedTag(t *testing.T) {
+	type testCase struct {
+		Action string
+		Tag    string
+	}
+
+	cases := []testCase{}
+	for _, tag := range model.MemorySessionTags {
+		cases = append(cases, testCase{Action: "add", Tag: tag}, testCase{Action: "remove", Tag: tag})
+	}
+
+	// guard is case-insensitive
+	cases = append(cases, testCase{Action: "add", Tag: "Memory"})
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s-%s", tc.Action, tc.Tag), func(t *testing.T) {
+			srv := &Server{
+				Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+			}
+			ctrl := gomock.NewController(t)
+			mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+			defer ctrl.Finish()
+
+			srv.Assistantstore = mockAssistantStore
+
+			handler := NewAssistantHandler(srv)
+
+			sessionId := "test-session-123"
+			requestBody := model.UpdateSessionRequest{
+				Action: tc.Action,
+				Tag:    tc.Tag,
+			}
+
+			jsonBody, _ := json.Marshal(requestBody)
+			req := httptest.NewRequest("PUT", fmt.Sprintf("/assistant/sessions/%s", sessionId), bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			// Set URL params
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("sessionId", sessionId)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			// Add required context values
+			ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+			ctx = context.WithValue(ctx, web.ContextKeyRequestId, "test-request-456")
+			req = req.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+
+			// No store expectations: any GetSessions/UpdateSessionTags call means
+			// the guard fell through and gomock fails the test.
+			handler.UpdateSession(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
+}
+
 func TestUpdateSessionRemoveTagAttachedToCase(t *testing.T) {
 	// Create mock server
 	srv := &Server{
@@ -1835,6 +1962,8 @@ func TestPostChatWithEntityTypeAndId(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
+
 	// The handler should forward the entityType/entityId to ChatInSession.
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), entityType, entityId).Return([]*model.Message{{
 		Role: "assistant",
@@ -1898,6 +2027,8 @@ func TestPostChatWithEntityTypeAndIdMarkFails(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", gomock.Any()).Return(false, false, nil)
+
 	// ChatInSession should still be called even when alert-mark fails.
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), entityType, entityId).Return([]*model.Message{{
 		Role: "assistant",
@@ -1952,6 +2083,64 @@ func TestMarkAlertAsInvestigated(t *testing.T) {
 
 	// Verify no error
 	assert.NoError(t, err)
+}
+
+func TestAlertUpdateQuotesSocId(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error
+	}{
+		{
+			name: "markAlertAsInvestigated",
+			call: func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error {
+				return h.markAlertAsInvestigated(ctx, socId, sessionId)
+			},
+		},
+		{
+			name: "clearInvestigationSessionFromAlert",
+			call: func(h *AssistantHandler, ctx context.Context, socId string, sessionId string) error {
+				return h.clearInvestigationSessionFromAlert(ctx, socId, sessionId)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := &Server{
+				Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+			}
+			ctrl := gomock.NewController(t)
+			mockBaseEventStore := mock.NewMockEventstore(ctrl)
+			defer ctrl.Finish()
+
+			var capturedQuery string
+			mockEventStore := &MockElasticEventstore{
+				MockEventstore: mockBaseEventStore,
+				updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+					capturedQuery = criteria.ParsedQuery.String()
+					return &model.EventUpdateResults{
+						UpdatedCount:   1,
+						UnchangedCount: 0,
+					}, nil
+				},
+			}
+
+			srv.Eventstore = mockEventStore
+
+			handler := NewAssistantHandler(srv)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-123")
+
+			// Injection-shaped socId must end up quoted and escaped, not spliced into the query raw
+			socId := `abc" OR soc_id:"*`
+			sessionId := "session-456"
+
+			err := tt.call(handler, ctx, socId, sessionId)
+
+			assert.NoError(t, err)
+			assert.Equal(t, `_id:"abc\" OR soc_id:\"*"`, capturedQuery)
+		})
+	}
 }
 
 func TestMarkAlertAsInvestigatedUnauthorized(t *testing.T) {
@@ -2657,11 +2846,20 @@ func TestGetSessions(t *testing.T) {
 	handler := NewAssistantHandler(srv)
 
 	// A child (delegated) session must be filtered out of the top-level list.
-	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
-		{SessionId: "top-1"},
-		{SessionId: "child-1", ParentSessionId: "top-1"},
-		{SessionId: "top-2"},
-	}, nil)
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		// The user-facing list must keep the default memory-session exclusion.
+		assert.False(t, applied.IncludeMemorySessions())
+
+		return []*model.AssistantSession{
+			{SessionId: "top-1"},
+			{SessionId: "child-1", ParentSessionId: "top-1"},
+			{SessionId: "top-2"},
+		}, nil
+	})
 
 	req := withAssistantContext(httptest.NewRequest("GET", "/assistant/sessions", nil))
 	w := httptest.NewRecorder()
@@ -2675,6 +2873,38 @@ func TestGetSessions(t *testing.T) {
 	for _, s := range got {
 		assert.Empty(t, s.ParentSessionId)
 	}
+}
+
+func TestGetSessionsAdmin_IncludesMemorySessions(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		// The management view returns everything, memory sessions included.
+		assert.True(t, applied.IncludeMemorySessions())
+		assert.True(t, applied.IncludeDeleted())
+
+		return []*model.AssistantSession{{SessionId: "chat-1-memory", Tags: []string{model.SessionTagMemory}}}, nil
+	})
+
+	params := url.Values{
+		"range":    {"2025-01-01 00:00:00 - 2025-01-31 23:59:59"},
+		"format":   {"2006-01-02 15:04:05"},
+		"timezone": {"UTC"},
+	}
+	req := withAssistantContext(httptest.NewRequest("GET", "/assistant/admin/sessions?"+params.Encode(), nil))
+	w := httptest.NewRecorder()
+
+	handler.GetSessionsAdmin(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got []*model.AssistantSession
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Len(t, got, 1)
 }
 
 func TestGetSessions_StoreError(t *testing.T) {
@@ -2716,9 +2946,10 @@ func TestPostChat_NonStreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").Return(nil, tc.err)
 
 			body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
@@ -2734,9 +2965,10 @@ func TestPostChat_NonStreamingUpstreamErrors(t *testing.T) {
 }
 
 func TestPostChat_Streaming(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
 		sseTextResponse("hello"), &model.AuxMessageData{}, noopFinalize, nil)
 
@@ -2753,9 +2985,10 @@ func TestPostChat_Streaming(t *testing.T) {
 }
 
 func TestPostChat_StreamingUpstreamError(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
 		nil, nil, nil, errors.New("boom"))
 
@@ -2768,6 +3001,61 @@ func TestPostChat_StreamingUpstreamError(t *testing.T) {
 	handler.PostChat(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// errAfterReader serves its data then fails, simulating an upstream body that
+// dies mid-stream.
+type errAfterReader struct {
+	data []byte
+	err  error
+	pos  int
+}
+
+func (r *errAfterReader) Read(p []byte) (int, error) {
+	if r.pos < len(r.data) {
+		n := copy(p, r.data[r.pos:])
+		r.pos += n
+		return n, nil
+	}
+	return 0, r.err
+}
+
+// A mid-stream upstream read error must not skip finalize: the buffered prefix
+// (which may hold a complete, billed turn) is still persisted. Mirrors the
+// PostTool loop, which fires finalize before examining the stream error.
+func TestPostChat_StreamingBodyError_StillFinalizes(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
+
+	prefix := "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"role\":\"assistant\",\"content\":[]}}\n\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"partial\"}}\n\n"
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(&errAfterReader{data: []byte(prefix), err: errors.New("upstream died")}),
+	}
+
+	finalized := make(chan []byte, 1)
+	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), "", "").Return(
+		resp, &model.AuxMessageData{}, func(raw []byte) error { finalized <- raw; return nil }, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	select {
+	case raw := <-finalized:
+		assert.Equal(t, prefix, string(raw), "finalize must receive everything buffered before the error")
+	case <-time.After(2 * time.Second):
+		t.Fatal("finalize was never called despite the buffered turn")
+	}
 }
 
 func TestDecodeIncomingMessage(t *testing.T) {
@@ -2813,6 +3101,16 @@ func TestDecodeIncomingMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeIncomingMessageFiltersTags(t *testing.T) {
+	body := `{"msg":"hi","sessionId":"s1","tags":["context_compression","tool_result","anything"]}`
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBufferString(body))
+
+	incMsg, err := decodeIncomingMessage(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{model.MessageTagContextCompression}, incMsg.Tags)
 }
 
 func TestStreamingAccepted(t *testing.T) {
@@ -2872,9 +3170,67 @@ func TestRespondChatError(t *testing.T) {
 	}
 }
 
-func TestPostChat_DefaultsSessionId(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+func TestPostChat_SessionNotOwned(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	// The session exists but belongs to a different user than the requestor
+	// ("test-user"), so the chat must be rejected before reaching the manager.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, true, nil)
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ChatStreamInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostChat_SessionLookupError(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, errors.New("es unavailable"))
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestPostChat_NewSessionAllowed(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// A session that doesn't exist yet isn't owned by anyone; the chat proceeds
+	// and the session is created as the caller's own.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, nil)
+	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").Return([]*model.Message{}, nil)
+
+	body, _ := json.Marshal(map[string]any{"msg": "hi", "sessionId": "s1", "model": "m"})
+	req := withAssistantContext(httptest.NewRequest("POST", "/assistant/chat", bytes.NewBuffer(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.PostChat(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPostChat_DefaultsSessionId(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", gomock.Any()).Return(false, false, nil)
 
 	var capturedIncMsg *model.IncomingMessage
 	mockManager.EXPECT().ChatInSession(gomock.Any(), gomock.Any(), "", "").DoAndReturn(
@@ -2896,8 +3252,10 @@ func TestPostChat_DefaultsSessionId(t *testing.T) {
 }
 
 func TestPostChat_StreamingDowngradeToNonStreaming(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 
 	// The writer is not an http.Flusher, so despite the SSE Accept header the
 	// handler must fall back to the buffered ChatInSession path.
@@ -2915,8 +3273,10 @@ func TestPostChat_StreamingDowngradeToNonStreaming(t *testing.T) {
 }
 
 func TestPostChat_StreamingFinalizeCalled(t *testing.T) {
-	srv, mockManager, _ := newAssistantTestServer(t, true)
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 
 	finalized := make(chan []byte, 1)
 	finalize := func(rawResponse []byte) error {
@@ -2978,9 +3338,10 @@ func TestPostTool_NonStreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), "query_events").Return(nil, tc.err)
 
 			body, _ := json.Marshal(model.ToolRequest{SessionId: "s1", ToolUseId: "tu1", Model: "m"})
@@ -3011,18 +3372,30 @@ func TestStreamResponse_NotFlushable(t *testing.T) {
 }
 
 func TestUnstreamResponse_EdgeCases(t *testing.T) {
-	t.Run("error event returns an error", func(t *testing.T) {
-		data := `data: {"type":"error","error":{"type":"overloaded","message":"too busy"}}
+	// Backstop rows ("message-less stream..."): a message-less stream (empty / no
+	// message_start) must never panic, even with a non-nil aux (the exact shape
+	// that previously crashed the handler).
+	messageLessAux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig")}}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		assert.Contains(t, err.Error(), "too busy")
-	})
+	testCases := []struct {
+		name             string
+		data             string
+		aux              *model.AuxMessageData
+		wantErrSubstring string // non-empty: expect an error containing this and a nil message
+		wantNilMsg       bool   // expect no error and a nil message
+		wantThoughts     string // non-empty: assert msg.Thoughts
+		wantSignature    []byte // non-nil: assert msg.ContentBlocks[0].ThoughtSignature
+	}{
+		{
+			name: "error event returns an error",
+			data: `data: {"type":"error","error":{"type":"overloaded","message":"too busy"}}
 
-	t.Run("thought delta accumulates into Thoughts and malformed lines are skipped", func(t *testing.T) {
-		data := `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
+data: [DONE]`,
+			wantErrSubstring: "too busy",
+		},
+		{
+			name: "thought delta accumulates into Thoughts and malformed lines are skipped",
+			data: `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
 
 data: {not valid json}
 
@@ -3030,50 +3403,76 @@ data: {"type":"content_block_delta","index":0,"delta":{"type":"thought_delta","t
 
 data: {"type":"content_block_stop","index":0}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, msg)
-		assert.Equal(t, "thinking...", msg.Thoughts)
-	})
-
-	t.Run("aux thought signatures are applied to tool_use blocks", func(t *testing.T) {
-		data := `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
+data: [DONE]`,
+			wantThoughts: "thinking...",
+		},
+		{
+			name: "aux thought signatures are applied to tool_use blocks",
+			data: `data: {"type":"message_start","message":{"id":"m","role":"assistant","content":[]}}
 
 data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"t1","name":"query_events","input":{}}}
 
 data: {"type":"content_block_stop","index":0}
 
-data: [DONE]`
-		aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig-123")}}
-		msg, err := UnstreamResponse(context.Background(), data, aux)
-		assert.NoError(t, err)
-		assert.NotNil(t, msg)
-		assert.Equal(t, []byte("sig-123"), msg.ContentBlocks[0].ThoughtSignature)
-	})
+data: [DONE]`,
+			aux:           &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig-123")}},
+			wantSignature: []byte("sig-123"),
+		},
+		// A first-chunk LLM failure now arrives as an SSE error event (see
+		// handleStreamError); it must surface as a real error, not a nil-deref panic.
+		{
+			name: "error event surfaces the real message",
+			data: `data: {"type":"error","error":{"type":"error","message":"quota exceeded"}}
 
-	// A first-chunk LLM failure now arrives as an SSE error event (see
-	// handleStreamError); it must surface as a real error, not a nil-deref panic.
-	t.Run("error event surfaces the real message", func(t *testing.T) {
-		data := `data: {"type":"error","error":{"type":"error","message":"quota exceeded"}}
+data: [DONE]`,
+			wantErrSubstring: "quota exceeded",
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: empty stream",
+			data:       "",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: done only",
+			data:       "data: [DONE]",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+		{
+			name:       "message-less stream with aux returns nil without panicking: orphan delta",
+			data:       "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\n\ndata: [DONE]",
+			aux:        messageLessAux,
+			wantNilMsg: true,
+		},
+	}
 
-data: [DONE]`
-		msg, err := UnstreamResponse(context.Background(), data, nil)
-		assert.Error(t, err)
-		assert.Nil(t, msg)
-		assert.Contains(t, err.Error(), "quota exceeded")
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := UnstreamResponse(context.Background(), tc.data, tc.aux)
 
-	// Backstop: a message-less stream (empty / no message_start) must never panic,
-	// even with a non-nil aux (the exact shape that previously crashed the handler).
-	t.Run("message-less stream with aux returns nil without panicking", func(t *testing.T) {
-		aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{"t1": []byte("sig")}}
-		for _, data := range []string{"", "data: [DONE]", "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\n\ndata: [DONE]"} {
-			msg, err := UnstreamResponse(context.Background(), data, aux)
+			if tc.wantErrSubstring != "" {
+				assert.Error(t, err)
+				assert.Nil(t, msg)
+				assert.Contains(t, err.Error(), tc.wantErrSubstring)
+				return
+			}
+
 			assert.NoError(t, err)
-			assert.Nil(t, msg)
-		}
-	})
+			if tc.wantNilMsg {
+				assert.Nil(t, msg)
+				return
+			}
+
+			assert.NotNil(t, msg)
+			if tc.wantThoughts != "" {
+				assert.Equal(t, tc.wantThoughts, msg.Thoughts)
+			}
+			if tc.wantSignature != nil {
+				assert.Equal(t, tc.wantSignature, msg.ContentBlocks[0].ThoughtSignature)
+			}
+		})
+	}
 }
 
 func assistantMsg(blocks ...model.ContentBlock) *model.StoredMessage {
@@ -3089,40 +3488,70 @@ func toolResultMsg(toolUseId string) *model.StoredMessage {
 
 func TestPendingToolApproval(t *testing.T) {
 	toolUse := model.ContentBlock{Type: "tool_use", Id: "tu-1", Name: "query_events", Input: json.RawMessage(`{"q":"dns"}`)}
+	delegate := model.ContentBlock{Type: "tool_use", Id: "del-1", Name: "delegate_to_Hunter", Input: json.RawMessage(`{}`)}
 
-	t.Run("trailing unresolved tool_use is pending", func(t *testing.T) {
-		history := []*model.StoredMessage{
-			{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "go"}}}},
-			assistantMsg(toolUse),
-		}
-		pending := pendingToolApproval("child-1", history, nil)
-		assert.NotNil(t, pending)
-		assert.Equal(t, "child-1", pending.SessionId)
-		assert.Equal(t, "tu-1", pending.ToolUseId)
-		assert.Equal(t, "query_events", pending.ToolName)
-		assert.JSONEq(t, `{"q":"dns"}`, string(pending.Input))
-	})
+	testCases := []struct {
+		name          string
+		sessionId     string
+		history       []*model.StoredMessage
+		delegated     map[string]struct{}
+		wantNil       bool
+		wantToolUseId string
+		wantToolName  string
+		wantInput     string
+	}{
+		{
+			name:      "trailing unresolved tool_use is pending",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "go"}}}},
+				assistantMsg(toolUse),
+			},
+			wantToolUseId: "tu-1",
+			wantToolName:  "query_events",
+			wantInput:     `{"q":"dns"}`,
+		},
+		{
+			name:      "tool_use with a following tool_result is resolved (nil)",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				assistantMsg(toolUse),
+				toolResultMsg("tu-1"),
+				assistantMsg(model.ContentBlock{Type: "text", Text: "done"}),
+			},
+			wantNil: true,
+		},
+		{
+			name:      "delegate tool_use that spawned a sub-session is running, not pending (nil)",
+			sessionId: "parent",
+			history:   []*model.StoredMessage{assistantMsg(delegate)},
+			delegated: map[string]struct{}{"del-1": {}},
+			wantNil:   true,
+		},
+		{
+			name:      "no tool_use yields nil",
+			sessionId: "s",
+			history:   []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})},
+			wantNil:   true,
+		},
+	}
 
-	t.Run("tool_use with a following tool_result is resolved (nil)", func(t *testing.T) {
-		history := []*model.StoredMessage{
-			assistantMsg(toolUse),
-			toolResultMsg("tu-1"),
-			assistantMsg(model.ContentBlock{Type: "text", Text: "done"}),
-		}
-		assert.Nil(t, pendingToolApproval("child-1", history, nil))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pending := pendingToolApproval(tc.sessionId, tc.history, tc.delegated)
 
-	t.Run("delegate tool_use that spawned a sub-session is running, not pending (nil)", func(t *testing.T) {
-		delegate := model.ContentBlock{Type: "tool_use", Id: "del-1", Name: "delegate_to_Hunter", Input: json.RawMessage(`{}`)}
-		history := []*model.StoredMessage{assistantMsg(delegate)}
-		delegated := map[string]struct{}{"del-1": {}}
-		assert.Nil(t, pendingToolApproval("parent", history, delegated))
-	})
+			if tc.wantNil {
+				assert.Nil(t, pending)
+				return
+			}
 
-	t.Run("no tool_use yields nil", func(t *testing.T) {
-		history := []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})}
-		assert.Nil(t, pendingToolApproval("s", history, nil))
-	})
+			assert.NotNil(t, pending)
+			assert.Equal(t, tc.sessionId, pending.SessionId)
+			assert.Equal(t, tc.wantToolUseId, pending.ToolUseId)
+			assert.Equal(t, tc.wantToolName, pending.ToolName)
+			assert.JSONEq(t, tc.wantInput, string(pending.Input))
+		})
+	}
 }
 
 func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
@@ -3140,9 +3569,10 @@ func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srv, mockManager, _ := newAssistantTestServer(t, true)
+			srv, mockManager, mockStore := newAssistantTestServer(t, true)
 			handler := NewAssistantHandler(srv)
 
+			mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(true, true, nil)
 			mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(nil, tc.err)
 
 			req, w := newToolStreamRequest(t, "s1", "query_events")
@@ -3155,6 +3585,64 @@ func TestPostTool_StreamingUpstreamErrors(t *testing.T) {
 			assert.Equal(t, tc.wantCode, w.Code)
 		})
 	}
+}
+
+// newToolRequest builds a non-streaming PostTool request for session "s1".
+func newToolRequest(t *testing.T) (*http.Request, *httptest.ResponseRecorder) {
+	t.Helper()
+	body, _ := json.Marshal(model.ToolRequest{SessionId: "s1", ToolUseId: "tu1", Model: "m"})
+	req := httptest.NewRequest("POST", "/assistant/tool/query_events", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "query_events")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	return withAssistantContext(req), httptest.NewRecorder()
+}
+
+func TestPostTool_SessionNotOwned(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// The session exists but belongs to a different user than the requestor
+	// ("test-user"), so the tool call must be rejected before reaching the manager.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, true, nil)
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostTool_SessionNotFound(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	// Unlike PostChat, a tool result can never start a new session: a nonexistent
+	// session is a 404, not an implicit create.
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, nil)
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestPostTool_SessionLookupError(t *testing.T) {
+	srv, mockManager, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "s1").Return(false, false, errors.New("es unavailable"))
+	mockManager.EXPECT().ToolInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, w := newToolRequest(t)
+	handler.PostTool(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestPostTool_Unauthorized(t *testing.T) {
@@ -3206,6 +3694,8 @@ func TestPostTool_StreamingDelegationResolveError(t *testing.T) {
 	srv.AssistantManager = mockManager
 	srv.Assistantstore = mockStore
 
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
+
 	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
 		&model.StreamedTurn{Response: sseTextResponse("child answer"), SessionId: "child", Model: "sonnet", Finalize: noopFinalize,
 			Session: &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}}, nil)
@@ -3256,142 +3746,173 @@ func paddedSSE(eventsAfterStart string) *http.Response {
 	}
 }
 
+// subSession is the delegated child session shape shared by the client-disconnect
+// tests below.
+func subSession() *model.AssistantSession {
+	return &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}
+}
+
 // A client that disconnects mid-turn must not cost us the turn: streamBody keeps
 // draining the upstream body so finalize receives the FULL response and the parse
 // correctly classifies it. This is the regression behind the "dead sub-session /
-// never-resolving delegation" bug. Two shapes are exercised:
+// never-resolving delegation" bug. Two shapes are exercised (one per test below):
 //   - the sub-agent's continuation requests another tool: the loop must recognize the
 //     tool_use (parse the full body) and break WITHOUT resolving the delegation, so a
 //     pending tool is left for the user to resume on reload.
 //   - the sub-agent's continuation is final text: the full text must reach
 //     ResolveDelegationStream so the delegation folds back into its parent.
-func TestPostTool_StreamingClientDisconnectStillPersistsTurn(t *testing.T) {
-	subSession := func() *model.AssistantSession {
-		return &model.AssistantSession{SessionId: "child", ParentSessionId: "parent", ParentToolUseId: "delegate-tu", ParentModel: "agent"}
+//
+// Here: tool_use continuation — full turn finalized, no premature resolution.
+func TestPostTool_StreamingClientDisconnect_PersistsTurnWithoutDelegation(t *testing.T) {
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockStore := mock.NewMockAssistantstore(ctrl)
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockStore
+
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
+
+	finalized := make(chan []byte, 1)
+	toolUseResp := paddedSSE(
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"query_events\"}}\n\n" +
+			"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+		&model.StreamedTurn{Response: toolUseResp, SessionId: "child", Model: "sonnet", Session: subSession(),
+			Finalize: func(raw []byte) error { finalized <- raw; return nil }}, nil)
+
+	// The continuation requests a tool, so the chain must NOT resolve the delegation.
+	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	req, _ := newToolStreamRequest(t, "parent", "query_events")
+	w := &disconnectingWriter{}
+	NewAssistantHandler(srv).PostTool(w, req)
+
+	select {
+	case raw := <-finalized:
+		msg, err := UnstreamResponse(context.Background(), string(raw), nil)
+		assert.NoError(t, err)
+		if assert.NotNil(t, msg, "finalize must receive the full turn even though the client was gone") {
+			assert.True(t, messageHasToolUse(msg), "the persisted turn must contain the sub-agent's tool_use")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("finalize was never called with the turn")
 	}
+}
 
-	t.Run("tool_use continuation: full turn finalized, no premature resolution", func(t *testing.T) {
-		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+// Client-disconnect, final-text continuation: full child text reaches delegation
+// resolution. See TestPostTool_StreamingClientDisconnect_PersistsTurnWithoutDelegation
+// for the full background.
+func TestPostTool_StreamingClientDisconnect_ResolvesDelegation(t *testing.T) {
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockManager := mock.NewMockAssistantManager(ctrl)
-		srv.AssistantManager = mockManager
+	mockManager := mock.NewMockAssistantManager(ctrl)
+	mockStore := mock.NewMockAssistantstore(ctrl)
+	srv.AssistantManager = mockManager
+	srv.Assistantstore = mockStore
 
-		finalized := make(chan []byte, 1)
-		toolUseResp := paddedSSE(
-			"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t2\",\"name\":\"query_events\"}}\n\n" +
-				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+	mockStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user", "parent").Return(true, true, nil)
 
-		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-			&model.StreamedTurn{Response: toolUseResp, SessionId: "child", Model: "sonnet", Session: subSession(),
-				Finalize: func(raw []byte) error { finalized <- raw; return nil }}, nil)
+	textResp := paddedSSE(
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +
+			"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
 
-		// The continuation requests a tool, so the chain must NOT resolve the delegation.
-		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
+		&model.StreamedTurn{Response: textResp, SessionId: "child", Model: "sonnet", Session: subSession(), Finalize: noopFinalize}, nil)
 
-		req, _ := newToolStreamRequest(t, "parent", "query_events")
-		w := &disconnectingWriter{}
-		NewAssistantHandler(srv).PostTool(w, req)
+	// The full child text must survive the disconnect and drive resolution. A
+	// truncated read would deliver empty/partial text and fail this matcher.
+	resolved := make(chan string, 1)
+	mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
+		func(_ context.Context, _ *model.AssistantSession, childText string) (*model.StreamedTurn, error) {
+			resolved <- childText
+			// A top-level parent turn ends the chain.
+			return &model.StreamedTurn{Response: paddedSSE(""), SessionId: "parent", Model: "agent",
+				Session: &model.AssistantSession{SessionId: "parent"}, Finalize: noopFinalize}, nil
+		})
 
-		select {
-		case raw := <-finalized:
-			msg, err := UnstreamResponse(context.Background(), string(raw), nil)
-			assert.NoError(t, err)
-			if assert.NotNil(t, msg, "finalize must receive the full turn even though the client was gone") {
-				assert.True(t, messageHasToolUse(msg), "the persisted turn must contain the sub-agent's tool_use")
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("finalize was never called with the turn")
-		}
-	})
+	req, _ := newToolStreamRequest(t, "parent", "query_events")
+	w := &disconnectingWriter{}
+	NewAssistantHandler(srv).PostTool(w, req)
 
-	t.Run("final-text continuation: full child text reaches delegation resolution", func(t *testing.T) {
-		srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: true}}
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	select {
+	case childText := <-resolved:
+		assert.Equal(t, "child answer", childText)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ResolveDelegationStream was never called")
+	}
+}
 
-		mockManager := mock.NewMockAssistantManager(ctrl)
-		srv.AssistantManager = mockManager
+// decodeToolResultEvent asserts the SSE framing of a writeToolResultEvent body
+// ("data: " prefix, "\n\n" suffix) and decodes its JSON payload.
+func decodeToolResultEvent(t *testing.T, body string) (eventType string, toolResult *model.ToolResult) {
+	t.Helper()
 
-		textResp := paddedSSE(
-			"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"child answer\"}}\n\n" +
-				"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n")
+	assert.True(t, strings.HasPrefix(body, "data: "))
+	assert.True(t, strings.HasSuffix(body, "\n\n"))
 
-		mockManager.EXPECT().ToolStreamInSession(gomock.Any(), gomock.Any(), "query_events").Return(
-			&model.StreamedTurn{Response: textResp, SessionId: "child", Model: "sonnet", Session: subSession(), Finalize: noopFinalize}, nil)
-
-		// The full child text must survive the disconnect and drive resolution. A
-		// truncated read would deliver empty/partial text and fail this matcher.
-		resolved := make(chan string, 1)
-		mockManager.EXPECT().ResolveDelegationStream(gomock.Any(), gomock.Any(), "child answer").DoAndReturn(
-			func(_ context.Context, _ *model.AssistantSession, childText string) (*model.StreamedTurn, error) {
-				resolved <- childText
-				// A top-level parent turn ends the chain.
-				return &model.StreamedTurn{Response: paddedSSE(""), SessionId: "parent", Model: "agent",
-					Session: &model.AssistantSession{SessionId: "parent"}, Finalize: noopFinalize}, nil
-			})
-
-		req, _ := newToolStreamRequest(t, "parent", "query_events")
-		w := &disconnectingWriter{}
-		NewAssistantHandler(srv).PostTool(w, req)
-
-		select {
-		case childText := <-resolved:
-			assert.Equal(t, "child answer", childText)
-		case <-time.After(2 * time.Second):
-			t.Fatal("ResolveDelegationStream was never called")
-		}
-	})
+	var payload struct {
+		Type       string            `json:"type"`
+		ToolResult *model.ToolResult `json:"toolResult"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(body, "data: "))), &payload))
+	return payload.Type, payload.ToolResult
 }
 
 func TestWriteToolResultEvent(t *testing.T) {
-	t.Run("success result", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		tr := &model.ToolResult{
-			Name:      "query_events",
-			ToolUseId: "tool-use-1",
-			Content:   []model.ToolResultContent{{Json: map[string]any{"result": "ok"}}},
-		}
-		assert.NoError(t, writeToolResultEvent(w, tr))
+	testCases := []struct {
+		name          string
+		toolResult    *model.ToolResult
+		wantToolUseId string // non-empty: assert the decoded ToolUseId
+		wantIsError   bool
+		wantText      string // non-empty: assert the decoded Content[0].Text
+	}{
+		{
+			name: "success result",
+			toolResult: &model.ToolResult{
+				Name:      "query_events",
+				ToolUseId: "tool-use-1",
+				Content:   []model.ToolResultContent{{Json: map[string]any{"result": "ok"}}},
+			},
+			wantToolUseId: "tool-use-1",
+			wantIsError:   false,
+		},
+		{
+			name: "error result",
+			toolResult: &model.ToolResult{
+				ToolUseId: "tool-use-2",
+				Status:    "error",
+				IsError:   true,
+				Content:   []model.ToolResultContent{{Text: "boom"}},
+			},
+			wantIsError: true,
+			wantText:    "boom",
+		},
+	}
 
-		out := w.Body.String()
-		assert.True(t, strings.HasPrefix(out, "data: "))
-		assert.True(t, strings.HasSuffix(out, "\n\n"))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			assert.NoError(t, writeToolResultEvent(w, tc.toolResult))
 
-		var payload struct {
-			Type       string            `json:"type"`
-			ToolResult *model.ToolResult `json:"toolResult"`
-		}
-		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(out, "data: "))), &payload))
-		assert.Equal(t, "tool_result", payload.Type)
-		if assert.NotNil(t, payload.ToolResult) {
-			assert.Equal(t, "tool-use-1", payload.ToolResult.ToolUseId)
-			assert.False(t, payload.ToolResult.IsError)
-		}
-	})
-
-	t.Run("error result", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		tr := &model.ToolResult{
-			ToolUseId: "tool-use-2",
-			Status:    "error",
-			IsError:   true,
-			Content:   []model.ToolResultContent{{Text: "boom"}},
-		}
-		assert.NoError(t, writeToolResultEvent(w, tr))
-
-		var payload struct {
-			Type       string            `json:"type"`
-			ToolResult *model.ToolResult `json:"toolResult"`
-		}
-		assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(w.Body.String(), "data: "))), &payload))
-		assert.Equal(t, "tool_result", payload.Type)
-		if assert.NotNil(t, payload.ToolResult) {
-			assert.True(t, payload.ToolResult.IsError)
-			assert.Equal(t, "boom", payload.ToolResult.Content[0].Text)
-		}
-	})
+			eventType, toolResult := decodeToolResultEvent(t, w.Body.String())
+			assert.Equal(t, "tool_result", eventType)
+			if assert.NotNil(t, toolResult) {
+				if tc.wantToolUseId != "" {
+					assert.Equal(t, tc.wantToolUseId, toolResult.ToolUseId)
+				}
+				assert.Equal(t, tc.wantIsError, toolResult.IsError)
+				if tc.wantText != "" {
+					assert.Equal(t, tc.wantText, toolResult.Content[0].Text)
+				}
+			}
+		})
+	}
 }
 
 // HTTP/2 forbids hop-by-hop headers; forwarding them (or a per-turn Content-Length,
@@ -3469,6 +3990,384 @@ func TestRespondToolTurnError(t *testing.T) {
 			req, w := newReqRec()
 			handler.respondToolTurnError(w, req, log.FromContext(req.Context()), tc.err, "unable to chat with assistant after tool execution")
 			assert.Equal(t, tc.wantCode, w.Code)
+		})
+	}
+}
+
+// The handler maps the manager's errors by message; the assistant module owns the
+// real values, which the server package cannot import.
+var (
+	errSystemImmutableStub = errors.New("ERROR_SYSTEM_AGENT_IMMUTABLE")
+	errNotFoundStub        = errors.New("ERROR_AGENT_NOT_FOUND")
+)
+
+// agentConfigRouter wires the real routes so tests exercise chi's path handling.
+func agentConfigRouter(t *testing.T) (*chi.Mux, *mock.MockAssistantManager) {
+	t.Helper()
+
+	return agentConfigRouterAuthorized(t, true)
+}
+
+func agentConfigRouterAuthorized(t *testing.T, authorized bool) (*chi.Mux, *mock.MockAssistantManager) {
+	t.Helper()
+
+	srv := &Server{Authorizer: &rbac.FakeAuthorizer{Authorized: authorized}}
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	manager := mock.NewMockAssistantManager(ctrl)
+	srv.AssistantManager = manager
+
+	r := chi.NewRouter()
+	RegisterAssistantRoutes(srv, r, "/assistant")
+
+	return r, manager
+}
+
+func agentConfigRequest(method, target string, body any) *http.Request {
+	var buf bytes.Buffer
+	if body != nil {
+		_ = json.NewEncoder(&buf).Encode(body)
+	}
+
+	req := httptest.NewRequest(method, target, &buf)
+	req.Header.Set("Content-Type", "application/json")
+
+	return req.WithContext(agentConfigContext(req.Context()))
+}
+
+// web.Respond reads the request start time and id from the context.
+func agentConfigContext(ctx context.Context) context.Context {
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "test-user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	return context.WithValue(ctx, web.ContextKeyRequestId, "test-request")
+}
+
+func TestSaveAgentDecodesNameFromPath(t *testing.T) {
+	// chi hands back the raw segment for some of these and the decoded form for
+	// others, so the handler has to normalize it: "Hunter (copy)" is the name the
+	// Agent Studio's Duplicate button generates.
+	names := []string{"Hunter (copy)", "My Agent", "a+b", "café", "a/b", "50%"}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+
+			var gotOriginal string
+			var gotAgent *model.StoredAgent
+			manager.EXPECT().SaveAgent(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+					gotOriginal = originalName
+					gotAgent = agent
+					return nil
+				})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/agents/"+url.PathEscape(name), model.StoredAgent{Name: name}))
+
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, name, gotOriginal)
+			assert.Equal(t, name, gotAgent.Name)
+		})
+	}
+}
+
+func TestSaveAgentFallsBackToPathName(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var gotAgent *model.StoredAgent
+	manager.EXPECT().SaveAgent(gomock.Any(), "Hunter", gomock.Any()).DoAndReturn(
+		func(ctx context.Context, originalName string, agent *model.StoredAgent) error {
+			gotAgent = agent
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/agents/Hunter", model.StoredAgent{}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hunter", gotAgent.Name, "a body without a name keeps the one in the path")
+}
+
+func TestDeleteAgentDecodesNameAndMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "deleted", err: nil, wantStatus: http.StatusOK},
+		{name: "system", err: errSystemImmutableStub, wantStatus: http.StatusForbidden},
+		{name: "missing", err: errNotFoundStub, wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().DeleteAgent(gomock.Any(), "My Agent").Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/agents/My%20Agent", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestSaveSkillDecodesNameFromPath(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	manager.EXPECT().SaveSkill(gomock.Any(), "Threat Hunting", gomock.Any()).Return(nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/skills/"+url.PathEscape("Threat Hunting"), model.StoredSkill{Name: "Threat Hunting"}))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGetBalanceDecodesSelectorFromPath(t *testing.T) {
+	// The picker sends encodeURIComponent(selector), so an agent or duplicated model
+	// named "test test123 (copy)" reached Health still percent-encoded and matched no
+	// adapter.
+	selectors := []string{"test test123 (copy)", "Model A", "google/gemini", "sonnet-4.5@SOAI"}
+
+	for _, selector := range selectors {
+		t.Run(selector, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+
+			var gotHealth, gotBalance string
+			manager.EXPECT().Health(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, m string) (*model.HealthResponse, error) {
+					gotHealth = m
+					return &model.HealthResponse{Status: "ok"}, nil
+				})
+			manager.EXPECT().Balance(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, m string) (*model.BalanceResponse, error) {
+					gotBalance = m
+					return &model.BalanceResponse{}, nil
+				})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/balance/"+url.PathEscape(selector), nil))
+
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, selector, gotHealth)
+			assert.Equal(t, selector, gotBalance)
+		})
+	}
+}
+
+// The mock manager has no EXPECT calls, so reaching it fails the test: a denied
+// request must not mutate configuration.
+func TestAgentConfigRoutesRequireConfigWrite(t *testing.T) {
+	cases := []struct {
+		method string
+		target string
+		body   any
+	}{
+		{http.MethodPut, "/assistant/agents/Hunter", model.StoredAgent{Name: "Hunter"}},
+		{http.MethodDelete, "/assistant/agents/Hunter", nil},
+		{http.MethodPut, "/assistant/skills/Hunting", model.StoredSkill{Name: "Hunting"}},
+		{http.MethodDelete, "/assistant/skills/Hunting", nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.method+" "+c.target, func(t *testing.T) {
+			r, _ := agentConfigRouterAuthorized(t, false)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, c.body))
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Contains(t, w.Body.String(), "ERROR_PERMISSION_DENIED")
+		})
+	}
+}
+
+func TestSaveAgentRejectsBadBody(t *testing.T) {
+	r, _ := agentConfigRouter(t)
+
+	req := httptest.NewRequest(http.MethodPut, "/assistant/agents/Hunter", bytes.NewBufferString("{not json"))
+	req = req.WithContext(agentConfigContext(req.Context()))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestGetMemoriesPassesFilterThrough(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.MemoryFilter
+	manager.EXPECT().ListMemories(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error) {
+			got = filter
+			return &model.MemoryResults{Memories: []*model.MemoryRecord{{Id: "mem-1"}}, Total: 1}, nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/memories?scope=self&userId=user-2&q=dark+mode&limit=10&offset=20", nil))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "self", got.Scope)
+	assert.Equal(t, "user-2", got.TargetUserId)
+	assert.Equal(t, "dark mode", got.Query)
+	assert.Equal(t, 10, got.Limit)
+	assert.Equal(t, 20, got.Offset)
+	assert.Contains(t, w.Body.String(), "mem-1")
+}
+
+func TestGetMemoriesMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
+		{name: "server", err: errors.New("boom"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().ListMemories(gomock.Any(), gomock.Any()).Return(nil, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/memories", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestCreateMemoryDefaultsTargetToRequestor(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/memories", model.MemoryRequest{
+		MemoryText: "prefers dark mode",
+		Scope:      "user",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, got.Id)
+	assert.Equal(t, "prefers dark mode", got.MemoryText)
+
+	if assert.NotNil(t, got.TargetUserId) {
+		assert.Equal(t, "test-user", *got.TargetUserId)
+	}
+}
+
+func TestCreateMemoryGlobalHasNoTarget(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/memories", model.MemoryRequest{
+		MemoryText: "the DMZ is 10.4.0.0/16",
+		Scope:      "global",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Nil(t, got.TargetUserId)
+	assert.Contains(t, w.Body.String(), `"scope":"global"`)
+}
+
+func TestUpdateMemoryUsesPathId(t *testing.T) {
+	r, manager := agentConfigRouter(t)
+
+	var got *model.Memory
+	manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, mem *model.Memory) error {
+			got = mem
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/memories/mem-1", model.MemoryRequest{
+		MemoryText:   "prefers light mode",
+		Scope:        "user",
+		TargetUserId: "user-2",
+	}))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "mem-1", got.Id)
+
+	if assert.NotNil(t, got.TargetUserId) {
+		assert.Equal(t, "user-2", *got.TargetUserId, "an explicit target is not replaced by the requestor")
+	}
+}
+
+func TestSaveMemoryMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "empty", err: errors.New("ERROR_MEMORY_TEXT_REQUIRED"), wantStatus: http.StatusBadRequest},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
+		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().SaveMemory(gomock.Any(), gomock.Any()).Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/memories/mem-1", model.MemoryRequest{MemoryText: "x"}))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestSaveMemoryRejectsInvalidBody(t *testing.T) {
+	r, _ := agentConfigRouter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/assistant/memories", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req.WithContext(agentConfigContext(req.Context())))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteMemoryMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "deleted", err: nil, wantStatus: http.StatusOK},
+		{name: "unauthorized", err: errors.New("ERROR_MEMORY_UNAUTHORIZED"), wantStatus: http.StatusForbidden},
+		{name: "missing", err: errors.New("ERROR_MEMORY_NOT_FOUND"), wantStatus: http.StatusNotFound},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager := agentConfigRouter(t)
+			manager.EXPECT().RemoveMemory(gomock.Any(), "mem-1").Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/memories/mem-1", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
 		})
 	}
 }

@@ -15,6 +15,8 @@ type Packet struct {
 	Number int `json:"number" example:"0"`
 	// The packet type. Note that Security Onion only supports specific packet types in the PCAP retrieval and viewing system.
 	Type string `json:"type" example:"DNS"`
+	// An optional error message if the packet failed to decode
+	Error string `json:"error,omitempty" example:"Unable to decode EthernetType 49320"`
 	// The packet source MAC address
 	SrcMac string `json:"srcMac" example:"0a:1b:2c:3d:4e:5f"`
 	// The packet destination MAC address

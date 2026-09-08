@@ -21,11 +21,15 @@ type Assistantstore interface {
 	// re-fetching the session record.
 	GetChatMessages(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
 	GetSessions(context.Context, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
+	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, err error)
 	CreateSession(context.Context, *model.AssistantSession) error
 	UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
+	FindSessionsPendingMemoryScan(ctx context.Context, dontScanBefore *time.Time, maxMemoryRetries int) ([]*model.AssistantSessionDetails, error)
+	UpdateSessionMemoryScanIndex(ctx context.Context, sessionId string, scannedIndex int) error
+	IncrementSessionMemoryErrors(ctx context.Context, sessionId string) error
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore

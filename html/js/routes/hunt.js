@@ -2300,6 +2300,7 @@ const huntComponent = {
       this.saveSetting('showDetailsPanel', this.showDetailsPanel, this.isCategory('alerts'));
       this.saveSetting('advanced', this.advanced, false);
       this.saveSetting('gridLayoutExpansions', this.gridLayoutExpansions, false);
+      this.saveSetting('collapsedSections', JSON.stringify(this.collapsedSections), '[]');
     },
     loadLocalSettings() {
       // Global settings
@@ -2323,6 +2324,7 @@ const huntComponent = {
       if (localStorage[prefix + '.advanced']) this.advanced = localStorage[prefix + '.advanced'] == 'true';
       if (localStorage[prefix + '.gridLayoutExpansions']) this.gridLayoutExpansions = localStorage[prefix + '.gridLayoutExpansions'] == 'true';
       if (localStorage[prefix + '.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage[prefix + '.autoRefreshInterval']);
+      if (localStorage[prefix + '.collapsedSections']) this.collapsedSections = JSON.parse(localStorage[prefix + '.collapsedSections']);
 
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
@@ -2332,6 +2334,7 @@ const huntComponent = {
       } else {
         this.collapsedSections.splice(this.collapsedSections.indexOf(item), 1);
       }
+      this.saveLocalSettings();
     },
     isExpandedSection(item) {
       return (this.collapsedSections.indexOf(item) == -1);
@@ -2794,7 +2797,7 @@ const huntComponent = {
     calculateEventColumnWidth() {
       const el = this.$refs?.eventColumn?.$el || this.$refs?.eventColumn;
       this.eventColumnWidth = el?.clientWidth || 0;
-      if (this.eventColumnWidth === 0) {
+      if (this.eventColumnWidth === 0 && this.isExpandedSection('hunt-events')) {
         setTimeout(() => {
           this.calculateEventColumnWidth();
         }, 300);

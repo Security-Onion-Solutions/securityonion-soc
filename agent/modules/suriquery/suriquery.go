@@ -124,7 +124,11 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 				"pcapPath": pcapPath,
 			}).Debug("Processing Suricata PCAP job with specific pcap file")
 			if pcapPathStr, ok := pcapPath.(string); ok {
-				pcapFiles = []string{pcapPathStr}
+				sanitizedPath, err := suri.sanitizeCaptureFilePath(pcapPathStr)
+				if err != nil {
+					return reader, err
+				}
+				pcapFiles = []string{sanitizedPath}
 			} else {
 				return reader, errors.New("invalid pcap path")
 			}
@@ -154,6 +158,52 @@ func (suri *SuriQuery) ProcessJob(job *model.Job, reader io.ReadCloser) (io.Read
 
 func (suri *SuriQuery) CleanupJob(job *model.Job) {
 	// Noop
+}
+
+func (suri *SuriQuery) sanitizeCaptureFilePath(pcapPath string) (string, error) {
+	if pcapPath == "" {
+		return "", errors.New("empty capture file path")
+	}
+
+	baseDir, err := filepath.Abs(filepath.Clean(suri.pcapInputPath))
+	if err != nil {
+		return "", fmt.Errorf("invalid base pcap directory: %w", err)
+	}
+
+	cleaned := filepath.Clean(pcapPath)
+	var targetAbs string
+	if filepath.IsAbs(cleaned) {
+		targetAbs = cleaned
+	} else {
+		// Try resolving relative path directly from working dir first
+		absCwd, err := filepath.Abs(cleaned)
+		if err == nil {
+			relCwd, errRel := filepath.Rel(baseDir, absCwd)
+			if errRel == nil && relCwd != "." && relCwd != ".." && !strings.HasPrefix(relCwd, ".."+string(filepath.Separator)) {
+				targetAbs = absCwd
+			}
+		}
+		if targetAbs == "" {
+			targetAbs = filepath.Join(baseDir, cleaned)
+		}
+	}
+
+	targetAbs, err = filepath.Abs(targetAbs)
+	if err != nil {
+		return "", fmt.Errorf("invalid capture file path: %w", err)
+	}
+
+	rel, err := filepath.Rel(baseDir, targetAbs)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		log.WithFields(log.Fields{
+			"pcapPath":   pcapPath,
+			"targetPath": targetAbs,
+			"baseDir":    baseDir,
+		}).Warn("Capture file path is not nested under configured suripcap directory")
+		return "", errors.New("invalid capture file path: outside allowed pcap directory")
+	}
+
+	return targetAbs, nil
 }
 
 func (suri *SuriQuery) decompress(path string) (string, error) {

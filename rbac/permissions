@@ -35,12 +35,18 @@ queries/read:              query-monitor
 queries/delete:            query-admin
 roles/read:                user-monitor
 roles/write:               user-admin
+subgrid/read:              subgrid-monitor
+subgrid/write:             subgrid-admin
 users/read:                user-monitor
 users/write:               user-admin
 users/delete:              user-admin
+notifications/read:        notification-monitor
+notifications/read_all:    notification-auditor
+notifications/write:       notification-admin
 playbooks/read:            playbook-monitor
 playbooks/write:           playbook-admin
 playbooks/delete:          playbook-admin
+assistant/read:            assistant-user assistant-monitor
 assistant/read_authored:   assistant-user assistant-monitor
 assistant/read_shared:     assistant-user assistant-monitor
 assistant/write_authored:  assistant-user
@@ -48,6 +54,12 @@ assistant/delete_authored: assistant-user
 assistant/read_all:        assistant-admin assistant-monitor
 assistant/write_all:       assistant-admin
 assistant/delete_all:      assistant-admin
+memory/read_authored:      memory-user memory-monitor
+memory/read_global:        memory-curator memory-monitor
+memory/read_all:           memory-admin memory-monitor
+memory/write_self:         memory-user
+memory/write_global:       memory-curator
+memory/write_all:          memory-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
@@ -62,9 +74,12 @@ grid-monitor:       grid-admin
 job-monitor:        job-admin
 job-user:           job-admin
 node-monitor:       node-admin
+notification-monitor: notification-admin notification-auditor
 query-monitor:      query-admin
+subgrid-monitor:    subgrid-admin
 user-monitor:       user-admin
 playbook-monitor:   playbook-admin
-detections-monitor: playbook-monitor
 assistant-user:     assistant-admin
 assistant-monitor:  assistant-admin
+memory-user:        memory-curator
+memory-curator:     memory-admin

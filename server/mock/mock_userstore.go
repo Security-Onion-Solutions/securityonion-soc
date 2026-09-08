@@ -11,6 +11,7 @@ package mock
 
 import (
 	context "context"
+	http "net/http"
 	reflect "reflect"
 
 	model "github.com/security-onion-solutions/securityonion-soc/model"
@@ -69,4 +70,19 @@ func (m *MockUserstore) GetUsers(ctx context.Context) ([]*model.User, error) {
 func (mr *MockUserstoreMockRecorder) GetUsers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsers", reflect.TypeOf((*MockUserstore)(nil).GetUsers), ctx)
+}
+
+// ValidateSession mocks base method.
+func (m *MockUserstore) ValidateSession(ctx context.Context, req *http.Request) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateSession", ctx, req)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidateSession indicates an expected call of ValidateSession.
+func (mr *MockUserstoreMockRecorder) ValidateSession(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateSession", reflect.TypeOf((*MockUserstore)(nil).ValidateSession), ctx, req)
 }

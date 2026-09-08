@@ -26,7 +26,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     creditsLoaded: false,
     // Per-session tool-execution state (one record per session id); replaces five
     // parallel structures. Read/create a record with sessionTools(id).
-    sessionToolState: new Map(), // Map<sessionId, {toolsById:Map, indexToId:Map, queue:[], busy:bool, floatingTool}>
+    sessionToolState: new Map(), // Map<sessionId, {toolsById:Map, indexToId:Map, queue:[], busy:bool, held:number, floatingTool}>
     delegationChildren: new Map(), // Map<childSessionId, {parentToolUse, parentSessionId, parentToolUseId, agentName}>
     contextLength: 0,
     creditsUsed: 0,
@@ -79,9 +79,11 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   beforeUnmount() {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
+    this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
+    this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
   },
   watch: {
     '$route'(to, from) {

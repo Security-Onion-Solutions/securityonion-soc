@@ -167,20 +167,22 @@ func (mgr *JobManager) ProcessJob(job *model.Job) (io.ReadCloser, error) {
 	mgr.lock.RLock()
 	defer mgr.lock.RUnlock()
 	var reader io.ReadCloser
-	var err error
 
 	job.Size = 0
 	for _, processor := range mgr.jobProcessors {
+		var err error
 		reader, err = processor.ProcessJob(job, reader)
+		if err != nil {
+			if reader != nil {
+				reader.Close()
+			}
+			return nil, err
+		}
 	}
-	if err != nil && reader != nil {
-		// Don't fail all processors if at least one provided some data.
-		err = nil
+	if reader == nil && len(job.Results) == 0 {
+		return nil, errors.New("no job processor provided a result")
 	}
-	if err == nil && reader == nil && len(job.Results) == 0 {
-		err = errors.New("no job processor provider a result")
-	}
-	return reader, err
+	return reader, nil
 }
 
 func (mgr *JobManager) CleanupJob(job *model.Job) {

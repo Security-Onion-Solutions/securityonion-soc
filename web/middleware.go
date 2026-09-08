@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
@@ -36,6 +37,9 @@ func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Hand
 
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, ContextKeyRequestStart, time.Now())
+			requestId := uuid.New().String()
+			ctx = context.WithValue(ctx, ContextKeyRequestId, requestId)
+			ctx = log.NewContext(ctx, log.WithField("requestId", requestId))
 
 			ctx, statusCode, err := host.Preprocess(ctx, r)
 			if err != nil {
@@ -65,6 +69,17 @@ func Middleware(host *Host, isWS bool, subgrids []*model.Subgrid) func(http.Hand
 			// Proxy subgrid requests
 			gridId := strings.TrimSpace(r.URL.Query().Get("gridId"))
 			if len(gridId) > 0 {
+				if host != nil && host.Authorizer != nil {
+					op := "write"
+					if r.Method == http.MethodGet || r.Method == http.MethodHead {
+						op = "read"
+					}
+					if err := host.Authorizer.CheckContextOperationAuthorized(ctx, op, "subgrid"); err != nil {
+						Respond(w, r, http.StatusForbidden, err)
+						return
+					}
+				}
+
 				ctx = context.WithValue(ctx, ContextKeySubgridResponses, make(map[string][]byte))
 				r = r.WithContext(ctx)
 				proxySubgridRequest(subgrids, gridId, ctx, w, r)
@@ -89,8 +104,7 @@ func validateRequest(ctx context.Context, host *Host, request *http.Request) err
 		request.Method == http.MethodPatch ||
 		request.Method == http.MethodDelete {
 
-		exempt := ctx.Value(ContextKeyRequestCSRFExempt).(bool)
-		if exempt {
+		if exempt, ok := ctx.Value(ContextKeyRequestCSRFExempt).(bool); ok && exempt {
 			return nil
 		}
 
@@ -105,7 +119,7 @@ func validateRequest(ctx context.Context, host *Host, request *http.Request) err
 			return errors.New("Missing SRV token on request")
 		}
 
-		userId := ctx.Value(ContextKeyRequestorId).(string)
+		userId, _ := ctx.Value(ContextKeyRequestorId).(string)
 		return model.ValidateSrvToken(host.SrvKey, userId, token)
 	}
 	return nil

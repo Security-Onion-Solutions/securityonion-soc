@@ -155,6 +155,8 @@ func (e *StrelkaEngine) Start() error {
 	e.isRunning = true
 
 	// start long running processes
+	e.SyncSchedulerParams.SyncThread.Add(1)
+	e.IntegrityCheckerData.Thread.Add(1)
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameStrelka, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameStrelka, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
@@ -298,6 +300,10 @@ func (e *StrelkaEngine) SyncLocalDetections(ctx context.Context, _ []*model.Dete
 func (e *StrelkaEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterrupt()
+
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error during a Strelka sync")
+		}
 	}()
 
 	if detections.CheckWriteNoRead(e.srv.Context, e.srv.Detectionstore, e.writeNoRead) {

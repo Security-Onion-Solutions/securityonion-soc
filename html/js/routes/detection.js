@@ -1016,7 +1016,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = this.ruleTemplates[engine].replaceAll('[publicId]', publicId).trim();
+				this.detect.content = this.ruleTemplates[engine]
+					.replaceAll('[publicId]', publicId)
+					.replaceAll('[today]', moment().format('YYYY-MM-DD'))
+					.trim();
 			}
 
 			this.onDetectionChange();

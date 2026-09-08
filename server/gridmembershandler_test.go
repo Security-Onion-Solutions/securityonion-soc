@@ -71,3 +71,56 @@ func TestImportAuth(t *testing.T) {
 	assert.Equal(t, 403, w.Code)
 	assert.Equal(t, "ERROR_PERMISSION_DENIED", w.Body.String())
 }
+
+type allowAuthorizer struct{}
+
+func (auth *allowAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
+	return nil
+}
+func (auth *allowAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	return nil
+}
+
+func TestImportSizeLimit(t *testing.T) {
+	cfg := &config.ServerConfig{}
+	cfg.ClientParams.GridParams.MaxUploadSize = 10
+
+	h := &GridMembersHandler{
+		server: &Server{
+			Authorizer: &allowAuthorizer{},
+			Config:     cfg,
+		},
+	}
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	ff, err := writer.CreateFormFile("attachment", "file.pcap")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := hex.DecodeString("a1b2c3d400000011223344556677889900")
+	assert.NoError(t, err)
+
+	_, err = ff.Write(content)
+	assert.NoError(t, err)
+
+	assert.NoError(t, writer.Close())
+
+	w := httptest.NewRecorder()
+
+	r := httptest.NewRequest("POST", "/1_standalone/import", bytes.NewReader(body.Bytes()))
+	r.Header.Add("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
+
+	c := chi.NewRouteContext()
+	c.URLParams.Add("id", "1_standalone")
+	ctx := context.WithValue(context.Background(), chi.RouteCtxKey, c)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	r = r.WithContext(ctx)
+
+	h.postImport(w, r)
+
+	assert.Equal(t, 400, w.Code)
+}

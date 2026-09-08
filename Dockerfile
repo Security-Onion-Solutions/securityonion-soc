@@ -4,6 +4,8 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
+ARG SO_BASE
+
 FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine AS builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
@@ -39,11 +41,7 @@ RUN if [ -d "src2/agentic" ]; then for f in src2/agentic/*.md; do jq -Rs --arg k
 RUN ./build.sh "$VERSION"
 
 
-FROM ghcr.io/security-onion-solutions/ubi9:9.7
-
-RUN dnf update -y && \
-    dnf install -y --nodocs ca-certificates && \
-    dnf clean all
+FROM ${SO_BASE}
 
 ARG UID=939
 ARG GID=939

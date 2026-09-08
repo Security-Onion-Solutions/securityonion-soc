@@ -70,32 +70,10 @@ func TestFilterMissing(t *testing.T) {
 	}
 }
 
-type MockEventstore struct{}
+type MockEventstore struct {
+	*FakeEventstore
+}
 
-func (m *MockEventstore) EventSearch(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) Search(context context.Context, criteria *model.EventSearchCriteria) (*model.EventSearchResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) MSearch(context context.Context, criteria []*model.EventMSearchCriteria) (*model.EventMSearchResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) Scroll(context context.Context, criteria *model.EventScrollCriteria, indexes []string) (*model.EventScrollResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (*model.EventIndexResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) Update(context context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
-	return nil, nil
-}
-func (m *MockEventstore) Delete(context context.Context, index string, id string) error {
-	return nil
-}
-func (m *MockEventstore) Acknowledge(context context.Context, criteria *model.EventAckCriteria) (*model.EventUpdateResults, error) {
-	return nil, nil
-}
 func (m *MockEventstore) GetActiveQueries(ctx context.Context, filter bool) ([]*model.QueryTask, error) {
 	// Create some mock QueryTask data
 	queries := []*model.QueryTask{

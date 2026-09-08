@@ -6,6 +6,7 @@
 
 require('../test_common.js');
 require('./grid.js');
+require('./grid_eventshealth.js');
 require('./grid_metrics.js');
 
 const comp = getComponent("grid");
@@ -380,6 +381,7 @@ test('loadLocalSettings_defaults', () => {
   expect(comp.itemsPerPage).toBe(10);
 });
 
+
 test('showNodeMetrics', () => {
 	comp.$root.papi.get = jest.fn().mockResolvedValue({ data: {} });
 	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
@@ -433,4 +435,45 @@ test('zone watcher on metrics tab', () => {
 	expect(comp.saveTimezone).toHaveBeenCalled();
 	expect(comp.loadHistoricalMetrics).toHaveBeenCalledWith(true);
 });
+
+test('getMetricsContainerItems filters by metricsNodeId', () => {
+	comp.nodes = [
+		{ id: 'host1', containers: [{ Name: 'so-zeek' }, { Name: 'so-suricata' }] },
+		{ id: 'host2', containers: [{ Name: 'so-elasticsearch' }, { Name: 'so-suricata' }] }
+	];
+
+	// All Hosts
+	comp.metricsNodeId = '';
+	let items = comp.getMetricsContainerItems();
+	expect(items.map(i => i.value)).toEqual(['all', 'so-elasticsearch', 'so-suricata', 'so-zeek']);
+
+	// Host 1 selected
+	comp.metricsNodeId = 'host1';
+	items = comp.getMetricsContainerItems();
+	expect(items.map(i => i.value)).toEqual(['all', 'so-suricata', 'so-zeek']);
+
+	// Host 2 selected
+	comp.metricsNodeId = 'host2';
+	items = comp.getMetricsContainerItems();
+	expect(items.map(i => i.value)).toEqual(['all', 'so-elasticsearch', 'so-suricata']);
+});
+
+test('metricsNodeId watcher resets metricsContainerId if container not on selected host', () => {
+	comp.nodes = [
+		{ id: 'host1', containers: [{ Name: 'so-zeek' }] },
+		{ id: 'host2', containers: [{ Name: 'so-elasticsearch' }] }
+	];
+	comp.updateRoute = jest.fn();
+
+	comp.metricsNodeId = 'host2';
+	comp.metricsContainerId = 'so-elasticsearch';
+
+	// Change host to host1 where so-elasticsearch does not exist
+	comp.metricsNodeId = 'host1';
+	comp.watch.metricsNodeId.call(comp);
+
+	expect(comp.metricsContainerId).toBe('all');
+	expect(comp.updateRoute).toHaveBeenCalled();
+});
+
 

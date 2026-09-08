@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -90,20 +91,35 @@ func (h *InfoHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 		subgrids = h.server.Config.Subgrids
 	}
 
+	notificationsStarted := licensing.IsEnabled(licensing.FEAT_NTF) && h.server.Notificationstore != nil
+	var lastUnreadNotificationTime *time.Time
+	if notificationsStarted {
+		if t, err := h.server.Notificationstore.GetLastUnreadTime(r.Context()); err == nil {
+			lastUnreadNotificationTime = t
+		}
+	}
+
+	var licenseKey *licensing.LicenseKey
+	if lk := licensing.GetLicenseKey(); lk != nil {
+		licenseKey = lk.LicenseKey
+	}
+
 	info := &model.Info{
-		Version:        h.server.Host.Version,
-		License:        "Elastic License 2.0 (ELv2)",
-		LicenseKey:     licensing.GetLicenseKey().LicenseKey,
-		LicenseStatus:  licensing.GetStatus(),
-		Parameters:     params,
-		ElasticVersion: os.Getenv("ELASTIC_VERSION"),
-		UserId:         userId,
-		Timezones:      h.timezones,
-		SrvToken:       srvToken,
-		ForceUserOtp:   forceUserOtp,
-		MgmtMac:        mgmtMac,
-		Subgrids:       subgrids,
-		CustomReports:  h.getCustomReports(h.server.Config.CustomReportsPath),
+		Version:                    h.server.Host.Version,
+		License:                    "Elastic License 2.0 (ELv2)",
+		LicenseKey:                 licenseKey,
+		LicenseStatus:              licensing.GetStatus(),
+		Parameters:                 params,
+		ElasticVersion:             os.Getenv("ELASTIC_VERSION"),
+		UserId:                     userId,
+		Timezones:                  h.timezones,
+		SrvToken:                   srvToken,
+		ForceUserOtp:               forceUserOtp,
+		MgmtMac:                    mgmtMac,
+		Subgrids:                   subgrids,
+		CustomReports:              h.getCustomReports(h.server.Config.CustomReportsPath),
+		LastUnreadNotificationTime: lastUnreadNotificationTime,
+		NotificationsStarted:       notificationsStarted,
 	}
 
 	web.Respond(w, r, http.StatusOK, info)

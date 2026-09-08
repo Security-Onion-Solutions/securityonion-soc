@@ -79,6 +79,11 @@ routes.push({
         appliedHistorySearch: '',
         historyFilteredTotal: 0,
         skipAdvancedReload: false,
+        draggedEntryIdx: null,
+        dragOverEntryIdx: null,
+        dragPosition: null,
+        recentlyMovedItem: null,
+        recentlyMovedTimer: null,
       }
     },
     mounted() {
@@ -1172,6 +1177,87 @@ routes.push({
         return false;
       }
       return true;
+    },
+    canDragEntry(idx) {
+      if (!this.form.entries || !this.form.entries[idx]) return false;
+      if (this.form.entries[idx]._title == "+" && idx == this.form.entries.length - 1) {
+        return false;
+      }
+      return true;
+    },
+    onEntryDragStart(evt, idx) {
+      if (!this.canDragEntry(idx)) {
+        if (evt && evt.preventDefault) evt.preventDefault();
+        return;
+      }
+      this.draggedEntryIdx = idx;
+      if (evt && evt.dataTransfer) {
+        evt.dataTransfer.effectAllowed = 'move';
+        evt.dataTransfer.setData('text/plain', idx.toString());
+      }
+    },
+    onEntryDragOver(evt, idx) {
+      if (this.draggedEntryIdx === null || this.draggedEntryIdx === idx) return;
+      if (!this.canDragEntry(idx)) return;
+      if (evt && evt.preventDefault) evt.preventDefault();
+      this.dragOverEntryIdx = idx;
+
+      if (evt && evt.currentTarget) {
+        const rect = evt.currentTarget.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        this.dragPosition = evt.clientY < midY ? 'above' : 'below';
+      }
+    },
+    onEntryDragLeave(evt, idx) {
+      if (this.dragOverEntryIdx === idx) {
+        this.dragOverEntryIdx = null;
+        this.dragPosition = null;
+      }
+    },
+    onEntryDrop(evt, targetIdx, selected) {
+      if (evt && evt.preventDefault) evt.preventDefault();
+      const fromIdx = this.draggedEntryIdx !== null ? this.draggedEntryIdx : parseInt(evt?.dataTransfer?.getData('text/plain'), 10);
+      const position = this.dragPosition;
+      this.draggedEntryIdx = null;
+      this.dragOverEntryIdx = null;
+      this.dragPosition = null;
+
+      if (isNaN(fromIdx) || fromIdx === null) return;
+      if (!this.canDragEntry(fromIdx) || !this.canDragEntry(targetIdx)) return;
+
+      let toIdx = targetIdx;
+      if (position === 'below') {
+        toIdx = fromIdx < targetIdx ? targetIdx : targetIdx + 1;
+      } else if (position === 'above') {
+        toIdx = fromIdx < targetIdx ? targetIdx - 1 : targetIdx;
+      }
+
+      if (fromIdx === toIdx || toIdx < 0) return;
+
+      this.reorderEntry(selected, fromIdx, toIdx);
+    },
+    onEntryDragEnd() {
+      this.draggedEntryIdx = null;
+      this.dragOverEntryIdx = null;
+      this.dragPosition = null;
+    },
+    reorderEntry(selected, fromIdx, toIdx) {
+      if (!this.isPendingSave(selected)) {
+        this.editNow(selected);
+      }
+      const movedItem = this.form.entries.splice(fromIdx, 1)[0];
+      this.form.entries.splice(toIdx, 0, movedItem);
+      this.regenEntryTitles();
+      this.markDirtyEntries();
+
+      if (this.recentlyMovedTimer) {
+        clearTimeout(this.recentlyMovedTimer);
+      }
+      this.recentlyMovedItem = movedItem;
+      this.recentlyMovedTimer = setTimeout(() => {
+        this.recentlyMovedItem = null;
+        this.recentlyMovedTimer = null;
+      }, 1000);
     },
     regenEntryTitles() {
       for (var idx = 0; idx < this.form.entries.length; idx++) {

@@ -197,4 +197,56 @@ func TestProcessJob(tester *testing.T) {
 	newReader, err = sq.ProcessJob(job, reader)
 	assert.Nil(tester, err)
 	assert.NotNil(tester, newReader)
+
+	// Case 4: suricata.capture_file has path traversal attempt
+	job = model.NewJob()
+	job.Filter.BeginTime = startTime
+	job.Filter.EndTime = endTime
+	job.Filter.Parameters["suricata.capture_file"] = "../../../etc/passwd"
+	_, err = sq.ProcessJob(job, reader)
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "outside allowed pcap directory")
+
+	// Case 5: suricata.capture_file is absolute path outside pcapInputPath
+	job = model.NewJob()
+	job.Filter.BeginTime = startTime
+	job.Filter.EndTime = endTime
+	job.Filter.Parameters["suricata.capture_file"] = "/etc/shadow"
+	_, err = sq.ProcessJob(job, reader)
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "outside allowed pcap directory")
+}
+
+func TestSanitizeCaptureFilePath(tester *testing.T) {
+	sq := initTest()
+
+	// Valid relative path
+	p, err := sq.sanitizeCaptureFilePath("3/so-pcap.1575817346")
+	assert.NoError(tester, err)
+	assert.NotEmpty(tester, p)
+
+	// Valid path starting with base dir name
+	p, err = sq.sanitizeCaptureFilePath("test_resources/3/so-pcap.1575817346")
+	assert.NoError(tester, err)
+	assert.NotEmpty(tester, p)
+
+	// Empty path
+	_, err = sq.sanitizeCaptureFilePath("")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "empty capture file path")
+
+	// Path traversal relative
+	_, err = sq.sanitizeCaptureFilePath("../../etc/passwd")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "outside allowed pcap directory")
+
+	// Path traversal absolute
+	_, err = sq.sanitizeCaptureFilePath("/tmp/some_other_pcap.pcap")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "outside allowed pcap directory")
+
+	// Base dir itself
+	_, err = sq.sanitizeCaptureFilePath(".")
+	assert.Error(tester, err)
+	assert.Contains(tester, err.Error(), "outside allowed pcap directory")
 }

@@ -26,6 +26,8 @@ type FakeEventstore struct {
 	InputScrollCriterias  []*model.EventScrollCriteria
 	InputScrollIndexes    [][]string
 	Err                   error
+	EventsHealth          *model.EventsHealth
+	EventsHealthErr       error
 	SearchResults         []*model.EventSearchResults
 	MSearchResults        []*model.EventMSearchResults
 	IndexResults          []*model.EventIndexResults
@@ -171,4 +173,9 @@ func (store *FakeEventstore) GetActiveQueries(context context.Context, filter bo
 
 func (store *FakeEventstore) CancelQuery(context context.Context, queryId string) error {
 	return errors.New("query not found")
+}
+
+func (store *FakeEventstore) GetEventsHealth(ctx context.Context) (*model.EventsHealth, error) {
+	store.InputContexts = append(store.InputContexts, ctx)
+	return store.EventsHealth, store.EventsHealthErr
 }

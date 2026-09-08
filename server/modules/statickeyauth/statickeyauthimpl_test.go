@@ -17,22 +17,15 @@ import (
 )
 
 func TestValidateAuthorization(tester *testing.T) {
-	validateAuthorization(tester, "172.17.0.0/24", "abc", "1.1.1.1", true)
-	validateAuthorization(tester, "172.17.0.0/24", "a", "1.1.1.1", false)
-	validateAuthorization(tester, "172.17.0.0/24", "", "1.1.1.1", false)
-	validateAuthorization(tester, "172.17.0.0/24", "", "172.17.1.1", false)
-	validateAuthorization(tester, "172.17.0.0/24", "", "172.17.0.1", true)
-	validateAuthorization(tester, "172.17.0.0/24", "abc", "172.17.0.1", true)
-
-	validateAuthorization(tester, "*", "", "1.1.1.1", true)
-	validateAuthorization(tester, "*", "abc", "1.1.1.1", true)
-	validateAuthorization(tester, "*", "abcd", "1.1.1.1", false)
+	validateAuthorization(tester, "abc", true)
+	validateAuthorization(tester, "a", false)
+	validateAuthorization(tester, "", false)
 }
 
-func validateAuthorization(tester *testing.T, cidr string, key string, ip string, expected bool) {
+func validateAuthorization(tester *testing.T, key string, expected bool) {
 	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
-	ai.Init("abc", cidr)
-	actual := ai.validateAuthorization(context.Background(), key, ip)
+	ai.Init("abc")
+	actual := ai.validateAuthorization(context.Background(), key)
 	assert.Equal(tester, expected, actual)
 }
 
@@ -53,12 +46,9 @@ func validateKey(tester *testing.T, key string, expected bool) {
 
 func TestAuthImplInit(tester *testing.T) {
 	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
-	err := ai.Init("abc", "1")
-	assert.Error(tester, err)
-	err = ai.Init("abc", "1.2.3.4/16")
+	err := ai.Init("abc")
 	if assert.Nil(tester, err) {
 		assert.Equal(tester, "abc", ai.apiKey)
-		assert.Equal(tester, "1.2.0.0/16", ai.anonymousNetwork.String())
 	}
 }
 
@@ -69,8 +59,6 @@ func TestPreprocessPriority(tester *testing.T) {
 
 func TestPreprocess(tester *testing.T) {
 	ai := NewStaticKeyAuthImpl(server.NewFakeAuthorizedServer(nil))
-	err := ai.Init("abc", "1")
-	assert.Error(tester, err)
 	ai.apiKey = "123"
 	request, _ := http.NewRequest("GET", "", nil)
 	request.Header.Set("authorization", ai.apiKey)
@@ -82,5 +70,4 @@ func TestPreprocess(tester *testing.T) {
 			assert.Equal(tester, server.AGENT_ID, requestorId)
 		}
 	}
-
 }

@@ -461,14 +461,14 @@ func (datastore *FileDatastoreImpl) loadJobs() error {
 	return err
 }
 
-func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool) (packets []*model.Packet, err error) {
+func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool, excludeErrors bool) (packets []*model.Packet, hasErrors bool, err error) {
 	logger := log.FromContext(ctx)
 
 	job := datastore.GetJob(ctx, jobId)
 	if job != nil {
 		if datastore.jobIsAllowed(ctx, job, "read") {
 			if job.Status == model.JobStatusCompleted {
-				packets, err = packet.ParsePcap(datastore.getStreamFilename(job), offset, count, unwrap)
+				packets, hasErrors, err = packet.ParsePcap(datastore.getStreamFilename(job), offset, count, unwrap, excludeErrors)
 				if err != nil {
 					logger.WithError(err).WithField("jobId", job.Id).Warn("Failed to parse captured packets")
 					err = nil
@@ -481,7 +481,7 @@ func (datastore *FileDatastoreImpl) GetPackets(ctx context.Context, jobId int, o
 		err = errors.New("Job not found")
 	}
 
-	return packets, err
+	return packets, hasErrors, err
 }
 
 func (datastore *FileDatastoreImpl) SaveJobStream(ctx context.Context, jobId int, reader io.ReadCloser) (err error) {

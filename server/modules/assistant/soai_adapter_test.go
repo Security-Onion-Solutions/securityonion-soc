@@ -18,7 +18,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
-	
+
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
@@ -119,60 +119,57 @@ func TestSOAiConstructorWithLicense(t *testing.T) {
 
 	srv := &server.Server{}
 
-	t.Run("license URL used when config is default", func(t *testing.T) {
-		config := map[string]interface{}{}
-		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
+	tests := []struct {
+		name       string
+		config     map[string]interface{}
+		wantApiUrl string
+	}{
+		{
+			name:       "license URL used when config is default",
+			config:     map[string]interface{}{},
+			wantApiUrl: "https://license.api.com",
+		},
+		{
+			name: "custom config overrides license URL",
+			config: map[string]interface{}{
+				"apiUrl": "https://custom.api.com",
+			},
+			wantApiUrl: "https://custom.api.com",
+		},
+		{
+			name: "license URL used when config is almost default (no trailing slash)",
+			// DEFAULT_APIURL is "https://onionai.securityonion.net/"
+			config: map[string]interface{}{
+				"apiUrl": "https://onionai.securityonion.net",
+			},
+			// Should be overridden by license URL: https://license.api.com
+			wantApiUrl: "https://license.api.com",
+		},
+		{
+			name: "license URL used when config has different scheme but same hostname",
+			config: map[string]interface{}{
+				"apiUrl": "http://onionai.securityonion.net/",
+			},
+			wantApiUrl: "https://license.api.com",
+		},
+		{
+			name: "license URL used when config has no scheme but same hostname",
+			config: map[string]interface{}{
+				"apiUrl": "onionai.securityonion.net",
+			},
+			wantApiUrl: "https://license.api.com",
+		},
+	}
 
-		assert.NoError(t, err)
-		br := adapter.(*SOAiCloudAdapter)
-		assert.Equal(t, "https://license.api.com", br.apiUrl)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter, err := NewSOAiCloudAdapter(context.Background(), srv, tt.config)
 
-	t.Run("custom config overrides license URL", func(t *testing.T) {
-		config := map[string]interface{}{
-			"apiUrl": "https://custom.api.com",
-		}
-		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
-
-		assert.NoError(t, err)
-		br := adapter.(*SOAiCloudAdapter)
-		assert.Equal(t, "https://custom.api.com", br.apiUrl)
-	})
-
-	t.Run("license URL used when config is almost default (no trailing slash)", func(t *testing.T) {
-		// DEFAULT_APIURL is "https://onionai.securityonion.net/"
-		config := map[string]interface{}{
-			"apiUrl": "https://onionai.securityonion.net",
-		}
-		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
-
-		assert.NoError(t, err)
-		br := adapter.(*SOAiCloudAdapter)
-		// Should be overridden by license URL: https://license.api.com
-		assert.Equal(t, "https://license.api.com", br.apiUrl)
-	})
-
-	t.Run("license URL used when config has different scheme but same hostname", func(t *testing.T) {
-		config := map[string]interface{}{
-			"apiUrl": "http://onionai.securityonion.net/",
-		}
-		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
-
-		assert.NoError(t, err)
-		br := adapter.(*SOAiCloudAdapter)
-		assert.Equal(t, "https://license.api.com", br.apiUrl)
-	})
-
-	t.Run("license URL used when config has no scheme but same hostname", func(t *testing.T) {
-		config := map[string]interface{}{
-			"apiUrl": "onionai.securityonion.net",
-		}
-		adapter, err := NewSOAiCloudAdapter(context.Background(), srv, config)
-
-		assert.NoError(t, err)
-		br := adapter.(*SOAiCloudAdapter)
-		assert.Equal(t, "https://license.api.com", br.apiUrl)
-	})
+			assert.NoError(t, err)
+			br := adapter.(*SOAiCloudAdapter)
+			assert.Equal(t, tt.wantApiUrl, br.apiUrl)
+		})
+	}
 }
 
 func TestSOAiGetHealth(t *testing.T) {

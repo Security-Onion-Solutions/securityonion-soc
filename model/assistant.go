@@ -8,12 +8,44 @@ package model
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/apex/log"
 )
 
 const (
 	MessageTagContextCompression = "context_compression"
+
+	SessionTagMemory    = "memory"
+	SessionTagEmbed     = "embed"
+	SessionTagReconcile = "reconcile"
 )
+
+// MemorySessionTags marks sessions created by the background memory pipeline
+// (and the live-chat embedding path) to hold agent usage records. Tagged
+// sessions are excluded from GetSessions unless GetSessionsWithMemorySessions
+// is passed, and are never scanned for memories themselves.
+var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
+
+var ClientMessageTags = []string{MessageTagContextCompression}
+
+// FilterClientTags drops any tag the client isn't allowed to assert.
+func FilterClientTags(tags []string) []string {
+	if len(tags) == 0 {
+		return tags
+	}
+
+	filtered := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if slices.Contains(ClientMessageTags, tag) {
+			filtered = append(filtered, tag)
+		}
+	}
+
+	return filtered
+}
 
 // @Description A user message to be added to a session.
 type IncomingMessage struct {
@@ -36,9 +68,9 @@ type ChatRequest struct {
 	// Optionally indicate the temperature for response randomness.
 	Temperature float64 `json:"temperature,omitempty" example:"0.7"`
 	// Optionally indicate the top-p sampling parameter.
-	TopP float64 `json:"top_p" example:"1"`
+	TopP float64 `json:"top_p,omitempty" example:"1"`
 	// Optionally indicate the top-k sampling parameter.
-	TopK int `json:"top_k" example:"40"`
+	TopK int `json:"top_k,omitempty" example:"40"`
 	// Optionally indicate the stop sequences for the response.
 	StopSequences []string `json:"stop_sequences,omitempty" example:"end_turn"`
 	// Optionally provide an alternative System prompt
@@ -53,6 +85,26 @@ type ChatRequest struct {
 	SystemAppend string `json:"system_append,omitempty" example:"Treat 192.168.1.105 as our internal DNS server."`
 	// The model to use for this chat transaction.
 	Model string `json:"model,omitempty" example:"claude-sonnet-4.5"`
+}
+
+// @Description A request to generate vector embeddings for one or more inputs.
+type EmbeddingRequest struct {
+	// The model to use for this embedding transaction.
+	Model string `json:"model" example:"text-embedding-3-small"`
+	// The input texts to embed. One vector is returned per input, index-aligned.
+	Input []string `json:"input"`
+	// Optionally request a specific output dimensionality (text-embedding-3 and later only).
+	Dimensions int `json:"dimensions,omitempty" example:"1536"`
+}
+
+// @Description The vector embeddings generated for an EmbeddingRequest.
+type EmbeddingResponse struct {
+	// The model used to generate the embeddings.
+	Model string `json:"model" example:"text-embedding-3-small"`
+	// One embedding vector per input, in the same order as the request inputs.
+	Embeddings [][]float32 `json:"embeddings"`
+	// Token usage for the request.
+	Usage *Usage `json:"usage,omitempty"`
 }
 
 // @Description A stored message in the chat session. This contains metadata about the message and its context not necessary for the conversation with the Assistant.
@@ -304,12 +356,23 @@ type ChatConfig struct {
 	AutoExecuteTools bool
 	// MaxTokens, when > 0, caps the number of output tokens the model may generate
 	// for this request. Used to enforce a per-sub-session output-token budget.
-	MaxTokens int
+	MaxTokens       int
+	IncludeMemories bool
+	// MemorySessionId is the chat session the retrieved memories serve; embedding
+	// token usage on the memory-fetch path is recorded against it.
+	MemorySessionId string
 }
 
 func WithAutoExecuteTools(autoExecute bool) ChatOpt {
 	return func(config *ChatConfig) {
 		config.AutoExecuteTools = autoExecute
+	}
+}
+
+func WithMemories(sessionId string) ChatOpt {
+	return func(config *ChatConfig) {
+		config.IncludeMemories = true
+		config.MemorySessionId = sessionId
 	}
 }
 
@@ -367,6 +430,19 @@ type AssistantSession struct {
 	ParentModel string `json:"parentModel,omitempty" example:"AgentClaude@SOAI"`
 	// For delegated sub-agent sessions, the display name of the delegated agent.
 	DelegateAgent string `json:"delegateAgent,omitempty" example:"Hunter"`
+	// When Memory is enabled, the scanner will use this field to denote how many
+	// messages in the session have been scanned for memory extraction. Extraction
+	// always begins with the oldest messages in a session.
+	LastMemoryScannedIndex int `json:"lastMemoryScannedIndex,omitempty" example:"4"`
+	// A denormalized count of the messages saved to this session, incremented on
+	// each chat save so the memory scanner can find sessions with unscanned
+	// messages in a single query. Not omitempty so new sessions index an explicit
+	// 0; sessions created before this field existed have no value, which the
+	// scanner treats as pending until its index update heals it.
+	MessageCount int `json:"messageCount" example:"7"`
+	// How many consecutive memory scans of this session have failed. Reset to 0
+	// by a successful scan
+	MemoryErrors int `json:"memoryErrors,omitempty" example:"1"`
 }
 
 const (
@@ -501,8 +577,310 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// StoredAgent is one agent as persisted in the "assistant.agents" setting (one
+// JSON object per line, the []{} uiElements convention) and as sent to the
+// per-agent save endpoint. An entry naming a system agent is an override, not a
+// replacement.
+type StoredAgent struct {
+	Name string `json:"name" example:"Malware Analyst"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled        *bool `json:"enabled,omitempty" example:"true"`
+	IsOrchestrator bool  `json:"isOrchestrator" example:"false"`
+	// A model selector ("id@adapter" or bare id), not a display name.
+	Model         string   `json:"model" example:"claude-sonnet-4.5@SOAI"`
+	AllowedSkills []string `json:"allowedSkills" example:"Hunt,Respond"`
+	CanDelegateTo []string `json:"canDelegateTo" example:"Log Analyst"`
+	Description   string   `json:"description" example:"Analyzes suspicious binaries and scripts"`
+	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
+	Persona string `json:"persona" example:"Prefer static analysis before detonating a sample."`
+}
+
+// StoredSkill is one skill in the "assistant.skills" setting, following the same
+// conventions as StoredAgent.
+type StoredSkill struct {
+	Name string `json:"name" example:"Threat Intel Lookup"`
+	// Pointer so an absent field means enabled rather than disabled.
+	Enabled *bool `json:"enabled,omitempty" example:"true"`
+	// Ignored for a system skill, whose tool set is fixed by the built-in.
+	Tools []string `json:"tools" example:"query_events,query_cases"`
+	// Addendum to the built-in guidance for a system skill; all of it otherwise.
+	Persona string `json:"persona" example:"Always cite the source of an indicator."`
+}
+
+// Agent is a persona plus the skills and delegation scope it runs with, and is
+// also what the browser receives in AssistantParameters.AvailableAgents. Agents
+// that ship with the product carry a built-in Prompt an admin may not view or
+// edit; admin-created ones define everything in PersonaAddendum.
+type Agent struct {
+	Name           string   `json:"name" example:"Malware Analyst"`
+	IsOrchestrator bool     `json:"isOrchestrator" example:"false"`
+	CanDelegateTo  []string `json:"canDelegateTo" example:"Log Analyst"`
+	AllowedSkills  []string `json:"allowedSkills" example:"Hunt,Respond"`
+	// Built-in prompt, never sent to the browser. Empty for admin-created agents.
+	Prompt      string `json:"-"`
+	Description string `json:"agentDescription" example:"Analyzes suspicious binaries and scripts"`
+	IsSystem    bool   `json:"isSystem" example:"true"`
+	// A disabled agent is still published so the Agent Studio can re-enable it.
+	Enabled bool `json:"enabled" example:"true"`
+	// Admin-authored persona; exposed because an admin wrote it.
+	PersonaAddendum string `json:"personaAddendum" example:"Prefer static analysis before detonating a sample."`
+}
+
+// EffectivePrompt is the built-in prompt with the admin persona appended; either
+// part may be empty.
+func (a *Agent) EffectivePrompt() string {
+	prompt := strings.TrimSpace(a.Prompt)
+	addendum := strings.TrimSpace(a.PersonaAddendum)
+
+	switch {
+	case prompt == "":
+		return addendum
+	case addendum == "":
+		return prompt
+	default:
+		return prompt + "\n\n" + addendum
+	}
+}
+
+// Skill is a bundle of tools plus the guidance that teaches an agent to use them,
+// and is also what the browser receives in AssistantParameters.AvailableSkills.
 type Skill struct {
-	Name             string
-	Tools            []string
-	AdditionalPrompt string
+	Name  string   `json:"name" example:"Threat Intel Lookup"`
+	Tools []string `json:"tools" example:"query_events,query_cases"`
+	// Built-in guidance, never sent to the browser. Empty for admin-created skills.
+	AdditionalPrompt string `json:"-"`
+	IsSystem         bool   `json:"isSystem" example:"true"`
+	// A disabled skill grants nothing, but is still published so it can be re-enabled.
+	Enabled bool `json:"enabled" example:"true"`
+	// Admin-authored guidance; exposed because an admin wrote it.
+	PersonaAddendum string `json:"personaAddendum" example:"Always cite the source of an indicator."`
+}
+
+// EffectiveGuidance is the built-in guidance with the admin addendum appended;
+// either part may be empty.
+func (s *Skill) EffectiveGuidance() string {
+	guidance := strings.TrimSpace(s.AdditionalPrompt)
+	addendum := strings.TrimSpace(s.PersonaAddendum)
+
+	switch {
+	case guidance == "":
+		return addendum
+	case addendum == "":
+		return guidance
+	default:
+		return guidance + "\n\n" + addendum
+	}
+}
+
+type ExtractedFact struct {
+	Fact       string  `json:"fact"`
+	Scope      string  `json:"scope"`
+	Category   string  `json:"category"`
+	Durability string  `json:"durability"`
+	Confidence float64 `json:"confidence"`
+}
+
+type Memory struct {
+	Auditable
+	LastUsedAt   *time.Time
+	UsageCount   int
+	MemoryText   string
+	SessionId    string
+	Embedding    []float32
+	ModelID      string
+	TargetUserId *string
+	UserDefined  bool
+}
+
+const (
+	MemoryScopeSelf   = "self"
+	MemoryScopeGlobal = "global"
+	MemoryScopeAll    = "all"
+)
+
+type MemoryFilter struct {
+	Scope        string
+	TargetUserId string
+	Query        string
+	Limit        int
+	Offset       int
+}
+
+// Client-facing view of a memory; the embedding is omitted.
+type MemoryRecord struct {
+	Id           string     `json:"id" example:"c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a"`
+	CreateTime   *time.Time `json:"createTime"`
+	UpdateTime   *time.Time `json:"updateTime,omitempty"`
+	MemoryText   string     `json:"memoryText" example:"The user prefers timestamps in UTC."`
+	Scope        string     `json:"scope" example:"user" enum:"user,global"`
+	TargetUserId string     `json:"targetUserId,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+	SessionId    string     `json:"sessionId,omitempty" example:"chat_1757086398900_ykhmndscn"`
+	UserDefined  bool       `json:"userDefined" example:"true"`
+	UsageCount   int        `json:"usageCount" example:"4"`
+	LastUsedAt   *time.Time `json:"lastUsedAt,omitempty"`
+	ModelId      string     `json:"modelId,omitempty" example:"claude-sonnet-4.5"`
+	Similarity   *float64   `json:"similarity,omitempty" example:"0.82"`
+}
+
+// MemoryRequest is the body of a memory create or update.
+type MemoryRequest struct {
+	MemoryText string `json:"memoryText" example:"The user prefers timestamps in UTC."`
+	Scope      string `json:"scope" example:"user" enum:"user,global"`
+	// TargetUserId assigns a user-scoped memory to someone else; requires
+	// memory/write_all. Empty means the requestor.
+	TargetUserId string `json:"targetUserId,omitempty" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
+}
+
+type MemoryResults struct {
+	Memories []*MemoryRecord `json:"memories"`
+	Total    int             `json:"total" example:"42"`
+	Offset   int             `json:"offset" example:"0"`
+	Limit    int             `json:"limit" example:"25"`
+}
+
+func NewMemoryRecord(mem *Memory) *MemoryRecord {
+	record := &MemoryRecord{
+		Id:          mem.Id,
+		CreateTime:  mem.CreateTime,
+		UpdateTime:  mem.UpdateTime,
+		MemoryText:  mem.MemoryText,
+		Scope:       "global",
+		SessionId:   mem.SessionId,
+		UserDefined: mem.UserDefined,
+		UsageCount:  mem.UsageCount,
+		LastUsedAt:  mem.LastUsedAt,
+		ModelId:     mem.ModelID,
+	}
+
+	if mem.TargetUserId != nil {
+		record.Scope = "user"
+		record.TargetUserId = *mem.TargetUserId
+	}
+
+	return record
+}
+
+type NearbyMemory struct {
+	Similarity float64
+	Memory     *Memory
+}
+
+type ReconciledMemory struct {
+	Action  string
+	ReEmbed bool
+	Memory  *Memory
+}
+
+type ReconcileMemoryBody struct {
+	Candidate ReconcileCandidate `json:"candidate"`
+	Neighbors []MemoryNeighbor   `json:"neighbors"`
+}
+
+type ReconcileCandidate struct {
+	Content string `json:"content"`
+	Scope   string `json:"scope"`
+}
+
+type MemoryNeighbor struct {
+	Id          string  `json:"id"`
+	Content     string  `json:"content"`
+	Scope       string  `json:"scope"`
+	Similarity  float64 `json:"similarity"`
+	UserDefined bool    `json:"userDefined"`
+}
+
+type MemoryOp struct {
+	Reasoning  string  `json:"reasoning"`
+	Op         string  `json:"op"`
+	TargetId   *string `json:"target_id"`
+	Content    *string `json:"content"`
+	Confidence float64 `json:"confidence"`
+}
+
+type MemoryOperations struct {
+	Operations []*MemoryOp `json:"operations"`
+}
+
+// RemoveInvalid removes improper operations from the set, logging each removal,
+// so the remaining valid operations can still be applied. An operation is
+// removed when its op is not ADD/UPDATE/DELETE/NOOP, an ADD carries a TargetId,
+// an UPDATE/DELETE does not target a supplied non-user-defined neighbor, a
+// prior operation already referenced the same TargetId, or an ADD/UPDATE/NOOP
+// was already kept (at most one of those three per reconciliation).
+func (memOps *MemoryOperations) RemoveInvalid(neighbors []MemoryNeighbor) {
+	userDefined := map[string]bool{}
+	for _, n := range neighbors {
+		userDefined[n.Id] = n.UserDefined
+	}
+
+	primarySeen := false
+	usedIds := map[string]bool{}
+	kept := make([]*MemoryOp, 0, len(memOps.Operations))
+
+	for _, op := range memOps.Operations {
+		if op == nil {
+			continue
+		}
+
+		oper := strings.ToUpper(op.Op)
+
+		reason := ""
+
+		switch oper {
+		case "ADD":
+			switch {
+			case op.TargetId != nil:
+				reason = "ADD with TargetId"
+			case primarySeen:
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
+			}
+		case "UPDATE", "DELETE":
+			if op.TargetId == nil {
+				reason = oper + " without TargetId"
+				break
+			}
+
+			ud, ok := userDefined[*op.TargetId]
+
+			switch {
+			case !ok:
+				reason = oper + " with non-existing TargetId"
+			case ud:
+				reason = "cannot " + oper + " user defined memories"
+			case usedIds[*op.TargetId]:
+				reason = "another operation already references this TargetId"
+			case oper == "UPDATE" && primarySeen:
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
+			}
+		case "NOOP":
+			if primarySeen {
+				reason = "more than one ADD, UPDATE, and/or NOOP operation"
+			}
+		default:
+			reason = "invalid op"
+		}
+
+		if reason != "" {
+			fields := log.Fields{"op": op.Op, "reason": reason}
+			if op.TargetId != nil {
+				fields["targetId"] = *op.TargetId
+			}
+
+			log.WithFields(fields).Warn("removing invalid memory operation")
+
+			continue
+		}
+
+		if oper != "DELETE" {
+			primarySeen = true
+		}
+
+		if op.TargetId != nil {
+			usedIds[*op.TargetId] = true
+		}
+
+		kept = append(kept, op)
+	}
+
+	memOps.Operations = kept
 }

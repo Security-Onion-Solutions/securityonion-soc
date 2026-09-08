@@ -74,6 +74,18 @@ html, body, * {
   color: rgb(var(--v-theme-altinfo)) !important;
 }
 
+.text-secondary {
+  color: rgb(var(--v-theme-altsecondary)) !important;
+}
+
+.text-cyan {
+  color: rgb(var(--v-theme-altcyan)) !important;
+}
+
+.text-teal {
+  color: rgb(var(--v-theme-altteal)) !important;
+}
+
 .v-input--error, .v-field--error, .v-field--error .v-field__append-inner > .v-icon{
   --v-theme-error: var(--v-theme-alterror) !important;
   --v-field-color: var(--v-theme-alterror) !important;
@@ -83,6 +95,15 @@ html, body, * {
 .v-expansion-panel,
 .v-alert {
   border-radius: var(--so-radius-panel) !important;
+}
+
+.v-alert__prepend > .v-icon {
+  display: inline-flex;
+}
+
+.v-alert__prepend {
+  align-self: center;
+  grid-row: 1 / -1;
 }
 
 .options-dialog {
@@ -314,15 +335,18 @@ html, body, * {
   background-color: rgba(var(--v-theme-text), var(--v-hover-opacity, 0.04));
 }
 
-.theme-links .v-list-item:focus-within {
+.theme-links .v-list-item:focus-visible,
+.theme-links .v-list-item:has(:focus-visible) {
   background-color: rgba(var(--v-theme-text), var(--v-focus-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active) {
+.theme-links .v-list-item:has(a.router-link-active),
+.theme-links .v-list-item.nav-active {
   background-color: rgba(var(--v-theme-text), var(--v-activated-opacity, 0.12));
 }
 
-.theme-links .v-list-item:has(a.router-link-active):hover {
+.theme-links .v-list-item:has(a.router-link-active):hover,
+.theme-links .v-list-item.nav-active:hover {
   background-color: rgba(var(--v-theme-text), calc(var(--v-activated-opacity, 0.12) + var(--v-hover-opacity, 0.04)));
 }
 
@@ -567,7 +591,7 @@ html, body, * {
 }
 
 .expanded-field-value:hover {
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-altprimary));
 }
 
 .expanded-field-expand-btn {
@@ -1279,6 +1303,55 @@ dfn {
   font-variant-numeric: tabular-nums;
 }
 
+.chat-container .message-item .flex-grow-1 {
+  min-width: 0;
+}
+
+.chat-container .message-item {
+  min-width: 480px;
+}
+
+.markdown-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-table-scroll:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.chat-container .message-item .text-body-2 pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.aimetrics-messages-table .v-table__wrapper:has(.hardwrap-aimetrics) {
+  container-type: inline-size;
+}
+
+.aimetrics-messages-table tr.expanded-row > td {
+  max-width: 1px;
+  overflow: visible;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.aimetrics-messages-table .expansion {
+  max-width: min(calc(100cqw - 2px), calc(100vw - var(--v-layout-left, 0px) - 48px));
+  box-sizing: border-box;
+  padding-left: 16px;
+  padding-right: 16px;
+  overflow-x: auto;
+  position: sticky;
+  left: 0;
+}
+
+.aimetrics-messages-table .expansion pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Agent Studio inline editor card (inside an expanded data-table row). */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
@@ -1313,9 +1386,23 @@ dfn {
 
 .agentstudio-toolbar {
   width: fit-content;
+  max-width: 100%;
 }
 
 #agentstudio-agents .expanded-row-wrapper .v-window-item,
 #agentstudio-skills .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
+}
+
+/* A disabled agent/skill still lists, but reads as inactive. */
+.agentstudio-row-disabled td {
+  opacity: 0.65;
+}
+
+.agentstudio-row-disabled td:last-child {
+  opacity: 1;
+}
+
+.agentstudio-dialog-body {
+  max-height: 70vh;
 }

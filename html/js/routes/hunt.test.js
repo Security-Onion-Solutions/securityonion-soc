@@ -165,6 +165,25 @@ test('saveTimezone', () => {
   expect(comp.zone).toBe("Foo/Bar");
 });
 
+test('collapsedSections persist across reloads', () => {
+  const origParams = comp.params;
+  comp.params = {};
+  comp.collapsedSections = [];
+
+  comp.toggleShowSection('hunt-graphs');
+  expect(comp.collapsedSections).toEqual(['hunt-graphs']);
+
+  comp.collapsedSections = [];
+  comp.loadLocalSettings();
+  expect(comp.collapsedSections).toEqual(['hunt-graphs']);
+
+  // back to all-expanded clears the stored setting
+  comp.toggleShowSection('hunt-graphs');
+  expect(localStorage['settings.' + comp.category + '.collapsedSections']).toBeUndefined();
+
+  comp.params = origParams;
+});
+
 test('removeFilter', () => {
   comp.query = "abc def | groupby foo bar*";
   comp.$router.resolve = jest.fn();
@@ -386,6 +405,11 @@ test('lookupSocIds', () => {
   var record = { 'so_case.userId': '12345678-1234-5678-0123-123456789012'};
   comp.lookupSocIds(record);
   expect(record['so_case.userId']).toBe('test@test.invalid');
+
+  var record = { 'so_case.userId': '00000000-0000-0000-0000-000000000000', 'so_case.assigneeId': '00000000-0000-0000-0000-000000000001'};
+  comp.lookupSocIds(record);
+  expect(record['so_case.userId']).toBe(comp.$root.i18n.systemUser);
+  expect(record['so_case.assigneeId']).toBe(comp.$root.i18n.agentUser);
 });
 
 test('getQuery', async () => {

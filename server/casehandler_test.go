@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"mime/multipart"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/apex/log"
+	"github.com/go-chi/chi/v5"
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -571,4 +573,68 @@ func TestHandlerCreateEvents(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateArtifactAuth(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	srv := NewMockServer(t, ctrl, &config.ServerConfig{})
+	authorizer := srv.Authorizer.(*rbac.FakeAuthorizer)
+	authorizer.Authorized = false
+
+	router := chi.NewRouter()
+	RegisterCaseRoutes(srv, router, "/case")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("json", `{"caseId":"123"}`)
+	ff, _ := writer.CreateFormFile("attachment", "test.txt")
+	_, _ = ff.Write([]byte("hello world"))
+	_ = writer.Close()
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/case/artifacts", bytes.NewReader(body.Bytes()))
+	r.Header.Add("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
+
+	ctx := NewTestContext(nil)
+	r = r.WithContext(ctx)
+
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, 403, w.Code)
+	assert.Equal(t, "ERROR_PERMISSION_DENIED", w.Body.String())
+}
+
+func TestCreateArtifactSizeLimit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := &config.ServerConfig{
+		MaxUploadSizeBytes: 10,
+	}
+	srv := NewMockServer(t, ctrl, cfg)
+	authorizer := srv.Authorizer.(*rbac.FakeAuthorizer)
+	authorizer.Authorized = true
+
+	router := chi.NewRouter()
+	RegisterCaseRoutes(srv, router, "/case")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("json", `{"caseId":"123"}`)
+	ff, _ := writer.CreateFormFile("attachment", "test.txt")
+	_, _ = ff.Write([]byte("some data that exceeds the max upload limit of 10 bytes"))
+	_ = writer.Close()
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/case/artifacts", bytes.NewReader(body.Bytes()))
+	r.Header.Add("Content-Type", "multipart/form-data; boundary="+writer.Boundary())
+
+	ctx := NewTestContext(nil)
+	r = r.WithContext(ctx)
+
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, 400, w.Code)
 }

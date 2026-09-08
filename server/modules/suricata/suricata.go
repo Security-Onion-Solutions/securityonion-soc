@@ -294,6 +294,8 @@ func (e *SuricataEngine) Start() error {
 	}
 
 	// start long running processes
+	e.SyncSchedulerParams.SyncThread.Add(1)
+	e.IntegrityCheckerData.Thread.Add(1)
 	go detections.SyncScheduler(e.srv.Context, e.srv.Detectionstore, e, &e.SyncSchedulerParams, &e.EngineState, model.EngineNameSuricata, &e.isRunning)
 	go detections.IntegrityChecker(model.EngineNameSuricata, e, &e.IntegrityCheckerData, &e.EngineState.IntegrityFailure)
 
@@ -615,6 +617,10 @@ func (e *SuricataEngine) ExtractDetails(detect *model.Detection) error {
 func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 	defer func() {
 		e.resetInterruptSync()
+
+		if r := recover(); r != nil {
+			logger.WithField("recoverValue", r).Error("recovered from an error during a Suricata sync")
+		}
 	}()
 
 	// Check for sync block at the very start
@@ -1026,6 +1032,10 @@ func (e *SuricataEngine) writeAllRulesFile(detections []*model.Detection) error 
 						content = re.ReplaceAllLiteralString(content, *override.Value)
 					}
 				}
+			}
+
+			if !isSingleLine(content) {
+				return fmt.Errorf("modify override for SID %s produces a multi-line rule; suricata rules must be a single line", det.PublicID)
 			}
 
 			// Handle disabled rules that are needed for flowbits
@@ -1603,13 +1613,13 @@ func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok b
 	return fingerprint, true, nil
 }
 
-func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
-	lines := strings.Split(rule, "\n")
-	nonEmpty := lo.Filter(lines, func(line string, _ int) bool {
-		return strings.TrimSpace(line) != ""
-	})
+func isSingleLine(rule string) bool {
+	trimmed := strings.TrimSpace(rule)
+	return trimmed != "" && !strings.Contains(trimmed, "\n")
+}
 
-	if len(nonEmpty) != 1 {
+func (e *SuricataEngine) ValidateRule(rule string) (string, error) {
+	if !isSingleLine(rule) {
 		return "", fmt.Errorf("suricata rules must be a single line")
 	}
 

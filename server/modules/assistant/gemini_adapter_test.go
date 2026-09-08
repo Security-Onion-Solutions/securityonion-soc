@@ -695,31 +695,12 @@ func TestConvertHistory(t *testing.T) {
 }
 
 func TestBuildClientFromApiKey(t *testing.T) {
-	t.Run("empty API key", func(t *testing.T) {
-		ctx := context.Background()
-		client, err := buildClientFromApiKey(ctx, "")
+	ctx := context.Background()
+	client, err := buildClientFromApiKey(ctx, "")
 
-		// With empty API key, it should return an error
-		assert.Error(t, err)
-		assert.Nil(t, client)
-	})
-
-	t.Run("with API key - integration test", func(t *testing.T) {
-		// This test requires a valid API key or will fail
-		// In real scenarios, this would be skipped in CI or use a test key
-		t.Skip("Skipping integration test - requires valid Gemini API key")
-
-		ctx := context.Background()
-		// This would require a real or test API key
-		client, err := buildClientFromApiKey(ctx, "test-api-key")
-
-		// Depending on whether the key is valid
-		if err != nil {
-			assert.Nil(t, client)
-		} else {
-			assert.NotNil(t, client)
-		}
-	})
+	// With empty API key, it should return an error
+	assert.Error(t, err)
+	assert.Nil(t, client)
 }
 
 func TestConvertPropertyToGemini(t *testing.T) {
@@ -1296,71 +1277,71 @@ func TestGeminiAdapterSendMessage_MaxTokens(t *testing.T) {
 	}
 }
 
+// newGeminiChatRequest builds a minimal single-message chat request for the
+// candidate-count tests.
+func newGeminiChatRequest() *model.ChatRequest {
+	return &model.ChatRequest{
+		Model:    "gemini-x",
+		Messages: []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
+	}
+}
+
 // Both send paths read only the first candidate, so they must explicitly request a
 // single candidate rather than rely on the API default.
-func TestGeminiAdapterCandidateCount(t *testing.T) {
-	req := func() *model.ChatRequest {
-		return &model.ChatRequest{
-			Model:    "gemini-x",
-			Messages: []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
-		}
+func TestGeminiAdapterCandidateCount_SendMessage(t *testing.T) {
+	var gotConfig *genai.GenerateContentConfig
+
+	mockSession := &mockGeminiSession{
+		sendMessageFunc: func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
+			return &genai.GenerateContentResponse{}, nil
+		},
+	}
+	mockClient := &mockGeminiClient{
+		createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+			gotConfig = config
+			return mockSession, nil
+		},
 	}
 
-	t.Run("SendMessage", func(t *testing.T) {
-		var gotConfig *genai.GenerateContentConfig
+	adapter := &GeminiAdapter{client: mockClient}
 
-		mockSession := &mockGeminiSession{
-			sendMessageFunc: func(ctx context.Context, part genai.Part) (*genai.GenerateContentResponse, error) {
-				return &genai.GenerateContentResponse{}, nil
-			},
-		}
-		mockClient := &mockGeminiClient{
-			createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
-				gotConfig = config
-				return mockSession, nil
-			},
-		}
+	_, err := adapter.SendMessage(context.Background(), newGeminiChatRequest())
+	assert.NoError(t, err)
+	assert.NotNil(t, gotConfig)
+	assert.Equal(t, int32(1), gotConfig.CandidateCount)
+}
 
-		adapter := &GeminiAdapter{client: mockClient}
+func TestGeminiAdapterCandidateCount_SendMessageStream(t *testing.T) {
+	var gotConfig *genai.GenerateContentConfig
 
-		_, err := adapter.SendMessage(context.Background(), req())
-		assert.NoError(t, err)
-		assert.NotNil(t, gotConfig)
-		assert.Equal(t, int32(1), gotConfig.CandidateCount)
-	})
+	mockSession := &mockGeminiSession{
+		sendMessageStreamFunc: func(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error] {
+			return func(yield func(*genai.GenerateContentResponse, error) bool) {
+				yield(&genai.GenerateContentResponse{
+					Candidates: []*genai.Candidate{
+						{Content: &genai.Content{Parts: []*genai.Part{{Text: "hello"}}}},
+					},
+				}, nil)
+			}
+		},
+	}
+	mockClient := &mockGeminiClient{
+		createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
+			gotConfig = config
+			return mockSession, nil
+		},
+	}
 
-	t.Run("SendMessageStream", func(t *testing.T) {
-		var gotConfig *genai.GenerateContentConfig
+	adapter := &GeminiAdapter{client: mockClient}
 
-		mockSession := &mockGeminiSession{
-			sendMessageStreamFunc: func(ctx context.Context, part genai.Part) iter.Seq2[*genai.GenerateContentResponse, error] {
-				return func(yield func(*genai.GenerateContentResponse, error) bool) {
-					yield(&genai.GenerateContentResponse{
-						Candidates: []*genai.Candidate{
-							{Content: &genai.Content{Parts: []*genai.Part{{Text: "hello"}}}},
-						},
-					}, nil)
-				}
-			},
-		}
-		mockClient := &mockGeminiClient{
-			createSessionFunc: func(ctx context.Context, model string, config *genai.GenerateContentConfig, history []*genai.Content) (GeminiSession, error) {
-				gotConfig = config
-				return mockSession, nil
-			},
-		}
+	response, _, err := adapter.SendMessageStream(context.Background(), newGeminiChatRequest())
+	assert.NoError(t, err)
 
-		adapter := &GeminiAdapter{client: mockClient}
+	// Drain the fabricated response body so the writer goroutine can finish.
+	_, _ = io.ReadAll(response.Body)
 
-		response, _, err := adapter.SendMessageStream(context.Background(), req())
-		assert.NoError(t, err)
-
-		// Drain the fabricated response body so the writer goroutine can finish.
-		_, _ = io.ReadAll(response.Body)
-
-		assert.NotNil(t, gotConfig)
-		assert.Equal(t, int32(1), gotConfig.CandidateCount)
-	})
+	assert.NotNil(t, gotConfig)
+	assert.Equal(t, int32(1), gotConfig.CandidateCount)
 }
 
 // streamGeminiAdapter builds an adapter whose stream yields the given sequence.
@@ -1387,50 +1368,59 @@ func TestGeminiAdapterSendMessageStream_ReleasesCallerWithoutContent(t *testing.
 		Messages: []*model.Message{{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
 	}
 
-	run := func(t *testing.T, seq iter.Seq2[*genai.GenerateContentResponse, error], validate func(t *testing.T, response *http.Response, body string)) {
-		adapter := streamGeminiAdapter(seq)
-
-		type result struct {
-			response *http.Response
-			body     string
-		}
-		done := make(chan result, 1)
-		go func() {
-			response, _, err := adapter.SendMessageStream(context.Background(), req)
-			assert.NoError(t, err)
-			body, _ := io.ReadAll(response.Body)
-			done <- result{response: response, body: string(body)}
-		}()
-
-		select {
-		case res := <-done:
-			validate(t, res.response, res.body)
-		case <-time.After(5 * time.Second):
-			t.Fatal("SendMessageStream deadlocked: caller was never released")
-		}
+	tests := []struct {
+		name     string
+		seq      iter.Seq2[*genai.GenerateContentResponse, error]
+		validate func(t *testing.T, response *http.Response, body string)
+	}{
+		{
+			name: "error on first chunk",
+			seq: func(yield func(*genai.GenerateContentResponse, error) bool) {
+				yield(nil, errors.New("quota exceeded"))
+			},
+			validate: func(t *testing.T, response *http.Response, body string) {
+				// A first-chunk error is now delivered as a parseable SSE error event
+				// (200) carrying the real message, not an opaque sentinel body.
+				assert.Equal(t, http.StatusOK, response.StatusCode)
+				assert.Contains(t, body, `"type":"error"`)
+				assert.Contains(t, body, "quota exceeded")
+			},
+		},
+		{
+			name: "empty stream",
+			seq:  func(yield func(*genai.GenerateContentResponse, error) bool) {},
+			validate: func(t *testing.T, response *http.Response, body string) {
+				assert.Equal(t, http.StatusOK, response.StatusCode)
+				// The SSE stream must still be well-formed for UnstreamResponse.
+				assert.Contains(t, body, `"type":"message_start"`)
+				assert.Contains(t, body, `"type":"message_stop"`)
+				assert.Contains(t, body, "data: [DONE]")
+			},
+		},
 	}
 
-	t.Run("error on first chunk", func(t *testing.T) {
-		seq := func(yield func(*genai.GenerateContentResponse, error) bool) {
-			yield(nil, errors.New("quota exceeded"))
-		}
-		run(t, seq, func(t *testing.T, response *http.Response, body string) {
-			// A first-chunk error is now delivered as a parseable SSE error event
-			// (200) carrying the real message, not an opaque sentinel body.
-			assert.Equal(t, http.StatusOK, response.StatusCode)
-			assert.Contains(t, body, `"type":"error"`)
-			assert.Contains(t, body, "quota exceeded")
-		})
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := streamGeminiAdapter(tt.seq)
 
-	t.Run("empty stream", func(t *testing.T) {
-		seq := func(yield func(*genai.GenerateContentResponse, error) bool) {}
-		run(t, seq, func(t *testing.T, response *http.Response, body string) {
-			assert.Equal(t, http.StatusOK, response.StatusCode)
-			// The SSE stream must still be well-formed for UnstreamResponse.
-			assert.Contains(t, body, `"type":"message_start"`)
-			assert.Contains(t, body, `"type":"message_stop"`)
-			assert.Contains(t, body, "data: [DONE]")
+			type result struct {
+				response *http.Response
+				body     string
+			}
+			done := make(chan result, 1)
+			go func() {
+				response, _, err := adapter.SendMessageStream(context.Background(), req)
+				assert.NoError(t, err)
+				body, _ := io.ReadAll(response.Body)
+				done <- result{response: response, body: string(body)}
+			}()
+
+			select {
+			case res := <-done:
+				tt.validate(t, res.response, res.body)
+			case <-time.After(5 * time.Second):
+				t.Fatal("SendMessageStream deadlocked: caller was never released")
+			}
 		})
-	})
+	}
 }

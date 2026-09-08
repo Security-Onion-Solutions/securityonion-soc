@@ -3,14 +3,15 @@ package model
 import "time"
 
 type GetSessionsOpts struct {
-	includeDeleted  bool
-	userId          string
-	sessionId       string
-	usage           bool
-	descendants     bool
-	skipMessageMeta bool
-	start           time.Time
-	end             time.Time
+	includeDeleted        bool
+	includeMemorySessions bool
+	userId                string
+	sessionId             string
+	usage                 bool
+	descendants           bool
+	skipMessageMeta       bool
+	start                 time.Time
+	end                   time.Time
 }
 
 func (gso *GetSessionsOpts) IncludeDeleted() bool {
@@ -46,11 +47,25 @@ func (gso *GetSessionsOpts) MessageMeta() bool {
 	return !gso.skipMessageMeta
 }
 
+// IncludeMemorySessions reports whether sessions tagged as memory-pipeline
+// bookkeeping (MemorySessionTags) should be returned. Off by default: these
+// sessions exist to record background agent token usage and are only shown in
+// the admin management views.
+func (gso *GetSessionsOpts) IncludeMemorySessions() bool {
+	return gso.includeMemorySessions
+}
+
 type GetSessionsOpt func(*GetSessionsOpts)
 
 func GetSessionsWithIncludeDeleted(includeDeleted bool) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
 		gso.includeDeleted = includeDeleted
+	}
+}
+
+func GetSessionsWithMemorySessions(includeMemorySessions bool) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.includeMemorySessions = includeMemorySessions
 	}
 }
 

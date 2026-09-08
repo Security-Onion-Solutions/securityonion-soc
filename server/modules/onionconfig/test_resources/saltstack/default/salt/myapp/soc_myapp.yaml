@@ -1,4 +1,38 @@
 myapp:
+  agent_list:
+    description: DB-stored, UI-managed list of objects (agent-studio shape)
+    storage: db
+    readonlyUi: True
+    global: True
+    syntax: json
+    forcedType: "[]{}"
+    uiElements:
+    - field: name
+      label: Name
+      forcedType: string
+      required: true
+    - field: enabled
+      label: Enabled
+      forcedType: bool
+    - field: isOrchestrator
+      label: Orchestrator
+      forcedType: bool
+    - field: model
+      label: Model
+      forcedType: string
+    - field: allowedSkills
+      label: Skills
+      forcedType: "[]string"
+    - field: canDelegateTo
+      label: Delegates To
+      forcedType: "[]string"
+    - field: description
+      label: Description
+      forcedType: string
+    - field: persona
+      label: Persona
+      forcedType: string
+      multiline: true
   my_def:
     jinjaEscaped: True
   foo__txt:

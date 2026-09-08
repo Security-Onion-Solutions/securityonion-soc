@@ -231,8 +231,15 @@ rule ExtractableRule {
 }`
 
 func TestStrelkaModule(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().DoesTemplateExist(gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+
 	srv := &server.Server{
 		DetectionEngines: sync.Map{}, // map[model.EngineName]server.DetectionEngine{},
+		Detectionstore:   detStore,
 	}
 	mod := NewStrelkaEngine(srv)
 
@@ -1003,6 +1010,31 @@ func TestSyncWriteNoReadFail(t *testing.T) {
 	err := eng.Sync(logger, false)
 	assert.Equal(t, detections.ErrSyncFailed, err)
 	assert.Equal(t, wnr, eng.writeNoRead)
+}
+
+func TestSyncRecoversFromPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	detStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "123").DoAndReturn(func(ctx context.Context, publicId string) (*model.Detection, error) {
+		panic("test panic")
+	})
+
+	eng := &StrelkaEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+		},
+		writeNoRead: util.Ptr("123"),
+	}
+
+	logger := log.WithField("detectionEngine", "test-strelka")
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = eng.Sync(logger, false)
+	})
+	assert.NoError(t, err)
 }
 
 func TestSyncIncrementalNoChanges(t *testing.T) {

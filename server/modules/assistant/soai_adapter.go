@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,10 @@ func init() {
 const (
 	DEFAULT_APIURL                 = "https://onionai.securityonion.net/"
 	DEFAULT_HEALTH_TIMEOUT_SECONDS = 3
+)
+
+var (
+	ErrNon2XXResponse = errors.New("received a non-2XX response")
 )
 
 type SOAiCloudAdapter struct {
@@ -88,11 +93,83 @@ func (a *SOAiCloudAdapter) Protocol() string {
 	return "securityonion_ai_cloud"
 }
 
+func (a *SOAiCloudAdapter) SupportsEmbeddings() bool {
+	return true
+}
+
 func buildApiKey() string {
 	key := licensing.GetLicenseKey()
 	hash := sha256.Sum256([]byte(key.Signature))
 
 	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
+}
+
+func (a *SOAiCloudAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	logger := log.FromContext(ctx)
+
+	u, err := url.Parse(a.apiUrl)
+	if err != nil {
+		logger.WithError(err).WithField("apiUrl", a.apiUrl).Error("unable to parse apiUrl")
+
+		return nil, err
+	}
+
+	u.Path = path.Join(u.Path, "/api/embed")
+	endpoint := u.String()
+
+	var buf bytes.Buffer
+
+	err = json.NewEncoder(&buf).Encode(req)
+	if err != nil {
+		logger.WithError(err).WithField("embeddingrequest", req).Error("unable to encode EmbeddingRequest")
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
+	if err != nil {
+		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
+
+		return nil, err
+	}
+
+	httpReq.Header.Add("Content-Type", "application/json")
+	a.prepareRequestHeaders(httpReq)
+
+	res, err := a.MakeRequest(httpReq, false)
+	if res != nil && res.Body != nil {
+		defer res.Body.Close()
+	}
+	if err != nil {
+		logger.WithError(err).Error("unable to execute request")
+
+		return nil, err
+	}
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		logger.WithFields(log.Fields{
+			"statusCode": res.StatusCode,
+			"status":     res.Status,
+		}).Error("unexpected status code in embedding response")
+
+		return nil, ErrNon2XXResponse
+	}
+
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		logger.WithError(err).Error("unable to read response body")
+
+		return nil, err
+	}
+
+	response := &model.EmbeddingResponse{}
+
+	err = json.Unmarshal(resBody, response)
+	if err != nil {
+		logger.WithError(err).WithField("embedResponseBodyLength", len(resBody)).Error("unable to unmarshal JSON response")
+		return nil, err
+	}
+
+	return response, nil
 }
 
 func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
@@ -132,7 +209,6 @@ func (a *SOAiCloudAdapter) SendMessage(ctx context.Context, req *model.ChatReque
 	}
 	if err != nil {
 		logger.WithError(err).Error("unable to execute request")
-
 		return nil, err
 	}
 

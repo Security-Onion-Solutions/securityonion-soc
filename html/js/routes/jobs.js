@@ -157,14 +157,22 @@ const jobsComponent = {
       setTimeout(this.loadData, 500);
     },
     saveAddJobForm() {
-      if (this.form.sensorId) localStorage['settings.jobs.addJobForm.sensorId'] = this.form.sensorId;
-      if (this.form.importId) localStorage['settings.jobs.addJobForm.importId'] = this.form.importId;
-      if (this.form.protocol) localStorage['settings.jobs.addJobForm.protocol'] = this.form.protocol;
-      if (this.form.srcIp) localStorage['settings.jobs.addJobForm.srcIp'] = this.form.srcIp;
-      if (this.form.srcPort) localStorage['settings.jobs.addJobForm.srcPort'] = this.form.srcPort;
-      if (this.form.dstIp) localStorage['settings.jobs.addJobForm.dstIp'] = this.form.dstIp;
-      if (this.form.dstPort) localStorage['settings.jobs.addJobForm.dstPort'] = this.form.dstPort;
-      if (this.form.timeframe) localStorage['settings.jobs.addJobForm.' + this.kind + '.timeframe'] = this.form.timeframe;
+      const setOrRemove = (key, val) => {
+        if (val !== null && val !== undefined && val !== '') {
+          localStorage[key] = val;
+        } else {
+          localStorage.removeItem(key);
+        }
+      };
+
+      setOrRemove('settings.jobs.addJobForm.sensorId', this.form.sensorId);
+      setOrRemove('settings.jobs.addJobForm.importId', this.form.importId);
+      setOrRemove('settings.jobs.addJobForm.protocol', this.form.protocol);
+      setOrRemove('settings.jobs.addJobForm.srcIp', this.form.srcIp);
+      setOrRemove('settings.jobs.addJobForm.srcPort', this.form.srcPort);
+      setOrRemove('settings.jobs.addJobForm.dstIp', this.form.dstIp);
+      setOrRemove('settings.jobs.addJobForm.dstPort', this.form.dstPort);
+      setOrRemove('settings.jobs.addJobForm.' + this.kind + '.timeframe', this.form.timeframe);
     },
     clearAddJobForm() {
       this.form.sensorId = null;

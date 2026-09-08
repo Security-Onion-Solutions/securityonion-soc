@@ -4,6 +4,8 @@
 # https://securityonion.net/license; you may not use this file except in compliance with the
 # Elastic License 2.0.
 
+ARG SO_BASE
+
 FROM ghcr.io/security-onion-solutions/golang:1.26.4 AS builder
 
 ARG OWNER=ory
@@ -39,11 +41,7 @@ RUN go mod download && go get -u golang.org/x/net && go mod tidy
 RUN go build -tags sqlite -ldflags="-X 'github.com/ory/kratos/driver/config.Version=${VERSION}' -X 'github.com/ory/kratos/driver/config.Date=$(date -I)' -X 'github.com/ory/kratos/driver/config.Commit=$(git rev-parse --short HEAD)'"
 
 
-FROM ghcr.io/security-onion-solutions/ubi9:9.7
-
-RUN dnf update -y && \
-    dnf install -y --nodocs ca-certificates && \
-    dnf clean all
+FROM ${SO_BASE}
 
 ENV DSN=sqlite:///kratos-data/db.sqlite?_fk=true
 

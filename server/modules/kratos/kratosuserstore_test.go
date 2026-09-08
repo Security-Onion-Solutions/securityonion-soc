@@ -16,7 +16,7 @@ import (
 
 func TestUserstoreInit(tester *testing.T) {
 	ai := NewKratosUserstore(nil)
-	err := ai.Init("abc")
+	err := ai.Init("abc", "def")
 	assert.Nil(tester, err)
 }
 

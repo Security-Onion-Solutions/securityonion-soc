@@ -84,6 +84,12 @@ $(document).ready(function () {
           nextIcon: 'fa-chevron-right',
           lastIcon: 'fa-forward-step',
         },
+        VDataTableServer: {
+          firstIcon: 'fa-backward-step',
+          prevIcon: 'fa-chevron-left',
+          nextIcon: 'fa-chevron-right',
+          lastIcon: 'fa-forward-step',
+        },
         VFileInput: {
           prependIcon: 'fa-paperclip',
           variant: 'outlined',
@@ -137,19 +143,22 @@ $(document).ready(function () {
             dark: false,
             colors: {
               success: '#3A833C',
-              altsuccess: '#357938',
+              altsuccess: '#337436',
               primary: '#0B78D0',
-              altprimary: '#096DBC',
+              altprimary: '#0968B4',
               secondary: '#424242',
+              altsecondary: '#424242',
               info: '#0B78D0',
-              altinfo: '#0A6FC2',
+              altinfo: '#0A68B6',
               warning: '#fb8c00',
-              altwarning: '#B34D00',
+              altwarning: '#AB4900',
               'on-warning': '#000000',
               'on-altwarning': '#ffffff',
               error: '#EB0000',
-              alterror: '#D60000',
-              amber: '#707000',
+              alterror: '#C90000',
+              amber: '#6B6B00',
+              altcyan: '#00717F',
+              altteal: '#2F716B',
               nav_background: '#000000',
               nav_background_link: '#039FDD',
               nav: '#ffffff',
@@ -168,19 +177,22 @@ $(document).ready(function () {
             dark: true,
             colors: {
               success: '#3A833C',
-              altsuccess: '#49A74B',
+              altsuccess: '#5AB65B',
               primary: '#007CAD',
-              altprimary: '#039FDD',
+              altprimary: '#03ADEF',
               secondary: '#2C3347',
+              altsecondary: '#97A1BF',
               info: '#0B78D0',
-              altinfo: '#2597F4',
+              altinfo: '#4AA9F6',
               warning: '#fb8c00',
               altwarning: '#fb8c00',
               'on-warning': '#000000',
               'on-altwarning': '#000000',
               error: '#EB0000',
-              alterror: '#FF5757',
+              alterror: '#FF7676',
               amber: '#ffc107',
+              altcyan: '#00BCD4',
+              altteal: '#4DB6AC',
               nav_background: '#000000',
               nav_background_link: '#039FDD',
               nav: '#ffffff',
@@ -188,7 +200,7 @@ $(document).ready(function () {
               drawer_background: '#252B3B',
               background: '#0B1019',
               text: '#ffffff',
-              icon: '#8B96A8',
+              icon: '#8893A6',
               button_icon_color: '#ffffff',
               row_stripe: '#2d2d2d',
               row_hover: '#2a3452',
@@ -228,6 +240,12 @@ $(document).ready(function () {
           warningTimeout: 30000,
           errorTimeout: 120000,
           toolbar: null,
+          notificationMenu: false,
+          notificationShowDismissed: false,
+          notifications: [],
+          expandedNotifications: {},
+          unreadCount: 0,
+          notificationAudits: {},
           wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
           apiUrl: location.origin + location.pathname + 'api/',
           authUrl: '/auth/self-service/',
@@ -249,12 +267,14 @@ $(document).ready(function () {
           tools: [],
           casesEnabled: false,
           detectionsEnabled: false,
+          notificationsStarted: false,
           subtitle: '',
           connected: false,
           reconnecting: false,
           users: [],
           cacheRefreshIntervalMs: 300000,
           loadServerSettingsTime: 0,
+          lastAgenticParamsJson: null,
           user: null,
           username: '',
           maximizedParent: null,
@@ -276,6 +296,9 @@ $(document).ready(function () {
           FEAT_RPT: 'rpt',
           FEAT_TTR: 'ttr',
           FEAT_OAI: 'oai',
+          FEAT_NTF: 'ntf',
+          SYSTEM_USER_ID: SYSTEM_USER_ID,
+          AGENT_USER_ID: AGENT_USER_ID,
           validators: {
             required: value => !!value || _i18n.required,
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
@@ -326,6 +349,10 @@ $(document).ready(function () {
         'selectedGridId': 'onGridSelected',
       },
       methods: {
+        ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        hasEnabledTools() {
+          return this.tools.some(tool => tool.enabled);
+        },
         getMetricsUrl() {
           for (var i = 0; i < this.tools.length; i++) {
             const tool = this.tools[i];
@@ -593,17 +620,31 @@ $(document).ready(function () {
                   this.subgrids = response.data.subgrids;
                   this.exportNodeId = response.data.parameters.exportNodeId;
                   this.customReports = response.data.customReports;
+                  // We have to subscribe to this websocket event in order to update the client Params initially provided
+                  // by the /api/info response. This is unique to agentic params because agentic params can change on
+                  // the fly via the AgentStudio, whereas other config changes currently require a SOC restart to take effect.
+                  // If we didn't do this then navigating to Grid and back to OnionAI, for example, would revert to showing the old models.
+                  this.subscribe('assistant:agentic', this.updateAgenticParams);
 
                   this.user = await this.getUserById(response.data.userId);
                   if (this.user) {
                     this.username = this.user.email;
                   }
+                  this.notificationsStarted = !!response.data.notificationsStarted;
+                  this.handleServerInfoNotifications(response.data);
 
                   if (this.parameterCallback != null) {
                     this.parameterCallback(this.parameters[this.parameterSection]);
                     this.parameterCallback = null;
                   }
                   this.parametersLoaded = true;
+                  // Heals a push missed while the websocket was down, but only when the
+                  // params actually differ from what subscribers already have.
+                  const agenticJson = JSON.stringify(this.parameters.assistant || null);
+                  if (agenticJson !== this.lastAgenticParamsJson) {
+                    this.lastAgenticParamsJson = agenticJson;
+                    this.publish('assistant:agentic', this.parameters.assistant);
+                  }
                   if (this.parameters.webSocketTimeoutMs > 0) {
                     this.wsConnectionTimeout = this.parameters.webSocketTimeoutMs;
                   }
@@ -632,6 +673,7 @@ $(document).ready(function () {
                   this.checkUserSecuritySettings(response.data);
 
                   this.subscribe("status", this.updateStatus);
+                  this.subscribe('notification', this.handleIncomingNotification);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);
@@ -676,7 +718,7 @@ $(document).ready(function () {
           }
         },
         async loadSubgridInfo() {
-          if (!this.subgrids) return;
+          if (!this.hasSubgrids()) return;
           var deferredError;
           for (var idx = 0; idx < this.subgrids.length; idx++) {
             const grid = this.subgrids[idx];
@@ -919,6 +961,29 @@ $(document).ready(function () {
           }
           return "";
         },
+        escapeHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }[char]));
+        },
+        unescapeHtml(str) {
+          if (!str) return '';
+          return String(str)
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+        },
+        stripHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/<[^>]*>/g, '');
+        },
         formatMarkdown(str, handleMermaid=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
@@ -937,6 +1002,7 @@ $(document).ready(function () {
             if (str) {
               md = marked.parse(str);
               md = DOMPurify.sanitize(md);
+              md = this.wrapScrollableTables(md);
             }
             return md;
           } else {
@@ -960,9 +1026,26 @@ $(document).ready(function () {
               this.initializeMermaid();
               md = marked.parse(str);
               md = DOMPurify.sanitize(md);
+              md = this.wrapScrollableTables(md);
             }
             return md;
           }
+        },
+        wrapScrollableTables(html) {
+          if (!html || html.indexOf('<table') == -1) return html;
+          const template = document.createElement('template');
+          template.innerHTML = html;
+          template.content.querySelectorAll('table').forEach(table => {
+            if (table.parentElement && table.parentElement.classList.contains('markdown-table-scroll')) return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'markdown-table-scroll';
+            wrapper.setAttribute('tabindex', '0');
+            wrapper.setAttribute('role', 'region');
+            wrapper.setAttribute('aria-label', this.i18n.ariaScrollableTable);
+            table.replaceWith(wrapper);
+            wrapper.appendChild(table);
+          });
+          return template.innerHTML;
         },
         initializeMermaid() {
           if (typeof mermaid !== 'undefined' && !this.mermaidInitialized) {
@@ -1020,6 +1103,9 @@ $(document).ready(function () {
           return node.gridId != null && node.gridId.trim().length > 0;
         },
         hasSubgrids() {
+          if (!(this.userHasRole('superuser') || this.userHasRole('subgrid-superuser') || this.userHasRole('subgrid-auditor'))) {
+            return false;
+          }
           return this.subgrids != null && this.subgrids.length > 0;
         },
         getSelectedGrid() {
@@ -1205,11 +1291,16 @@ $(document).ready(function () {
           var link = $('link[href^="css/external/prism-custom-"]')[0];
           if (link) {
             if (this.$vuetify.theme.current.dark) {
-              link.href = "css/external/prism-custom-dark-v1.29.0.css";
+              link.href = "css/external/prism-custom-dark-v1.30.0.css";
             } else {
-              link.href = "css/external/prism-custom-light-v1.29.0.css";
+              link.href = "css/external/prism-custom-light-v1.30.0.css";
             }
           }
+        },
+        updateAgenticParams(update) {
+          if (!update || !this.parameters) return;
+          this.parameters.assistant = update;
+          this.lastAgenticParamsJson = JSON.stringify(update);
         },
         subscribe(kind, fn) {
           this.ensureConnected();
@@ -1453,6 +1544,9 @@ $(document).ready(function () {
         },
         getAllGrids() {
           const grids = [{id: LOCAL_GRID_ID, name: this.i18n.gridLocal}];
+          if (!this.hasSubgrids()) {
+            return grids;
+          }
           this.subgrids.forEach((grid) => {
             grid.name = grid.id;
             grids.push(grid);
@@ -1496,7 +1590,22 @@ $(document).ready(function () {
           }
           return [];
         },
+        // Pseudo-users resolvable by id but intentionally absent from users/ enumeration
+        getSpecialUser(id) {
+          switch (id) {
+            case SYSTEM_USER_ID:
+              return { id: id, email: this.i18n.systemUser };
+            case AGENT_USER_ID:
+            case 'agent':
+              return { id: id, email: this.i18n.agentUser };
+          }
+          return null;
+        },
         async getUserById(id) {
+          const special = this.getSpecialUser(id);
+          if (special) {
+            return special;
+          }
           const nowTime = new Date().time;
           if (this.users.length == 0 || (nowTime - this.usersLoadedTime > this.cacheRefreshIntervalMs)) {
             await this.getAllUsers();
@@ -1505,6 +1614,10 @@ $(document).ready(function () {
           return this.getUserByIdViaCache(id);
         },
         getUserByIdViaCache(id) {
+          const special = this.getSpecialUser(id);
+          if (special) {
+            return special;
+          }
           if (this.users) {
             for (var idx = 0; idx < this.users.length; idx++) {
               const user = this.users[idx];
@@ -1524,11 +1637,6 @@ $(document).ready(function () {
         async populateUserDetails(obj, idField, outputField) {
           if (obj[idField] && obj[idField].length > 0) {
             const id = obj[idField];
-            if (id === SYSTEM_USER_ID || id === AGENT_USER_ID || id === "agent") {
-              obj[outputField] = this.i18n.systemUser;
-              return
-            }
-
             const user = await this.$root.getUserById(id);
             if (user) {
               const displayName = this.getUserDisplayName(user);

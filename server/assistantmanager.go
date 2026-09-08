@@ -44,6 +44,14 @@ type AssistantManager interface {
 	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
 	Health(ctx context.Context, aiModel string) (*model.HealthResponse, error)
+	SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error
+	DeleteAgent(ctx context.Context, name string) error
+	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
+	DeleteSkill(ctx context.Context, name string) error
+	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
+	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
+	SaveMemory(ctx context.Context, mem *model.Memory) error
+	RemoveMemory(ctx context.Context, id string) error
 }
 
 type AssistantAdapter interface {
@@ -52,6 +60,8 @@ type AssistantAdapter interface {
 	SendMessageStream(ctx context.Context, req *model.ChatRequest) (*http.Response, *model.AuxMessageData, error)
 	GetBalance(ctx context.Context) (*model.BalanceResponse, error)
 	GetHealth(ctx context.Context) (*model.HealthResponse, error)
+	Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error)
+	SupportsEmbeddings() bool
 }
 
 //go:generate mockgen -destination mock/mock_assistantmanager.go -package mock . AssistantManager

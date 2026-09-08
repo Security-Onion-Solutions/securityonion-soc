@@ -38,6 +38,10 @@ func (s *stubOpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, para
 	return nil
 }
 
+func (s *stubOpenAIClient) EmbeddingsNew(ctx context.Context, params openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	return nil, nil
+}
+
 func TestBuildOpenAIClientOptions(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -113,61 +117,52 @@ func TestBuildOpenAIClientOptions(t *testing.T) {
 func TestCheckOpenAIHealth(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("API Error", func(t *testing.T) {
-		client := &stubOpenAIClient{
-			ModelsListFunc: func(ctx context.Context) (*pagination.Page[openai.Model], error) {
-				return nil, errors.New("api error")
+	tests := []struct {
+		name             string
+		modelsListResult *pagination.Page[openai.Model]
+		listErr          error
+		wantStatus       string
+	}{
+		{
+			name:       "API Error",
+			listErr:    errors.New("api error"),
+			wantStatus: "unhealthy",
+		},
+		{
+			name: "API Success with models",
+			modelsListResult: &pagination.Page[openai.Model]{
+				Data: []openai.Model{
+					{ID: "model1"},
+					{ID: "model2"},
+				},
 			},
-		}
-
-		health, err := checkOpenAIHealth(ctx, client, 5)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if health.Status != "unhealthy" {
-			t.Errorf("expected unhealthy, got %s", health.Status)
-		}
-	})
-
-	t.Run("API Success with models", func(t *testing.T) {
-		client := &stubOpenAIClient{
-			ModelsListFunc: func(ctx context.Context) (*pagination.Page[openai.Model], error) {
-				return &pagination.Page[openai.Model]{
-					Data: []openai.Model{
-						{ID: "model1"},
-						{ID: "model2"},
-					},
-				}, nil
+			wantStatus: "healthy",
+		},
+		{
+			name: "API Success without models",
+			modelsListResult: &pagination.Page[openai.Model]{
+				Data: []openai.Model{},
 			},
-		}
+			wantStatus: "unhealthy",
+		},
+	}
 
-		health, err := checkOpenAIHealth(ctx, client, 5)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &stubOpenAIClient{
+				ModelsListFunc: func(ctx context.Context) (*pagination.Page[openai.Model], error) {
+					return tt.modelsListResult, tt.listErr
+				},
+			}
 
-		if health.Status != "healthy" {
-			t.Errorf("expected healthy, got %s", health.Status)
-		}
-	})
+			health, err := checkOpenAIHealth(ctx, client, 5)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
 
-	t.Run("API Success without models", func(t *testing.T) {
-		client := &stubOpenAIClient{
-			ModelsListFunc: func(ctx context.Context) (*pagination.Page[openai.Model], error) {
-				return &pagination.Page[openai.Model]{
-					Data: []openai.Model{},
-				}, nil
-			},
-		}
-
-		health, err := checkOpenAIHealth(ctx, client, 5)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if health.Status != "unhealthy" {
-			t.Errorf("expected unhealthy, got %s", health.Status)
-		}
-	})
+			if health.Status != tt.wantStatus {
+				t.Errorf("expected %s, got %s", tt.wantStatus, health.Status)
+			}
+		})
+	}
 }

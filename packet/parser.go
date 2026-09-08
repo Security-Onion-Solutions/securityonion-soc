@@ -24,8 +24,12 @@ import (
 
 var SupportedLayerTypes = [...]gopacket.LayerType{
 	layers.LayerTypeARP,
+	layers.LayerTypeDHCPv4,
+	layers.LayerTypeDHCPv6,
+	layers.LayerTypeDNS,
 	layers.LayerTypeICMPv4,
 	layers.LayerTypeICMPv6,
+	layers.LayerTypeIGMP,
 	layers.LayerTypeIPSecAH,
 	layers.LayerTypeIPSecESP,
 	layers.LayerTypeNTP,
@@ -33,17 +37,84 @@ var SupportedLayerTypes = [...]gopacket.LayerType{
 	layers.LayerTypeTLS,
 }
 
-func ParsePcap(filename string, offset int, count int, unwrap bool) ([]*model.Packet, error) {
+func recoverPacket(pcapPacket gopacket.Packet) gopacket.Packet {
+	if pcapPacket == nil || pcapPacket.ErrorLayer() == nil {
+		return pcapPacket
+	}
+
+	data := pcapPacket.Data()
+	if len(data) >= 20 {
+		version := data[0] >> 4
+		var fallback gopacket.Packet
+		if version == 4 {
+			fallback = gopacket.NewPacket(data, layers.LayerTypeIPv4, gopacket.Default)
+		} else if version == 6 && len(data) >= 40 {
+			fallback = gopacket.NewPacket(data, layers.LayerTypeIPv6, gopacket.Default)
+		} else if len(data) >= 16 {
+			fallback = gopacket.NewPacket(data, layers.LayerTypeLinuxSLL, gopacket.Default)
+		}
+
+		if fallback != nil && (fallback.NetworkLayer() != nil || fallback.LinkLayer() != nil) && fallback.ErrorLayer() == nil {
+			fallback.Metadata().CaptureInfo = pcapPacket.Metadata().CaptureInfo
+			return fallback
+		}
+	}
+
+	return pcapPacket
+}
+
+func getLinkType(packets []gopacket.Packet) layers.LinkType {
+	if len(packets) == 0 {
+		return layers.LinkTypeEthernet
+	}
+
+	first := packets[0]
+	if first.LinkLayer() != nil {
+		switch first.LinkLayer().(type) {
+		case *layers.LinuxSLL:
+			return layers.LinkTypeLinuxSLL
+		case *layers.FDDI:
+			return layers.LinkTypeFDDI
+		case *layers.Ethernet:
+			return layers.LinkTypeEthernet
+		}
+	}
+
+	data := first.Data()
+	if len(data) > 0 {
+		version := data[0] >> 4
+		if version == 4 {
+			return layers.LinkTypeIPv4
+		} else if version == 6 {
+			return layers.LinkTypeIPv6
+		}
+	}
+
+	return layers.LinkTypeEthernet
+}
+
+func ParsePcap(filename string, offset int, count int, unwrap bool, excludeErrors bool) ([]*model.Packet, bool, error) {
 	packets := make([]*model.Packet, 0)
-	parsePcapFile(filename, "", func(index int, pcapPacket gopacket.Packet) bool {
-		if index >= offset {
+	matchingIndex := 0
+	hasErrors := false
+	err := parsePcapFile(filename, "", func(index int, pcapPacket gopacket.Packet) bool {
+		pcapPacket = recoverPacket(pcapPacket)
+		isError := pcapPacket.ErrorLayer() != nil
+		if isError {
+			hasErrors = true
+		}
+		if excludeErrors && isError {
+			return true
+		}
+		if matchingIndex >= offset {
 			packet := model.NewPacket(index)
 			parseData(pcapPacket, packet, unwrap)
 			packets = append(packets, packet)
 		}
+		matchingIndex++
 		return len(packets) < count
 	})
-	return packets, nil
+	return packets, hasErrors, err
 }
 
 func ToStream(packets []gopacket.Packet) (io.ReadCloser, int, error) {
@@ -51,18 +122,13 @@ func ToStream(packets []gopacket.Packet) (io.ReadCloser, int, error) {
 	var full bytes.Buffer
 
 	writer := pcapgo.NewWriter(&full)
-	writer.WriteFileHeader(snaplen, layers.LinkTypeEthernet)
+	writer.WriteFileHeader(snaplen, getLinkType(packets))
 
-	opts := gopacket.SerializeOptions{}
-
-	buf := gopacket.NewSerializeBuffer()
 	for _, packet := range packets {
-		buf.Clear()
-		err := gopacket.SerializePacket(buf, opts, packet)
+		err := writer.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
 		if err != nil {
 			return nil, 0, err
 		}
-		writer.WritePacket(packet.Metadata().CaptureInfo, buf.Bytes())
 	}
 	return io.NopCloser(bytes.NewReader(full.Bytes())), full.Len(), nil
 }
@@ -191,7 +257,17 @@ func UnwrapPcap(filename string, unwrappedFilename string) bool {
 
 }
 
-func parsePcapFile(filename string, bpf string, handler func(int, gopacket.Packet) bool) error {
+func parsePcapFile(filename string, bpf string, handler func(int, gopacket.Packet) bool) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.WithFields(log.Fields{
+				"pcap":  filename,
+				"panic": r,
+			}).Error("Recovered from PCAP decode panic")
+			err = fmt.Errorf("packet decode panic: %v", r)
+		}
+	}()
+
 	handle, err := pcap.OpenOffline(filename)
 	if err == nil {
 		defer handle.Close()
@@ -245,42 +321,52 @@ func unwrapVxlanPacket(pcapPacket gopacket.Packet, packet *model.Packet) gopacke
 }
 
 func parseData(pcapPacket gopacket.Packet, packet *model.Packet, unwrap bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			packet.Type = "DecodeFailure"
+			packet.Error = fmt.Sprintf("Decode panic: %v", r)
+		}
+	}()
+
 	if unwrap {
 		pcapPacket = unwrapVxlanPacket(pcapPacket, packet)
 	}
+	pcapPacket = recoverPacket(pcapPacket)
 
 	packet.Timestamp = pcapPacket.Metadata().Timestamp
 	packet.Length = pcapPacket.Metadata().Length
 
-	layer := pcapPacket.Layer(layers.LayerTypeEthernet)
-	if layer != nil {
-		layer := layer.(*layers.Ethernet)
-		packet.SrcMac = layer.SrcMAC.String()
-		packet.DstMac = layer.DstMAC.String()
+	linkLayer := pcapPacket.LinkLayer()
+	if linkLayer != nil {
+		if eth, ok := linkLayer.(*layers.Ethernet); ok {
+			packet.SrcMac = eth.SrcMAC.String()
+			packet.DstMac = eth.DstMAC.String()
+		}
 	}
 
-	layer = pcapPacket.Layer(layers.LayerTypeIPv6)
-	if layer != nil {
-		layer := layer.(*layers.IPv6)
-		packet.SrcIp = layer.SrcIP.String()
-		packet.DstIp = layer.DstIP.String()
-	} else {
-		layer = pcapPacket.Layer(layers.LayerTypeIPv4)
-		if layer != nil {
-			layer := layer.(*layers.IPv4)
-			packet.SrcIp = layer.SrcIP.String()
-			packet.DstIp = layer.DstIP.String()
+	if pcapPacket.Layer(layers.LayerTypeDot1Q) != nil {
+		packet.Flags = append(packet.Flags, "VLAN")
+	}
+
+	netLayer := pcapPacket.NetworkLayer()
+	if netLayer != nil {
+		if ip6, ok := netLayer.(*layers.IPv6); ok {
+			packet.SrcIp = ip6.SrcIP.String()
+			packet.DstIp = ip6.DstIP.String()
+		} else if ip4, ok := netLayer.(*layers.IPv4); ok {
+			packet.SrcIp = ip4.SrcIP.String()
+			packet.DstIp = ip4.DstIP.String()
 		}
 	}
 
 	for _, layerType := range SupportedLayerTypes {
-		layer = pcapPacket.Layer(layerType)
+		layer := pcapPacket.Layer(layerType)
 		if layer != nil {
 			overrideType(packet, layer.LayerType())
 		}
 	}
 
-	layer = pcapPacket.Layer(layers.LayerTypeTCP)
+	layer := pcapPacket.Layer(layers.LayerTypeTCP)
 	if layer != nil {
 		layer := layer.(*layers.TCP)
 		packet.SrcPort = int(layer.SrcPort)
@@ -320,8 +406,14 @@ func parseData(pcapPacket gopacket.Packet, packet *model.Packet, unwrap bool) {
 	}
 
 	packetLayers := pcapPacket.Layers()
-	topLayer := packetLayers[len(packetLayers)-1]
-	overrideType(packet, topLayer.LayerType())
+	if len(packetLayers) > 0 {
+		topLayer := packetLayers[len(packetLayers)-1]
+		overrideType(packet, topLayer.LayerType())
+	}
+
+	if errLayer := pcapPacket.ErrorLayer(); errLayer != nil {
+		packet.Error = errLayer.Error().Error()
+	}
 
 	packet.Payload = base64.StdEncoding.EncodeToString(pcapPacket.Data())
 	packet.PayloadOffset = 0

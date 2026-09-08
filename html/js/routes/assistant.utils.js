@@ -265,10 +265,21 @@ globalThis.AssistantUtils = (function() {
             'get_playbooks',
             'query_cases',
             'query_detections',
+            'query_reports',
           ].includes(toolName) ||
           /^delegate_to_.+$/.test(toolName)
         )
       );
+    },
+
+    // One tool_use per id: a provider that repeats a call's header can leave the
+    // same id stored more than once with only the later block carrying input, so keep
+    // the last block's content in the first block's position.
+    dedupeToolUseBlocks(blocks) {
+      const byId = new Map();
+      // An id-less block keys on itself so it is never merged with another.
+      for (const b of blocks) byId.set(b.id || b, b);
+      return Array.from(byId.values());
     },
 
     clearStreamingStates() {
@@ -426,15 +437,6 @@ globalThis.AssistantUtils = (function() {
         id: this.currentChatId,
       });
     },
-    escapeHtml(str) {
-      return String(str).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-      }[char]));
-    },
     applyChoiceButtons(text) {
       if (!text || typeof text !== 'string') return text;
 
@@ -442,8 +444,8 @@ globalThis.AssistantUtils = (function() {
         const label = this.stripNewlines(rawLabel).trim();
         if (!label) return '';
 
-        const cleanLabel = this.stripHtml(this.renderInlineMarkdown(label));
-        const safeChoiceAttr = this.escapeHtml(label);
+        const cleanLabel = this.$root.stripHtml(this.renderInlineMarkdown(label));
+        const safeChoiceAttr = this.$root.escapeHtml(label);
 
         return `<button type="button" class="assistant-choice-btn" data-choice="${safeChoiceAttr}">${cleanLabel}</button>`;
       });
@@ -464,9 +466,6 @@ globalThis.AssistantUtils = (function() {
         this.focusChatInput();
         this.sendMessage();
       });
-    },
-    stripHtml(str) {
-      return str.replace(/<[^>]*>/g, '');
     },
     stripNewlines(text) {
       if (typeof text !== 'string') return text;

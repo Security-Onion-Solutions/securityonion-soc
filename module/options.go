@@ -68,6 +68,20 @@ func GetIntDefault(options map[string]interface{}, key string, dflt int) int {
 	return value
 }
 
+func GetFloatDefault(options map[string]any, key string, dflt float64) float64 {
+	var value float64
+	if gen, ok := options[key]; ok {
+		value, ok = gen.(float64)
+		if !ok {
+			value = dflt
+		}
+	} else {
+		value = dflt
+	}
+
+	return value
+}
+
 func GetBool(options map[string]interface{}, key string) (bool, error) {
 	var err error
 	var value bool

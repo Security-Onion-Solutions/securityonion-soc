@@ -85,6 +85,12 @@ func (kratosUser *KratosUser) copyToUser(user *model.User) {
 	user.FirstName = kratosUser.Traits.FirstName
 	user.LastName = kratosUser.Traits.LastName
 	user.Note = kratosUser.Traits.Note
+	if !kratosUser.CreateDate.IsZero() {
+		user.CreateTime = kratosUser.CreateDate
+	}
+	if !kratosUser.UpdateDate.IsZero() {
+		user.UpdateTime = kratosUser.UpdateDate
+	}
 	if kratosUser.State == "inactive" {
 		user.Status = "locked"
 	} else {
@@ -121,6 +127,12 @@ func (kratosUser *KratosUser) copyFromUser(user *model.User) {
 	kratosUser.Traits.FirstName = user.FirstName
 	kratosUser.Traits.LastName = user.LastName
 	kratosUser.Traits.Note = user.Note
+	if !user.CreateTime.IsZero() {
+		kratosUser.CreateDate = user.CreateTime
+	}
+	if !user.UpdateTime.IsZero() {
+		kratosUser.UpdateDate = user.UpdateTime
+	}
 	if user.Status == "locked" {
 		kratosUser.State = "inactive"
 	} else {

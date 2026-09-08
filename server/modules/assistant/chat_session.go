@@ -9,6 +9,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -24,6 +25,11 @@ import (
 func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
 
+	// Detach up front: a browser refresh cancels the request context, which
+	// would otherwise abort a billed in-flight turn before it can be saved.
+	ctx, cancel := buildDetachedCtx(ctx, CHAT_TURN_TIMEOUT)
+	defer cancel()
+
 	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
 	if err != nil {
 		logger.WithField("sessionId", incMsg.SessionId).WithError(err).Error("unable to load history")
@@ -33,7 +39,7 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
 
-	response, err := ac.Send(ctx, incMsg.Model, messages)
+	response, err := ac.Send(ctx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"sessionId": incMsg.SessionId,
@@ -44,16 +50,16 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 		return nil, err
 	}
 
+	// Send already succeeded (and was billed), so bookkeeping failures below must
+	// not discard the response before it and its usage are saved.
 	if isNewSession {
 		if err := ac.createSessionIfNeeded(ctx, incMsg, entityType, entityId); err != nil {
 			logger.WithError(err).Error("unable to create session for non-streaming chat")
-			return nil, err
 		}
 	}
 
 	if err := ac.srv.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
 		logger.WithError(err).Error("unable to save user message for non-streaming chat")
-		return nil, err
 	}
 
 	for _, msg := range response {
@@ -86,7 +92,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages)
+	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"sessionId": incMsg.SessionId,
@@ -97,16 +103,17 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 		return nil, nil, nil, err
 	}
 
+	// SendStream already succeeded (the upstream is live and billing), so
+	// bookkeeping failures below must not abandon the stream before finalize can
+	// save the turn and its usage.
 	if isNewSession {
 		if err := ac.createSessionIfNeeded(noTimeOutCtx, incMsg, entityType, entityId); err != nil {
 			logger.WithError(err).Error("unable to create session for streaming chat")
-			return nil, nil, nil, err
 		}
 	}
 
 	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
 		logger.WithError(err).Error("unable to save user message before streaming response")
-		return nil, nil, nil, err
 	}
 
 	finalize := func(rawResponse []byte) error {
@@ -164,7 +171,7 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 }
 
 // buildNoTimeoutCtx returns a context detached from the request's cancellation and
-// timeout, carrying over the requestor identity and request-scoped logger.
+// timeout, carrying over the requestor identity, request id, and request-scoped logger.
 func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	noTimeOutCtx := context.Background()
 	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
@@ -175,6 +182,18 @@ func buildNoTimeoutCtx(ctx context.Context) context.Context {
 	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
 		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, requestorId)
 	}
+	// Carried so downstream stores that key work off the request id (e.g. the salt
+	// relay's queue filename) still find it on a detached turn.
+	if requestId, ok := ctx.Value(web.ContextKeyRequestId).(string); ok {
+		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestId, requestId)
+	}
 	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
 	return noTimeOutCtx
+}
+
+// buildDetachedCtx returns a context detached from the request's cancellation —
+// so a browser refresh cannot abort a billed in-flight turn before it is saved —
+// but bounded by its own timeout, carrying the requestor identity and logger.
+func buildDetachedCtx(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(buildNoTimeoutCtx(ctx), timeout)
 }

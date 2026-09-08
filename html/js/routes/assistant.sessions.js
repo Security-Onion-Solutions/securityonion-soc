@@ -13,7 +13,11 @@ globalThis.MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 
 globalThis.AssistantSessions = (function() {
   return {
-    async initAssistant(params) {
+    onAgenticUpdate() {
+      if (!this.agentic) return;
+      this.initAssistant((this.$root.parameters || {}).assistant || {}, false);
+    },
+    async initAssistant(params, loadSession = true) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
       this.compressContextMsg = params["compressContextPrompt"];
@@ -25,8 +29,9 @@ globalThis.AssistantSessions = (function() {
       this.agentic = params["agentic"] || false;
       this.availableAdapters = params["availableAdapters"];
       if (this.agentic) {
-        // in agentic mode, use agent names rather than model names
-        this.availableAgents = params["availableAgents"] || [];
+        // in agentic mode, use agent names rather than model names. Disabled agents
+        // are published so the Agent Studio can re-enable them, but they cannot run.
+        this.availableAgents = (params["availableAgents"] || []).filter(a => a.enabled !== false);
         this.agentMapping = params["agentMapping"] || {};
         const allModels = params["availableModels"] || [];
         this.availableModels = this.availableAgents.map(a => {
@@ -82,10 +87,15 @@ globalThis.AssistantSessions = (function() {
 
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
-          await this.loadStoredChats();
-          await this.handleRouteSessionId();
-          await this.loadCredits();
-          this.focusChatInput();
+          if (loadSession) {
+            await this.loadStoredChats();
+            await this.handleRouteSessionId();
+            await this.loadCredits();
+            this.focusChatInput();
+          } else {
+            await this.loadStoredChats(false);
+            await this.loadCredits();
+          }
         }
       } else {
         this.$root.disclaimer = false;
@@ -526,7 +536,7 @@ globalThis.AssistantSessions = (function() {
     },
     
     processToolUseBlocks(msg, frontendMsg, backendMessages, i) {
-      const toolBlocks = msg.message.contentBlocks.filter(block => block.type === 'tool_use');
+      const toolBlocks = this.dedupeToolUseBlocks(msg.message.contentBlocks.filter(block => block.type === 'tool_use'));
       if (toolBlocks.length === 0) return;
 
       // Status is decided per tool: one turn can request parallel tools saved as separate
@@ -691,33 +701,33 @@ globalThis.AssistantSessions = (function() {
         // (thoughts only show when "show thinking" is on).
         let contentText = '';
         const thoughtText = m.thoughts || '';
-        for (const b of (m.contentBlocks || [])) {
-          if (b.type === 'text' && b.text) {
-            contentText += b.text;
-          } else if (b.type === 'tool_use') {
-            const childTool = {
-              id: b.id || 'unknown',
-              name: b.name || 'unknown',
-              input: b.input || {},
-              // Default 'skipped' for a tool_use with no result; finalized below to
-              // completed/error/executing/pending_approval. Must NOT default to
-              // 'completed' -- that would show a false checkmark for a tool that never ran.
-              status: 'skipped',
-              result: null,
-              error: null,
-              rawResult: null,
-              timestamp: sm.createTime || new Date().toISOString(),
-              approved: true,
-              sessionId: childSessionId,
-            };
-            childMsg.toolUses.push(childTool);
-            toolUseById.set(childTool.id, childTool);
+        const blocks = m.contentBlocks || [];
+        for (const b of blocks) {
+          if (b.type === 'text' && b.text) contentText += b.text;
+        }
+        for (const b of this.dedupeToolUseBlocks(blocks.filter(b => b.type === 'tool_use'))) {
+          const childTool = {
+            id: b.id || 'unknown',
+            name: b.name || 'unknown',
+            input: b.input || {},
+            // Default 'skipped' for a tool_use with no result; finalized below to
+            // completed/error/executing/pending_approval. Must NOT default to
+            // 'completed' -- that would show a false checkmark for a tool that never ran.
+            status: 'skipped',
+            result: null,
+            error: null,
+            rawResult: null,
+            timestamp: sm.createTime || new Date().toISOString(),
+            approved: true,
+            sessionId: childSessionId,
+          };
+          childMsg.toolUses.push(childTool);
+          toolUseById.set(childTool.id, childTool);
 
-            // Defer grandchild recursion until this tool's status is finalized below.
-            if (childTool.name.startsWith('delegate_to_')) {
-              const gchild = index.byParentToolUseId.get(childTool.id);
-              if (gchild) delegateChildTools.push({ childTool, gchild });
-            }
+          // Defer grandchild recursion until this tool's status is finalized below.
+          if (childTool.name.startsWith('delegate_to_')) {
+            const gchild = index.byParentToolUseId.get(childTool.id);
+            if (gchild) delegateChildTools.push({ childTool, gchild });
           }
         }
         childMsg.thoughts = thoughtText;

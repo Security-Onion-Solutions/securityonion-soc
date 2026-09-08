@@ -437,3 +437,95 @@ func TestGetNextJobThrottling(tester *testing.T) {
 	assert.Equal(tester, 1, gotJob1Again.Id)
 }
 
+func TestGetPackets_JobNotFound(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+
+	packets, hasErrors, err := ds.GetPackets(newContext(), 9999, 0, 100, false, false)
+	assert.Error(tester, err)
+	assert.Equal(tester, "Job not found", err.Error())
+	assert.Nil(tester, packets)
+	assert.False(tester, hasErrors)
+}
+
+func TestGetPackets_JobUnauthorized(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(false, []byte(""))
+
+	job := ds.CreateJob(newContext())
+	job.UserId = ANOTHER_USER_ID
+	job.Id = 1001
+	job.Status = model.JobStatusCompleted
+	ds.addJob(job)
+
+	packets, hasErrors, err := ds.GetPackets(newContext(), 1001, 0, 100, false, false)
+	assert.Error(tester, err)
+	assert.Empty(tester, packets)
+	assert.False(tester, hasErrors)
+}
+
+func TestGetPackets_JobNotCompleted(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+
+	job := ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID
+	job.Id = 1001
+	job.Status = model.JobStatusPending
+	ds.addJob(job)
+
+	packets, hasErrors, err := ds.GetPackets(newContext(), 1001, 0, 100, false, false)
+	assert.NoError(tester, err)
+	assert.Nil(tester, packets)
+	assert.False(tester, hasErrors)
+}
+
+func TestGetPackets_CompletedJobWithPcap(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+
+	job := ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID
+	job.Id = 1001
+	job.Status = model.JobStatusCompleted
+	ds.addJob(job)
+
+	// Copy real test PCAP file to stream location
+	pcapData, err := os.ReadFile("../../../packet/test_resources/so-pcap.1575817346")
+	assert.NoError(tester, err)
+	err = os.WriteFile(ds.getStreamFilename(job), pcapData, 0644)
+	assert.NoError(tester, err)
+
+	// Fetch without excludeErrors
+	packets, hasErrors, err := ds.GetPackets(newContext(), 1001, 0, 100, false, false)
+	assert.NoError(tester, err)
+	assert.NotEmpty(tester, packets)
+	assert.False(tester, hasErrors)
+
+	// Fetch with excludeErrors = true
+	packetsExcluded, hasErrorsExcluded, err := ds.GetPackets(newContext(), 1001, 0, 100, false, true)
+	assert.NoError(tester, err)
+	assert.NotEmpty(tester, packetsExcluded)
+	assert.False(tester, hasErrorsExcluded)
+}
+
+func TestGetPackets_CompletedJobWithCorruptedPcap(tester *testing.T) {
+	defer cleanup()
+	ds, _ := createDatastore(true, []byte(""))
+
+	job := ds.CreateJob(newContext())
+	job.UserId = MY_USER_ID
+	job.Id = 1001
+	job.Status = model.JobStatusCompleted
+	ds.addJob(job)
+
+	// Write corrupted binary data to stream location
+	err := os.WriteFile(ds.getStreamFilename(job), []byte("invalid-pcap-data"), 0644)
+	assert.NoError(tester, err)
+
+	packets, hasErrors, err := ds.GetPackets(newContext(), 1001, 0, 100, false, false)
+	assert.NoError(tester, err)
+	assert.Empty(tester, packets)
+	assert.False(tester, hasErrors)
+}
+

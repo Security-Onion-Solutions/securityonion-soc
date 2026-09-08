@@ -191,17 +191,38 @@ type AssistantParameters struct {
 	AvailableModels        []ModelParameters   `json:"availableModels"`
 	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
 	Agentic                bool                `json:"agentic"`
-	AvailableAgents        []AgentParameters   `json:"availableAgents"`
-	AvailableSkills        []SkillParameters   `json:"availableSkills"`
-	AgentMapping           map[string]string   `json:"agentMapping"`
+	MemoryEnabled          bool                `json:"memoryEnabled"`
+	MemoryParams           MemoryParameters    `json:"memoryParams"`
+	AvailableAgents        []Agent             `json:"availableAgents"`
+	AvailableSkills        []Skill             `json:"availableSkills"`
+	// Tool names an admin-created skill may grant; delegate tools excluded.
+	AvailableTools []string          `json:"availableTools" example:"query_events,query_cases"`
+	AgentMapping   map[string]string `json:"agentMapping" example:"Malware Analyst:claude-sonnet-4.5@SOAI"`
+	// Delegation guardrails, surfaced so the Agent Studio can show and edit them
+	// without fetching every setting. 0 disables the limit.
+	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
+	MaxSubSessionTokens int `json:"maxSubSessionTokens" example:"100000"`
 }
 
-// SkillParameters is the client-facing view of an agent skill: its name and the
-// tools it unlocks. The skill's prompt guidance (AdditionalPrompt) is
-// intentionally not exposed to the browser, matching the agent persona.
-type SkillParameters struct {
-	Name  string   `json:"name"`
-	Tools []string `json:"tools"`
+type MemoryParameters struct {
+	UseMemory                    bool    `json:"useMemory" example:"true"`
+	UseMemoryScanner             bool    `json:"useMemoryScanner" example:"true"`
+	ScanIntervalSeconds          int     `json:"scanIntervalSeconds" example:"300"`
+	MemoryProximityThreshold     float64 `json:"memoryProximityThreshold" example:"0.8"`
+	MessageProximityThreshold    float64 `json:"messageProximityThreshold" example:"0.5"`
+	MaxUserMemoriesToInclude     int     `json:"maxUserMemoriesToInclude" example:"5"`
+	MaxGlobalMemoriesToInclude   int     `json:"maxGlobalMemoriesToInclude" example:"5"`
+	MaxUserMemoriesToReconcile   int     `json:"maxUserMemoriesToReconcile" example:"20"`
+	MaxGlobalMemoriesToReconcile int     `json:"maxGlobalMemoriesToReconcile" example:"20"`
+	MemoryExtractBatchSize       int     `json:"memoryExtractBatchSize" example:"5"`
+	MaxMemoryRetries             int     `json:"maxMemoryRetries" example:"2"`
+	MemoryModel                  string  `json:"memoryModel" example:"sonnet@SOAI"`
+	EmbedModel                   string  `json:"embedModel" example:"amazon.titan-embed-text-v2@SOAI"`
+	ReconcileModel               string  `json:"reconcileModel" example:"sonnet@SOAI"`
+	MemoryPersona                string  `json:"memoryPersona"`
+	ReconcilePersona             string  `json:"reconcilePersona"`
+	StaleMemoryCount             int     `json:"staleMemoryCount"`
+	DontScanBefore               string  `json:"dontScanBefore"`
 }
 
 // ModelParameters describes a configured model. DisplayName is optional,
@@ -224,19 +245,10 @@ func (m *ModelParameters) Selector() string {
 	return m.ID + "@" + m.Adapter
 }
 
-type AgentParameters struct {
-	Name           string   `json:"name"`
-	IsOrchestrator bool     `json:"isOrchestrator"`
-	CanDelegateTo  []string `json:"canDelegateTo"`
-	AllowedSkills  []string `json:"allowedSkills"`
-	// Prompt is the agent's system prompt; never serialized to the browser.
-	Prompt      string `json:"-"`
-	Description string `json:"agentDescription"`
-}
-
 type AdapterParameters struct {
-	Name     string `json:"name"`
-	Protocol string `json:"protocol"`
+	Name               string `json:"name"`
+	Protocol           string `json:"protocol"`
+	SupportsEmbeddings bool   `json:"supportsEmbeddings"`
 }
 
 // Custom unmarshal to handle numeric or scientific-notation string fields

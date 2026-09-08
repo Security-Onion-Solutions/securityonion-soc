@@ -44,9 +44,67 @@ test('replaceActionVar', () => {
   expect(app.replaceActionVar('test {foo} here', 'foo', undefined, true)).toBe('test {foo} here');
 });
 
+test('escapeHtml', () => {
+  expect(app.escapeHtml('<img src=x onerror=alert(1)> a & b')).toBe('&lt;img src=x onerror=alert(1)&gt; a &amp; b');
+  expect(app.escapeHtml(`"quoted" and 'single'`)).toBe('&quot;quoted&quot; and &#39;single&#39;');
+  expect(app.escapeHtml('')).toBe('');
+  expect(app.escapeHtml(null)).toBe('');
+});
+
+test('escapeHtml and unescapeHtml round-trip', () => {
+  const raw = `Error: <nil> & "quoted" > it's done`;
+  expect(app.unescapeHtml(app.escapeHtml(raw))).toBe(raw);
+});
+
+test('unescapeHtml decodes ampersands last', () => {
+  expect(app.unescapeHtml('&amp;lt;not a tag&amp;gt;')).toBe('&lt;not a tag&gt;');
+  expect(app.unescapeHtml(null)).toBe('');
+});
+
+test('stripHtml', () => {
+  expect(app.stripHtml('<p>This is <strong>bold</strong> text with <a href="#">link</a></p>')).toBe('This is bold text with link');
+  expect(app.stripHtml('This is plain text')).toBe('This is plain text');
+  expect(app.stripHtml(null)).toBe('');
+});
+
 test('formatMarkdown', () => {
   expect(app.formatMarkdown('```code```')).toBe('<p><code>code</code></p>\n');
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
+});
+
+test('formatMarkdownWrapsTables', () => {
+  const html = app.formatMarkdown('| a | b |\n| --- | --- |\n| 1 | 2 |');
+  expect(html).toContain('<div class="markdown-table-scroll" tabindex="0" role="region"');
+  expect(html).toContain('aria-label="Scrollable table"');
+  expect(html).toContain('<table>');
+});
+
+test('wrapScrollableTables', () => {
+  expect(app.wrapScrollableTables('')).toBe('');
+  expect(app.wrapScrollableTables(null)).toBe(null);
+  expect(app.wrapScrollableTables('<p>no tables here</p>')).toBe('<p>no tables here</p>');
+
+  const wrapped = app.wrapScrollableTables('<p>a</p><table><tbody><tr><td>1</td></tr></tbody></table><table><tbody><tr><td>2</td></tr></tbody></table>');
+  const root = document.createElement('div');
+  root.innerHTML = wrapped;
+  expect(root.querySelectorAll('.markdown-table-scroll').length).toBe(2);
+  // Tables keep their semantics; only the wrapper scrolls.
+  expect(root.querySelectorAll('.markdown-table-scroll > table').length).toBe(2);
+  const wrapper = root.querySelector('.markdown-table-scroll');
+  expect(wrapper.getAttribute('tabindex')).toBe('0');
+  expect(wrapper.getAttribute('role')).toBe('region');
+  expect(wrapper.getAttribute('aria-label')).toBe(app.i18n.ariaScrollableTable);
+
+  // Re-processing already-wrapped markup is a no-op.
+  expect(app.wrapScrollableTables(wrapped)).toBe(wrapped);
+});
+
+test('formatMarkdownSanitizesTables', () => {
+  // Wrapping happens after sanitization, so unsafe markup around a table is still stripped.
+  const html = app.formatMarkdown('| a |\n| --- |\n| 1 |\n\n<p onclick="evil()">x</p><script>evil()</script>');
+  expect(html).toContain('markdown-table-scroll');
+  expect(html).not.toContain('onclick');
+  expect(html).not.toContain('<script>');
 });
 
 test('formatHours', () => {
@@ -163,7 +221,7 @@ test('populateUserDetailsSystem', async () => {
   app.users = [{id:'123',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(app.i18n.systemUser);
+  expect(obj.owner).toBe(app.i18n.agentUser);
 });
 
 test('populateUserDetailsAgent', async () => {
@@ -171,7 +229,30 @@ test('populateUserDetailsAgent', async () => {
   app.users = [{id:'123',email:'hi@there.net'}];
   app.usersLoadedTime = new Date().time;
   await app.populateUserDetails(obj, "userId", "owner")
-  expect(obj.owner).toBe(app.i18n.systemUser);
+  expect(obj.owner).toBe(app.i18n.agentUser);
+});
+
+test('getSpecialUser', () => {
+  expect(app.getSpecialUser('00000000-0000-0000-0000-000000000000').email).toBe(app.i18n.systemUser);
+  expect(app.getSpecialUser('00000000-0000-0000-0000-000000000001').email).toBe(app.i18n.agentUser);
+  expect(app.getSpecialUser('agent').email).toBe(app.i18n.agentUser);
+  expect(app.getSpecialUser('12345678-1234-1234-1234-123456789012')).toBe(null);
+  expect(app.getSpecialUser(null)).toBe(null);
+});
+
+test('getUserById resolves special users without fetching or caching them', async () => {
+  app.users = [];
+  app.getAllUsers = jest.fn();
+  const user = await app.getUserById('00000000-0000-0000-0000-000000000000');
+  expect(user.email).toBe(app.i18n.systemUser);
+  expect(app.getAllUsers).not.toHaveBeenCalled();
+  expect(app.users.length).toBe(0);
+});
+
+test('getUserByIdViaCache resolves special users', () => {
+  app.users = [];
+  expect(app.getUserByIdViaCache('00000000-0000-0000-0000-000000000001').email).toBe(app.i18n.agentUser);
+  expect(app.getUserByIdViaCache('123')).toBe(null);
 });
 
 test('getUserDisplayName', () => {
@@ -957,11 +1038,15 @@ test('hasSubgrids', () => {
   expect(app.hasSubgrids()).toBe(false);
 
   app.subgrids = [{}];
+  expect(app.hasSubgrids()).toBe(false);
+
+  app.user = { roles: ['subgrid-superuser'] };
   expect(app.hasSubgrids()).toBe(true);
 });
 
 test('adjustSubgridColVisibility', () => {
   const origFn = app.updateColumnClass;
+  const origHasSubgrids = app.hasSubgrids;
   const headers = [
     { title: 'Grid ID', value: 'gridId', align: 'd-none' },
     { title: 'Other Column', value: 'other', align: 'd-none' },
@@ -980,6 +1065,7 @@ test('adjustSubgridColVisibility', () => {
 
   expect(app.updateColumnClass).toHaveBeenCalledWith(headers, 'Grid ID', false);
   app.updateColumnClass = origFn;
+  app.hasSubgrids = origHasSubgrids;
 });
 
 test('updateColumnClass', () => {
@@ -1014,8 +1100,11 @@ test('loadGridInfo', async () => {
   app.papi.get = mock;
 
   app.gridInfo = {};
+  app.user = { roles: ['subgrid-superuser'] };
   app.subgrids = [{id: 'g1'},{id: 'g2'}];
-  await expect(() => app.loadSubgridInfo()).rejects.toThrow(Error);
+  await expect(() => 
+    app.loadSubgridInfo()
+  ).rejects.toThrow(Error);
 
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g1' }});
   expect(mock).toHaveBeenCalledWith('info', { params: { gridId: 'g2' }});
@@ -1565,4 +1654,92 @@ test('validator: matches factory', () => {
   expect(v(null)).toBe(_i18n.passwordMustMatch);
   expect(v('wrong')).toBe(_i18n.passwordMustMatch);
   expect(v('secret')).toBe(true);
+});
+
+test('updateAgenticParams replaces the cached assistant params with the pushed block', () => {
+  app.parameters = { assistant: { enabled: true, availableAgents: [{ name: 'Old' }] }, docsUrl: 'keep' };
+
+  app.updateAgenticParams({
+    enabled: true,
+    availableAgents: [{ name: 'New' }],
+    availableSkills: [{ name: 'hunt' }],
+    somethingAddedLater: 42,
+  });
+
+  const assistant = app.parameters.assistant;
+  expect(assistant.availableAgents).toEqual([{ name: 'New' }]);
+  expect(assistant.availableSkills).toEqual([{ name: 'hunt' }]);
+  expect(assistant.somethingAddedLater).toBe(42);
+  // Only the assistant block is replaced.
+  expect(app.parameters.docsUrl).toBe('keep');
+});
+
+test('updateAgenticParams ignores a push that arrives before parameters load', () => {
+  app.parameters = null;
+  expect(() => app.updateAgenticParams({ availableAgents: [] })).not.toThrow();
+
+  app.parameters = { assistant: { availableAgents: [{ name: 'Old' }] } };
+  app.updateAgenticParams(null);
+  expect(app.parameters.assistant.availableAgents).toEqual([{ name: 'Old' }]);
+});
+
+test('a server settings reload republishes the assistant params so open pages re-derive', () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.parameters = { assistant: { availableAgents: [{ name: 'Triage' }] } };
+
+  // What loadServerSettings does once it has refreshed the parameters.
+  app.publish('assistant:agentic', app.parameters.assistant);
+
+  expect(handler).toHaveBeenCalledWith(app.parameters.assistant);
+});
+
+const stubServerSettings = (assistant) => {
+  app.subgrids = [];
+  app.gridInfo = {};
+  app.parameterCallback = null;
+  app.loadServerSettingsTime = 0;
+  global.document.getElementById = jest.fn().mockReturnValue(true);
+  resetPapi();
+  app.papi.get = jest.fn().mockResolvedValue({ data: { parameters: { assistant: assistant }, userId: 'myUserId' } });
+};
+
+test('a server settings reload only republishes assistant params that actually changed', async () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.lastAgenticParamsJson = null;
+
+  const agents = [{ name: 'Triage' }];
+  stubServerSettings({ enabled: true, availableAgents: agents });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(1);
+
+  stubServerSettings({ enabled: true, availableAgents: agents });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(1);
+
+  stubServerSettings({ enabled: true, availableAgents: [{ name: 'Triage' }, { name: 'Hunter' }] });
+  await app.loadServerSettings();
+  expect(handler).toHaveBeenCalledTimes(2);
+});
+
+test('a live agentic push is not republished again by the next settings reload', async () => {
+  const handler = jest.fn();
+  app.socket = {};
+  app.subscriptions = [];
+  app.subscribe('assistant:agentic', handler);
+  app.parameters = { assistant: { availableAgents: [{ name: 'Old' }] } };
+  app.lastAgenticParamsJson = null;
+
+  const pushed = { enabled: true, availableAgents: [{ name: 'Triage' }] };
+  app.updateAgenticParams(pushed);
+
+  stubServerSettings(pushed);
+  await app.loadServerSettings();
+
+  expect(handler).not.toHaveBeenCalled();
 });

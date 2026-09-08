@@ -118,6 +118,14 @@ func (a *GeminiAdapter) Protocol() string {
 	return "gemini"
 }
 
+func (a *GeminiAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+	return nil, ErrEmbeddingsUnsupported
+}
+
+func (a *GeminiAdapter) SupportsEmbeddings() bool {
+	return false
+}
+
 func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest) (*model.Message, error) {
 	logger := log.FromContext(ctx)
 

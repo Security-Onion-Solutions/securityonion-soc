@@ -7,6 +7,8 @@
 package model
 
 import (
+	"time"
+
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 )
 
@@ -37,4 +39,8 @@ type Info struct {
 	CustomReports map[string]string `json:"customReports"`
 	// The list of subordinate grids configured for this grid.
 	Subgrids []*Subgrid `json:"subgrids"`
+	// The timestamp of the most recent unread notification for the user.
+	LastUnreadNotificationTime *time.Time `json:"lastUnreadNotificationTime,omitempty" example:"2026-08-20T17:00:00Z"`
+	// Indicates whether the notification subsystem module is started and available.
+	NotificationsStarted bool `json:"notificationsStarted"`
 }

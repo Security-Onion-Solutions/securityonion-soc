@@ -46,7 +46,6 @@ type SyncSchedulerParams struct {
 }
 
 func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {
-	syncParams.SyncThread.Add(1)
 	defer func() {
 		syncParams.SyncThread.Done()
 		*isRunning = false
@@ -105,6 +104,12 @@ func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDete
 		case <-timer.C:
 		case typ := <-syncParams.InterruptChan:
 			forceSync = forceSync || typ
+		}
+
+		// Stop() clears isRunning before signaling InterruptChan, so this read is
+		// ordered by the channel receive; bail before touching the store
+		if !*isRunning {
+			break
 		}
 
 		haveTemplate := CheckTemplate(ctx, detStore)

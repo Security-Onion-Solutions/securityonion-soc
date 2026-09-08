@@ -24,6 +24,7 @@ const DEFAULT_SRV_EXP_SECONDS = 600
 const REQUIRED_SRV_KEY_LENGTH = 64
 const DEFAULT_CUSTOM_REPORTS_PATH = "/opt/sensoroni/templates/reports/custom"
 const DEFAULT_JOB_POLL_RETRY_INTERVAL_MS = 600000
+const DEFAULT_EVENTS_HEALTH_TIMEOUT_MS = 45000
 
 type ServerConfig struct {
 	AirgapEnabled           bool                   `json:"airgapEnabled"`
@@ -50,6 +51,7 @@ type ServerConfig struct {
 	CustomReportsPath       string                 `json:"customReportsPath"`
 	EnableReverseLookup     bool                   `json:"enableReverseLookup"`
 	JobPollRetryIntervalMs  int                    `json:"jobPollRetryIntervalMs"`
+	EventsHealthTimeoutMs   int                    `json:"eventsHealthTimeoutMs"`
 	SrvKeyBytes             []byte
 }
 
@@ -57,6 +59,9 @@ func (config *ServerConfig) Verify() error {
 	var err error
 	if config.MaxPacketCount <= 0 {
 		config.MaxPacketCount = DEFAULT_MAX_PACKET_COUNT
+	}
+	if config.EventsHealthTimeoutMs <= 0 {
+		config.EventsHealthTimeoutMs = DEFAULT_EVENTS_HEALTH_TIMEOUT_MS
 	}
 	if config.BindAddress == "" {
 		err = errors.New("Server.BindAddress configuration value is required")

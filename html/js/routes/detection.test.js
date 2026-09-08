@@ -453,6 +453,13 @@ test('onNewDetectionLanguageChange', async () => {
 	comp.detect = { language:'sigma', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X');
+
+	// [today] is replaced with the current date in YYYY-MM-DD format
+	comp.ruleTemplates["elastalert"] = 'c [publicId] [today]';
+	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	comp.detect = { language:'sigma', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('c X ' + moment().format('YYYY-MM-DD'));
 });
 
 test('getDefaultPreset', () => {

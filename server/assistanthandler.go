@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +49,16 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+
+		r.Put("/agents/{name}", h.SaveAgent)
+		r.Delete("/agents/{name}", h.DeleteAgent)
+		r.Put("/skills/{name}", h.SaveSkill)
+		r.Delete("/skills/{name}", h.DeleteSkill)
+
+		r.Get("/memories", h.GetMemories)
+		r.Post("/memories", h.CreateMemory)
+		r.Put("/memories/{id}", h.UpdateMemory)
+		r.Delete("/memories/{id}", h.DeleteMemory)
 
 		r.Get("/admin/stats", h.GetUsage)
 		r.Get("/admin/sessions", h.getAllSessions)
@@ -83,6 +95,8 @@ func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
 	if incMsg.SessionId == "" {
 		incMsg.SessionId = uuid.NewString()
 	}
+
+	incMsg.Tags = model.FilterClientTags(incMsg.Tags)
 
 	return incMsg, nil
 }
@@ -126,6 +140,26 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	incMsg, err := decodeIncomingMessage(r)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	// check if caller owns session
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	// A nonexistent session is fine: it's created as the caller's own on first
+	// chat. Only an existing session owned by someone else is rejected.
+	if sessionExists && !ownedByUser {
+		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to post to a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, nil)
+
 		return
 	}
 
@@ -176,19 +210,20 @@ func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.Respo
 		return
 	}
 
-	entireResponse, err := streamResponse(ctx, w, r, response)
-	if err != nil {
-		logger.WithError(err).Error("error streaming response")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+	entireResponse, streamErr := streamResponse(ctx, w, r, response)
 
-		return
-	}
-
+	// Persist whatever was buffered even when the stream errored — the upstream
+	// billed the turn either way. Mirrors the PostTool loop.
 	go func() {
 		if err := finalize(entireResponse); err != nil {
 			logger.WithError(err).Error("error finalizing streamed response")
 		}
 	}()
+
+	if streamErr != nil {
+		logger.WithError(streamErr).Error("error streaming response")
+		web.Respond(w, r, http.StatusInternalServerError, streamErr)
+	}
 }
 
 // @Summary      Execute Tool
@@ -231,6 +266,29 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.WithError(err).Error("unable to decode request body")
 		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	// check if caller owns session
+	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if !sessionExists {
+		web.Respond(w, r, http.StatusNotFound, "session does not exist")
+		return
+	}
+
+	if sessionExists && !ownedByUser {
+		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, nil)
 
 		return
 	}
@@ -433,7 +491,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	model := chi.URLParam(r, "*")
+	model := decodePathValue(chi.URLParam(r, "*"))
 
 	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {
@@ -689,6 +747,15 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// don't allow any actions involving reserved tags
+	for _, reservedTag := range model.MemorySessionTags {
+		if strings.EqualFold(reservedTag, updateReq.Tag) {
+			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
+
+			return
+		}
+	}
+
 	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
@@ -910,6 +977,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		model.GetSessionsWithRange(start, end),
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithUsage(true),
+		model.GetSessionsWithMemorySessions(true),
 	}
 
 	if userId != "" {
@@ -952,7 +1020,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -1287,7 +1355,16 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 			if sm.Message != nil {
 				message = sm.Message
 				if len(message.ContentBlocks) == 0 {
-					message.ContentBlocks = []model.ContentBlock{{}}
+					message.ContentBlocks = []model.ContentBlock{}
+				}
+				if sm.Usage != nil {
+					if message.Usage == nil {
+						message.Usage = new(*sm.Usage)
+					} else {
+						if sm.Usage.InputTokens != 0 {
+							message.Usage.InputTokens = sm.Usage.InputTokens
+						}
+					}
 				}
 			}
 		case "content_block_start":
@@ -1323,6 +1400,10 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 
 					message.ContentBlocks[sm.Index].Content = message.ContentBlocks[sm.Index].Content.(string) + sm.Delta.Text
 				case "input_json_delta":
+					for len(message.ContentBlocks) <= sm.Index {
+						message.ContentBlocks = append(message.ContentBlocks, model.ContentBlock{})
+					}
+
 					message.ContentBlocks[sm.Index].Input = json.RawMessage(string(message.ContentBlocks[sm.Index].Input) + *sm.Delta.PartialJson)
 				case "thought_delta":
 					message.Thoughts += sm.Delta.Text
@@ -1348,12 +1429,24 @@ func UnstreamResponse(ctx context.Context, rawResponse string, aux *model.AuxMes
 			if message == nil {
 				continue // no message_start yet
 			}
+
 			if sm.Usage != nil {
-				message.Usage = sm.Usage
+				if message.Usage == nil {
+					message.Usage = sm.Usage
+				} else {
+					if sm.Usage.InputTokens != 0 {
+						message.Usage.InputTokens = sm.Usage.InputTokens
+					}
+					if sm.Usage.OutputTokens != 0 {
+						message.Usage.OutputTokens = sm.Usage.OutputTokens
+					}
+					if sm.Usage.Credits != 0 {
+						message.Usage.Credits = sm.Usage.Credits
+					}
+				}
 			}
 			if sm.Delta != nil && sm.Delta.StopReason != nil {
-				message.StopReason = new(string)
-				*message.StopReason = *sm.Delta.StopReason
+				message.StopReason = new(*sm.Delta.StopReason)
 			}
 		}
 	}
@@ -1439,7 +1532,7 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	// Create a simple query to match the soc_id
 	updateCriteria.ParsedQuery = model.NewQuery()
 	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
 
@@ -1520,7 +1613,7 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 	// Create a query to match the soc_id
 	updateCriteria.ParsedQuery = model.NewQuery()
 	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, true, true, false)
+	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
 
@@ -1537,4 +1630,323 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 	}).Info("Successfully cleared investigation_session_id from alert")
 
 	return nil
+}
+
+// @Summary      Save an Assistant Agent
+// @Description  Create or update a single agent definition. The server merges it into the stored set, so a stale client cannot revert other agents.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name     path  string             true  "Agent name"
+// @Param        request  body  model.StoredAgent  true  "Agent definition"
+// @Produce      json
+// @Success      200           "Agent saved"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/agents/{name} [put]
+func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
+	agent := &model.StoredAgent{}
+	if !h.decodeConfigRequest(w, r, agent) {
+		return
+	}
+
+	originalName := urlParamName(r)
+	if strings.TrimSpace(agent.Name) == "" {
+		agent.Name = originalName
+	}
+	h.respondConfigWrite(w, r, h.server.AssistantManager.SaveAgent(r.Context(), originalName, agent))
+}
+
+// @Summary      Delete an Assistant Agent
+// @Description  Remove an admin-created agent. System agents can only be disabled.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name  path  string  true  "Agent name"
+// @Produce      json
+// @Success      200           "Agent deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions, or the agent is system-provided"
+// @Failure      404           "Agent not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/agents/{name} [delete]
+func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(r.Context(), urlParamName(r)))
+}
+
+// @Summary      Save an Assistant Skill
+// @Description  Create or update a single skill definition, merged into the stored set by the server.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name     path  string             true  "Skill name"
+// @Param        request  body  model.StoredSkill  true  "Skill definition"
+// @Produce      json
+// @Success      200           "Skill saved"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/skills/{name} [put]
+func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
+	skill := &model.StoredSkill{}
+	if !h.decodeConfigRequest(w, r, skill) {
+		return
+	}
+
+	originalName := urlParamName(r)
+	if strings.TrimSpace(skill.Name) == "" {
+		skill.Name = originalName
+	}
+	h.respondConfigWrite(w, r, h.server.AssistantManager.SaveSkill(r.Context(), originalName, skill))
+}
+
+// @Summary      Delete an Assistant Skill
+// @Description  Remove an admin-created skill. System skills can only be disabled.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        name  path  string  true  "Skill name"
+// @Produce      json
+// @Success      200           "Skill deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions, or the skill is system-provided"
+// @Failure      404           "Skill not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/skills/{name} [delete]
+func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(r.Context(), urlParamName(r)))
+}
+
+// @Summary      List Assistant Memories
+// @Description  Retrieve a page of the memories the requestor is allowed to read. A query orders results by semantic similarity instead of recency.
+// @Tags         Assistant
+// @Security     bearer[memory/read_authored]
+// @Security     bearer[memory/read_global]
+// @Security     bearer[memory/read_all]
+// @Param        scope   query  string  false  "self, global, or all (default)" example(global)
+// @Param        userId  query  string  false  "Narrow to one user; another user requires memory/read_all" example(8beae4b5-275b-4669-b678-8cff894911b5)
+// @Param        q       query  string  false  "Order results by similarity to this text" example(preferred timezone)
+// @Param        limit   query  int     false  "Page size" example(25)
+// @Param        offset  query  int     false  "Page offset" example(0)
+// @Produce      json
+// @Success      200 {object} model.MemoryResults "A page of memories"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories [get]
+func (h *AssistantHandler) GetMemories(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+
+	results, err := h.server.AssistantManager.ListMemories(ctx, &model.MemoryFilter{
+		Scope:        query.Get("scope"),
+		TargetUserId: query.Get("userId"),
+		Query:        query.Get("q"),
+		Limit:        limit,
+		Offset:       offset,
+	})
+	if err != nil {
+		h.respondMemoryError(w, r, err, "unable to list memories")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, results)
+}
+
+// @Summary      Create an Assistant Memory
+// @Description  Store a new user-defined memory. User-defined memories are never rewritten or removed by the memory scanner.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Param        request  body  model.MemoryRequest  true  "Memory to create"
+// @Produce      json
+// @Success      200 {object} model.MemoryRecord "The created memory"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories [post]
+func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) {
+	h.saveMemory(w, r, "")
+}
+
+// @Summary      Update an Assistant Memory
+// @Description  Replace the text or scope of an existing memory, marking it user-defined so the scanner leaves it alone.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Security     bearer[memory/write_all]
+// @Param        id       path  string               true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        request  body  model.MemoryRequest  true  "Replacement memory"
+// @Produce      json
+// @Success      200 {object} model.MemoryRecord "The updated memory"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Memory not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories/{id} [put]
+func (h *AssistantHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
+	h.saveMemory(w, r, decodePathValue(chi.URLParam(r, "id")))
+}
+
+func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id string) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	req := &model.MemoryRequest{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		log.FromContext(ctx).WithError(err).Error("unable to decode memory request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	mem := &model.Memory{
+		Auditable: model.Auditable{
+			Id:   id,
+			Kind: "memory",
+		},
+		MemoryText: req.MemoryText,
+	}
+
+	if !strings.EqualFold(req.Scope, model.MemoryScopeGlobal) {
+		targetUserId := req.TargetUserId
+		if targetUserId == "" {
+			targetUserId = ctx.Value(web.ContextKeyRequestorId).(string)
+		}
+
+		mem.TargetUserId = &targetUserId
+	}
+
+	if err := h.server.AssistantManager.SaveMemory(ctx, mem); err != nil {
+		h.respondMemoryError(w, r, err, "unable to save memory")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, model.NewMemoryRecord(mem))
+}
+
+// @Summary      Delete an Assistant Memory
+// @Description  Permanently remove a memory.
+// @Tags         Assistant
+// @Security     bearer[memory/write_self]
+// @Security     bearer[memory/write_global]
+// @Security     bearer[memory/write_all]
+// @Param        id  path  string  true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200           "Memory deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Memory not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/memories/{id} [delete]
+func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	if err := h.server.AssistantManager.RemoveMemory(ctx, decodePathValue(chi.URLParam(r, "id"))); err != nil {
+		h.respondMemoryError(w, r, err, "unable to delete memory")
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *AssistantHandler) respondMemoryError(w http.ResponseWriter, r *http.Request, err error, logMsg string) {
+	switch {
+	case strings.Contains(err.Error(), "ERROR_MEMORY_UNAUTHORIZED"):
+		web.Respond(w, r, http.StatusForbidden, err)
+	case strings.Contains(err.Error(), "ERROR_MEMORY_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_MEMORY_TEXT_REQUIRED"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	default:
+		log.FromContext(r.Context()).WithError(err).Error(logMsg)
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+// decodePathValue undoes the percent-encoding a client applies to a path segment.
+// chi leaves the segment encoded for some values ("Hunter (copy)") while decoding
+// others ("My Agent"), so decode explicitly; a value that is not valid escaping is
+// used as-is.
+func decodePathValue(raw string) string {
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+
+	return raw
+}
+
+func urlParamName(r *http.Request) string {
+	return decodePathValue(chi.URLParam(r, "name"))
+}
+
+// checkConfigWriteAuthorized gates the agent/skill endpoints on the same
+// permission a direct config write needs.
+func (h *AssistantHandler) checkConfigWriteAuthorized(w http.ResponseWriter, r *http.Request) bool {
+	if err := h.server.CheckAuthorized(r.Context(), "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return false
+	}
+
+	return h.checkAssistantAvailable(r.Context(), w, r)
+}
+
+func (h *AssistantHandler) decodeConfigRequest(w http.ResponseWriter, r *http.Request, out any) bool {
+	if !h.checkConfigWriteAuthorized(w, r) {
+		return false
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
+		log.FromContext(r.Context()).WithError(err).Error("unable to decode agent configuration request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return false
+	}
+
+	return true
+}
+
+// respondConfigWrite maps the manager's errors onto status codes.
+func (h *AssistantHandler) respondConfigWrite(w http.ResponseWriter, r *http.Request, err error) {
+	if err == nil {
+		web.Respond(w, r, http.StatusOK, nil)
+		return
+	}
+
+	logger := log.FromContext(r.Context())
+	switch {
+	case strings.Contains(err.Error(), "ERROR_SYSTEM_AGENT_IMMUTABLE"):
+		web.Respond(w, r, http.StatusForbidden, err)
+	case strings.Contains(err.Error(), "ERROR_AGENT_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_NAME_CONFLICT"):
+		web.Respond(w, r, http.StatusConflict, err)
+	case strings.Contains(err.Error(), "NAME_REQUIRED"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	default:
+		logger.WithError(err).Error("unable to save assistant configuration")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
 }

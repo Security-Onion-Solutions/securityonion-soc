@@ -21,12 +21,14 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	modcontext "github.com/security-onion-solutions/securityonion-soc/server/modules/context"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -40,10 +42,14 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 var protocols = map[string]ProtocolConstructor{}
 
 var (
-	ErrToolNotFound    = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
-	ErrRequestTooLarge = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
-	ErrInvalidModel    = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
-	ErrInvalidAgent    = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
+	ErrRequestTooLarge    = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
+	ErrInvalidModel       = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
+	ErrInvalidAgent       = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
+	ErrNoDatabase         = errors.New("no database configured")
+	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
+	ErrMemoryNotFound     = database.ErrMemoryNotFound
+	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
 )
 
 const (
@@ -63,8 +69,43 @@ const (
 	// DEFAULT_TOOL_USE_TURN_ATTEMPTS and DEFAULT_TOOL_USE_TURN_DELAY_MS bound
 	// awaitToolUseTurn's polling for an asynchronously-persisted tool_use turn,
 	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
-	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 10
-	DEFAULT_TOOL_USE_TURN_DELAY_MS = 150
+	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 12
+	DEFAULT_TOOL_USE_TURN_DELAY_MS = 175
+
+	DEFAULT_USE_MEMORY_SCANNER           = false
+	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
+	DEFAULT_DONT_SCAN_BEFORE             = ""
+
+	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
+	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE   = 5
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE = 5
+
+	DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE   = 20
+	DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE = 20
+
+	// Unscanned session messages sent to the Memory agent per request.
+	DEFAULT_MEMORY_EXTRACT_BATCH_SIZE = 5
+
+	// Failed memory scans a session may accumulate before it is excluded.
+	DEFAULT_MAX_MEMORY_RETRIES = 2
+
+	DEFAULT_MEMORY_PAGE_SIZE = 25
+	MAX_MEMORY_PAGE_SIZE     = 1000
+
+	// Memories re-embedded per batch after the embedding model changes. One
+	// Embed call carries the whole batch.
+	MEMORY_REEMBED_BATCH_SIZE = 100
+	// Pause between batches. Every user message also embeds, so the pass yields
+	// gateway headroom to live recall rather than running as fast as it can.
+	MEMORY_REEMBED_BATCH_DELAY = 2 * time.Second
+	// Ceiling on one embedding call; a stalled gateway would otherwise strand the
+	// pass and block every later one.
+	MEMORY_REEMBED_CALL_TIMEOUT = 2 * time.Minute
+	// Ceiling on a detached non-streaming chat turn; bounds the orphaned work
+	// after a browser refresh without racing the model on big prompts.
+	CHAT_TURN_TIMEOUT = 3 * time.Minute
 )
 
 //go:embed SOSystemPrompt.bin
@@ -74,23 +115,40 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
-	FunctionLibrary   map[string]Tool
+	FunctionLibrary map[string]Tool
+	SkillLibrary    map[string]model.Skill
+	toolConfig      json.RawMessage
+	adapters        map[string]server.AssistantAdapter
+	isAgentic       bool
+
+	// agentMu guards the agentic configuration that can be hot-reloaded from a
+	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
+	// (request handlers) take RLock; a reload rebuilds the whole set under Lock.
+	agentMu           sync.RWMutex
 	DelegationLibrary map[string]Tool
-	SkillLibrary      map[string]model.Skill
-	toolConfig        json.RawMessage
-	adapters          map[string]server.AssistantAdapter
-	isAgentic         bool
-	agents            map[string]model.AgentParameters
+	agents            map[string]model.Agent
 	agentMapping      map[string]string // map[agentName]modelSelector ("id@adapter" or bare id)
+
+	// The system-provided sets, captured at setup and never mutated after. A reload
+	// merges stored overrides onto these, so what an admin cannot edit survives a save.
+	builtinAgents       map[string]model.Agent
+	builtinAgentMapping map[string]string
+	builtinSkills       map[string]model.Skill
+
+	// Serializes the read-modify-write of the agent/skill settings so concurrent
+	// saves merge instead of overwriting each other.
+	configWriteMu sync.Mutex
 
 	systemPrompt         string
 	systemPromptAddendum string
 
 	// maxSubSessionTokens is the per-sub-session output-token budget. 0 disables it.
-	maxSubSessionTokens int
+	// Atomic so it can be hot-reloaded without racing per-request readers.
+	maxSubSessionTokens atomic.Int64
 
 	// maxDelegationDepth is the maximum delegation nesting depth. 0 disables it.
-	maxDelegationDepth int
+	// Atomic so it can be hot-reloaded without racing per-request readers.
+	maxDelegationDepth atomic.Int64
 
 	// toolUseTurnAttempts and toolUseTurnDelay bound awaitToolUseTurn's polling for
 	// the asynchronously-persisted assistant turn that requested a tool: up to
@@ -102,7 +160,138 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
+	store *database.Store
+
+	// Runtime-changeable memory tunables, guarded so a reload cannot race a read.
+	memoryMu sync.RWMutex
+	memory   memorySettings
+
+	// memoryWorkerMu guards the scanner goroutine; terminateMemory is nil when stopped.
+	memoryWorkerMu  sync.Mutex
+	terminateMemory context.CancelCauseFunc
+	// True while a re-embed pass runs, so a second one cannot start;
+	// terminateReembed interrupts it at the next batch boundary.
+	reembedding      bool
+	terminateReembed context.CancelCauseFunc
+	// Interrupts the scan pass currently running, if any; nil between passes.
+	terminateMemoryScan context.CancelCauseFunc
+	// Published count of memories awaiting re-embedding.
+	staleMemories atomic.Int64
+	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
+	reembedBatchDelay  time.Duration
+	reembedCallTimeout time.Duration
+	// Wakes the worker ahead of its next tick, after an interval change.
+	scanNow chan struct{}
+
+	memoryAgents  map[string]model.Agent // "Memory"/"Embed"/"Reconcile" prompt holders, kept out of ac.agents
+	memoryMapping map[string]string      // map[roleName]modelSelector
+	// Decompressed embedded prompts, kept to rebuild a disabled memory role.
+	// Never serialized: Agent.Prompt and Skill.AdditionalPrompt are json:"-".
+	embeddedPrompts map[string]string
+
 	detections.IOManager
+}
+
+type memorySettings struct {
+	useMemory              bool
+	useScanner             bool
+	scanInterval           time.Duration
+	mem2mem                float64
+	mem2msg                float64
+	maxUserInclude         int
+	maxGlobalInclude       int
+	maxUserReconcile       int
+	maxGlobalReconcile     int
+	memoryExtractBatchSize int
+	maxMemoryRetries       int
+	memoryModel            string
+	embedModel             string
+	reconcileModel         string
+	memoryPersona          string
+	reconcilePersona       string
+	dontScanBefore         string
+}
+
+func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
+	ac.memoryMu.RLock()
+	defer ac.memoryMu.RUnlock()
+
+	return ac.memory
+}
+
+func (ac *AssistantCoordinator) setMemorySettings(settings memorySettings) {
+	ac.memoryMu.Lock()
+	defer ac.memoryMu.Unlock()
+
+	ac.memory = settings
+}
+
+// Configuration setting IDs the coordinator subscribes to for live reloads. These
+// must match the setting IDs defined in the config annotations (salt).
+const (
+	// ConfigSettingAgents holds the full agent definition set (name, role, model,
+	// skills, delegation, persona) as a structured, DB-stored config value. It also
+	// drives the agent->model mapping (each agent carries its model). These IDs sit
+	// under the assistant module's config namespace, alongside the other assistant
+	// module settings (adapters, systemPromptAddendum, ...).
+	ConfigSettingAgents = "soc.config.server.modules.assistant.agents"
+	// AgenticUpdateKind is the websocket message kind carrying agentic parameter
+	// changes to connected browsers.
+	AgenticUpdateKind = "assistant:agentic"
+	// Skill definitions, in the same structured form as the agents setting.
+	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
+	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
+	// limits that can be hot-reloaded.
+	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
+	ConfigSettingMaxSubSessionTokens = "soc.config.server.modules.assistant.maxSubSessionTokens"
+
+	ConfigSettingUseMemory                    = "soc.config.server.modules.assistant.useMemory"
+	ConfigSettingUseMemoryScanner             = "soc.config.server.modules.assistant.useMemoryScanner"
+	ConfigSettingMemoryScanInterval           = "soc.config.server.modules.assistant.memoryScanIntervalSeconds"
+	ConfigSettingMemoryProximity              = "soc.config.server.modules.assistant.memoryProximityThreshold"
+	ConfigSettingMessageProximity             = "soc.config.server.modules.assistant.messageProximityThreshold"
+	ConfigSettingMaxUserMemoriesToInclude     = "soc.config.server.modules.assistant.maxUserMemoriesToInclude"
+	ConfigSettingMaxGlobalMemoriesToInclude   = "soc.config.server.modules.assistant.maxGlobalMemoriesToInclude"
+	ConfigSettingMaxUserMemoriesToReconcile   = "soc.config.server.modules.assistant.maxUserMemoriesToReconcile"
+	ConfigSettingMaxGlobalMemoriesToReconcile = "soc.config.server.modules.assistant.maxGlobalMemoriesToReconcile"
+	ConfigSettingMemoryModel                  = "soc.config.server.modules.assistant.memoryModel"
+	ConfigSettingEmbedModel                   = "soc.config.server.modules.assistant.embedModel"
+	ConfigSettingReconcileModel               = "soc.config.server.modules.assistant.reconcileModel"
+	ConfigSettingMemoryPersona                = "soc.config.server.modules.assistant.memoryPersona"
+	ConfigSettingReconcilePersona             = "soc.config.server.modules.assistant.reconcilePersona"
+	ConfigSettingDontScanBefore               = "soc.config.server.modules.assistant.dontScanBefore"
+	ConfigSettingMemoryExtractBatchSize       = "soc.config.server.modules.assistant.memoryExtractBatchSize"
+	ConfigSettingMaxMemoryRetries             = "soc.config.server.modules.assistant.maxMemoryRetries"
+)
+
+var memoryConfigSettings = []string{
+	ConfigSettingUseMemory,
+	ConfigSettingUseMemoryScanner,
+	ConfigSettingMemoryScanInterval,
+	ConfigSettingMemoryProximity,
+	ConfigSettingMessageProximity,
+	ConfigSettingMaxUserMemoriesToInclude,
+	ConfigSettingMaxGlobalMemoriesToInclude,
+	ConfigSettingMaxUserMemoriesToReconcile,
+	ConfigSettingMaxGlobalMemoriesToReconcile,
+	ConfigSettingMemoryModel,
+	ConfigSettingEmbedModel,
+	ConfigSettingReconcileModel,
+	ConfigSettingMemoryPersona,
+	ConfigSettingReconcilePersona,
+	ConfigSettingDontScanBefore,
+	ConfigSettingMemoryExtractBatchSize,
+	ConfigSettingMaxMemoryRetries,
+}
+
+// getMaxSubSessionTokens returns the current per-sub-session output-token budget.
+func (ac *AssistantCoordinator) getMaxSubSessionTokens() int {
+	return int(ac.maxSubSessionTokens.Load())
+}
+
+// getMaxDelegationDepth returns the current maximum delegation nesting depth.
+func (ac *AssistantCoordinator) getMaxDelegationDepth() int {
+	return int(ac.maxDelegationDepth.Load())
 }
 
 func NewAssistantCoordinator(srv *server.Server) *AssistantCoordinator {
@@ -132,27 +321,79 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	}
 
 	ac.systemPromptAddendum = systemPromptAddendum
-	ac.maxSubSessionTokens = module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)
-	ac.maxDelegationDepth = module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)
+	ac.maxSubSessionTokens.Store(int64(module.GetIntDefault(config, "maxSubSessionTokens", DEFAULT_MAX_SUBSESSION_TOKENS)))
+	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
-
 	ac.loadAdapters(config)
-
-	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
-
-	if ac.isAgentic {
-		ac.setupAgentic()
-		ac.agentMapping = ac.loadAgentMapping(config)
-	}
 
 	ac.validateModelSelectors()
 
+	ac.srv.Config.ClientParams.AssistantParams.Agentic = ac.isAgentic
+
+	memScanInterval := module.GetIntDefault(config, "memoryScanIntervalSeconds", DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS)
+
+	memoryExtractBatchSize := module.GetIntDefault(config, "memoryExtractBatchSize", DEFAULT_MEMORY_EXTRACT_BATCH_SIZE)
+	if memoryExtractBatchSize < 1 {
+		log.FromContext(ac.srv.Context).WithField("memoryExtractBatchSize", memoryExtractBatchSize).Warn("memoryExtractBatchSize must be at least 1; using 1")
+		memoryExtractBatchSize = 1
+	}
+
+	maxMemoryRetries := module.GetIntDefault(config, "maxMemoryRetries", DEFAULT_MAX_MEMORY_RETRIES)
+	if maxMemoryRetries < 0 {
+		log.FromContext(ac.srv.Context).WithField("maxMemoryRetries", maxMemoryRetries).Warn("maxMemoryRetries must be at least 0; using 0")
+		maxMemoryRetries = 0
+	}
+
+	memory := memorySettings{
+		useMemory:              module.GetBoolDefault(config, "useMemory", false),
+		useScanner:             module.GetBoolDefault(config, "useMemoryScanner", DEFAULT_USE_MEMORY_SCANNER),
+		scanInterval:           time.Second * time.Duration(memScanInterval),
+		mem2mem:                module.GetFloatDefault(config, "memoryProximityThreshold", DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD),
+		mem2msg:                module.GetFloatDefault(config, "messageProximityThreshold", DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD),
+		maxUserInclude:         module.GetIntDefault(config, "maxUserMemoriesToInclude", DEFAULT_MAX_USER_MEMORIES_TO_INCLUDE),
+		maxGlobalInclude:       module.GetIntDefault(config, "maxGlobalMemoriesToInclude", DEFAULT_MAX_GLOBAL_MEMORIES_TO_INCLUDE),
+		maxUserReconcile:       module.GetIntDefault(config, "maxUserMemoriesToReconcile", DEFAULT_MAX_USER_MEMORIES_TO_RECONCILE),
+		maxGlobalReconcile:     module.GetIntDefault(config, "maxGlobalMemoriesToReconcile", DEFAULT_MAX_GLOBAL_MEMORIES_TO_RECONCILE),
+		memoryExtractBatchSize: memoryExtractBatchSize,
+		maxMemoryRetries:       maxMemoryRetries,
+		memoryModel:            module.GetStringDefault(config, "memoryModel", ""),
+		embedModel:             module.GetStringDefault(config, "embedModel", ""),
+		reconcileModel:         module.GetStringDefault(config, "reconcileModel", ""),
+		memoryPersona:          module.GetStringDefault(config, "memoryPersona", ""),
+		reconcilePersona:       module.GetStringDefault(config, "reconcilePersona", ""),
+		dontScanBefore:         module.GetStringDefault(config, "dontScanBefore", DEFAULT_DONT_SCAN_BEFORE),
+	}
+
+	if memScanInterval <= 0 && err == nil && memory.useScanner {
+		err = fmt.Errorf("memoryScanInterval must be > 0")
+	}
+
+	ac.reembedBatchDelay = MEMORY_REEMBED_BATCH_DELAY
+	ac.reembedCallTimeout = MEMORY_REEMBED_CALL_TIMEOUT
+
+	ac.setMemorySettings(memory)
+	ac.exposeMemorySettings()
+
+	// Loaded even when neither agentic nor memory is on, since memory can be
+	// enabled at runtime and its roles are built from these.
+	ac.embeddedPrompts = ac.unzipAndUnmarshal(allPrompts)
+
 	if ac.isAgentic {
+		ac.setupAgentic(ac.embeddedPrompts)
+		ac.agentMapping = ac.loadAgentMapping(config)
+
+		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))
+		for name, selector := range ac.agentMapping {
+			ac.builtinAgentMapping[name] = selector
+		}
+
 		ac.validateAgentMappings()
 		ac.registerDelegateTools()
 		ac.exposeAgents()
 	}
+
+	ac.applyMemoryAgents(memory)
 
 	ac.getPrompt()
 
@@ -208,8 +449,9 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 			}).Info("loaded assistant adapter")
 
 			adapterArray = append(adapterArray, model.AdapterParameters{
-				Name:     name,
-				Protocol: protocol,
+				Name:               name,
+				Protocol:           protocol,
+				SupportsEmbeddings: adapt.SupportsEmbeddings(),
 			})
 		}
 
@@ -237,6 +479,11 @@ func (ac *AssistantCoordinator) registerDelegateTools() {
 
 	for _, name := range names {
 		agent := ac.agents[name]
+
+		// Not a delegation target, so no other agent can hand work to it.
+		if !agent.Enabled {
+			continue
+		}
 
 		delegate := NewDelegateTool(name, name, agent.Description)
 		toolName := delegate.GetName()
@@ -320,6 +567,10 @@ func buildToolConfig(functions map[string]Tool, delegates map[string]Tool, toolF
 		}
 	}
 
+	if len(toolSpecs) == 0 {
+		return nil, nil
+	}
+
 	tc := &model.ToolConfig{
 		Tools: toolSpecs,
 		ToolChoice: map[string]model.JSONSchema{
@@ -396,11 +647,137 @@ func (ac *AssistantCoordinator) getPrompt() {
 func (ac *AssistantCoordinator) Start() error {
 	ac.isRunning = true
 
+	if ac.srv != nil && ac.srv.DB != nil {
+		store, err := database.New(context.Background(), ac.srv.DB)
+		if err != nil {
+			log.WithError(err).Error("assistant: database init failed")
+			return err
+		}
+		ac.store = store
+	}
+
+	// Agent definitions and limits can be managed as config settings (some
+	// DB-stored, e.g. "assistant.agents") that do not arrive through the module's
+	// Init config. Start runs after every module's Init, so the Configstore is
+	// available now. Subscribe to the relevant settings and pull their current
+	// values on top of the Init defaults.
+	// A zero-value coordinator (used by some tests) has nothing to subscribe to.
+	if ac.srv == nil {
+		return nil
+	}
+
+	ac.registerConfigCallbacks()
+
+	if ac.isAgentic {
+		ac.reloadAgentConfiguration(ac.srv.Context)
+	}
+
+	ac.reloadMemoryConfiguration(ac.srv.Context)
+
 	return nil
+}
+
+func (ac *AssistantCoordinator) applyScannerState(enabled bool) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	switch {
+	case enabled && ac.terminateMemory == nil:
+		var memCtx context.Context
+		memCtx, ac.terminateMemory = context.WithCancelCause(ac.srv.Context)
+		ac.scanNow = make(chan struct{}, 1)
+
+		go ac.memoryWorker(memCtx, ac.scanNow)
+	case !enabled && ac.terminateMemory != nil:
+		ac.terminateMemory(errors.New("memory scanner disabled"))
+		ac.terminateMemory = nil
+		ac.scanNow = nil
+	}
+}
+
+func (ac *AssistantCoordinator) wakeScanner() {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	if ac.scanNow == nil {
+		return
+	}
+
+	select {
+	case ac.scanNow <- struct{}{}:
+	default:
+	}
+}
+
+func (ac *AssistantCoordinator) interruptMemoryScan(cause error) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	if ac.terminateMemoryScan != nil {
+		ac.terminateMemoryScan(cause)
+	}
+}
+
+// registerConfigCallbacks subscribes the coordinator to changes of the config
+// settings that drive agentic behavior. It is a no-op when the configured
+// Configstore does not support callbacks (e.g. in-memory store used by tests).
+func (ac *AssistantCoordinator) registerConfigCallbacks() {
+	registrar, ok := ac.srv.Configstore.(server.ConfigSettingCallbackRegistrar)
+	if !ok {
+		log.FromContext(ac.srv.Context).Debug("configstore does not support setting callbacks; agent config will not hot-reload")
+		return
+	}
+
+	ids := []string{
+		ConfigSettingAgents,
+		ConfigSettingSkills,
+		ConfigSettingMaxDelegationDepth,
+		ConfigSettingMaxSubSessionTokens,
+	}
+	ids = append(ids, memoryConfigSettings...)
+
+	for _, id := range ids {
+		registrar.RegisterConfigSettingCallback(id, ac)
+	}
+}
+
+// OnConfigSettingUpdated implements server.ConfigSettingCallbackHandler. When one
+// of the subscribed settings changes, the coordinator re-reads the full agentic
+// configuration so its in-memory state and the client-facing parameters stay
+// consistent.
+func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
+	if setting == nil {
+		return
+	}
+
+	if slices.Contains(memoryConfigSettings, setting.Id) {
+		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading memory configuration after config change")
+		ac.reloadMemoryConfiguration(ctx)
+
+		return
+	}
+
+	if !ac.isAgentic {
+		return
+	}
+
+	switch setting.Id {
+	case ConfigSettingAgents, ConfigSettingSkills, ConfigSettingMaxDelegationDepth, ConfigSettingMaxSubSessionTokens:
+		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading agentic configuration after config change")
+		ac.reloadAgentConfiguration(ctx)
+	}
 }
 
 func (ac *AssistantCoordinator) Stop() error {
 	ac.isRunning = false
+
+	ac.applyScannerState(false)
+
+	ac.memoryWorkerMu.Lock()
+	if ac.terminateReembed != nil {
+		ac.terminateReembed(errors.New("assistant stopped"))
+	}
+	ac.memoryWorkerMu.Unlock()
 
 	return nil
 }
@@ -502,21 +879,38 @@ func (ac *AssistantCoordinator) resolveModel(selector string) *model.ModelParame
 // resolveAgent resolves an agent name to its definition and the model that
 // executes it. The model is found by mapping the agent name through
 // ac.agentMapping to a model selector ("id@adapter" or bare id) and then
-// resolveModel. Returns ErrInvalidAgent when the agent is unknown or its
-// mapped model is missing; callers surface this as a client error. Only
+// resolveModel. Returns ErrInvalidAgent when the agent is unknown, disabled, or
+// its mapped model is missing; callers surface this as a client error. Only
 // meaningful in agentic mode.
-func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameters, *model.ModelParameters, error) {
+func (ac *AssistantCoordinator) resolveAgent(name string) (*model.Agent, *model.ModelParameters, error) {
+	ac.agentMu.RLock()
 	agent, ok := ac.agents[name]
-	if !ok {
-		return nil, nil, ErrInvalidAgent
-	}
-
 	modelSelector, mapped := ac.agentMapping[name]
-	if !mapped {
+	ac.agentMu.RUnlock()
+
+	// A disabled agent is published but must not execute, even for a stored session.
+	if !ok || !mapped || !agent.Enabled {
 		return nil, nil, ErrInvalidAgent
 	}
 
 	modelParams := ac.resolveModel(modelSelector)
+	if modelParams == nil {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	return &agent, modelParams, nil
+}
+
+// resolveMemoryAgent resolves an internal memory role (Memory, Embed,
+// Reconcile) to its prompt-holding definition and the model that executes it,
+// configured via the memoryModel/embedModel/reconcileModel module config keys.
+func (ac *AssistantCoordinator) resolveMemoryAgent(name string) (*model.Agent, *model.ModelParameters, error) {
+	agent, ok := ac.memoryAgents[name]
+	if !ok {
+		return nil, nil, ErrInvalidAgent
+	}
+
+	modelParams := ac.resolveModel(ac.memoryMapping[name])
 	if modelParams == nil {
 		return nil, nil, ErrInvalidAgent
 	}
@@ -529,7 +923,7 @@ func (ac *AssistantCoordinator) resolveAgent(name string) (*model.AgentParameter
 // (or any string in non-agentic mode) is tried as a model selector
 // ("id@adapter" or bare id). agentParams is non-nil only when an agent
 // matched; modelParams is nil when nothing matched.
-func (ac *AssistantCoordinator) resolveSelector(selector string) (*model.AgentParameters, *model.ModelParameters) {
+func (ac *AssistantCoordinator) resolveSelector(selector string) (*model.Agent, *model.ModelParameters) {
 	if ac.isAgentic {
 		if agentParams, modelParams, err := ac.resolveAgent(selector); err == nil {
 			return agentParams, modelParams
@@ -603,17 +997,14 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		return nil, nil, ErrInvalidModel
 	}
 
+	clean := cleanupMessages(messages)
+
 	req := &model.ChatRequest{
-		Messages:  cleanupMessages(messages),
+		Messages:  clean,
 		Stream:    stream,
 		UserId:    userID,
 		Model:     modelParams.ID,
 		MaxTokens: config.MaxTokens,
-	}
-
-	if err := ac.checkRequestSize(req, modelParams); err != nil {
-		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
-		return nil, nil, err
 	}
 
 	adapter, ok := ac.adapters[modelParams.Adapter]
@@ -636,7 +1027,70 @@ func (ac *AssistantCoordinator) prepareChatRequest(ctx context.Context, aiModel 
 		req.SystemAppend = ac.systemPromptAddendum
 	}
 
+	if ac.memorySnapshot().useMemory && config.IncludeMemories && len(clean) != 0 {
+		latest := clean[len(clean)-1]
+		if strings.EqualFold(latest.Role, "user") {
+			content := messageText(latest)
+			if content != "" {
+				ac.addMemoriesToPrompt(ctx, req, content, config.MemorySessionId)
+			}
+		}
+	}
+
+	if err := ac.checkRequestSize(req, modelParams); err != nil {
+		logger.WithFields(log.Fields{"modelId": modelParams.ID, "adapterName": modelParams.Adapter, "estimatedChars": estimateRequestChars(req)}).Error("request exceeds estimated context limit")
+		return nil, nil, err
+	}
+
 	return req, adapter, nil
+}
+
+func (ac *AssistantCoordinator) addMemoriesToPrompt(ctx context.Context, req *model.ChatRequest, content string, sourceSessionId string) {
+	logger := log.FromContext(ctx)
+
+	user, global, err := ac.fetchMemoriesForPrompt(ctx, content, sourceSessionId)
+	if err != nil {
+		// log error but send request without memories
+		logger.WithError(err).Warnf("failed to fetch memories for prompt, sending without memories")
+		return
+	}
+
+	memPrompt := strings.Builder{}
+	ids := make([]string, 0, len(user)+len(global))
+
+	if len(user) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this user:")
+		for _, m := range user {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	if len(global) > 0 {
+		memPrompt.WriteString("\n\nMemories specific to this SOC installation:")
+		for _, m := range global {
+			memPrompt.WriteString(fmt.Sprintf("\n * %s", m.Memory.MemoryText))
+			ids = append(ids, m.Memory.Id)
+		}
+	}
+
+	go func() {
+		noCancelCtx := context.WithoutCancel(ctx)
+		noCancelCtx, cancel := context.WithTimeout(noCancelCtx, time.Second*10)
+		defer cancel()
+
+		err := ac.store.CountMemoryUsage(noCancelCtx, ids)
+		if err != nil {
+			logger.WithError(err).WithField("memoryIds", ids).Error("unable to update usage count for memories")
+		}
+	}()
+
+	logger.WithFields(log.Fields{
+		"userMemoriesAdded":   len(user),
+		"globalMemoriesAdded": len(global),
+	}).Info("adding memories to message")
+
+	req.SystemAppend += memPrompt.String()
 }
 
 func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error) {
@@ -703,13 +1157,9 @@ func (ac *AssistantCoordinator) Send(ctx context.Context, aiModel string, messag
 						},
 					}
 
+					// Not persisted here: callers save every returned message under their
+					// own session id, and this loop has none to offer.
 					newMessages = append(newMessages, toolMsg)
-
-					err = ac.srv.Assistantstore.SaveChat(ctx, toolMsg.PrepareForStorage("", []string{"tool_result"}, aiModel))
-					if err != nil {
-						logger.WithError(err).Error("unable to save tool result message")
-						return nil, err
-					}
 
 					// append to message history and recurse to send the tool result back with context
 					messages = append(messages, toolMsg)
@@ -765,7 +1215,9 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 	tool, ok := ac.FunctionLibrary[toolName]
 	if !ok {
+		ac.agentMu.RLock()
 		tool, ok = ac.DelegationLibrary[toolName]
+		ac.agentMu.RUnlock()
 		if !ok {
 			logger.Error("tool not found")
 			return nil, ErrToolNotFound
@@ -832,6 +1284,30 @@ func (ac *AssistantCoordinator) Health(ctx context.Context, aiModel string) (*mo
 	}
 
 	return response, nil
+}
+
+// Embed resolves the given model selector to its adapter and generates a vector
+// embedding for each input. It mirrors the model->adapter resolution used by
+// Balance/Health but also needs the model id to pass to the provider.
+func (ac *AssistantCoordinator) Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error) {
+	logger := log.FromContext(ctx)
+
+	modelParams := ac.resolveModel(aiModel)
+	if modelParams == nil {
+		logger.WithField("model", aiModel).Error("requested embedding model is not configured")
+		return nil, ErrInvalidModel
+	}
+
+	adapter, ok := ac.adapters[modelParams.Adapter]
+	if !ok {
+		logger.WithField("adapterName", modelParams.Adapter).Error("assistant adapter not found")
+		return nil, fmt.Errorf("assistant adapter not found: %s", modelParams.Adapter)
+	}
+
+	return adapter.Embed(ctx, &model.EmbeddingRequest{
+		Model: modelParams.ID,
+		Input: input,
+	})
 }
 
 // ToolInSession is the non-streaming counterpart to ToolStreamInSession. It runs
@@ -1267,13 +1743,13 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 		return nil, err
 	}
 
+	// Send already succeeded, a failed tool_result save must not
+	// discard the response before it and its usage are saved.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message (non-streaming)")
 	}
 
 	for _, msg := range response {
@@ -1593,13 +2069,14 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		return nil, err
 	}
 
+	// SendStream already succeeded (the upstream is live and billing); a failed
+	// tool_result save must not abandon the stream before finalize can save the
+	// turn and its usage.
 	if err := saveResult(); err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
 			"sessionId": sess.Id,
-		})
-
-		return nil, err
+		}).Error("unable to save tool result message")
 	}
 
 	finalize := func(rawResponse []byte) error {
@@ -1641,7 +2118,7 @@ func (ac *AssistantCoordinator) loadTurnSession(ctx context.Context, sessionId s
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithMessageMeta(false),
 	}
-	if ac.maxSubSessionTokens > 0 {
+	if ac.getMaxSubSessionTokens() > 0 {
 		opts = append(opts, model.GetSessionsWithUsage(true))
 	}
 
@@ -1688,7 +2165,7 @@ func (ac *AssistantCoordinator) loadSessionHistory(ctx context.Context, sess *mo
 // sessions, when no budget is configured, or when the session (and therefore its
 // usage) couldn't be loaded, isSub is false and remaining is 0 (no cap).
 func (ac *AssistantCoordinator) subSessionOutputBudget(sess *model.AssistantSession) (isSub bool, remaining int) {
-	if ac.maxSubSessionTokens <= 0 || sess == nil {
+	if ac.getMaxSubSessionTokens() <= 0 || sess == nil {
 		return false, 0
 	}
 
@@ -1701,17 +2178,17 @@ func (ac *AssistantCoordinator) subSessionOutputBudget(sess *model.AssistantSess
 		used = sess.Usage.TotalOutputTokens
 	}
 
-	return true, ac.maxSubSessionTokens - used
+	return true, ac.getMaxSubSessionTokens() - used
 }
 
 // subSessionStartOpts returns the chat options that cap a sub-agent's first turn
 // at the full per-sub-session budget (none has been spent yet). It returns no
 // options when the budget is disabled.
 func (ac *AssistantCoordinator) subSessionStartOpts() []model.ChatOpt {
-	if ac.maxSubSessionTokens <= 0 {
+	if ac.getMaxSubSessionTokens() <= 0 {
 		return nil
 	}
-	return []model.ChatOpt{model.WithMaxTokens(ac.maxSubSessionTokens)}
+	return []model.ChatOpt{model.WithMaxTokens(ac.getMaxSubSessionTokens())}
 }
 
 // subSessionBudgetNotice is the text returned to the parent when a sub-agent is
@@ -1734,7 +2211,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
-		"budget":    ac.maxSubSessionTokens,
+		"budget":    ac.getMaxSubSessionTokens(),
 	}).Info("sub-session output-token budget exhausted; halting")
 
 	if toolMsg != nil {
@@ -1745,7 +2222,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 		}
 	}
 
-	notice := subSessionBudgetNotice(ac.maxSubSessionTokens)
+	notice := subSessionBudgetNotice(ac.getMaxSubSessionTokens())
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 	aux := &model.AuxMessageData{ThoughtSignatures: map[string][]byte{}}
@@ -1793,7 +2270,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
-		"budget":    ac.maxSubSessionTokens,
+		"budget":    ac.getMaxSubSessionTokens(),
 	}).Info("sub-session output-token budget exhausted; halting")
 
 	if toolMsg != nil {
@@ -1809,7 +2286,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 		Id:   uuid.NewString(),
 		Role: "assistant",
 		ContentBlocks: []model.ContentBlock{
-			{Type: "text", Text: subSessionBudgetNotice(ac.maxSubSessionTokens)},
+			{Type: "text", Text: subSessionBudgetNotice(ac.getMaxSubSessionTokens())},
 		},
 		StopReason: &stopReason,
 	}
@@ -1955,7 +2432,7 @@ func delegationDepthNotice(limit int) string {
 // resolves the delegating session's delegate tool_use so it resumes instead of
 // nesting another sub-agent. A limit of 0 disables the check.
 func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, toolReq *model.ToolRequest) *model.Message {
-	if ac.maxDelegationDepth <= 0 {
+	if ac.getMaxDelegationDepth() <= 0 {
 		return nil
 	}
 
@@ -1965,19 +2442,19 @@ func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, tool
 	}
 
 	// The child would be one level deeper than the delegating session.
-	if parentDepth+1 <= ac.maxDelegationDepth {
+	if parentDepth+1 <= ac.getMaxDelegationDepth() {
 		return nil
 	}
 
 	log.FromContext(ctx).WithFields(log.Fields{
 		"sessionId":          toolReq.SessionId,
 		"delegatingDepth":    parentDepth,
-		"maxDelegationDepth": ac.maxDelegationDepth,
+		"maxDelegationDepth": ac.getMaxDelegationDepth(),
 	}).Info("delegation refused; would exceed maximum delegation depth")
 
 	return buildToolResultMessage(toolReq.ToolUseId, &model.ToolResponse{
 		ToolName: "delegation",
-		Result:   delegationDepthNotice(ac.maxDelegationDepth),
+		Result:   delegationDepthNotice(ac.getMaxDelegationDepth()),
 	}, nil)
 }
 
@@ -2199,10 +2676,10 @@ func buildToolResultMessage(toolUseId string, result *model.ToolResponse, toolEr
 	}
 }
 
-func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.AgentParameters) (err error) {
+func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatRequest, agent *model.Agent) (err error) {
 	logger := log.FromContext(ctx)
 
-	req.System = agent.Prompt // build system prompt for this agent
+	req.System = agent.EffectivePrompt()
 
 	allowedTools := map[string]struct{}{}
 	seenSkills := map[string]struct{}{}
@@ -2231,8 +2708,18 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 
 		seenSkills[skillName] = struct{}{}
 
-		if skill.AdditionalPrompt != "" {
-			prompts = append(prompts, skill.AdditionalPrompt)
+		// Grants nothing, but stays listed on the agent so re-enabling restores it.
+		if !skill.Enabled {
+			logger.WithFields(log.Fields{
+				"skillName": skillName,
+				"agentName": agent.Name,
+			}).Debug("agent holds a disabled skill, granting nothing for it")
+
+			continue
+		}
+
+		if guidance := skill.EffectiveGuidance(); guidance != "" {
+			prompts = append(prompts, guidance)
 		}
 
 		for _, tool := range skill.Tools {
@@ -2251,7 +2738,11 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 		tools = append(tools, tool)
 	}
 
-	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, ac.DelegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
+	ac.agentMu.RLock()
+	delegationLibrary := ac.DelegationLibrary
+	ac.agentMu.RUnlock()
+
+	req.ToolConfig, err = buildToolConfig(ac.FunctionLibrary, delegationLibrary, tools, agent.CanDelegateTo) // build tools for this agent
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"agentName": agent.Name,
@@ -2288,6 +2779,7 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 		// Collapse internal tool_result statuses (e.g. "rejected") onto the success/error
 		// vocabulary every model provider accepts. Done once here so no adapter has to.
 		m.ContentBlocks = wireCanonicalToolResults(m.ContentBlocks)
+		m.ContentBlocks = dedupeToolUses(m.ContentBlocks)
 
 		// Coalesce parallel tool calls: the results answering one multi-tool assistant
 		// turn are persisted as separate messages (one per tool, executed by its own
@@ -2316,6 +2808,31 @@ func cleanupMessages(messages []*model.Message) []*model.Message {
 	}
 
 	return msgs
+}
+
+// dedupeToolUses collapses tool_use blocks sharing an id: a provider that repeats a
+// call's header can leave the same id stored more than once, usually with only the
+// later block carrying input. The last block with input wins and lands in the first
+// block's position, so every provider sees one call per id and a header-only repeat
+// can't erase the arguments. The UI's dedupeToolUseBlocks does the same for rendering.
+func dedupeToolUses(blocks []model.ContentBlock) []model.ContentBlock {
+	first := make(map[string]int)
+	out := make([]model.ContentBlock, 0, len(blocks))
+	for _, b := range blocks {
+		if b.Type != "tool_use" || b.Id == "" {
+			out = append(out, b)
+			continue
+		}
+		if i, seen := first[b.Id]; seen {
+			if len(b.Input) > 0 {
+				out[i] = b
+			}
+			continue
+		}
+		first[b.Id] = len(out)
+		out = append(out, b)
+	}
+	return out
 }
 
 // wireCanonicalToolResults returns content blocks whose tool_result statuses are

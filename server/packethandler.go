@@ -35,10 +35,12 @@ func RegisterPacketRoutes(srv *Server, r chi.Router, prefix string) {
 // @Security     bearer[jobs/read]
 // @Param        jobId  path  integer  true  "The job ID" example(1004)
 // @Param        unwrap  query  boolean  false  "If true, and if the stream data is eligible the stream data will be unwrapped. An example of wrapped stream data is VXLAN packet data." example(true)
+// @Param        excludeErrors  query  boolean  false  "If true, packet decode failures will be excluded from the returned results." example(true)
 // @Param        offset  query  integer  false  "The starting offset of the packet to retrieve; used for paging large packet results. Defaults to 0." example(100)
 // @Param        count  query  integer  false  "The maximum number of packets to retrieve; used for paging large packet results. Defaults to 5000, or an optional server-side configuration value/" example(100)
 // @Produce      json
 // @Success      200  {array}  model.Packet       "The array of retrieved Packet objects"
+// @Header       200  {string}  X-Decode-Errors-Present  "Indicates whether any packets in the PCAP capture encountered decode failures (true or false)"
 // @Failure      400         "The provided input object or parameters are malformed or invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      404         "The job was not found"
@@ -63,6 +65,11 @@ func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 		unwrap = false
 	}
 
+	excludeErrors, err := strconv.ParseBool(r.URL.Query().Get("excludeErrors"))
+	if err != nil {
+		excludeErrors = false
+	}
+
 	offset, err := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 32)
 	if offset <= 0 || err != nil {
 		offset = 0
@@ -77,10 +84,16 @@ func (h *PacketHandler) getPackets(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	packets, err := h.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap)
+	packets, hasErrors, err := h.server.Datastore.GetPackets(ctx, int(jobId), int(offset), count, unwrap, excludeErrors)
 	if err != nil {
 		web.Respond(w, r, http.StatusNotFound, err)
 		return
+	}
+
+	if hasErrors {
+		w.Header().Set("X-Decode-Errors-Present", "true")
+	} else {
+		w.Header().Set("X-Decode-Errors-Present", "false")
 	}
 
 	web.Respond(w, r, http.StatusOK, packets)

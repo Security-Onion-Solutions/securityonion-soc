@@ -103,10 +103,17 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
 	uploadLimit := int64(h.server.Config.ClientParams.GridParams.MaxUploadSize)
 	if uploadLimit == 0 {
 		uploadLimit = 25 * 1024 * 1024 // 25 MiB
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, uploadLimit)
 
 	err := r.ParseMultipartForm(uploadLimit)
 	if err != nil {
@@ -172,15 +179,6 @@ func (h *GridMembersHandler) postImport(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ext = ext[1:]
-
-	// auth check before we do anything async, before we even process the upload,
-	// if the user is authorized to complete this action
-	// TODO: When we re-evaluate the permissions needed to SendFile, we should
-	// add that same permission check here
-	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
-		return
-	}
 
 	baseTargetDir := h.server.Config.ImportUploadDir // "/opt/sensoroni/uploads/"
 	targetDir := filepath.Join(baseTargetDir, "processing", id)

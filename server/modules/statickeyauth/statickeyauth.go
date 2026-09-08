@@ -32,13 +32,9 @@ func (skmodule *StaticKeyAuth) Init(cfg module.ModuleConfig) error {
 	skmodule.config = cfg
 	key, err := module.GetString(cfg, "apiKey")
 	if err == nil {
-		var anonymousCidr string
-		anonymousCidr, err = module.GetString(cfg, "anonymousCidr")
+		err = skmodule.impl.Init(key)
 		if err == nil {
-			err = skmodule.impl.Init(key, anonymousCidr)
-			if err == nil {
-				err = skmodule.server.Host.AddPreprocessor(skmodule.impl)
-			}
+			err = skmodule.server.Host.AddPreprocessor(skmodule.impl)
 		}
 	}
 	return err

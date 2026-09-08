@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -19,6 +20,7 @@ import (
 type Userstore interface {
 	GetUsers(ctx context.Context) ([]*model.User, error)
 	GetUserById(ctx context.Context, id string) (*model.User, error)
+	ValidateSession(ctx context.Context, req *http.Request) (*http.Response, error)
 }
 
 //go:generate mockgen -destination mock/mock_userstore.go -package mock . Userstore

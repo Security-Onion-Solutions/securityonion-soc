@@ -8,6 +8,7 @@ package kratos
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -17,8 +18,9 @@ import (
 )
 
 type KratosUserstore struct {
-	server *server.Server
-	client *web.Client
+	server       *server.Server
+	client       *web.Client
+	publicClient *web.Client
 }
 
 func NewKratosUserstore(server *server.Server) *KratosUserstore {
@@ -27,15 +29,33 @@ func NewKratosUserstore(server *server.Server) *KratosUserstore {
 	}
 }
 
-func (kratos *KratosUserstore) Init(url string) error {
-	kratos.client = web.NewClient(url, true)
+func (kratos *KratosUserstore) Init(adminUrl string, publicUrl string) error {
+	kratos.client = web.NewClient(adminUrl, true)
+	kratos.publicClient = web.NewClient(publicUrl, true)
 	return nil
 }
 
-func (kratos *KratosUserstore) fetchUser(id string) (*KratosUser, error) {
-	kratosUser := &KratosUser{}
-	_, err := kratos.client.SendObject("GET", "/identities/"+id, "", &kratosUser, false)
-	return kratosUser, err
+func (kratos *KratosUserstore) ValidateSession(ctx context.Context, req *http.Request) (*http.Response, error) {
+	client := kratos.publicClient
+	if client == nil {
+		client = kratos.client
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", client.FormatUrl(client.HostUrl(), "sessions/whoami"), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for key, values := range req.Header {
+		for _, value := range values {
+			httpReq.Header.Add(key, value)
+		}
+	}
+
+	for _, cookie := range req.Cookies() {
+		httpReq.AddCookie(cookie)
+	}
+
+	return client.Do(httpReq)
 }
 
 func (kratos *KratosUserstore) GetUserById(ctx context.Context, id string) (user *model.User, err error) {

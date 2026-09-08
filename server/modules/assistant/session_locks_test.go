@@ -228,6 +228,12 @@ func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSes
 	}
 	return []*model.AssistantSession{{SessionId: "default-session"}}, nil
 }
+func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId string) (bool, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, exists := f.msgs[sessionId]
+	return exists, exists, nil
+}
 func (f *fakeAssistantstore) CreateSession(_ context.Context, _ *model.AssistantSession) error {
 	return nil
 }
@@ -235,6 +241,15 @@ func (f *fakeAssistantstore) UpdateSessionTags(_ context.Context, _ string, _ []
 	return nil
 }
 func (f *fakeAssistantstore) DeleteSession(_ context.Context, _ string) error { return nil }
+func (f *fakeAssistantstore) FindSessionsPendingMemoryScan(_ context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
+	return nil, nil
+}
+func (f *fakeAssistantstore) UpdateSessionMemoryScanIndex(_ context.Context, _ string, _ int) error {
+	return nil
+}
+func (f *fakeAssistantstore) IncrementSessionMemoryErrors(_ context.Context, _ string) error {
+	return nil
+}
 func (f *fakeAssistantstore) GetUsage(_ context.Context, _, _ time.Time) ([]*model.UserUsage, error) {
 	return nil, nil
 }
