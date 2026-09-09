@@ -227,3 +227,44 @@ func TestIsProcessRunning(tester *testing.T) {
 	node.ProcessJson = `{"containers":[{"Name":"so-test", "Status":"running"}]}`
 	assert.True(tester, node.IsProcessRunning("so-test"))
 }
+
+func TestNonCriticalNode(tester *testing.T) {
+	roles := []struct {
+		role            string
+		nonCriticalNode bool
+	}{
+		{NodeRoleDesktop, true},
+		{NodeRoleIdh, true},
+		{"so-eval", false},
+		{"so-manager", false},
+		{"so-standalone", false},
+		{"so-sensor", false},
+		{"", false},
+	}
+
+	for _, r := range roles {
+		for _, enhanced := range []bool{false, true} {
+			node := NewNode("")
+			node.Role = r.role
+			node.UpdateOverallStatus(enhanced)
+			assert.Equal(tester, r.nonCriticalNode, node.NonCriticalNode)
+		}
+	}
+}
+
+func TestIsManager(tester *testing.T) {
+	node := NewNode("")
+	assert.False(tester, node.IsManager())
+	node.Role = "so-standalone"
+	assert.True(tester, node.IsManager())
+	node.Role = "so-manager"
+	assert.True(tester, node.IsManager())
+	node.Role = "so-eval"
+	assert.True(tester, node.IsManager())
+	node.Role = "so-import"
+	assert.True(tester, node.IsManager())
+	node.Role = "so-managersearch"
+	assert.True(tester, node.IsManager())
+	node.Role = "so-sensor"
+	assert.False(tester, node.IsManager())
+}

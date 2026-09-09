@@ -13,6 +13,7 @@ import (
 )
 
 const NodeRoleDesktop = "so-desktop"
+const NodeRoleIdh = "so-idh"
 const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
@@ -204,7 +205,7 @@ func (node *Node) updateStatusComponent(currentState string, newState string) st
 }
 
 func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
-	node.NonCriticalNode = node.Role == NodeRoleDesktop
+	node.NonCriticalNode = node.Role == NodeRoleDesktop || node.Role == NodeRoleIdh
 	newStatus := NodeStatusUnknown
 	newStatus = node.updateStatusComponent(newStatus, node.ConnectionStatus)
 	if enhancedStatusEnabled {
