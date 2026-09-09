@@ -8,6 +8,7 @@
 
 globalThis.AssistantUtils = (function() {
   const SESTAG_SHARED = 'shared';
+  const SESTAG_INCOGNITO = 'incognito';
   const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
 
   return {
@@ -391,6 +392,24 @@ globalThis.AssistantUtils = (function() {
     },
     messageClassesFromTags(tags) {
       return tags.map(tag => 'msgTag-' + tag);
+    },
+    isIncognitoLocked() {
+      return this.messages.some(m => m.role === 'user');
+    },
+    isIncognito() {
+      const session = this.chatHistoryById?.[this.currentChatId];
+      if (session) return (session.tags || []).includes(SESTAG_INCOGNITO);
+      return this.incognito;
+    },
+    toggleIncognito() {
+      if (this.isIncognitoLocked()) return;
+      this.incognito = !this.incognito;
+    },
+    // Carry the incognito tag until the server has the session, so a retry after a
+    // failed first send still creates it incognito.
+    withIncognitoTag(tags) {
+      if (!this.incognito || this.chatHistoryById?.[this.currentChatId]) return tags;
+      return [...(tags || []), SESTAG_INCOGNITO];
     },
     async toggleSharedSession(chatId) {
       const session = this.chatHistoryById[chatId];

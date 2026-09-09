@@ -22,6 +22,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     chatHistory: [],
     chatHistoryById: {},
     currentChatId: null,
+    incognito: false,
     creditsRemaining: 0,
     creditsLoaded: false,
     // Per-session tool-execution state (one record per session id); replaces five

@@ -1474,6 +1474,12 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 							store.schemaPrefix + "session.tags": model.MemorySessionTags,
 						},
 					},
+					// Incognito sessions opted out of memory extraction at creation.
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.tags": model.SessionTagIncognito,
+						},
+					},
 				},
 			},
 		},

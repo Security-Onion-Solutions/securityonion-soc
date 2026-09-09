@@ -200,6 +200,64 @@ func TestChatInSession_SurvivesRequestCancellation(t *testing.T) {
 	assert.Len(t, response, 1)
 }
 
+func TestCreateSessionIfNeeded_IncognitoTag(t *testing.T) {
+	const sessionId = "session-incognito"
+
+	testCases := []struct {
+		name      string
+		streaming bool
+		incognito bool
+		wantTags  []string
+	}{
+		{name: "non-streaming incognito", incognito: true, wantTags: []string{model.SessionTagIncognito}},
+		{name: "non-streaming default", incognito: false, wantTags: nil},
+		{name: "streaming incognito", streaming: true, incognito: true, wantTags: []string{model.SessionTagIncognito}},
+		{name: "streaming default", streaming: true, incognito: false, wantTags: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockIO := detectionsmock.NewMockIOManager(ctrl)
+			store := servermock.NewMockAssistantstore(ctrl)
+
+			store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+			store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, s *model.AssistantSession) error {
+					assert.Equal(t, tc.wantTags, s.Tags)
+					return nil
+				})
+			store.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+			ac := newChatInSessionCoordinator(t, store, mockIO, "https://api.example.com")
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+			incMsg := &model.IncomingMessage{Msg: "hi", SessionId: sessionId, Model: "test-model@MyAdapter"}
+			if tc.incognito {
+				incMsg.Tags = []string{model.SessionTagIncognito}
+			}
+
+			if tc.streaming {
+				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(strings.NewReader("data: stream")),
+				}, nil)
+				_, _, _, err := ac.ChatStreamInSession(ctx, incMsg, "", "")
+				assert.NoError(t, err)
+			} else {
+				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
+					StatusCode: 200,
+					Body: io.NopCloser(strings.NewReader(
+						`{"id":"resp1","role":"assistant","content":[{"type":"text","text":"ok"}]}`)),
+				}, nil)
+				_, err := ac.ChatInSession(ctx, incMsg, "", "")
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 	const sessionId = "session-cis-err"
 

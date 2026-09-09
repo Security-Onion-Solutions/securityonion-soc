@@ -144,6 +144,9 @@
 				<v-card-title id="chat-header" class="py-3 d-flex align-center" role="heading" aria-level="2">
 					<v-icon class="mr-2" data-aid="assistant_banner_chat_icon">fa-comments</v-icon>
 					<span class="mr-2">{{ i18n.chatTitle }}</span>
+					<v-icon class="mr-2" @click="toggleIncognito" @keydown.enter.space.stop="toggleIncognito" data-aid="assistant_banner_incognito_toggle" :disabled="isIncognitoLocked()" :title="i18n.assistantIncognitoTitle" :aria-label="isIncognito() ? i18n.ariaIncognitoOn : i18n.ariaIncognitoOff" role="button" tabindex="0">
+						{{ isIncognito() ? 'fa-mask' : 'fa-eye' }}
+					</v-icon>
 					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" @keydown.enter.space.stop="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle" :aria-label="(chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? i18n.ariaLinkToCase : i18n.ariaUnlinkFromCase" role="button" tabindex="0">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
@@ -343,6 +346,7 @@
 							<v-list-item-subtitle>
 								{{ formatChatDate(chat.lastUpdated) }}
 								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" title="Shared Session">fa-link</v-icon>
+							<v-icon v-if="chat?.tags?.includes('incognito')" class="ml-1 tiny-link-icon" :title="i18n.assistantIncognitoSession">fa-mask</v-icon>
 							</v-list-item-subtitle>
 							<template #append>
 								<v-btn id="chat-delete-button" icon variant="text" size="small" @click.stop="deleteChat(chat.sessionId)" data-aid="assistant_chat_history_delete" :aria-label="i18n.ariaDeleteChat">

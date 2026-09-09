@@ -1665,7 +1665,7 @@ func TestUpdateSessionReservedTag(t *testing.T) {
 	}
 
 	cases := []testCase{}
-	for _, tag := range model.MemorySessionTags {
+	for _, tag := range model.ReservedSessionTags {
 		cases = append(cases, testCase{Action: "add", Tag: tag}, testCase{Action: "remove", Tag: tag})
 	}
 
@@ -3111,6 +3111,16 @@ func TestDecodeIncomingMessageFiltersTags(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, []string{model.MessageTagContextCompression}, incMsg.Tags)
+}
+
+func TestDecodeIncomingMessageKeepsIncognitoTag(t *testing.T) {
+	body := `{"msg":"hi","sessionId":"s1","tags":["incognito","anything"]}`
+	req := httptest.NewRequest("POST", "/assistant/chat", bytes.NewBufferString(body))
+
+	incMsg, err := decodeIncomingMessage(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{model.SessionTagIncognito}, incMsg.Tags)
 }
 
 func TestStreamingAccepted(t *testing.T) {
