@@ -154,6 +154,10 @@ func ApplyAnnotations(setting *model.Setting, annotations map[string]interface{}
 			setting.AllowedNodeTypes = CastToStringArray(value)
 		}
 	}
+
+	if setting.File {
+		setting.Duplicates = false
+	}
 }
 
 // FlattenAnnotations recursively walks a nested map of annotations and flattens it into a map of setting ID to annotation properties.
@@ -261,7 +265,9 @@ func HydrateAnnotations(annotations map[string]map[string]interface{}, defaults 
 			ann["default"] = defVal
 		}
 
-		if isFile, _ := ann["file"].(bool); !isFile {
+		if isFile, _ := ann["file"].(bool); isFile {
+			ann["duplicates"] = false
+		} else {
 			if val, ok := ann["default"]; ok && val != nil {
 				if list, ok := val.([]interface{}); ok {
 					ann["default"] = FlattenInterfaceSliceToString(list)

@@ -156,3 +156,68 @@ func TestConfigHandler_putSyncModule_NoConfigstore(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	assert.Contains(t, w.Body.String(), "The request could not be processed.")
 }
+
+func TestConfigHandler_putSetting(t *testing.T) {
+	tests := []struct {
+		name           string
+		body           string
+		expectedStatus int
+		expectedErr    string
+	}{
+		{
+			name:           "Valid setting",
+			body:           `{"id":"soc.test","value":"hello"}`,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Valid duplicatedFromId",
+			body:           `{"id":"soc.test_dup","duplicatedFromId":"soc.test","value":"hello"}`,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Invalid setting id",
+			body:           `{"id":"soc test","value":"hello"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedErr:    web.GENERIC_ERROR_MESSAGE,
+		},
+		{
+			name:           "Invalid duplicatedFromId",
+			body:           `{"id":"soc.test_dup","duplicatedFromId":"soc test invalid","value":"hello"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedErr:    web.GENERIC_ERROR_MESSAGE,
+		},
+		{
+			name:           "Invalid minion id",
+			body:           `{"id":"soc.test","nodeId":"invalid node!","value":"hello"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedErr:    web.GENERIC_ERROR_MESSAGE,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := NewFakeAuthorizedServer(nil)
+			srv.Configstore = &FakeConfigstore{}
+
+			h := &ConfigHandler{
+				server: srv,
+			}
+
+			r := chi.NewRouter()
+			r.Put("/", h.putSetting)
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("PUT", "/", bytes.NewReader([]byte(tt.body)))
+			ctx := context.WithValue(req.Context(), web.ContextKeyRequestId, "test-request")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+			req = req.WithContext(ctx)
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedErr != "" {
+				assert.Contains(t, w.Body.String(), tt.expectedErr)
+			}
+		})
+	}
+}

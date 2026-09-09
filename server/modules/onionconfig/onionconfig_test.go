@@ -654,3 +654,116 @@ func TestUpdateSetting_UnknownSetting(t *testing.T) {
 		assert.Equal(t, "[SO_JINJA_SL_START] salt['cmd.run']('id > /tmp/pwn') [SO_JINJA_SL_END]", setting.Value)
 	})
 }
+
+func TestUpdateSetting_DuplicatedSetting(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir+"/local/pillar/myapp", 0755))
+	require.NoError(t, os.MkdirAll(dir+"/local/salt/myapp", 0755))
+
+	srv := server.NewFakeAuthorizedServer(nil)
+	ready := make(chan struct{})
+	close(ready)
+	oc := &OnionConfig{
+		server:       srv,
+		saltstackDir: dir,
+		ready:        ready,
+		annotations: map[string]map[string]interface{}{
+			"myapp.file_setting": {
+				"file":       true,
+				"duplicates": true,
+				"title":      "File Setting",
+			},
+			"myapp.nondup_setting": {
+				"file":       false,
+				"duplicates": false,
+				"title":      "Non-duplicatable Setting",
+			},
+			"myapp.valid_template": {
+				"file":        false,
+				"duplicates":  true,
+				"title":       "Valid Duplicatable Setting",
+				"description": "Template description",
+			},
+		},
+	}
+
+	t.Run("FileSettingRejected", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "myapp.arbitrary_file",
+			DuplicatedFromID: "myapp.file_setting",
+			Value:            "malicious content",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "file-backed settings cannot be duplicated")
+
+		// Verify file was NOT created in /local/salt
+		_, statErr := os.Stat(dir + "/local/salt/myapp/arbitrary_file")
+		assert.True(t, os.IsNotExist(statErr))
+	})
+
+	t.Run("NonDuplicatableSettingRejected", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "myapp.dup_from_nondup",
+			DuplicatedFromID: "myapp.nondup_setting",
+			Value:            "some value",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "does not allow duplication")
+	})
+
+	t.Run("NonExistentSourceRejected", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "myapp.dup_nonexistent",
+			DuplicatedFromID: "myapp.does_not_exist",
+			Value:            "some value",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found for duplication")
+	})
+
+	t.Run("MismatchedParentRejected", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "otherapp.arbitrary_key",
+			DuplicatedFromID: "myapp.valid_template",
+			Value:            "some value",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must share the same parent path")
+	})
+
+	t.Run("LeafWithSlashRejected", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "myapp.foo/bar",
+			DuplicatedFromID: "myapp.valid_template",
+			Value:            "some value",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid duplicated setting leaf name")
+	})
+
+	t.Run("ValidDuplicationSucceeds", func(t *testing.T) {
+		setting := &model.Setting{
+			Id:               "myapp.valid_duplicate",
+			DuplicatedFromID: "myapp.valid_template",
+			Value:            "customized value",
+		}
+
+		err := oc.UpdateSetting(context.Background(), setting, false)
+		assert.NoError(t, err)
+		assert.False(t, setting.File)
+		assert.Equal(t, "Template description", setting.Description)
+		assert.Equal(t, "Valid Duplicatable Setting", setting.Title)
+		assert.True(t, setting.Duplicates)
+		assert.Equal(t, "myapp.valid_template", setting.DuplicatedFromID)
+	})
+}

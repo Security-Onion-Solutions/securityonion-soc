@@ -180,9 +180,23 @@ func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting,
 
 	if settingDef == nil && setting.DuplicatedFromID != "" {
 		origSettings, origErr := c.loadAllSettings(ctx, setting.DuplicatedFromID)
-		if origErr == nil {
-			settingDef, _ = resolveExistingSetting(origSettings, setting.DuplicatedFromID, setting.NodeId)
+		if origErr != nil {
+			return fmt.Errorf("failed to load source setting %s for duplication: %w", setting.DuplicatedFromID, origErr)
 		}
+		origDef, _ := resolveExistingSetting(origSettings, setting.DuplicatedFromID, setting.NodeId)
+		if origDef == nil {
+			return fmt.Errorf("source setting %s not found for duplication", setting.DuplicatedFromID)
+		}
+		if origDef.File {
+			return errors.New("file-backed settings cannot be duplicated")
+		}
+		if !origDef.Duplicates {
+			return fmt.Errorf("setting %s does not allow duplication", setting.DuplicatedFromID)
+		}
+		if err := validateDuplicatedSettingId(setting.Id, origDef.Id); err != nil {
+			return err
+		}
+		settingDef = origDef
 	}
 
 	if settingDef == nil {
@@ -527,6 +541,7 @@ func (c *OnionConfig) loadAllSettings(ctx context.Context, filterId string) ([]*
 		if s.DuplicatedFromID != "" {
 			if ann, ok := c.annotations[s.DuplicatedFromID]; ok {
 				ApplyAnnotations(s, ann, nil)
+				s.File = false
 			}
 		}
 		ApplySensitiveMask(s)
@@ -603,5 +618,32 @@ func (c *OnionConfig) validateAllowedNodeTypes(ctx context.Context, setting *mod
 		}
 	}
 
+	return nil
+}
+
+func validateDuplicatedSettingId(newID, origID string) error {
+	if !model.IsValidSettingId(newID) {
+		return fmt.Errorf("invalid setting ID: %s", newID)
+	}
+
+	origLastDot := strings.LastIndex(origID, ".")
+	newLastDot := strings.LastIndex(newID, ".")
+
+	var origPrefix, newPrefix string
+	if origLastDot >= 0 {
+		origPrefix = origID[:origLastDot+1]
+	}
+	if newLastDot >= 0 {
+		newPrefix = newID[:newLastDot+1]
+	}
+
+	if origPrefix != newPrefix {
+		return fmt.Errorf("duplicated setting %s must share the same parent path as %s", newID, origID)
+	}
+
+	leaf := newID[len(newPrefix):]
+	if leaf == "" || strings.Contains(leaf, "/") {
+		return fmt.Errorf("invalid duplicated setting leaf name: %s", leaf)
+	}
 	return nil
 }
