@@ -340,7 +340,7 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 
 				items = append(items, responses.ResponseInputItemUnionParam{
 					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-						CallID: block.ToolResult.ToolUseId,
+						CallID: param.NewOpt(block.ToolResult.ToolUseId),
 						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
 							OfString: openai.String(output),
 						},
@@ -419,8 +419,8 @@ func pairToolOutputs(items []responses.ResponseInputItemUnionParam) []responses.
 	outputs := make(map[string]int, len(items))
 	for i, it := range items {
 		if it.OfFunctionCallOutput != nil {
-			if _, seen := outputs[it.OfFunctionCallOutput.CallID]; !seen {
-				outputs[it.OfFunctionCallOutput.CallID] = i
+			if _, seen := outputs[it.OfFunctionCallOutput.CallID.String()]; !seen {
+				outputs[it.OfFunctionCallOutput.CallID.String()] = i
 			}
 		}
 	}

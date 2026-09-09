@@ -25,7 +25,7 @@ require (
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/openai/openai-go/v3 v3.53.0
+	github.com/openai/openai-go/v3 v3.59.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/pierrec/lz4/v4 v4.1.29
 	github.com/pkg/errors v0.9.1
