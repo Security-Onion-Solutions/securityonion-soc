@@ -21,6 +21,7 @@ import (
 	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/pagination"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -472,7 +473,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
 				require.NotNil(t, item.OfFunctionCallOutput)
-				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID.Value)
 				assert.Equal(t, "completed", item.OfFunctionCallOutput.Status)
 				// Output should be the JSON marshaled content
 				assert.JSONEq(t, `{"temperature":72}`, item.OfFunctionCallOutput.Output.OfString.Or(""))
@@ -504,7 +505,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
 				require.NotNil(t, item.OfFunctionCallOutput)
-				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID.Value)
 				assert.Equal(t, "completed", item.OfFunctionCallOutput.Status)
 				// Error should be wrapped in error JSON format
 				assert.Contains(t, item.OfFunctionCallOutput.Output.OfString.Or(""), "API connection failed")
@@ -534,7 +535,7 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.Len(t, resp.OfInputItemList, 1)
 				item := resp.OfInputItemList[0]
 				require.NotNil(t, item.OfFunctionCallOutput)
-				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_123", item.OfFunctionCallOutput.CallID.Value)
 				assert.Equal(t, "{}", item.OfFunctionCallOutput.Output.OfString.Or(""))
 			},
 		},
@@ -677,11 +678,11 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
 				assert.Equal(t, "call_1", resp.OfInputItemList[1].OfFunctionCall.CallID)
 				require.NotNil(t, resp.OfInputItemList[2].OfFunctionCallOutput)
-				assert.Equal(t, "call_1", resp.OfInputItemList[2].OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_1", resp.OfInputItemList[2].OfFunctionCallOutput.CallID.Value)
 				require.NotNil(t, resp.OfInputItemList[3].OfFunctionCall)
 				assert.Equal(t, "call_2", resp.OfInputItemList[3].OfFunctionCall.CallID)
 				require.NotNil(t, resp.OfInputItemList[4].OfFunctionCallOutput)
-				assert.Equal(t, "call_2", resp.OfInputItemList[4].OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_2", resp.OfInputItemList[4].OfFunctionCallOutput.CallID.Value)
 			},
 		},
 		{
@@ -714,9 +715,9 @@ func TestConvertHistoryToOpenAI(t *testing.T) {
 				require.NotNil(t, resp.OfInputItemList[1].OfFunctionCall)
 				assert.Equal(t, "call_2", resp.OfInputItemList[1].OfFunctionCall.CallID)
 				require.NotNil(t, resp.OfInputItemList[2].OfFunctionCallOutput)
-				assert.Equal(t, "call_2", resp.OfInputItemList[2].OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_2", resp.OfInputItemList[2].OfFunctionCallOutput.CallID.Value)
 				require.NotNil(t, resp.OfInputItemList[3].OfFunctionCallOutput)
-				assert.Equal(t, "call_orphan", resp.OfInputItemList[3].OfFunctionCallOutput.CallID)
+				assert.Equal(t, "call_orphan", resp.OfInputItemList[3].OfFunctionCallOutput.CallID.Value)
 			},
 		},
 		{
@@ -2190,7 +2191,7 @@ func TestPairToolOutputs(t *testing.T) {
 		return responses.ResponseInputItemUnionParam{OfFunctionCall: &responses.ResponseFunctionToolCallParam{CallID: id, Name: "search", Arguments: "{}"}}
 	}
 	output := func(id string) responses.ResponseInputItemUnionParam {
-		return responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{CallID: id}}
+		return responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{CallID: param.NewOpt(id)}}
 	}
 	text := responses.ResponseInputItemUnionParam{OfInputMessage: &responses.ResponseInputItemMessageParam{Role: "user"}}
 	shape := func(items []responses.ResponseInputItemUnionParam) []string {
@@ -2200,7 +2201,7 @@ func TestPairToolOutputs(t *testing.T) {
 			case it.OfFunctionCall != nil:
 				out = append(out, "call:"+it.OfFunctionCall.CallID)
 			case it.OfFunctionCallOutput != nil:
-				out = append(out, "out:"+it.OfFunctionCallOutput.CallID)
+				out = append(out, "out:"+it.OfFunctionCallOutput.CallID.String())
 			default:
 				out = append(out, "text")
 			}
