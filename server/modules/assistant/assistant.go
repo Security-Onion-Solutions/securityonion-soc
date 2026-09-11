@@ -175,6 +175,9 @@ type AssistantCoordinator struct {
 	terminateReembed context.CancelCauseFunc
 	// Interrupts the scan pass currently running, if any; nil between passes.
 	terminateMemoryScan context.CancelCauseFunc
+	// Embed model selector the last pass verified the store against; empty until
+	// one completes, so every process start re-checks.
+	lastReembedModel string
 	// Published count of memories awaiting re-embedding.
 	staleMemories atomic.Int64
 	// Pace the re-embed pass and bound its embedding calls; tests shorten both.

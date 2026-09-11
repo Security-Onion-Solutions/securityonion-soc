@@ -353,6 +353,13 @@ func (s *Store) GetMemory(ctx context.Context, id string) (*model.Memory, error)
 	return scanMemoryRow(rows, nil)
 }
 
+func (s *Store) CountMemories(ctx context.Context) (int, error) {
+	count := 0
+	err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM memories`).Scan(&count)
+
+	return count, err
+}
+
 func (s *Store) CountStaleMemories(ctx context.Context, modelId string) (int, error) {
 	stale := 0
 	err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM memories WHERE model_id <> $1`, modelId).Scan(&stale)
