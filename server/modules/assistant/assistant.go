@@ -108,6 +108,35 @@ const (
 	CHAT_TURN_TIMEOUT = 3 * time.Minute
 )
 
+var (
+	DEFAULT_FILTER_EVENT_FIELDS = []string{
+		"@timestamp",
+		"client.name",
+		"destination.ip", "destination.port", "destination.geo.country_name",
+		"dns.query.name", "dns.query_name",
+		"event.action", "event.category", "event.module", "event.dataset", "event.outcome", "event.severity", "event.severity_label", "event.type",
+		"event_data.agent.name", "event_data.host.os.name",
+		"file.mime_type", "file.name",
+		"hash.md5", "hash.sha1",
+		"host.mac", "host.name", "host.os.name",
+		"http.method", "http.useragent", "http.virtual_host",
+		"log.id.uid",
+		"network.community_id", "network.protocol", "network.transport",
+		"notice.message",
+		"observer.name",
+		"process.name", "process.executable", "process.entity_id", "process.command_line", "process.Ext.ancestry",
+		"process.parent.entity_id", "process.parent.command_line",
+		"rule.category", "rule.name", "rule.uuid",
+		"software.name", "software.type", "software.version.unparsed",
+		"source.ip", "source.port", "source.geo.country_name",
+		"ssh.cypher_algorithm", "ssh.client", "ssh.server",
+		"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+		"user.name", "user.domain", "user.effective.name",
+		"weird.name",
+		"tags",
+	}
+)
+
 //go:embed SOSystemPrompt.bin
 var embeddedSystemPrompt []byte
 
@@ -191,6 +220,8 @@ type AssistantCoordinator struct {
 	// Decompressed embedded prompts, kept to rebuild a disabled memory role.
 	// Never serialized: Agent.Prompt and Skill.AdditionalPrompt are json:"-".
 	embeddedPrompts map[string]string
+
+	filterEventFields []string
 
 	detections.IOManager
 }
@@ -399,6 +430,11 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.applyMemoryAgents(memory)
 
 	ac.getPrompt()
+
+	toolsCfg, ok := config["tools"].(map[string]any)
+	if ok {
+		ac.filterEventFields = module.GetStringArrayDefault(toolsCfg, "filterEventFields", DEFAULT_FILTER_EVENT_FIELDS)
+	}
 
 	return err
 }
@@ -2898,4 +2934,79 @@ func isToolResultOnly(m *model.Message) bool {
 		}
 	}
 	return true
+}
+
+// filterEvents filters event fields to reduce payload size
+func (ac *AssistantCoordinator) FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
+	fields := append(slices.Clone(ac.filterEventFields), extraFields...)
+
+	filtered := make([]map[string]any, 0, len(events))
+
+	for _, event := range events {
+		filteredPayload := map[string]any{
+			"_id": event.Id,
+		}
+
+		// Copy only default fields starting with the Id field
+		for _, field := range fields {
+			// First try the field as-is (for non-nested fields)
+			if val, exists := event.Payload[field]; exists && val != nil {
+				filteredPayload[field] = val
+			} else if value := getNestedField(event.Payload, field); value != nil {
+				// Try nested field lookup
+				setNestedField(filteredPayload, field, value)
+			}
+		}
+
+		filtered = append(filtered, map[string]any{
+			"payload": filteredPayload,
+		})
+	}
+
+	return filtered
+}
+
+// getNestedField retrieves a value from a nested map using dot notation
+func getNestedField(data map[string]any, field string) any {
+	parts := splitDotNotation(field)
+	current := data
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			return current[part]
+		}
+
+		if next, ok := current[part].(map[string]any); ok {
+			current = next
+		} else {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// setNestedField sets a value in a nested map using dot notation
+func setNestedField(data map[string]any, field string, value any) {
+	parts := splitDotNotation(field)
+	current := data
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			current[part] = value
+			return
+		}
+
+		if _, ok := current[part]; !ok {
+			current[part] = make(map[string]any)
+		}
+
+		current = current[part].(map[string]any)
+	}
+}
+
+// splitDotNotation splits a field name by dots
+func splitDotNotation(field string) []string {
+	// Simple split for now. In production, handle escaped dots
+	return strings.Split(field, ".")
 }

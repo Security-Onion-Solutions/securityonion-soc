@@ -52,6 +52,7 @@ type AssistantManager interface {
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error
 	RemoveMemory(ctx context.Context, id string) error
+	FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any
 }
 
 type AssistantAdapter interface {

@@ -162,7 +162,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, req 
 		logger.WithError(err).Error("unable to execute playbook searches")
 	}
 
-	result.Result = simplifyPlaybooks(playbooks)
+	result.Result = simplifyPlaybooks(srv, playbooks)
 
 	return result, nil
 }
@@ -187,7 +187,7 @@ type SimpleQuestion struct {
 	TimedOut     bool    `json:"timedOut"`
 }
 
-func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
+func simplifyPlaybooks(server *server.Server, playbooks []*model.Playbook) []*SimplePlaybook {
 	simplePlaybooks := make([]*SimplePlaybook, 0, len(playbooks))
 	for _, pb := range playbooks {
 		simpleQuestions := make([]*SimpleQuestion, 0, len(pb.Questions))
@@ -198,7 +198,7 @@ func simplifyPlaybooks(playbooks []*model.Playbook) []*SimplePlaybook {
 					Question:     q.Question,
 					Context:      q.Context,
 					Range:        q.Range,
-					QueryResults: filterEvents(q.QueryResults, q.QueryFields...),
+					QueryResults: server.AssistantManager.FilterEvents(q.QueryResults, q.QueryFields...),
 					TimedOut:     q.QueryTimedOut,
 				})
 			}
