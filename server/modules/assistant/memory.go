@@ -265,6 +265,20 @@ func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 	}()
 }
 
+func (ac *AssistantCoordinator) embedModelVerified(selector string) bool {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	return ac.lastReembedModel != "" && ac.lastReembedModel == selector
+}
+
+func (ac *AssistantCoordinator) markEmbedModelVerified(selector string) {
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+
+	ac.lastReembedModel = selector
+}
+
 // Bounds one embedding call so a stalled gateway cannot park the pass forever.
 func (ac *AssistantCoordinator) embedWithTimeout(ctx context.Context, selector string, texts []string) (*model.EmbeddingResponse, error) {
 	timeout := ac.reembedCallTimeout
@@ -284,6 +298,10 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 	_, embedModel, err := ac.resolveMemoryAgent("Embed")
 	if err != nil {
 		logger.WithError(err).Error("unable to resolve Embed agent; not re-embedding")
+		return
+	}
+
+	if ac.embedModelVerified(embedModel.Selector()) {
 		return
 	}
 
@@ -310,6 +328,17 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 		ac.recordEmbedUsageSummary(recCtx, summary, passUsage, embedModel.Selector())
 	}()
 
+	stored, err := ac.store.CountMemories(ctx)
+	if err != nil {
+		logger.WithError(err).Error("unable to count memories; not re-embedding")
+		return
+	}
+
+	if stored == 0 {
+		ac.setStaleMemoryCount(0)
+		return
+	}
+
 	// model_id is whatever the provider reported, not the selector, so a probe
 	// embedding names the current model.
 	probe, err := ac.embedWithTimeout(ctx, embedModel.Selector(), []string{"probe"})
@@ -330,6 +359,7 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 	ac.setStaleMemoryCount(total)
 
 	if total == 0 {
+		ac.markEmbedModelVerified(embedModel.Selector())
 		return
 	}
 
@@ -402,6 +432,7 @@ func (ac *AssistantCoordinator) reembedStaleMemories(ctx context.Context) {
 	}
 
 	ac.setStaleMemoryCount(0)
+	ac.markEmbedModelVerified(embedModel.Selector())
 
 	logger.WithFields(log.Fields{
 		"reembedded":      done,
