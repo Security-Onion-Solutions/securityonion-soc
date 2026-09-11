@@ -145,7 +145,8 @@ func TestQueryEventsTool_Execute(t *testing.T) {
 
 			// Create mock server
 			mockServer := &server.Server{
-				Eventstore: mockEventstore,
+				Eventstore:       mockEventstore,
+				AssistantManager: &AssistantCoordinator{filterEventFields: DEFAULT_FILTER_EVENT_FIELDS},
 			}
 
 			// Create context with user ID
@@ -203,7 +204,10 @@ func TestQueryEventsTool_GroupByNullSentinel(t *testing.T) {
 				},
 			}
 
-			mockServer := &server.Server{Eventstore: mockEventstore}
+			mockServer := &server.Server{
+				Eventstore:       mockEventstore,
+				AssistantManager: &AssistantCoordinator{filterEventFields: DEFAULT_FILTER_EVENT_FIELDS},
+			}
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 
 			params, err := json.Marshal(map[string]any{

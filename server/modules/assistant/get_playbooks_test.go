@@ -503,6 +503,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 				Detectionstore:   mockDetectionstore,
 				Playbookstore:    mockPlaybookstore,
 				DetectionEngines: sync.Map{},
+				AssistantManager: &AssistantCoordinator{filterEventFields: DEFAULT_FILTER_EVENT_FIELDS},
 			}
 
 			// Store the Suricata detection engine for tests that use it

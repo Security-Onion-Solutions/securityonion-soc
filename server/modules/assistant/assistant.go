@@ -2938,13 +2938,9 @@ func isToolResultOnly(m *model.Message) bool {
 
 // filterEvents filters event fields to reduce payload size
 func (ac *AssistantCoordinator) FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
-	// Default fields from Python implementation
-	defaultFields := make([]string, len(ac.filterEventFields), len(ac.filterEventFields)+len(extraFields))
-	copy(ac.filterEventFields, defaultFields)
+	fields := append(slices.Clone(ac.filterEventFields), extraFields...)
 
 	filtered := make([]map[string]any, 0, len(events))
-
-	fields := append(defaultFields, extraFields...)
 
 	for _, event := range events {
 		filteredPayload := map[string]any{
