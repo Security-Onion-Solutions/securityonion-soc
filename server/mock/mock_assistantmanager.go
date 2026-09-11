@@ -147,6 +147,25 @@ func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, toolReq a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, toolReq)
 }
 
+// FilterEvents mocks base method.
+func (m *MockAssistantManager) FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
+	m.ctrl.T.Helper()
+	varargs := []any{events}
+	for _, a := range extraFields {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FilterEvents", varargs...)
+	ret0, _ := ret[0].([]map[string]any)
+	return ret0
+}
+
+// FilterEvents indicates an expected call of FilterEvents.
+func (mr *MockAssistantManagerMockRecorder) FilterEvents(events any, extraFields ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{events}, extraFields...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterEvents", reflect.TypeOf((*MockAssistantManager)(nil).FilterEvents), varargs...)
+}
+
 // Health mocks base method.
 func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()
