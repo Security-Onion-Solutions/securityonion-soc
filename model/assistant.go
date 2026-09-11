@@ -21,6 +21,7 @@ const (
 	SessionTagMemory    = "memory"
 	SessionTagEmbed     = "embed"
 	SessionTagReconcile = "reconcile"
+	SessionTagIncognito = "incognito"
 )
 
 // MemorySessionTags marks sessions created by the background memory pipeline
@@ -29,7 +30,13 @@ const (
 // is passed, and are never scanned for memories themselves.
 var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
 
-var ClientMessageTags = []string{MessageTagContextCompression}
+// ReservedSessionTags cannot be added or removed through the session tag endpoint.
+var ReservedSessionTags = slices.Concat(MemorySessionTags, []string{SessionTagIncognito})
+
+// ClientMessageTags are the tags a client may assert on an incoming message.
+// SessionTagIncognito is accepted here so the first message can mark its new
+// session incognito.
+var ClientMessageTags = []string{MessageTagContextCompression, SessionTagIncognito}
 
 // FilterClientTags drops any tag the client isn't allowed to assert.
 func FilterClientTags(tags []string) []string {

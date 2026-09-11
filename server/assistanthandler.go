@@ -748,7 +748,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	// don't allow any actions involving reserved tags
-	for _, reservedTag := range model.MemorySessionTags {
+	for _, reservedTag := range model.ReservedSessionTags {
 		if strings.EqualFold(reservedTag, updateReq.Tag) {
 			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
 

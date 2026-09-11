@@ -55,6 +55,8 @@ globalThis.AssistantStreaming = (function() {
         this.messages = [];
       }
 
+      tags = this.withIncognitoTag(tags);
+
       const floatingState = this.sessionToolState.get(this.currentChatId);
       if (this.messages.length > 1 && floatingState && floatingState.floatingTool) {
         floatingState.floatingTool.status = 'skipped';

@@ -1133,6 +1133,8 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	assert.Contains(t, string(body), `"memory"`)
 	assert.Contains(t, string(body), `"embed"`)
 	assert.Contains(t, string(body), `"reconcile"`)
+	// incognito sessions opted out of memory extraction
+	assert.Contains(t, string(body), `"term":{"so_session.tags":"incognito"}`)
 	// nil dontScanBefore adds no range clause
 	var pendingQuery map[string]any
 	assert.NoError(t, json.Unmarshal(body, &pendingQuery))

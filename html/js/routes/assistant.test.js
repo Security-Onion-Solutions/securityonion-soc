@@ -6330,6 +6330,113 @@ test('messageClassesFromTags', () => {
   expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
 });
 
+test('isIncognitoLocked', () => {
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  expect(comp.isIncognitoLocked()).toBe(false);
+
+  comp.messages.push({ role: 'user', content: 'hi' });
+  expect(comp.isIncognitoLocked()).toBe(true);
+});
+
+test('isIncognito prefers stored session tag over local toggle', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.incognito = true;
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['shared'] } };
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
+  comp.incognito = false;
+  expect(comp.isIncognito()).toBe(true);
+});
+
+test('isIncognito falls back to local toggle when session is not stored', () => {
+  comp.currentChatId = null;
+  comp.chatHistoryById = {};
+
+  comp.incognito = false;
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.incognito = true;
+  expect(comp.isIncognito()).toBe(true);
+});
+
+test('toggleIncognito flips only while unlocked', () => {
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  comp.incognito = false;
+
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(true);
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(false);
+
+  comp.messages.push({ role: 'user', content: 'hi' });
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(false);
+});
+
+test('loadNewChatScreen resets incognito', async () => {
+  comp.incognito = true;
+
+  await comp.loadNewChatScreen();
+
+  expect(comp.incognito).toBe(false);
+});
+
+test('withIncognitoTag adds tag until the server has the session', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.chatHistoryById = {};
+
+  comp.incognito = false;
+  expect(comp.withIncognitoTag(null)).toBe(null);
+
+  comp.incognito = true;
+  expect(comp.withIncognitoTag(null)).toEqual(['incognito']);
+  expect(comp.withIncognitoTag(['context_compression'])).toEqual(['context_compression', 'incognito']);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
+  expect(comp.withIncognitoTag(null)).toBe(null);
+});
+
+test('withIncognitoTag keeps tag on retry after a failed first send', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.chatHistoryById = {};
+  comp.incognito = true;
+  comp.messages = [
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'error' },
+  ];
+
+  expect(comp.isIncognitoLocked()).toBe(true);
+  expect(comp.withIncognitoTag(null)).toEqual(['incognito']);
+});
+
+test('sendMessage passes incognito tag on first message', async () => {
+  comp.newMessage = 'hello';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsLoaded = true;
+  comp.creditsRemaining = 10;
+  comp.incognito = true;
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  comp.currentChatId = null;
+  comp.isMessageTooLong = false;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.generateChatId = jest.fn().mockReturnValue(fakeSessionId);
+  comp.saveCurrentChatId = jest.fn();
+  comp.updateUrlWithSessionId = jest.fn();
+  comp.scrollToBottom = jest.fn();
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+
+  await comp.sendMessage();
+
+  expect(comp.callAIAPI).toHaveBeenCalledWith('hello', ['incognito']);
+});
+
 test('toggleSharedSession', async () => {
   const _updateSessionTag = comp.updateSessionTag;
   const _loadStoredChats = comp.loadStoredChats;

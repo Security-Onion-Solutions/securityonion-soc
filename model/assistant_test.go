@@ -21,6 +21,17 @@ func TestApplyChatOptsWithMemories(t *testing.T) {
 	assert.False(t, ApplyChatOpts().IncludeMemories)
 }
 
+func TestFilterClientTags(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, FilterClientTags(nil))
+	assert.Empty(t, FilterClientTags([]string{}))
+	assert.Equal(t,
+		[]string{MessageTagContextCompression, SessionTagIncognito},
+		FilterClientTags([]string{MessageTagContextCompression, "tool_result", SessionTagIncognito, "anything"}))
+	assert.Empty(t, FilterClientTags([]string{"tool_result", SessionTagMemory}))
+}
+
 func TestMemoryOperationsRemoveInvalid(t *testing.T) {
 	t.Parallel()
 
