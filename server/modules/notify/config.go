@@ -34,6 +34,7 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 					destName := module.GetStringDefault(destMap, "name", destKey)
 					destType := module.GetStringDefault(destMap, "type", "")
 					destEnabled := module.GetBoolDefault(destMap, "enabled", true)
+					destScheduleID := module.GetStringDefault(destMap, "scheduleId", "")
 					var params map[string]interface{}
 					if p, ok := destMap["params"].(map[string]interface{}); ok {
 						params = p
@@ -41,10 +42,11 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 						params = make(map[string]interface{})
 					}
 					config.Destinations[destKey] = model.DestinationConfig{
-						Name:    destName,
-						Type:    destType,
-						Enabled: destEnabled,
-						Params:  params,
+						Name:       destName,
+						Type:       destType,
+						Enabled:    destEnabled,
+						ScheduleID: destScheduleID,
+						Params:     params,
 					}
 				}
 			}

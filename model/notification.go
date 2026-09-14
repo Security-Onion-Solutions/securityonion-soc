@@ -84,6 +84,8 @@ type DestinationConfig struct {
 	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,msteams,pagerduty,webhook"`
 	// Indicates whether this destination is currently active and receiving alerts.
 	Enabled bool `json:"enabled" example:"true"`
+	// The ID of the reusable activation schedule linked to this destination.
+	ScheduleID string `json:"scheduleId,omitempty" example:"after-hours-and-weekends"`
 	// Channel-specific driver parameters (e.g. webhook URLs, hostnames, credentials).
 	Params map[string]interface{} `json:"params,omitempty"`
 }
