@@ -254,6 +254,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
           allowedSkills: a.allowedSkills || [],
           canDelegateTo: a.canDelegateTo || [],
           persona: a.personaAddendum || '',
+          maxConcurrentInstances: a.maxConcurrentInstances || 0,
         };
       });
     },
@@ -342,6 +343,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
           model: a.modelSelector || '',
           canDelegateTo: a.canDelegateTo || [],
           persona: a.persona || '',
+          maxConcurrentInstances: a.maxConcurrentInstances || 0,
         };
       }
       return {
@@ -353,6 +355,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         canDelegateTo: a.canDelegateTo || [],
         description: a.description || '',
         persona: a.persona || '',
+        maxConcurrentInstances: a.maxConcurrentInstances || 0,
       };
     },
     skillPayload(s) {
@@ -574,6 +577,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         allowedSkills: (agent.allowedSkills || []).slice(),
         canDelegateTo: (agent.canDelegateTo || []).slice(),
         persona: agent.persona || '',
+        maxConcurrentInstances: agent.maxConcurrentInstances || 0,
       };
       await this.persistAgent(copy, this.agents.concat([copy]));
     },
@@ -604,6 +608,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         // the agent itself; saving rewrites those agents' canDelegateTo.
         delegators: [],
         persona: '',
+        maxConcurrentInstances: 0,
       };
       this.createAgentDialog = true;
     },
