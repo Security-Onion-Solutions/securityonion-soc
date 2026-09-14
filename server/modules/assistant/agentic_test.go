@@ -300,6 +300,15 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
+	// Notify ships defined but granted to nobody: an admin decides which agent gets it.
+	assert.Equal(t, []string{"send_notification"}, ac.SkillLibrary["Notify"].Tools)
+	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
+	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
+	assert.Contains(t, ac.builtinSkills, "Notify")
+	for name, agent := range ac.agents {
+		assert.NotContains(t, agent.AllowedSkills, "Notify", name)
+	}
+
 	// Delegate tools are registered under both the agent name and the
 	// sanitized tool name.
 	for _, key := range []string{

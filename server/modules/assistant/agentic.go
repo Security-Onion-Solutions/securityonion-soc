@@ -290,7 +290,7 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.Agent, map[str
 			Description:     sa.Description,
 			PersonaAddendum: sa.Persona,
 			// Absent means unchanged, which for a new entry means enabled.
-			Enabled: sa.Enabled == nil || *sa.Enabled,
+			Enabled:                sa.Enabled == nil || *sa.Enabled,
 			MaxConcurrentInstances: max(sa.MaxConcurrentInstances, 0),
 		}
 		if strings.TrimSpace(sa.Model) != "" {
@@ -388,6 +388,12 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 			Name:             "Reports",
 			Tools:            []string{"query_reports", "update_custom_report"},
 			AdditionalPrompt: prompts["prompt_skill_reports"],
+		},
+		// Granted to no built-in agent yet; an admin can add it to a custom agent.
+		"Notify": {
+			Name:             "Notify",
+			Tools:            []string{"send_notification"},
+			AdditionalPrompt: prompts["prompt_skill_notify"],
 		},
 	}
 
