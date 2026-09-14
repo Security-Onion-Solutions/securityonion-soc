@@ -600,6 +600,8 @@ type StoredAgent struct {
 	Description   string   `json:"description" example:"Analyzes suspicious binaries and scripts"`
 	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
 	Persona string `json:"persona" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // StoredSkill is one skill in the "assistant.skills" setting, following the same
@@ -631,6 +633,8 @@ type Agent struct {
 	Enabled bool `json:"enabled" example:"true"`
 	// Admin-authored persona; exposed because an admin wrote it.
 	PersonaAddendum string `json:"personaAddendum" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // EffectivePrompt is the built-in prompt with the admin persona appended; either

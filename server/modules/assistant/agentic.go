@@ -291,6 +291,7 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.Agent, map[str
 			PersonaAddendum: sa.Persona,
 			// Absent means unchanged, which for a new entry means enabled.
 			Enabled: sa.Enabled == nil || *sa.Enabled,
+			MaxConcurrentInstances: max(sa.MaxConcurrentInstances, 0),
 		}
 		if strings.TrimSpace(sa.Model) != "" {
 			mapping[sa.Name] = sa.Model
