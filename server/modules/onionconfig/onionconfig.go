@@ -161,6 +161,40 @@ func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.
 	return Sort(Filter(settings, advanced)), err
 }
 
+func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	if err := c.waitReady(ctx); err != nil {
+		return nil, err
+	}
+	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		return nil, err
+	}
+
+	if c.store != nil {
+		row, err := c.store.GetSetting(ctx, id, "")
+		if err == nil && row != nil {
+			s := dbRowToSetting(*row)
+			if ann, ok := c.annotations[s.Id]; ok {
+				ApplyAnnotations(s, ann, nil)
+			}
+			ApplySensitiveMask(s)
+			return s, nil
+		}
+	}
+
+	settings, err := c.loadAllSettings(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, s := range settings {
+		if s.Id == id && s.NodeId == "" {
+			return s, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {
 	if err = c.waitReady(ctx); err != nil {
 		return err

@@ -29,6 +29,10 @@ func (f *FakeConfigstore) GetSettings(ctx context.Context, advanced bool) ([]*mo
 	return nil, nil
 }
 
+func (f *FakeConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return nil, nil
+}
+
 func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
 	return nil
 }
