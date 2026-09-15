@@ -2156,6 +2156,7 @@ func (ac *AssistantCoordinator) loadTurnSession(ctx context.Context, sessionId s
 		model.GetSessionsWithSessionId(sessionId),
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithMessageMeta(false),
+		model.GetSessionsWithAutomationSessions(true),
 	}
 	if ac.getMaxSubSessionTokens() > 0 {
 		opts = append(opts, model.GetSessionsWithUsage(true))
@@ -2647,6 +2648,7 @@ func (ac *AssistantCoordinator) loadSession(ctx context.Context, sessionId strin
 	sessions, err := ac.srv.Assistantstore.GetSessions(ctx,
 		model.GetSessionsWithSessionId(sessionId),
 		model.GetSessionsWithMessageMeta(false),
+		model.GetSessionsWithAutomationSessions(true),
 	)
 	if err != nil || len(sessions) == 0 {
 		return nil

@@ -71,13 +71,14 @@ func (mr *MockAssistantstoreMockRecorder) DeleteSession(arg0, arg1 any) *gomock.
 }
 
 // DoesUserOwnSession mocks base method.
-func (m *MockAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (bool, bool, error) {
+func (m *MockAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (bool, bool, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DoesUserOwnSession", ctx, userId, sessionId)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret2, _ := ret[2].(bool)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // DoesUserOwnSession indicates an expected call of DoesUserOwnSession.

@@ -3,15 +3,16 @@ package model
 import "time"
 
 type GetSessionsOpts struct {
-	includeDeleted        bool
-	includeMemorySessions bool
-	userId                string
-	sessionId             string
-	usage                 bool
-	descendants           bool
-	skipMessageMeta       bool
-	start                 time.Time
-	end                   time.Time
+	includeDeleted            bool
+	includeMemorySessions     bool
+	includeAutomationSessions bool
+	userId                    string
+	sessionId                 string
+	usage                     bool
+	descendants               bool
+	skipMessageMeta           bool
+	start                     time.Time
+	end                       time.Time
 }
 
 func (gso *GetSessionsOpts) IncludeDeleted() bool {
@@ -55,6 +56,15 @@ func (gso *GetSessionsOpts) IncludeMemorySessions() bool {
 	return gso.includeMemorySessions
 }
 
+// IncludeAutomationSessions reports whether sessions created by an automation run
+// (SessionTagAutomation) should be returned. Off by default so scheduled runs do not
+// swamp the configured owner's conversation list; every lookup by session id turns it
+// on, because the runner, the live view and clone-and-resume all read by id. A new
+// call site that forgets it sees zero rows rather than an error.
+func (gso *GetSessionsOpts) IncludeAutomationSessions() bool {
+	return gso.includeAutomationSessions
+}
+
 type GetSessionsOpt func(*GetSessionsOpts)
 
 func GetSessionsWithIncludeDeleted(includeDeleted bool) GetSessionsOpt {
@@ -66,6 +76,12 @@ func GetSessionsWithIncludeDeleted(includeDeleted bool) GetSessionsOpt {
 func GetSessionsWithMemorySessions(includeMemorySessions bool) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
 		gso.includeMemorySessions = includeMemorySessions
+	}
+}
+
+func GetSessionsWithAutomationSessions(includeAutomationSessions bool) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.includeAutomationSessions = includeAutomationSessions
 	}
 }
 
