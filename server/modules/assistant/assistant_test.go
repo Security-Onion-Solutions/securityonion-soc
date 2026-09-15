@@ -4202,7 +4202,7 @@ func TestAssistantCoordinator_newDelegationSession_Depth(t *testing.T) {
 
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 	mockAssistantstore.EXPECT().
-		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+		GetSessions(gomock.Any(), gomock.Any()).
 		Return([]*model.AssistantSession{{SessionId: "parent", Depth: 2, Model: "m@A"}}, nil)
 
 	ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
@@ -4241,7 +4241,7 @@ func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 			if tc.expectLookup {
 				mockAssistantstore.EXPECT().
-					GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetSessions(gomock.Any(), gomock.Any()).
 					Return([]*model.AssistantSession{{SessionId: "s", Depth: tc.parentDepth}}, nil)
 			}
 

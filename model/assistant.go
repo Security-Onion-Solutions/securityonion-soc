@@ -18,10 +18,12 @@ import (
 const (
 	MessageTagContextCompression = "context_compression"
 
-	SessionTagMemory    = "memory"
-	SessionTagEmbed     = "embed"
-	SessionTagReconcile = "reconcile"
-	SessionTagIncognito = "incognito"
+	SessionTagMemory     = "memory"
+	SessionTagEmbed      = "embed"
+	SessionTagReconcile  = "reconcile"
+	SessionTagIncognito  = "incognito"
+	SessionTagShared     = "shared"
+	SessionTagAutomation = "automation"
 )
 
 // MemorySessionTags marks sessions created by the background memory pipeline
@@ -31,7 +33,13 @@ const (
 var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
 
 // ReservedSessionTags cannot be added or removed through the session tag endpoint.
-var ReservedSessionTags = slices.Concat(MemorySessionTags, []string{SessionTagIncognito})
+// SessionTagShared is deliberately absent: sharing and un-sharing is the action that
+// endpoint exists for.
+var ReservedSessionTags = slices.Concat(MemorySessionTags, []string{SessionTagIncognito, SessionTagAutomation})
+
+// AutomationSessionTags are stamped on every session an automation run creates.
+// Callers assigning this to a session must slices.Clone it.
+var AutomationSessionTags = []string{SessionTagAutomation, SessionTagShared}
 
 // ClientMessageTags are the tags a client may assert on an incoming message.
 // SessionTagIncognito is accepted here so the first message can mark its new
