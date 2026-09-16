@@ -96,10 +96,10 @@ func (t *DelegateTool) GetSchema() model.JSONSchema {
 }
 
 type DelegateArgs struct {
-	Objective      string `json:"objective"`
-	Context        string `json:"context"`
-	ExpectedOutput string `json:"expected_output"`
-	Constraints    string `json:"constraints,omitempty"`
+	Objective      flexibleString `json:"objective"`
+	Context        flexibleString `json:"context"`
+	ExpectedOutput flexibleString `json:"expected_output"`
+	Constraints    flexibleString `json:"constraints,omitempty"`
 }
 
 func (t *DelegateTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {

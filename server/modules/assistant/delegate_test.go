@@ -100,3 +100,58 @@ func TestDelegateTool_ExecuteBadParams(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
+
+func TestDelegateTool_TolerantParamTypes(t *testing.T) {
+	testCases := []struct {
+		name     string
+		params   string
+		expected string
+	}{
+		{
+			name:     "empty array",
+			params:   `{"objective":"o","context":"c","expected_output":"e","constraints":[]}`,
+			expected: "Objective: o\n\nContext: c\n\nExpected Output: e\n\nConstraints: ",
+		},
+		{
+			name:     "array of strings",
+			params:   `{"objective":"o","context":"c","expected_output":"e","constraints":["read only","under 5 minutes"]}`,
+			expected: "Objective: o\n\nContext: c\n\nExpected Output: e\n\nConstraints: read only\nunder 5 minutes",
+		},
+		{
+			name:     "array with mixed scalars",
+			params:   `{"objective":"o","context":"c","expected_output":"e","constraints":["read only",5,true]}`,
+			expected: "Objective: o\n\nContext: c\n\nExpected Output: e\n\nConstraints: read only\n5\ntrue",
+		},
+		{
+			name:     "null",
+			params:   `{"objective":"o","context":"c","expected_output":"e","constraints":null}`,
+			expected: "Objective: o\n\nContext: c\n\nExpected Output: e\n\nConstraints: ",
+		},
+		{
+			name:     "object",
+			params:   `{"objective":"o","context":"c","expected_output":"e","constraints":{"budget":"1h"}}`,
+			expected: "Objective: o\n\nContext: c\n\nExpected Output: e\n\nConstraints: {\"budget\":\"1h\"}",
+		},
+		{
+			name:     "array in a required field",
+			params:   `{"objective":["find DNS beacons"],"context":"c","expected_output":"e"}`,
+			expected: "Objective: find DNS beacons\n\nContext: c\n\nExpected Output: e\n\nConstraints: ",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tool := NewDelegateTool("Hunter", "Hunter", "desc")
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+			result, err := tool.Execute(ctx, &server.Server{}, &model.ToolRequest{
+				Params: json.RawMessage(testCase.params),
+			})
+			assert.NoError(t, err)
+
+			kickoff, ok := result.Result.(model.DelegationKickoff)
+			assert.True(t, ok)
+			assert.Equal(t, testCase.expected, kickoff.Objective)
+		})
+	}
+}

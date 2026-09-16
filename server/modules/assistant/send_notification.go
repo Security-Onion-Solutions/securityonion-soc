@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -209,21 +208,12 @@ func stringifyValues(values map[string]any) map[string]string {
 			continue
 		}
 
-		switch typed := value.(type) {
-		case string:
-			stringified[key] = typed
-		case bool:
-			stringified[key] = strconv.FormatBool(typed)
-		case float64:
-			// 'f' rather than 'g' so a large count stays 1000000 instead of 1e+06.
-			stringified[key] = strconv.FormatFloat(typed, 'f', -1, 64)
-		default:
-			encoded, err := json.Marshal(typed)
-			if err != nil {
-				continue
-			}
-			stringified[key] = string(encoded)
+		text, ok := stringifyValue(value)
+		if !ok {
+			continue
 		}
+
+		stringified[key] = text
 	}
 
 	if len(stringified) == 0 {
