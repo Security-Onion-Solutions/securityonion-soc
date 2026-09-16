@@ -525,6 +525,7 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
 	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
 	ac.srv.Config.ClientParams.AssistantParams.AvailableTools = ac.exposeToolCatalog()
+	ac.srv.Config.ClientParams.AssistantParams.AvailableAutomationKinds = ac.exposeAutomationKinds()
 	ac.srv.Config.ClientParams.AssistantParams.MaxDelegationDepth = ac.getMaxDelegationDepth()
 	ac.srv.Config.ClientParams.AssistantParams.MaxSubSessionTokens = ac.getMaxSubSessionTokens()
 
@@ -569,6 +570,30 @@ func (ac *AssistantCoordinator) exposeToolCatalog() []string {
 	sort.Strings(tools)
 
 	return tools
+}
+
+// exposeAutomationKinds returns the catalog the "new automation" form is built from.
+// Sorted by name because broadcastAgenticUpdate pushes the whole parameter block to
+// every connected browser, so map order would reshuffle the form on each reload.
+func (ac *AssistantCoordinator) exposeAutomationKinds() []model.AutomationKindDefinition {
+	names := make([]string, 0, len(ac.AutomationKindLibrary))
+	for name := range ac.AutomationKindLibrary {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	kinds := make([]model.AutomationKindDefinition, 0, len(names))
+	for _, name := range names {
+		kind := ac.AutomationKindLibrary[name]
+		kinds = append(kinds, model.AutomationKindDefinition{
+			Name:        kind.GetName(),
+			DisplayName: kind.GetDisplayName(),
+			Description: kind.GetDescription(),
+			ParamSchema: kind.GetParamSchema(),
+		})
+	}
+
+	return kinds
 }
 
 // ErrSystemAgentImmutable is returned when a request tries to delete an agent or

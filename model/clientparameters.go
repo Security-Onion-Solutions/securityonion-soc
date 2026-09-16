@@ -180,21 +180,22 @@ type AlertingParameters struct {
 }
 
 type AssistantParameters struct {
-	Enabled                bool                `json:"enabled"`
-	InvestigationPrompt    string              `json:"investigationPrompt"`
-	CompressContextPrompt  string              `json:"compressContextPrompt"`
-	ThresholdColorRatioLow float64             `json:"thresholdColorRatioLow"`
-	ThresholdColorRatioMed float64             `json:"thresholdColorRatioMed"`
-	ThresholdColorRatioMax float64             `json:"thresholdColorRatioMax"`
-	ToolBusyMaxRetries     int                 `json:"toolBusyMaxRetries"`
-	ToolBusyRetryDelayMs   int                 `json:"toolBusyRetryDelayMs"`
-	AvailableModels        []ModelParameters   `json:"availableModels"`
-	AvailableAdapters      []AdapterParameters `json:"availableAdapters"`
-	Agentic                bool                `json:"agentic"`
-	MemoryEnabled          bool                `json:"memoryEnabled"`
-	MemoryParams           MemoryParameters    `json:"memoryParams"`
-	AvailableAgents        []Agent             `json:"availableAgents"`
-	AvailableSkills        []Skill             `json:"availableSkills"`
+	Enabled                  bool                       `json:"enabled"`
+	InvestigationPrompt      string                     `json:"investigationPrompt"`
+	CompressContextPrompt    string                     `json:"compressContextPrompt"`
+	ThresholdColorRatioLow   float64                    `json:"thresholdColorRatioLow"`
+	ThresholdColorRatioMed   float64                    `json:"thresholdColorRatioMed"`
+	ThresholdColorRatioMax   float64                    `json:"thresholdColorRatioMax"`
+	ToolBusyMaxRetries       int                        `json:"toolBusyMaxRetries"`
+	ToolBusyRetryDelayMs     int                        `json:"toolBusyRetryDelayMs"`
+	AvailableModels          []ModelParameters          `json:"availableModels"`
+	AvailableAdapters        []AdapterParameters        `json:"availableAdapters"`
+	Agentic                  bool                       `json:"agentic"`
+	MemoryEnabled            bool                       `json:"memoryEnabled"`
+	MemoryParams             MemoryParameters           `json:"memoryParams"`
+	AvailableAgents          []Agent                    `json:"availableAgents"`
+	AvailableSkills          []Skill                    `json:"availableSkills"`
+	AvailableAutomationKinds []AutomationKindDefinition `json:"availableAutomationKinds"`
 	// Tool names an admin-created skill may grant; delegate tools excluded.
 	AvailableTools []string          `json:"availableTools" example:"query_events,query_cases"`
 	AgentMapping   map[string]string `json:"agentMapping" example:"Malware Analyst:claude-sonnet-4.5@SOAI"`
