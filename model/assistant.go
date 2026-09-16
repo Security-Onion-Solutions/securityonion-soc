@@ -612,12 +612,15 @@ type AgentSessionRequest struct {
 	MaxTurns int
 }
 
+// AgentSessionResult is produced at the end of one headless agent session.
 type AgentSessionResult struct {
+	// The session the run drove, linking the result back to its transcript.
 	SessionId string
 	// The agent's final assistant text, where a caller looks for the structured
 	// conclusion it asked for.
 	FinalText string
-	Turns     int
+	// Model turns actually executed.
+	Turns int
 	// True when the run stopped on MaxTurns rather than the agent ending its turn,
 	// so a caller can decline to act on a half-finished analysis.
 	Truncated bool
