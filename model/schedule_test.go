@@ -342,3 +342,206 @@ func TestIsScheduleActive_Timezones(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, active)
 }
+
+func TestIsScheduleActive_Exclusions(t *testing.T) {
+	holidays := &Schedule{
+		ID:       "us-holidays",
+		Name:     "US Holidays",
+		Enabled:  true,
+		Timezone: "UTC",
+		Definitions: []ScheduleDefinition{
+			{
+				Type:        ScheduleTypeAnnually,
+				Months:      []int{12},
+				DaysOfMonth: []int{25},
+				AllDay:      true,
+			},
+		},
+	}
+
+	convention := &Schedule{
+		ID:       "annual-convention",
+		Name:     "Annual Convention",
+		Enabled:  true,
+		Timezone: "UTC",
+		Definitions: []ScheduleDefinition{
+			{
+				Type:        ScheduleTypeAnnually,
+				Months:      []int{10},
+				DaysOfMonth: []int{12, 13, 14, 15, 16},
+				AllDay:      true,
+			},
+		},
+	}
+
+	workWeek := &Schedule{
+		ID:       "work-week",
+		Name:     "Work Week",
+		Enabled:  true,
+		Timezone: "UTC",
+		Definitions: []ScheduleDefinition{
+			{
+				Type:       ScheduleTypeWeekly,
+				DaysOfWeek: []int{1, 2, 3, 4, 5},
+				StartTime:  "08:00",
+				EndTime:    "17:00",
+			},
+		},
+		ExcludeScheduleIDs: []string{"us-holidays", "annual-convention"},
+	}
+
+	allSchedules := BuildScheduleLookup([]Schedule{*holidays, *convention, *workWeek})
+
+	// Normal Monday (Sep 14, 2026, 10:00 UTC) -> active
+	tNormalMonday := time.Date(2026, 9, 14, 10, 0, 0, 0, time.UTC)
+	active, err := IsScheduleActive(workWeek, tNormalMonday, allSchedules)
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	// Friday Dec 25, 2026, 10:00 UTC (Christmas) -> inactive (suppressed by holiday exclusion)
+	tChristmas := time.Date(2026, 12, 25, 10, 0, 0, 0, time.UTC)
+	active, err = IsScheduleActive(workWeek, tChristmas, allSchedules)
+	assert.NoError(t, err)
+	assert.False(t, active)
+
+	// Wednesday Oct 14, 2026, 10:00 UTC (Convention) -> inactive (suppressed by convention exclusion)
+	tConvention := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
+	active, err = IsScheduleActive(workWeek, tConvention, allSchedules)
+	assert.NoError(t, err)
+	assert.False(t, active)
+
+	// Saturday Dec 25, 2026 (outside work week anyway) -> inactive
+	tSaturday := time.Date(2026, 12, 26, 10, 0, 0, 0, time.UTC)
+	active, err = IsScheduleActive(workWeek, tSaturday, allSchedules)
+	assert.NoError(t, err)
+	assert.False(t, active)
+
+	// If holiday exclusion schedule is disabled, it should not suppress
+	holidays.Enabled = false
+	allSchedulesDisabledHoliday := BuildScheduleLookup([]Schedule{*holidays, *convention, *workWeek})
+	active, err = IsScheduleActive(workWeek, tChristmas, allSchedulesDisabledHoliday)
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	// Test nested exclusions: A excludes B, B excludes C. When C is active, B is inactive, so A is active.
+	schedC := &Schedule{
+		ID:       "sched-c",
+		Enabled:  true,
+		Timezone: "UTC",
+		Definitions: []ScheduleDefinition{
+			{Type: ScheduleTypeDaily, AllDay: true},
+		},
+	}
+	schedB := &Schedule{
+		ID:                 "sched-b",
+		Enabled:            true,
+		Timezone:           "UTC",
+		Definitions:        []ScheduleDefinition{{Type: ScheduleTypeDaily, AllDay: true}},
+		ExcludeScheduleIDs: []string{"sched-c"},
+	}
+	schedA := &Schedule{
+		ID:                 "sched-a",
+		Enabled:            true,
+		Timezone:           "UTC",
+		Definitions:        []ScheduleDefinition{{Type: ScheduleTypeDaily, AllDay: true}},
+		ExcludeScheduleIDs: []string{"sched-b"},
+	}
+
+	nestedLookup := BuildScheduleLookup([]Schedule{*schedA, *schedB, *schedC})
+	active, err = IsScheduleActive(schedA, tNormalMonday, nestedLookup)
+	assert.NoError(t, err)
+	assert.True(t, active)
+}
+
+func TestValidateScheduleDAG(t *testing.T) {
+	schedA := Schedule{ID: "A", Name: "Schedule A"}
+	schedB := Schedule{ID: "B", Name: "Schedule B"}
+	schedC := Schedule{ID: "C", Name: "Schedule C"}
+	schedD := Schedule{ID: "D", Name: "Schedule D"}
+
+	// 1. Valid acyclic chain: A -> B -> C
+	schedB.ExcludeScheduleIDs = []string{"C"}
+	schedA.ExcludeScheduleIDs = []string{"B"}
+	err := ValidateScheduleDAG(&schedA, []Schedule{schedA, schedB, schedC})
+	assert.NoError(t, err)
+
+	// 2. Diamond DAG: A -> B, A -> C, B -> D, C -> D (Valid, no cycle)
+	schedB.ExcludeScheduleIDs = []string{"D"}
+	schedC.ExcludeScheduleIDs = []string{"D"}
+	schedA.ExcludeScheduleIDs = []string{"B", "C"}
+	err = ValidateScheduleDAG(&schedA, []Schedule{schedA, schedB, schedC, schedD})
+	assert.NoError(t, err)
+
+	// 3. Direct self-reference: A -> A
+	schedSelf := Schedule{ID: "A", Name: "Schedule A", ExcludeScheduleIDs: []string{"A"}}
+	err = ValidateScheduleDAG(&schedSelf, []Schedule{schedSelf})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "schedule cannot exclude itself")
+
+	// 4. 2-node cycle: A -> B -> A
+	schedB.ExcludeScheduleIDs = []string{"A"}
+	schedA.ExcludeScheduleIDs = []string{"B"}
+	err = ValidateScheduleDAG(&schedA, []Schedule{schedA, schedB})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "circular schedule dependency detected")
+
+	// 5. 3-node cycle: A -> B -> C -> A
+	schedC.ExcludeScheduleIDs = []string{"A"}
+	schedB.ExcludeScheduleIDs = []string{"C"}
+	schedA.ExcludeScheduleIDs = []string{"B"}
+	err = ValidateScheduleDAG(&schedA, []Schedule{schedA, schedB, schedC})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "circular schedule dependency detected")
+
+	// 6. New target not in slice yet attempting to introduce cycle
+	newTarget := Schedule{ID: "New", ExcludeScheduleIDs: []string{"B"}}
+	schedB.ExcludeScheduleIDs = []string{"New"}
+	err = ValidateScheduleDAG(&newTarget, []Schedule{schedB})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "circular schedule dependency detected")
+}
+
+func TestSanitizeScheduleDAG(t *testing.T) {
+	// 1. Empty slice
+	assert.Empty(t, SanitizeScheduleDAG(nil))
+	assert.Empty(t, SanitizeScheduleDAG([]Schedule{}))
+
+	// 2. Self reference & non-existent reference
+	schedulesWithInvalid := []Schedule{
+		{
+			ID:                 "A",
+			Name:               "Schedule A",
+			ExcludeScheduleIDs: []string{"A", "non-existent-id"},
+		},
+	}
+	sanitized := SanitizeScheduleDAG(schedulesWithInvalid)
+	assert.Len(t, sanitized, 1)
+	assert.Empty(t, sanitized[0].ExcludeScheduleIDs)
+
+	// 3. 3-node cycle: A -> B -> C -> A
+	// When evaluated in order, A -> B and B -> C are preserved, and C -> A is dropped to break the cycle.
+	cyclicSchedules := []Schedule{
+		{ID: "A", Name: "Schedule A", ExcludeScheduleIDs: []string{"B"}},
+		{ID: "B", Name: "Schedule B", ExcludeScheduleIDs: []string{"C"}},
+		{ID: "C", Name: "Schedule C", ExcludeScheduleIDs: []string{"A"}},
+	}
+	sanitized = SanitizeScheduleDAG(cyclicSchedules)
+	assert.Len(t, sanitized, 3)
+	assert.Equal(t, []string{"B"}, sanitized[0].ExcludeScheduleIDs)
+	assert.Equal(t, []string{"C"}, sanitized[1].ExcludeScheduleIDs)
+	assert.Empty(t, sanitized[2].ExcludeScheduleIDs)
+
+	// Verify that the sanitized result is now a valid DAG
+	err := ValidateScheduleDAG(&sanitized[0], sanitized)
+	assert.NoError(t, err)
+
+	// 4. Valid DAG is preserved as-is
+	validSchedules := []Schedule{
+		{ID: "A", Name: "Schedule A", ExcludeScheduleIDs: []string{"B", "C"}},
+		{ID: "B", Name: "Schedule B", ExcludeScheduleIDs: []string{"D"}},
+		{ID: "C", Name: "Schedule C", ExcludeScheduleIDs: []string{"D"}},
+		{ID: "D", Name: "Schedule D", ExcludeScheduleIDs: []string{}},
+	}
+	sanitizedValid := SanitizeScheduleDAG(validSchedules)
+	assert.Equal(t, validSchedules, sanitizedValid)
+}

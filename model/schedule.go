@@ -6,6 +6,7 @@
 package model
 
 import (
+	"errors"
 	"time"
 )
 
@@ -50,15 +51,174 @@ type Schedule struct {
 	Timezone string `json:"timezone" example:"America/New_York"`
 	// Array of recurrence definitions
 	Definitions []ScheduleDefinition `json:"definitions"`
+	// Array of schedule IDs to exclude (exception/blackout schedules)
+	ExcludeScheduleIDs []string `json:"excludeScheduleIds,omitempty"`
+}
+
+// BuildScheduleLookup constructs a map of Schedule ID -> *Schedule from a slice of schedules.
+func BuildScheduleLookup(schedules []Schedule) map[string]*Schedule {
+	lookup := make(map[string]*Schedule, len(schedules))
+	for i := range schedules {
+		lookup[schedules[i].ID] = &schedules[i]
+	}
+	return lookup
+}
+
+// SanitizeScheduleDAG inspects a slice of schedules and returns a sanitized copy
+// where any self-references, non-existent schedule references, or circular dependencies
+// are automatically resolved by dropping the offending exclusion edge that introduces the cycle.
+func SanitizeScheduleDAG(schedules []Schedule) []Schedule {
+	if len(schedules) == 0 {
+		return []Schedule{}
+	}
+
+	result := make([]Schedule, len(schedules))
+	copy(result, schedules)
+
+	// Map of schedule ID existence
+	existingIDs := make(map[string]bool, len(schedules))
+	for _, s := range schedules {
+		existingIDs[s.ID] = true
+	}
+
+	// Adjacency graph of accepted valid edges
+	validGraph := make(map[string][]string, len(schedules))
+	for _, s := range schedules {
+		validGraph[s.ID] = []string{}
+	}
+
+	// Helper: check if toID can reach fromID in the current validGraph
+	canReach := func(fromID, toID string) bool {
+		visited := make(map[string]bool)
+		var dfs func(curr string) bool
+		dfs = func(curr string) bool {
+			if curr == toID {
+				return true
+			}
+			if visited[curr] {
+				return false
+			}
+			visited[curr] = true
+			for _, neighbor := range validGraph[curr] {
+				if dfs(neighbor) {
+					return true
+				}
+			}
+			return false
+		}
+		return dfs(fromID)
+	}
+
+	for i := range result {
+		cleanedExcludes := make([]string, 0, len(result[i].ExcludeScheduleIDs))
+		for _, excludeID := range result[i].ExcludeScheduleIDs {
+			// 1. Drop self references
+			if excludeID == result[i].ID {
+				continue
+			}
+			// 2. Drop references to non-existent schedules
+			if !existingIDs[excludeID] {
+				continue
+			}
+			// 3. Drop edge if excludeID can already reach result[i].ID (which would complete a cycle)
+			if canReach(excludeID, result[i].ID) {
+				continue
+			}
+
+			cleanedExcludes = append(cleanedExcludes, excludeID)
+			validGraph[result[i].ID] = append(validGraph[result[i].ID], excludeID)
+		}
+		result[i].ExcludeScheduleIDs = cleanedExcludes
+	}
+
+	return result
+}
+
+// ValidateScheduleDAG verifies that the given target schedule (and its exclusions)
+// does not introduce any direct or indirect circular dependencies among allSchedules.
+func ValidateScheduleDAG(target *Schedule, allSchedules []Schedule) error {
+	if target == nil {
+		return nil
+	}
+
+	graph := make(map[string][]string)
+	for _, s := range allSchedules {
+		if s.ID == target.ID {
+			graph[s.ID] = target.ExcludeScheduleIDs
+		} else {
+			graph[s.ID] = s.ExcludeScheduleIDs
+		}
+	}
+	if _, exists := graph[target.ID]; !exists {
+		graph[target.ID] = target.ExcludeScheduleIDs
+	}
+
+	// 1. Direct self-reference check
+	for nodeID, neighbors := range graph {
+		for _, neighborID := range neighbors {
+			if nodeID == neighborID {
+				return errors.New("schedule cannot exclude itself: " + nodeID)
+			}
+		}
+	}
+
+	// 2. Transitive cycle detection (DFS with 3-color state)
+	visited := make(map[string]int) // 0 = unvisited, 1 = visiting (in stack), 2 = visited
+
+	var checkCycle func(nodeID string, path []string) error
+	checkCycle = func(nodeID string, path []string) error {
+		visited[nodeID] = 1
+		currentPath := append(path, nodeID)
+
+		for _, neighborID := range graph[nodeID] {
+			if visited[neighborID] == 1 {
+				cycleStr := ""
+				for _, p := range currentPath {
+					cycleStr += p + " -> "
+				}
+				cycleStr += neighborID
+				return errors.New("circular schedule dependency detected: " + cycleStr)
+			}
+			if visited[neighborID] == 0 {
+				if err := checkCycle(neighborID, currentPath); err != nil {
+					return err
+				}
+			}
+		}
+
+		visited[nodeID] = 2
+		return nil
+	}
+
+	for id := range graph {
+		if visited[id] == 0 {
+			if err := checkCycle(id, nil); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // IsScheduleActive evaluates if the given schedule is active at the specified UTC time.
-// 1. Disabled / Nil Guard: If schedule == nil or len(Definitions) == 0, returns true.
+// 1. Disabled / Nil Guard: If schedule == nil or (len(Definitions) == 0 and len(ExcludeScheduleIDs) == 0), returns true.
 //    If !schedule.Enabled, returns false.
 // 2. Timezone Conversion: Converts utcNow into schedule.Timezone (fallback to UTC on error).
-// 3. OR Logic Across Definitions: If any definition matches, returns true.
-func IsScheduleActive(schedule *Schedule, utcNow time.Time) (bool, error) {
-	if schedule == nil || len(schedule.Definitions) == 0 {
+// 3. OR Logic Across Definitions: If any definition matches, base schedule is active.
+// 4. Exception / Exclusion Evaluation: If base schedule is active, evaluates ExcludeScheduleIDs.
+//    If any enabled exclusion schedule is active at utcNow, returns false.
+// Optional lookup map can be provided to resolve ExcludeScheduleIDs.
+func IsScheduleActive(schedule *Schedule, utcNow time.Time, lookup ...map[string]*Schedule) (bool, error) {
+	var allSchedules map[string]*Schedule
+	if len(lookup) > 0 && lookup[0] != nil {
+		allSchedules = lookup[0]
+	}
+	return isScheduleActiveRecursive(schedule, allSchedules, utcNow, make(map[string]bool))
+}
+
+func isScheduleActiveRecursive(schedule *Schedule, allSchedules map[string]*Schedule, utcNow time.Time, visited map[string]bool) (bool, error) {
+	if schedule == nil {
 		return true, nil
 	}
 
@@ -66,20 +226,57 @@ func IsScheduleActive(schedule *Schedule, utcNow time.Time) (bool, error) {
 		return false, nil
 	}
 
-	loc, err := time.LoadLocation(schedule.Timezone)
-	if err != nil {
-		loc = time.UTC
+	// Prevent circular recursion if a cycle exists at runtime
+	if visited[schedule.ID] {
+		return false, nil
+	}
+	visited[schedule.ID] = true
+
+	// If no definitions and no exclusions, schedule is always active
+	if len(schedule.Definitions) == 0 && len(schedule.ExcludeScheduleIDs) == 0 {
+		return true, nil
 	}
 
-	localTime := utcNow.In(loc)
+	baseActive := len(schedule.Definitions) == 0 // if no definitions, base is active unless suppressed
+	if len(schedule.Definitions) > 0 {
+		loc, err := time.LoadLocation(schedule.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
 
-	for _, def := range schedule.Definitions {
-		if isDefinitionActive(def, localTime) {
-			return true, nil
+		localTime := utcNow.In(loc)
+
+		for _, def := range schedule.Definitions {
+			if isDefinitionActive(def, localTime) {
+				baseActive = true
+				break
+			}
 		}
 	}
 
-	return false, nil
+	if !baseActive {
+		return false, nil
+	}
+
+	// Base is active; check if suppressed by any exclusion schedule
+	if len(schedule.ExcludeScheduleIDs) > 0 && allSchedules != nil {
+		for _, excludeID := range schedule.ExcludeScheduleIDs {
+			if excludeSched, exists := allSchedules[excludeID]; exists && excludeSched != nil {
+				// Copy visited map for branch isolation
+				visitedCopy := make(map[string]bool, len(visited))
+				for k, v := range visited {
+					visitedCopy[k] = v
+				}
+
+				excludedActive, err := isScheduleActiveRecursive(excludeSched, allSchedules, utcNow, visitedCopy)
+				if err == nil && excludedActive {
+					return false, nil // Suppressed by active exclusion schedule
+				}
+			}
+		}
+	}
+
+	return true, nil
 }
 
 func isDefinitionActive(def ScheduleDefinition, t time.Time) bool {

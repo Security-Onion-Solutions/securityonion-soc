@@ -15,6 +15,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -69,26 +70,64 @@ func (h *ScheduleHandler) respondError(w http.ResponseWriter, r *http.Request, e
 	}
 }
 
-func (h *ScheduleHandler) loadSchedules(ctx context.Context) ([]model.Schedule, error) {
-	settings, err := h.server.Configstore.GetSettings(ctx, true)
-	if err != nil {
-		return nil, err
+func unmarshalSchedules(val string) ([]model.Schedule, error) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return []model.Schedule{}, nil
 	}
+
 	var schedules []model.Schedule
-	for _, s := range settings {
-		if s.Id == "soc.config.server.schedules" {
-			if s.Value != "" {
-				if err := json.Unmarshal([]byte(s.Value), &schedules); err != nil {
-					return nil, err
-				}
-			}
+	var err error
+
+	// 1. Try standard JSON array format
+	if strings.HasPrefix(val, "[") {
+		if err = json.Unmarshal([]byte(val), &schedules); err == nil {
+			return model.SanitizeScheduleDAG(schedules), nil
+		}
+	}
+
+	// 2. Try newline-delimited JSON objects (produced by FlattenInterfaceSliceToString when loaded from YAML pillars)
+	lines := strings.Split(val, "\n")
+	schedules = nil
+	allLinesParsed := true
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var s model.Schedule
+		if err := json.Unmarshal([]byte(line), &s); err == nil {
+			schedules = append(schedules, s)
+		} else {
+			allLinesParsed = false
 			break
 		}
 	}
-	if schedules == nil {
-		schedules = []model.Schedule{}
+	if allLinesParsed && len(schedules) > 0 {
+		return model.SanitizeScheduleDAG(schedules), nil
 	}
-	return schedules, nil
+
+	// 3. Try single JSON object
+	var single model.Schedule
+	if err := json.Unmarshal([]byte(val), &single); err == nil {
+		return model.SanitizeScheduleDAG([]model.Schedule{single}), nil
+	}
+
+	return nil, err
+}
+
+func (h *ScheduleHandler) loadSchedules(ctx context.Context) ([]model.Schedule, error) {
+	if h.server == nil || h.server.Configstore == nil {
+		return []model.Schedule{}, nil
+	}
+	setting, err := h.server.Configstore.GetSetting(ctx, "soc.config.server.schedules")
+	if err != nil {
+		return nil, err
+	}
+	if setting == nil || setting.Value == "" {
+		return []model.Schedule{}, nil
+	}
+	return unmarshalSchedules(setting.Value)
 }
 
 func (h *ScheduleHandler) saveSchedules(ctx context.Context, schedules []model.Schedule) error {
@@ -174,9 +213,13 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ID == "" {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("schedule ID cannot be empty"))
+	if strings.TrimSpace(req.Name) == "" {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("schedule name cannot be empty"))
 		return
+	}
+
+	if req.ID == "" {
+		req.ID = uuid.NewString()
 	}
 
 	schedules, err := h.loadSchedules(ctx)
@@ -191,6 +234,12 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 			web.Respond(w, r, http.StatusBadRequest, errors.New("schedule with this ID already exists"))
 			return
 		}
+	}
+
+	if err := model.ValidateScheduleDAG(&req, schedules); err != nil {
+		logger.WithError(err).Warn("invalid schedule DAG")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
 	}
 
 	schedules = append(schedules, req)
@@ -265,6 +314,12 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 
 	if foundIndex == -1 {
 		web.Respond(w, r, http.StatusNotFound, errors.New("schedule not found"))
+		return
+	}
+
+	if err := model.ValidateScheduleDAG(&req, schedules); err != nil {
+		logger.WithError(err).Warn("invalid schedule DAG")
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -402,7 +457,13 @@ func (h *ScheduleHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 		evalTime = parsed.UTC()
 	}
 
-	active, err := model.IsScheduleActive(&req.Schedule, evalTime)
+	schedules, _ := h.loadSchedules(ctx)
+	lookup := model.BuildScheduleLookup(schedules)
+	if req.Schedule.ID != "" {
+		lookup[req.Schedule.ID] = &req.Schedule
+	}
+
+	active, err := model.IsScheduleActive(&req.Schedule, evalTime, lookup)
 	if err != nil {
 		logger.WithError(err).Error("failed to evaluate schedule")
 		web.Respond(w, r, http.StatusInternalServerError, err)

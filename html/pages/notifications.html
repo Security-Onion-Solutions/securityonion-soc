@@ -1,0 +1,39 @@
+<v-container fluid data-aid="notifications_screen">
+  <v-row>
+    <v-col>
+      <v-row>
+        <v-toolbar class="so-toolbar elevation-0" fixed>
+          <h4 class="ml-2 my-0" data-aid="notifications_summary" role="heading" aria-level="2">{{ i18n.notifications || 'Notifications' }}</h4>
+          <v-spacer></v-spacer>
+          <v-btn icon variant="flat" @click.stop="refresh()" id="notifications-refresh-button" class="circle-button mx-2" :title="i18n.refresh || 'Refresh'" :aria-label="i18n.ariaNotificationsRefresh || 'Refresh notifications'" data-aid="notifications_refresh_button">
+            <v-icon>fa-sync</v-icon>
+          </v-btn>
+          <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'notifications'" :title="i18n.contextualDocsBtn" data-aid="notifications_docs" :aria-label="i18n.ariaHelpLink">
+            <v-icon>fa-circle-question</v-icon>
+          </v-btn>
+        </v-toolbar>
+      </v-row>
+
+      <v-tabs v-model="tab" color="primary" class="my-3" data-aid="notifications_tabs">
+        <v-tab value="destinations" data-aid="notifications_tab_destinations">{{ i18n.destinations || 'Destinations' }}</v-tab>
+        <v-tab value="schedules" data-aid="notifications_tab_schedules">{{ i18n.activationSchedules || 'Activation Schedules' }}</v-tab>
+      </v-tabs>
+
+      <v-tabs-window v-model="tab">
+        <!-- Destinations Tab (Placeholder for Phase 3) -->
+        <v-tabs-window-item value="destinations" data-aid="notifications_destinations_tab">
+          <v-card class="pa-6 text-center text-medium-emphasis">
+            <v-icon size="48" class="mb-3">fa-bullhorn</v-icon>
+            <div class="text-h6 mb-2">{{ i18n.destinations || 'Destinations' }}</div>
+            <div class="text-body-2">{{ i18n.destinationsPlaceholder || 'Notification destinations administration will be available here.' }}</div>
+          </v-card>
+        </v-tabs-window-item>
+
+        <!-- Activation Schedules Tab -->
+        <v-tabs-window-item value="schedules" data-aid="notifications_schedules_tab">
+          <schedules-manager ref="schedulesManager" data-aid="notifications_schedules_manager"></schedules-manager>
+        </v-tabs-window-item>
+      </v-tabs-window>
+    </v-col>
+  </v-row>
+</v-container>
