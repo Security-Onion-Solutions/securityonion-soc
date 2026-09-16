@@ -592,6 +592,40 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// AgentSessionRequest drives one agent session to its final turn with no browser
+// attached: the session is created, the objective seeded, and turns and tool
+// results looped until the agent stops or the turn cap trips.
+type AgentSessionRequest struct {
+	// Seeds the session's first user message, the way a delegation seeds a child
+	// session. Not a system prompt: the agent brings its own.
+	Objective string
+	// Agent name, whose configured mapping resolves the model. Empty runs the
+	// orchestrator.
+	Agent string
+	// Owner of the created session; tool calls are authorized as this identity.
+	OwnerId string
+	// Tags stamped on the created session in addition to any the caller's context
+	// already requires.
+	Tags []string
+	// Ceiling on model turns, so an agent that loops cannot bill indefinitely. 0
+	// means the configured default, not unlimited.
+	MaxTurns int
+}
+
+// AgentSessionResult is produced at the end of one headless agent session.
+type AgentSessionResult struct {
+	// The session the run drove, linking the result back to its transcript.
+	SessionId string
+	// The agent's final assistant text, where a caller looks for the structured
+	// conclusion it asked for.
+	FinalText string
+	// Model turns actually executed.
+	Turns int
+	// True when the run stopped on MaxTurns rather than the agent ending its turn,
+	// so a caller can decline to act on a half-finished analysis.
+	Truncated bool
+}
+
 // StoredAgent is one agent as persisted in the "assistant.agents" setting (one
 // JSON object per line, the []{} uiElements convention) and as sent to the
 // per-agent save endpoint. An entry naming a system agent is an override, not a

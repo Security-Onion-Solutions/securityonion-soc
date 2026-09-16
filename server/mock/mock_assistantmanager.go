@@ -225,6 +225,21 @@ func (mr *MockAssistantManagerMockRecorder) ResolveDelegationStream(ctx, childSe
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveDelegationStream", reflect.TypeOf((*MockAssistantManager)(nil).ResolveDelegationStream), ctx, childSession, childFinalText)
 }
 
+// RunAgentSession mocks base method.
+func (m *MockAssistantManager) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunAgentSession", ctx, req)
+	ret0, _ := ret[0].(*model.AgentSessionResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunAgentSession indicates an expected call of RunAgentSession.
+func (mr *MockAssistantManagerMockRecorder) RunAgentSession(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAgentSession", reflect.TypeOf((*MockAssistantManager)(nil).RunAgentSession), ctx, req)
+}
+
 // SaveAgent mocks base method.
 func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error {
 	m.ctrl.T.Helper()

@@ -50,6 +50,8 @@ var (
 	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
 	ErrMemoryNotFound     = database.ErrMemoryNotFound
 	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
+	// ErrAgentSessionUnsupported is returned until the headless turn driver lands.
+	ErrAgentSessionUnsupported = errors.New("ERROR_AGENT_SESSION_UNSUPPORTED")
 )
 
 const (
@@ -144,11 +146,12 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
-	FunctionLibrary map[string]Tool
-	SkillLibrary    map[string]model.Skill
-	toolConfig      json.RawMessage
-	adapters        map[string]server.AssistantAdapter
-	isAgentic       bool
+	FunctionLibrary       map[string]Tool
+	SkillLibrary          map[string]model.Skill
+	AutomationKindLibrary map[string]AutomationKind
+	toolConfig            json.RawMessage
+	adapters              map[string]server.AssistantAdapter
+	isAgentic             bool
 
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
@@ -342,6 +345,7 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
+	ac.AutomationKindLibrary = knownAutomationKinds
 	ac.DelegationLibrary = map[string]Tool{}
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary, nil, nil, nil)
@@ -1280,6 +1284,13 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	logger.Info("tool executed successfully")
 
 	return result, nil
+}
+
+// RunAgentSession is declared here so the automation contract is complete, but the
+// headless turn driver that implements it lands separately. Nothing calls it yet:
+// no automation kind is registered.
+func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+	return nil, ErrAgentSessionUnsupported
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
