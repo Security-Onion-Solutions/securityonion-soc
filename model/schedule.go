@@ -43,13 +43,13 @@ type ScheduleDefinition struct {
 	// If true, the schedule is active all day (00:00-24:00)
 	AllDay bool `json:"allDay,omitempty" example:"false"`
 	// For weekly/monthly schedules: days of the week (0=Sunday, 1=Monday, ..., 6=Saturday)
-	DaysOfWeek []int `json:"daysOfWeek,omitempty" example:"[1,2,3,4,5]"`
+	DaysOfWeek []int `json:"daysOfWeek,omitempty" example:"1,2,3,4,5"`
 	// For monthly/annually schedules: days of the month (1-31, -1 for last day of month)
-	DaysOfMonth []int `json:"daysOfMonth,omitempty" example:"[1,15,-1]"`
+	DaysOfMonth []int `json:"daysOfMonth,omitempty" example:"1,15,-1"`
 	// For monthly/annually schedules: week numbers within the month (1, 2, 3, 4, 5, -1 for last occurrence)
-	WeekNumbers []int `json:"weekNumbers,omitempty" example:"[1,3]"`
+	WeekNumbers []int `json:"weekNumbers,omitempty" example:"1,3"`
 	// For annual schedules: month numbers (1=January, ..., 12=December)
-	Months []int `json:"months,omitempty" example:"[12]"`
+	Months []int `json:"months,omitempty" example:"12"`
 }
 
 // @Description Schedule represents a reusable activation schedule.
@@ -236,12 +236,13 @@ func ValidateScheduleDAG(target *Schedule, allSchedules []Schedule) error {
 }
 
 // IsScheduleActive evaluates if the given schedule is active at the specified UTC time.
-// 1. Disabled / Nil Guard: If schedule == nil or (len(Definitions) == 0 and len(ExcludeScheduleIDs) == 0), returns true.
-//    If !schedule.Enabled, returns false.
-// 2. Timezone Conversion: Converts utcNow into schedule.Timezone (fallback to UTC on error).
-// 3. OR Logic Across Definitions: If any definition matches, base schedule is active.
-// 4. Exception / Exclusion Evaluation: If base schedule is active, evaluates ExcludeScheduleIDs.
-//    If any enabled exclusion schedule is active at utcNow, returns false.
+//  1. Disabled / Nil Guard: If schedule == nil or (len(Definitions) == 0 and len(ExcludeScheduleIDs) == 0), returns true.
+//     If !schedule.Enabled, returns false.
+//  2. Timezone Conversion: Converts utcNow into schedule.Timezone (fallback to UTC on error).
+//  3. OR Logic Across Definitions: If any definition matches, base schedule is active.
+//  4. Exception / Exclusion Evaluation: If base schedule is active, evaluates ExcludeScheduleIDs.
+//     If any enabled exclusion schedule is active at utcNow, returns false.
+//
 // Optional lookup map can be provided to resolve ExcludeScheduleIDs.
 func IsScheduleActive(schedule *Schedule, utcNow time.Time, lookup ...map[string]*Schedule) (bool, error) {
 	var allSchedules map[string]*Schedule
