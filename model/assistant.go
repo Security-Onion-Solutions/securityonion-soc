@@ -18,9 +18,12 @@ import (
 const (
 	MessageTagContextCompression = "context_compression"
 
-	SessionTagMemory    = "memory"
-	SessionTagEmbed     = "embed"
-	SessionTagReconcile = "reconcile"
+	SessionTagMemory     = "memory"
+	SessionTagEmbed      = "embed"
+	SessionTagReconcile  = "reconcile"
+	SessionTagIncognito  = "incognito"
+	SessionTagShared     = "shared"
+	SessionTagAutomation = "automation"
 )
 
 // MemorySessionTags marks sessions created by the background memory pipeline
@@ -29,7 +32,19 @@ const (
 // is passed, and are never scanned for memories themselves.
 var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
 
-var ClientMessageTags = []string{MessageTagContextCompression}
+// ReservedSessionTags cannot be added or removed through the session tag endpoint.
+// SessionTagShared is deliberately absent: sharing and un-sharing is the action that
+// endpoint exists for.
+var ReservedSessionTags = slices.Concat(MemorySessionTags, []string{SessionTagIncognito, SessionTagAutomation})
+
+// AutomationSessionTags are stamped on every session an automation run creates.
+// Callers assigning this to a session must slices.Clone it.
+var AutomationSessionTags = []string{SessionTagAutomation, SessionTagShared}
+
+// ClientMessageTags are the tags a client may assert on an incoming message.
+// SessionTagIncognito is accepted here so the first message can mark its new
+// session incognito.
+var ClientMessageTags = []string{MessageTagContextCompression, SessionTagIncognito}
 
 // FilterClientTags drops any tag the client isn't allowed to assert.
 func FilterClientTags(tags []string) []string {
@@ -577,6 +592,40 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// AgentSessionRequest drives one agent session to its final turn with no browser
+// attached: the session is created, the objective seeded, and turns and tool
+// results looped until the agent stops or the turn cap trips.
+type AgentSessionRequest struct {
+	// Seeds the session's first user message, the way a delegation seeds a child
+	// session. Not a system prompt: the agent brings its own.
+	Objective string
+	// Agent name, whose configured mapping resolves the model. Empty runs the
+	// orchestrator.
+	Agent string
+	// Owner of the created session; tool calls are authorized as this identity.
+	OwnerId string
+	// Tags stamped on the created session in addition to any the caller's context
+	// already requires.
+	Tags []string
+	// Ceiling on model turns, so an agent that loops cannot bill indefinitely. 0
+	// means the configured default, not unlimited.
+	MaxTurns int
+}
+
+// AgentSessionResult is produced at the end of one headless agent session.
+type AgentSessionResult struct {
+	// The session the run drove, linking the result back to its transcript.
+	SessionId string
+	// The agent's final assistant text, where a caller looks for the structured
+	// conclusion it asked for.
+	FinalText string
+	// Model turns actually executed.
+	Turns int
+	// True when the run stopped on MaxTurns rather than the agent ending its turn,
+	// so a caller can decline to act on a half-finished analysis.
+	Truncated bool
+}
+
 // StoredAgent is one agent as persisted in the "assistant.agents" setting (one
 // JSON object per line, the []{} uiElements convention) and as sent to the
 // per-agent save endpoint. An entry naming a system agent is an override, not a
@@ -593,6 +642,8 @@ type StoredAgent struct {
 	Description   string   `json:"description" example:"Analyzes suspicious binaries and scripts"`
 	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
 	Persona string `json:"persona" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // StoredSkill is one skill in the "assistant.skills" setting, following the same
@@ -624,6 +675,8 @@ type Agent struct {
 	Enabled bool `json:"enabled" example:"true"`
 	// Admin-authored persona; exposed because an admin wrote it.
 	PersonaAddendum string `json:"personaAddendum" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // EffectivePrompt is the built-in prompt with the admin persona appended; either

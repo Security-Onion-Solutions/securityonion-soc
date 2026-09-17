@@ -170,6 +170,7 @@ globalThis.AssistantSessions = (function() {
         this.contextLength = 0;
         this.creditsUsed = 0;
         this.creditsByAgent = {};
+        this.incognito = false;
       } catch (error) {
         this.$root.showError(error);
       }

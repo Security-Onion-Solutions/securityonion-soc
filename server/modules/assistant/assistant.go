@@ -50,6 +50,8 @@ var (
 	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
 	ErrMemoryNotFound     = database.ErrMemoryNotFound
 	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
+	// ErrAgentSessionUnsupported is returned until the headless turn driver lands.
+	ErrAgentSessionUnsupported = errors.New("ERROR_AGENT_SESSION_UNSUPPORTED")
 )
 
 const (
@@ -108,6 +110,35 @@ const (
 	CHAT_TURN_TIMEOUT = 3 * time.Minute
 )
 
+var (
+	DEFAULT_FILTER_EVENT_FIELDS = []string{
+		"@timestamp",
+		"client.name",
+		"destination.ip", "destination.port", "destination.geo.country_name",
+		"dns.query.name", "dns.query_name",
+		"event.action", "event.category", "event.module", "event.dataset", "event.outcome", "event.severity", "event.severity_label", "event.type",
+		"event_data.agent.name", "event_data.host.os.name",
+		"file.mime_type", "file.name",
+		"hash.md5", "hash.sha1",
+		"host.mac", "host.name", "host.os.name",
+		"http.method", "http.useragent", "http.virtual_host",
+		"log.id.uid",
+		"network.community_id", "network.protocol", "network.transport",
+		"notice.message",
+		"observer.name",
+		"process.name", "process.executable", "process.entity_id", "process.command_line", "process.Ext.ancestry",
+		"process.parent.entity_id", "process.parent.command_line",
+		"rule.category", "rule.name", "rule.uuid",
+		"software.name", "software.type", "software.version.unparsed",
+		"source.ip", "source.port", "source.geo.country_name",
+		"ssh.cypher_algorithm", "ssh.client", "ssh.server",
+		"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+		"user.name", "user.domain", "user.effective.name",
+		"weird.name",
+		"tags",
+	}
+)
+
 //go:embed SOSystemPrompt.bin
 var embeddedSystemPrompt []byte
 
@@ -115,11 +146,12 @@ type AssistantCoordinator struct {
 	srv       *server.Server
 	isRunning bool
 
-	FunctionLibrary map[string]Tool
-	SkillLibrary    map[string]model.Skill
-	toolConfig      json.RawMessage
-	adapters        map[string]server.AssistantAdapter
-	isAgentic       bool
+	FunctionLibrary       map[string]Tool
+	SkillLibrary          map[string]model.Skill
+	AutomationKindLibrary map[string]AutomationKind
+	toolConfig            json.RawMessage
+	adapters              map[string]server.AssistantAdapter
+	isAgentic             bool
 
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
@@ -175,6 +207,9 @@ type AssistantCoordinator struct {
 	terminateReembed context.CancelCauseFunc
 	// Interrupts the scan pass currently running, if any; nil between passes.
 	terminateMemoryScan context.CancelCauseFunc
+	// Embed model selector the last pass verified the store against; empty until
+	// one completes, so every process start re-checks.
+	lastReembedModel string
 	// Published count of memories awaiting re-embedding.
 	staleMemories atomic.Int64
 	// Pace the re-embed pass and bound its embedding calls; tests shorten both.
@@ -188,6 +223,8 @@ type AssistantCoordinator struct {
 	// Decompressed embedded prompts, kept to rebuild a disabled memory role.
 	// Never serialized: Agent.Prompt and Skill.AdditionalPrompt are json:"-".
 	embeddedPrompts map[string]string
+
+	filterEventFields []string
 
 	detections.IOManager
 }
@@ -308,6 +345,7 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.AssistantManager = ac
 	ac.FunctionLibrary = knownTools
+	ac.AutomationKindLibrary = knownAutomationKinds
 	ac.DelegationLibrary = map[string]Tool{}
 
 	ac.toolConfig, err = buildToolConfig(ac.FunctionLibrary, nil, nil, nil)
@@ -396,6 +434,11 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.applyMemoryAgents(memory)
 
 	ac.getPrompt()
+
+	toolsCfg, ok := config["tools"].(map[string]any)
+	if ok {
+		ac.filterEventFields = module.GetStringArrayDefault(toolsCfg, "filterEventFields", DEFAULT_FILTER_EVENT_FIELDS)
+	}
 
 	return err
 }
@@ -1241,6 +1284,13 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	logger.Info("tool executed successfully")
 
 	return result, nil
+}
+
+// RunAgentSession is declared here so the automation contract is complete, but the
+// headless turn driver that implements it lands separately. Nothing calls it yet:
+// no automation kind is registered.
+func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+	return nil, ErrAgentSessionUnsupported
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
@@ -2117,6 +2167,7 @@ func (ac *AssistantCoordinator) loadTurnSession(ctx context.Context, sessionId s
 		model.GetSessionsWithSessionId(sessionId),
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithMessageMeta(false),
+		model.GetSessionsWithAutomationSessions(true),
 	}
 	if ac.getMaxSubSessionTokens() > 0 {
 		opts = append(opts, model.GetSessionsWithUsage(true))
@@ -2608,6 +2659,7 @@ func (ac *AssistantCoordinator) loadSession(ctx context.Context, sessionId strin
 	sessions, err := ac.srv.Assistantstore.GetSessions(ctx,
 		model.GetSessionsWithSessionId(sessionId),
 		model.GetSessionsWithMessageMeta(false),
+		model.GetSessionsWithAutomationSessions(true),
 	)
 	if err != nil || len(sessions) == 0 {
 		return nil
@@ -2895,4 +2947,79 @@ func isToolResultOnly(m *model.Message) bool {
 		}
 	}
 	return true
+}
+
+// filterEvents filters event fields to reduce payload size
+func (ac *AssistantCoordinator) FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
+	fields := append(slices.Clone(ac.filterEventFields), extraFields...)
+
+	filtered := make([]map[string]any, 0, len(events))
+
+	for _, event := range events {
+		filteredPayload := map[string]any{
+			"_id": event.Id,
+		}
+
+		// Copy only default fields starting with the Id field
+		for _, field := range fields {
+			// First try the field as-is (for non-nested fields)
+			if val, exists := event.Payload[field]; exists && val != nil {
+				filteredPayload[field] = val
+			} else if value := getNestedField(event.Payload, field); value != nil {
+				// Try nested field lookup
+				setNestedField(filteredPayload, field, value)
+			}
+		}
+
+		filtered = append(filtered, map[string]any{
+			"payload": filteredPayload,
+		})
+	}
+
+	return filtered
+}
+
+// getNestedField retrieves a value from a nested map using dot notation
+func getNestedField(data map[string]any, field string) any {
+	parts := splitDotNotation(field)
+	current := data
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			return current[part]
+		}
+
+		if next, ok := current[part].(map[string]any); ok {
+			current = next
+		} else {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// setNestedField sets a value in a nested map using dot notation
+func setNestedField(data map[string]any, field string, value any) {
+	parts := splitDotNotation(field)
+	current := data
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			current[part] = value
+			return
+		}
+
+		if _, ok := current[part]; !ok {
+			current[part] = make(map[string]any)
+		}
+
+		current = current[part].(map[string]any)
+	}
+}
+
+// splitDotNotation splits a field name by dots
+func splitDotNotation(field string) []string {
+	// Simple split for now. In production, handle escaped dots
+	return strings.Split(field, ".")
 }

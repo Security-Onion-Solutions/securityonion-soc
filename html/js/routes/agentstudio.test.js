@@ -27,8 +27,8 @@ const agenticParams = () => ({
     { name: 'cases', tools: ['createCase'], isSystem: false, enabled: true },
   ],
   availableAgents: [
-    { name: 'Coordinator', isOrchestrator: true, allowedSkills: ['hunt'], canDelegateTo: ['Hunter'], agentDescription: 'Routes work', isSystem: true, enabled: true, personaAddendum: 'be brief' },
-    { name: 'Hunter', isOrchestrator: false, allowedSkills: ['hunt', 'cases'], canDelegateTo: [], agentDescription: 'Hunts', isSystem: false, enabled: true },
+    { name: 'Coordinator', isOrchestrator: true, allowedSkills: ['hunt'], canDelegateTo: ['Hunter'], agentDescription: 'Routes work', isSystem: true, enabled: true, personaAddendum: 'be brief', maxConcurrentInstances: 1 },
+    { name: 'Hunter', isOrchestrator: false, allowedSkills: ['hunt', 'cases'], canDelegateTo: [], agentDescription: 'Hunts', isSystem: false, enabled: true, maxConcurrentInstances: 2 },
   ],
   availableTools: ['query', 'grid', 'createCase'],
   agentMapping: { Coordinator: 'model-a@soai', Hunter: 'model-b' },
@@ -362,6 +362,7 @@ test('a system agent persists only the fields an admin may change', () => {
     model: 'model-a@soai',
     canDelegateTo: ['Hunter'],
     persona: 'be brief',
+    maxConcurrentInstances: 1,
   });
 });
 
@@ -377,6 +378,7 @@ test('a custom agent persists every field', () => {
     canDelegateTo: [],
     description: 'Hunts',
     persona: '',
+    maxConcurrentInstances: 2,
   });
 });
 
@@ -490,6 +492,26 @@ test('duplicating a custom agent appends an editable copy with a free name', asy
   // A copy is always custom, so every field is written and editable.
   expect(saved.row.allowedSkills).toEqual(['hunt', 'cases']);
   expect(saved.row.description).toBe('Hunts');
+});
+
+test('toggling enabled preserves maxConcurrentInstances', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  // The tab has no input for it yet, so a save that dropped it would silently
+  // reset a limit set by hand or through the API.
+  await comp.toggleAgentEnabled(comp.agents[1]);
+
+  expect(savedRow(put).row.maxConcurrentInstances).toBe(2);
+});
+
+test('a duplicated agent carries its concurrency limit', async () => {
+  comp.initAssistant(agenticParams());
+  const put = mockPapi('put', {});
+
+  await comp.duplicateAgent(comp.agents[1]);
+
+  expect(savedRow(put).row.maxConcurrentInstances).toBe(2);
 });
 
 test('copyName avoids names already in use', () => {

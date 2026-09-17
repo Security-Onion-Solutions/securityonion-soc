@@ -53,7 +53,9 @@ RUN dnf install -y --nodocs wget tcpdump unzip git gcc python3.14 python3.14-dev
     dnf clean all
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python3 && ln -s /usr/bin/pip3.14 /usr/local/bin/pip3
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python && ln -s /usr/bin/pip3.14 /usr/local/bin/pip
-RUN pip3 install pysigma==1.4.0 sigma-cli==3.0.2 pysigma-backend-elasticsearch pysigma-pipeline-windows
+ARG PYSIGMA_ES_REF=esql-refactor
+RUN pip3 install pysigma==1.5.0 sigma-cli==3.0.2 pysigma-pipeline-windows==2.0.0 \
+    "pysigma-backend-elasticsearch @ git+https://github.com/Security-Onion-Solutions/pySigma-backend-elasticsearch.git@${PYSIGMA_ES_REF}"
 ADD dep/pysigma_backend_securityonion-1.0.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-1.0.0-py3-none-any.whl
 RUN pip3 install yara-python==4.5.4

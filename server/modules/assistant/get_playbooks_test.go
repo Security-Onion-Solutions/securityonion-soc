@@ -503,6 +503,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 				Detectionstore:   mockDetectionstore,
 				Playbookstore:    mockPlaybookstore,
 				DetectionEngines: sync.Map{},
+				AssistantManager: &AssistantCoordinator{filterEventFields: DEFAULT_FILTER_EVENT_FIELDS},
 			}
 
 			// Store the Suricata detection engine for tests that use it
@@ -989,9 +990,40 @@ func TestSimplifyPlaybooks(t *testing.T) {
 		},
 	}
 
+	srv := &server.Server{
+		AssistantManager: &AssistantCoordinator{
+			filterEventFields: []string{
+				"@timestamp",
+				"client.name",
+				"destination.ip", "destination.port", "destination.geo.country_name",
+				"dns.query.name", "dns.query_name",
+				"event.action", "event.category", "event.module", "event.dataset", "event.outcome", "event.severity", "event.severity_label", "event.type",
+				"event_data.agent.name", "event_data.host.os.name",
+				"file.mime_type", "file.name",
+				"hash.md5", "hash.sha1",
+				"host.mac", "host.name", "host.os.name",
+				"http.method", "http.useragent", "http.virtual_host",
+				"log.id.uid",
+				"network.community_id", "network.protocol", "network.transport",
+				"notice.message",
+				"observer.name",
+				"process.name", "process.executable", "process.entity_id", "process.command_line", "process.Ext.ancestry",
+				"process.parent.entity_id", "process.parent.command_line",
+				"rule.category", "rule.name", "rule.uuid",
+				"software.name", "software.type", "software.version.unparsed",
+				"source.ip", "source.port", "source.geo.country_name",
+				"ssh.cypher_algorithm", "ssh.client", "ssh.server",
+				"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+				"user.name", "user.domain", "user.effective.name",
+				"weird.name",
+				"tags",
+			},
+		},
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := simplifyPlaybooks(tc.inputPlaybooks)
+			result := simplifyPlaybooks(srv, tc.inputPlaybooks)
 
 			assert.Equal(t, tc.expectedResult, result, tc.description)
 

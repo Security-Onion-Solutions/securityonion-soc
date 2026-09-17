@@ -146,7 +146,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
+	ownedByUser, sessionExists, isAutomation, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -159,6 +159,14 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	if sessionExists && !ownedByUser {
 		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to post to a session they do not own")
 		web.Respond(w, r, http.StatusForbidden, nil)
+
+		return
+	}
+
+	// prevent users from adding to automated sessions
+	if isAutomation {
+		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to continue an automation session")
+		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be continued")
 
 		return
 	}
@@ -273,7 +281,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
+	ownedByUser, sessionExists, isAutomation, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -289,6 +297,14 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	if sessionExists && !ownedByUser {
 		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to a session they do not own")
 		web.Respond(w, r, http.StatusForbidden, nil)
+
+		return
+	}
+
+	// Prevent users from interactings with tools in automated sessions
+	if isAutomation {
+		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to an automation session")
+		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be modified")
 
 		return
 	}
@@ -593,7 +609,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 
 	// Fetch the session plus every delegated sub-session descending from it, so the
 	// UI can reconstruct nested sub-agent activity when the conversation is reopened.
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true), model.GetSessionsWithDescendants(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true), model.GetSessionsWithDescendants(true), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -748,7 +764,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	// don't allow any actions involving reserved tags
-	for _, reservedTag := range model.MemorySessionTags {
+	for _, reservedTag := range model.ReservedSessionTags {
 		if strings.EqualFold(reservedTag, updateReq.Tag) {
 			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
 
@@ -756,7 +772,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -772,6 +788,14 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	session := sessions[0]
+
+	// cannot modify an automation session
+	if slices.Contains(session.Tags, model.SessionTagAutomation) {
+		logger.Warn("cannot modify tags on an automation session")
+		web.Respond(w, r, http.StatusConflict, "automation session tags cannot be modified")
+
+		return
+	}
 
 	switch updateReq.Action {
 	case "add":
@@ -978,6 +1002,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithUsage(true),
 		model.GetSessionsWithMemorySessions(true),
+		model.GetSessionsWithAutomationSessions(true),
 	}
 
 	if userId != "" {
@@ -1020,7 +1045,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)

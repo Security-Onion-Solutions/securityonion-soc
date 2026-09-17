@@ -302,7 +302,7 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 }
 
 func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
+	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (store *ElasticAssistantstore) GetChatMessages(ctx context.Context, session
 		if err != nil {
 			return nil, err
 		}
-	} else if slices.Contains(session.Tags, "shared") {
+	} else if slices.Contains(session.Tags, model.SessionTagShared) {
 		// they don't own it but it's shared, can the user read_shared?
 		err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
 		if err != nil {
@@ -534,6 +534,14 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 		})
 	}
 
+	if !opt.IncludeAutomationSessions() {
+		mustNot = append(mustNot, map[string]any{
+			"term": map[string]any{
+				store.schemaPrefix + "session.tags": model.SessionTagAutomation,
+			},
+		})
+	}
+
 	if len(mustNot) != 0 {
 		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
 		boolQuery["must_not"] = mustNot
@@ -596,11 +604,11 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 }
 
 // DoesUserOwnSession reports whether the session identified by sessionId is
-// recorded (soft-deleted included) as owned by userId, and whether it exists at
-// all. Only the owner id is fetched from the index — the session document is
-// never transferred or deserialized. A session that doesn't exist returns
-// (false, false, nil).
-func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (ownedByUser bool, sessionExists bool, err error) {
+// recorded (soft-deleted included) as owned by userId, whether it exists at all,
+// and whether it is an automation run's transcript. Only the owner id and tags are
+// fetched from the index — the session document is never transferred or
+// deserialized. A session that doesn't exist returns (false, false, false, nil).
+func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, err error) {
 	logger := log.FromContext(ctx)
 
 	query := map[string]any{
@@ -620,14 +628,17 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 				},
 			},
 		},
-		"_source": []string{store.schemaPrefix + "session.userId"},
-		"size":    1,
+		"_source": []string{
+			store.schemaPrefix + "session.userId",
+			store.schemaPrefix + "session.tags",
+		},
+		"size": 1,
 	}
 
 	queryJSON, err := json.Marshal(query)
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
-		return false, false, err
+		return false, false, false, err
 	}
 
 	res, err := store.esClient.Search(
@@ -637,26 +648,26 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 	)
 	if err != nil {
 		logger.WithError(err).Error("Failed to execute Elasticsearch search")
-		return false, false, err
+		return false, false, false, err
 	}
 	defer res.Body.Close()
 
 	responseJSON, err := readJsonFromResponse(res)
 	if err != nil {
 		logger.WithError(err).Error("Failed to read Elasticsearch response")
-		return false, false, err
+		return false, false, false, err
 	}
 
 	var response map[string]any
 	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
 		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
-		return false, false, err
+		return false, false, false, err
 	}
 
 	hits, _ := response["hits"].(map[string]any)
 	hitsArray, _ := hits["hits"].([]any)
 	if len(hitsArray) == 0 {
-		return false, false, nil
+		return false, false, false, nil
 	}
 
 	hit, _ := hitsArray[0].(map[string]any)
@@ -664,7 +675,17 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 	sess, _ := source[store.schemaPrefix+"session"].(map[string]any)
 	owner, _ := sess["userId"].(string)
 
-	return owner == userId, true, nil
+	// Sessions predating the tags field, and those saved with none, decode to a nil
+	// slice here rather than an error.
+	tags, _ := sess["tags"].([]any)
+	for _, tag := range tags {
+		if s, ok := tag.(string); ok && s == model.SessionTagAutomation {
+			isAutomation = true
+			break
+		}
+	}
+
+	return owner == userId, true, isAutomation, nil
 }
 
 // searchSessions executes a session-index query and deserializes the hits into
@@ -799,7 +820,7 @@ func (store *ElasticAssistantstore) fetchDescendantSessions(ctx context.Context,
 
 func (store *ElasticAssistantstore) filterSharedSessions(ctx context.Context, sessions []*model.AssistantSession) []*model.AssistantSession {
 	logger := log.FromContext(ctx)
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
+	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
 	filteredOut := 0
 
 	var canReadAll, canReadShared, canReadAuthored *bool
@@ -819,7 +840,7 @@ func (store *ElasticAssistantstore) filterSharedSessions(ctx context.Context, se
 			}
 		} else {
 			// they don't own it, is it shared?
-			if slices.Contains(s.Tags, "shared") {
+			if slices.Contains(s.Tags, model.SessionTagShared) {
 				// its shared, can they read shared?
 				if canReadShared == nil {
 					err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
@@ -1472,6 +1493,20 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 					map[string]any{
 						"terms": map[string]any{
 							store.schemaPrefix + "session.tags": model.MemorySessionTags,
+						},
+					},
+					// Incognito sessions opted out of memory extraction at creation.
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.tags": model.SessionTagIncognito,
+						},
+					},
+					// An automation transcript is the machine talking to itself;
+					// scanning it would feed a run's own output back as the owner's
+					// memories, and the scanner can otherwise read a partial mid-run.
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "session.tags": model.SessionTagAutomation,
 						},
 					},
 				},

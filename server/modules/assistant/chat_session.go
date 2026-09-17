@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -165,6 +166,9 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 	if entityType != "" && entityId != "" {
 		session.Type = entityType
 		session.EntityId = entityId
+	}
+	if slices.Contains(incMsg.Tags, model.SessionTagIncognito) {
+		session.Tags = []string{model.SessionTagIncognito}
 	}
 
 	return ac.srv.Assistantstore.CreateSession(ctx, session)

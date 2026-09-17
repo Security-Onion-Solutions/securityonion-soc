@@ -1133,6 +1133,10 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	assert.Contains(t, string(body), `"memory"`)
 	assert.Contains(t, string(body), `"embed"`)
 	assert.Contains(t, string(body), `"reconcile"`)
+	// incognito sessions opted out of memory extraction
+	assert.Contains(t, string(body), `"term":{"so_session.tags":"incognito"}`)
+	// automation transcripts are the machine talking to itself
+	assert.Contains(t, string(body), `"term":{"so_session.tags":"automation"}`)
 	// nil dontScanBefore adds no range clause
 	var pendingQuery map[string]any
 	assert.NoError(t, json.Unmarshal(body, &pendingQuery))
@@ -2150,13 +2154,16 @@ func TestGetSessions_IncludeDeleted(t *testing.T) {
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
 	assert.NoError(t, err)
 
-	// includeDeleted=true drops the deleteTime exclusion; the default
-	// memory-session exclusion remains as the only must_not member
+	// includeDeleted=true drops the deleteTime exclusion; the default memory-session
+	// and automation-session exclusions remain
 	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
 	mustNot, hasMustNot := boolQuery["must_not"].([]any)
-	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 1) {
+	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 2) {
 		terms := mustNot[0].(map[string]any)["terms"].(map[string]any)
 		assert.ElementsMatch(t, []any{"memory", "embed", "reconcile"}, terms["so_session.tags"])
+
+		term := mustNot[1].(map[string]any)["term"].(map[string]any)
+		assert.Equal(t, "automation", term["so_session.tags"])
 	}
 }
 
@@ -2196,19 +2203,22 @@ func TestGetSessions_ExcludesMemorySessionsByDefault(t *testing.T) {
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
 	assert.NoError(t, err)
 
-	// by default both the deleted and the memory-session exclusions apply
+	// by default the deleted, memory-session and automation-session exclusions apply
 	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
 	mustNot, hasMustNot := boolQuery["must_not"].([]any)
-	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 2) {
+	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 3) {
 		exists := mustNot[0].(map[string]any)["exists"].(map[string]any)
 		assert.Equal(t, "so_session.deleteTime", exists["field"])
 
 		terms := mustNot[1].(map[string]any)["terms"].(map[string]any)
 		assert.ElementsMatch(t, []any{"memory", "embed", "reconcile"}, terms["so_session.tags"])
+
+		term := mustNot[2].(map[string]any)["term"].(map[string]any)
+		assert.Equal(t, "automation", term["so_session.tags"])
 	}
 }
 
-func TestGetSessions_IncludeMemorySessions(t *testing.T) {
+func TestGetSessions_ExcludesAutomationSessionsIndependently(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
 	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
@@ -2244,10 +2254,55 @@ func TestGetSessions_IncludeMemorySessions(t *testing.T) {
 	err = json.NewDecoder(reqs[0].Body).Decode(&query)
 	assert.NoError(t, err)
 
-	// with both include opts no exclusions remain
+	// the automation exclusion has its own opt and survives the other two being off
+	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
+	mustNot, hasMustNot := boolQuery["must_not"].([]any)
+	if assert.True(t, hasMustNot) && assert.Len(t, mustNot, 1) {
+		term := mustNot[0].(map[string]any)["term"].(map[string]any)
+		assert.Equal(t, "automation", term["so_session.tags"])
+	}
+}
+
+func TestGetSessions_IncludeMemorySessions(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	searchResponse := `{
+		"hits": {
+			"total": {
+				"value": 0
+			},
+			"hits": []
+		}
+	}`
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(searchResponse)),
+	}, nil)
+
+	sessions, err := store.GetSessions(ctx, model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true), model.GetSessionsWithAutomationSessions(true))
+	assert.NoError(t, err)
+	assert.Empty(t, sessions)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+
+	var query map[string]any
+	err = json.NewDecoder(reqs[0].Body).Decode(&query)
+	assert.NoError(t, err)
+
+	// with every include opt no exclusions remain
 	boolQuery := query["query"].(map[string]any)["bool"].(map[string]any)
 	_, hasMustNot := boolQuery["must_not"]
-	assert.False(t, hasMustNot, "must_not clause should not be present when both include opts are set")
+	assert.False(t, hasMustNot, "must_not clause should not be present when all include opts are set")
 }
 
 func TestGetSessions_TimeRangeFilter(t *testing.T) {
@@ -2583,6 +2638,8 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 }
 
 func TestDoesUserOwnSession(t *testing.T) {
+	// A session with no tags key at all stands in for documents that predate the
+	// field; the tag parse must read those as "not an automation session".
 	ownerHitResponse := func(owner string) string {
 		return `{
 			"hits": {
@@ -2603,13 +2660,35 @@ func TestDoesUserOwnSession(t *testing.T) {
 		}`
 	}
 
+	taggedHitResponse := func(owner string, tags string) string {
+		return `{
+			"hits": {
+				"total": {
+					"value": 1
+				},
+				"hits": [
+					{
+						"_id": "session123",
+						"_source": {
+							"so_session": {
+								"userId": "` + owner + `",
+								"tags": ` + tags + `
+							}
+						}
+					}
+				]
+			}
+		}`
+	}
+
 	testCases := []struct {
-		name       string
-		statusCode int
-		response   string
-		wantOwned  bool
-		wantExists bool
-		wantErr    bool
+		name           string
+		statusCode     int
+		response       string
+		wantOwned      bool
+		wantExists     bool
+		wantAutomation bool
+		wantErr        bool
 	}{
 		{
 			name:       "session owned by the user",
@@ -2633,6 +2712,28 @@ func TestDoesUserOwnSession(t *testing.T) {
 			wantExists: false,
 		},
 		{
+			name:           "automation session",
+			statusCode:     200,
+			response:       taggedHitResponse("test-user", `["automation", "shared"]`),
+			wantOwned:      true,
+			wantExists:     true,
+			wantAutomation: true,
+		},
+		{
+			name:       "other tags are not automation",
+			statusCode: 200,
+			response:   taggedHitResponse("test-user", `["shared", "investigation"]`),
+			wantOwned:  true,
+			wantExists: true,
+		},
+		{
+			name:       "empty tag list",
+			statusCode: 200,
+			response:   taggedHitResponse("test-user", `[]`),
+			wantOwned:  true,
+			wantExists: true,
+		},
+		{
 			name:       "elasticsearch error propagates",
 			statusCode: 500,
 			response:   `{"error": "internal server error"}`,
@@ -2651,7 +2752,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 
 			addJsonResponse(transport, tc.statusCode, tc.response)
 
-			ownedByUser, sessionExists, err := store.DoesUserOwnSession(ctx, "test-user", "session123")
+			ownedByUser, sessionExists, isAutomation, err := store.DoesUserOwnSession(ctx, "test-user", "session123")
 			if tc.wantErr {
 				assert.Error(t, err)
 				return
@@ -2660,16 +2761,17 @@ func TestDoesUserOwnSession(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.wantOwned, ownedByUser)
 			assert.Equal(t, tc.wantExists, sessionExists)
+			assert.Equal(t, tc.wantAutomation, isAutomation)
 
-			// Verify the query fetches only the owner id: source-filtered to the
-			// session userId field, capped to a single hit, filtered by kind and
+			// Verify the query fetches only the owner id and tags: source-filtered to
+			// those session fields, capped to a single hit, filtered by kind and
 			// sessionId.
 			reqs := transport.GetRequests()
 			assert.Len(t, reqs, 1)
 
 			var query map[string]any
 			assert.NoError(t, json.NewDecoder(reqs[0].Body).Decode(&query))
-			assert.Equal(t, []any{"so_session.userId"}, query["_source"])
+			assert.Equal(t, []any{"so_session.userId", "so_session.tags"}, query["_source"])
 			assert.Equal(t, float64(1), query["size"])
 
 			mustQuery := query["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any)

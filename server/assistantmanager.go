@@ -40,6 +40,7 @@ type AssistantManager interface {
 	ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error)
 	ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error)
 	ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error)
+	RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error)
 	ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error)
 	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
@@ -52,6 +53,7 @@ type AssistantManager interface {
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error
 	RemoveMemory(ctx context.Context, id string) error
+	FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any
 }
 
 type AssistantAdapter interface {

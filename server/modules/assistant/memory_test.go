@@ -1381,6 +1381,24 @@ func singleEmbedAdapter() *embedAdapter {
 	}}
 }
 
+// countingEmbedAdapter behaves like singleEmbedAdapter and reports how many
+// embedding calls it served, which is how the probe is counted.
+func countingEmbedAdapter() (*embedAdapter, *int) {
+	calls := 0
+	adapter := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		calls++
+
+		embeddings := make([][]float32, 0, len(req.Input))
+		for range req.Input {
+			embeddings = append(embeddings, []float32{0.1})
+		}
+
+		return &model.EmbeddingResponse{Model: req.Model, Embeddings: embeddings}, nil
+	}}
+
+	return adapter, &calls
+}
+
 func memoryTestCtx() context.Context {
 	return context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
 }
@@ -3257,11 +3275,27 @@ func TestReloadMemoryConfigurationPublishesPersonas(t *testing.T) {
 	assert.Equal(t, "be terse", ac.memorySnapshot().memoryPersona)
 }
 
-func newReembedTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter) *AssistantCoordinator {
+func newReembedTestCoordinator(mDB *mockdb.MockDB, embed *embedAdapter, stored ...int) *AssistantCoordinator {
 	ac := newFetchTestCoordinator(mDB, embed, map[string]bool{})
 	ac.srv.Context = context.Background()
 
+	total := 1
+	if len(stored) > 0 {
+		total = stored[0]
+	}
+
+	expectMemoryTotal(mDB, total)
+
 	return ac
+}
+
+func expectMemoryTotal(mDB *mockdb.MockDB, total int) {
+	countRow := &mockdb.MockRow{}
+	countRow.On("Scan", mock.Anything).Run(func(a mock.Arguments) {
+		*(a.Get(0).(*int)) = total
+	}).Return(nil)
+
+	mDB.On("QueryRow", mock.Anything, sqlContains("SELECT COUNT(*) FROM memories")).Return(countRow).Maybe()
 }
 
 // expectStaleBatch scripts one batch query returning the given id/text pairs.
@@ -3380,6 +3414,57 @@ func TestReembedStopsWhenNothingIsStale(t *testing.T) {
 	// No batch query and no updates: the count alone ends the pass.
 	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestReembedSkipsProbeWhenNoMemoriesAreStored(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mDB := &mockdb.MockDB{}
+	embed, probes := countingEmbedAdapter()
+
+	ac := newReembedTestCoordinator(mDB, embed, 0)
+	// A store with no rows also clears a count left by an earlier pass.
+	ac.staleMemories.Store(3)
+
+	ac.srv.Assistantstore = servermock.NewMockAssistantstore(ctrl)
+
+	ac.reembedStaleMemories(context.Background())
+
+	assert.Equal(t, 0, *probes, "an empty store is never probed")
+	assert.Equal(t, int64(0), ac.staleMemories.Load())
+	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, sqlContains("WHERE model_id <> $1"), mock.Anything)
+}
+
+func TestReembedSkipsAlreadyVerifiedModel(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	embed, probes := countingEmbedAdapter()
+
+	ac := newReembedTestCoordinator(mDB, embed)
+
+	expectStaleCount(mDB, "embed-model", 0)
+
+	ac.reembedStaleMemories(context.Background())
+	assert.Equal(t, 1, *probes)
+
+	ac.reembedStaleMemories(context.Background())
+	assert.Equal(t, 1, *probes, "the model was already verified, so the pass is skipped")
+}
+
+func TestReembedRetriesAfterAFailedProbe(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	probes := 0
+	embed := &embedAdapter{embedFn: func(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {
+		probes++
+		return nil, errors.New("gateway down")
+	}}
+
+	ac := newReembedTestCoordinator(mDB, embed)
+
+	ac.reembedStaleMemories(context.Background())
+	ac.reembedStaleMemories(context.Background())
+
+	assert.Equal(t, 2, probes, "a failed pass verifies nothing")
 }
 
 // A failed embed must leave the remaining rows alone so the next pass retries them.
@@ -3517,8 +3602,10 @@ func TestReembedTimesOutAStalledEmbedCall(t *testing.T) {
 		t.Fatal("stalled embedding call was never bounded")
 	}
 
-	// The probe never returned a model, so nothing was counted or read.
-	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
+	// The probe never returned a model, so nothing was counted as stale or read.
+	// mock.Anything also matches a missing argument, so the query has to be named.
+	mDB.AssertNotCalled(t, "QueryRow", mock.Anything, sqlContains("WHERE model_id <> $1"), mock.Anything)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, sqlContains("WHERE model_id <> $1"), mock.Anything, mock.Anything)
 }
 
 func TestStartReembedRunsOnlyOnePassAtATime(t *testing.T) {

@@ -1208,18 +1208,17 @@ test('loadPlaybooks', async () => {
 
 		comp.runQueryInDiscover();
 
-		expect(window.open).toHaveBeenCalledWith(
-			'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
-			'_blank'
-		);
+		const esqlUrl = window.open.mock.calls[0][0];
+		expect(window.open).toHaveBeenCalledWith(esqlUrl, '_blank');
+		expect(esqlUrl.startsWith('/kibana/app/discover#/?_a=')).toBe(true);
+		expect(LZString.compressToEncodedURIComponent).not.toHaveBeenCalled();
 
-		const expectedQuery = `POST /_query
-{
-	"query": """
-	FROM logs-*
-	"""
-}`;
-		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedQuery);
+		const esqlAppState = decodeURIComponent(esqlUrl.split('_a=')[1].split('&_g=')[0]);
+		expect(esqlAppState).toContain('dataSource:(type:esql)');
+		expect(esqlAppState).toContain("query:(esql:'FROM logs-*')");
+
+		const esqlGlobalState = decodeURIComponent(esqlUrl.split('&_g=')[1]);
+		expect(esqlGlobalState).toContain('time:(from:now-24h,to:now)');
 
 		comp.isEsql = false;
 		comp.convertedRule = 'some eql query';
@@ -1232,10 +1231,28 @@ test('loadPlaybooks', async () => {
 	"""
 }`;
 		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedEqlQuery);
+		expect(window.open).toHaveBeenCalledWith(
+			'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
+			'_blank'
+		);
 
 		window.open = originalOpen;
 		LZString.compressToEncodedURIComponent = originalCompress;
 		resetPapi();
+	});
+
+	test('buildEsqlDiscoverUrl escapes rison special characters', () => {
+		const url = comp.buildEsqlDiscoverUrl(`from * | where process.command_line like "* /priv*" and message == "it's a !bang"`);
+
+		const appState = decodeURIComponent(url.split('_a=')[1].split('&_g=')[0]);
+		expect(appState).toContain(`query:(esql:'from * | where process.command_line like "* /priv*" and message == "it!'s a !!bang"')`);
+	});
+
+	test('buildEsqlDiscoverUrl trims and preserves backslashes', () => {
+		const url = comp.buildEsqlDiscoverUrl('  from * | where ends_with(process.executable.caseless, "\\whoami.exe")  ');
+
+		const appState = decodeURIComponent(url.split('_a=')[1].split('&_g=')[0]);
+		expect(appState).toContain(`query:(esql:'from * | where ends_with(process.executable.caseless, "\\whoami.exe")')`);
 	});
 
 	test('extract elastalert with multi-doc YAML', () => {

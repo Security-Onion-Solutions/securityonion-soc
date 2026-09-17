@@ -300,6 +300,15 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
+	// Notify ships defined but granted to nobody: an admin decides which agent gets it.
+	assert.Equal(t, []string{"send_notification"}, ac.SkillLibrary["Notify"].Tools)
+	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
+	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
+	assert.Contains(t, ac.builtinSkills, "Notify")
+	for name, agent := range ac.agents {
+		assert.NotContains(t, agent.AllowedSkills, "Notify", name)
+	}
+
 	// Delegate tools are registered under both the agent name and the
 	// sanitized tool name.
 	for _, key := range []string{
@@ -480,6 +489,21 @@ func TestParseAgentsSetting(t *testing.T) {
 		assert.True(t, agents["On"].Enabled)
 	})
 
+	t.Run("maxConcurrentInstances defaults to unlimited and clamps a negative", func(t *testing.T) {
+		value := `{"name":"Default","model":"m"}
+{"name":"Capped","model":"m","maxConcurrentInstances":2}
+{"name":"Bogus","model":"m","maxConcurrentInstances":-1}`
+
+		agents, _, err := parseAgentsSetting(&model.Setting{Id: ConfigSettingAgents, Value: value})
+		require.NoError(t, err)
+		require.Len(t, agents, 3)
+
+		assert.Equal(t, 0, agents["Default"].MaxConcurrentInstances, "omitted means unlimited")
+		assert.Equal(t, 2, agents["Capped"].MaxConcurrentInstances)
+		// A negative would otherwise read as a limit no session can satisfy.
+		assert.Equal(t, 0, agents["Bogus"].MaxConcurrentInstances)
+	})
+
 	t.Run("malformed json returns an error", func(t *testing.T) {
 		_, _, err := parseAgentsSetting(&model.Setting{Id: ConfigSettingAgents, Value: `{"name":"X"`})
 		assert.Error(t, err)
@@ -572,6 +596,18 @@ func TestApplyBuiltinDefaults(t *testing.T) {
 		ac.applyBuiltinDefaults(agents)
 
 		assert.Equal(t, []string{}, agents["Orchestrator"].CanDelegateTo)
+	})
+
+	t.Run("a stored concurrency limit survives on a system agent", func(t *testing.T) {
+		ac, _ := builtinMergeCoordinator()
+		agents := map[string]model.Agent{
+			"Hunter": {Name: "Hunter", Enabled: true, MaxConcurrentInstances: 3},
+		}
+
+		ac.applyBuiltinDefaults(agents)
+
+		// Editable, and no builtin declares one, so the stored value always wins.
+		assert.Equal(t, 3, agents["Hunter"].MaxConcurrentInstances)
 	})
 
 	t.Run("an admin-created agent is left untouched", func(t *testing.T) {
@@ -774,6 +810,24 @@ func TestExposeAgentsPublishesLimits(t *testing.T) {
 	assert.Equal(t, 9000, params.MaxSubSessionTokens)
 }
 
+func TestExposeAgentsPublishesConcurrencyLimit(t *testing.T) {
+	ac, _ := builtinMergeCoordinator()
+	ac.agents = map[string]model.Agent{
+		"Hunter": {Name: "Hunter", Enabled: true, MaxConcurrentInstances: 2},
+	}
+	ac.agentMapping = map[string]string{"Hunter": "m2@a"}
+
+	ac.exposeAgents()
+
+	params := ac.srv.Config.ClientParams.AssistantParams
+	require.Len(t, params.AvailableAgents, 1)
+	assert.Equal(t, 2, params.AvailableAgents[0].MaxConcurrentInstances)
+
+	raw, err := json.Marshal(params.AvailableAgents[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"maxConcurrentInstances":2`)
+}
+
 func TestBroadcastAgenticUpdateWithoutHost(t *testing.T) {
 	ac, _ := builtinMergeCoordinator()
 	ac.srv.Host = nil
@@ -883,6 +937,19 @@ func TestSaveAgentMergesIntoStoredList(t *testing.T) {
 	assert.Contains(t, lines[0], `"model":"m1@a"`)
 	assert.Contains(t, lines[1], `"model":"m3@a"`)
 	assert.Contains(t, lines[1], `"persona":"hunt better"`)
+}
+
+func TestSaveAgentPersistsConcurrencyLimit(t *testing.T) {
+	ac, store := configWriteCoordinator(`{"name":"Hunter","enabled":true,"model":"m2@a"}`)
+
+	err := ac.SaveAgent(context.Background(), "Hunter", &model.StoredAgent{
+		Name: "Hunter", Enabled: enabledPtr(true), Model: "m2@a", MaxConcurrentInstances: 3,
+	})
+	require.NoError(t, err)
+
+	lines := store.lastWritten()
+	require.Len(t, lines, 1)
+	assert.Contains(t, lines[0], `"maxConcurrentInstances":3`)
 }
 
 func TestSaveAgentAppendsWhenNew(t *testing.T) {
