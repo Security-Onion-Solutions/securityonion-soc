@@ -1280,7 +1280,7 @@ const i18n = {
       editSchedule: 'Edit Schedule',
       deleteScheduleTitle: 'Delete Schedule',
       deleteScheduleConfirm: 'Are you sure you want to delete this schedule?',
-      deleteScheduleWarning: 'Any entities that reference this schedule will effectively have an inactive schedule.',
+      deleteScheduleWarning: 'Any entities that reference this schedule will treat the missing schedule as Always Active.',
       duplicateSchedule: 'Duplicate Schedule',
       exceptionSchedules: 'Exception Schedules',
       exceptionSchedulesHint: 'Select blackout schedules (e.g. holidays or maintenance windows) during which this schedule will be inactive.',
