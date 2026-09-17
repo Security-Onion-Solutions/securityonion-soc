@@ -133,11 +133,38 @@ globalThis.socNotifications = {
     }
   },
 
+  showNotificationToast(payload) {
+    if (!payload || !payload.title) return;
+    this.notificationToastTitle = payload.title;
+    this.notificationToastSeverity = payload.severity || 'info';
+    this.notificationToast = true;
+  },
+
+  getNotificationToastColor(severity) {
+    const s = severity?.toLowerCase();
+    switch (s) {
+      case 'critical': return 'red-darken-4';
+      case 'high': return 'deep-orange-darken-3';
+      case 'medium': return 'amber-darken-4';
+      case 'low': return 'blue-darken-3';
+      default: return 'grey-darken-3';
+    }
+  },
+
+  openNotificationFromToast() {
+    this.notificationToast = false;
+    this.notificationMenu = true;
+    this.loadNotifications();
+  },
+
   handleIncomingNotification(payload) {
     if (!this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return;
     this.unreadCount = (this.unreadCount || 0) + 1;
     if (payload && payload.timestamp) {
       this.lastUnreadNotificationTime = payload.timestamp;
+    }
+    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
+      this.showNotificationToast(payload);
     }
     if (this.notificationMenu) {
       this.loadNotifications();

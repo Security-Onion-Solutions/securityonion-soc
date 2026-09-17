@@ -9,6 +9,7 @@ coverage/
 .vscode/
 .DS_Store
 node_modules/
+md/
 
 # Pytest output
 __pycache__

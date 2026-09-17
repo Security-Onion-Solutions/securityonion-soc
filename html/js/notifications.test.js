@@ -466,6 +466,35 @@ describe('notifications.js', () => {
       expect(mockLoadNotifications).not.toHaveBeenCalled();
     });
 
+    it('triggers toast notification on incoming payload with title', () => {
+      const mockLoadNotifications = jest.fn();
+
+      const ctx = {
+        FEAT_NTF: 'ntf',
+        isLicensed: jest.fn(() => true),
+        notificationsStarted: true,
+        unreadCount: 0,
+        lastUnreadNotificationTime: null,
+        notificationMenu: false,
+        notificationToast: false,
+        notificationToastTitle: '',
+        notificationToastSeverity: 'info',
+        loadNotifications: mockLoadNotifications,
+        showNotificationToast: socNotifications.showNotificationToast
+      };
+
+      socNotifications.handleIncomingNotification.call(ctx, {
+        id: 'notif-999',
+        title: 'New High Severity Alert',
+        severity: 'high',
+        timestamp: '2026-08-20T17:15:00Z'
+      });
+
+      expect(ctx.notificationToast).toBe(true);
+      expect(ctx.notificationToastTitle).toBe('New High Severity Alert');
+      expect(ctx.notificationToastSeverity).toBe('high');
+    });
+
     it('does nothing if unlicensed for notifications', () => {
       const mockLoadNotifications = jest.fn();
 
@@ -482,6 +511,31 @@ describe('notifications.js', () => {
 
       expect(ctx.unreadCount).toBe(0);
       expect(mockLoadNotifications).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toast helpers', () => {
+    it('maps severity to toast colors correctly', () => {
+      expect(socNotifications.getNotificationToastColor('critical')).toBe('red-darken-4');
+      expect(socNotifications.getNotificationToastColor('high')).toBe('deep-orange-darken-3');
+      expect(socNotifications.getNotificationToastColor('medium')).toBe('amber-darken-4');
+      expect(socNotifications.getNotificationToastColor('low')).toBe('blue-darken-3');
+      expect(socNotifications.getNotificationToastColor('info')).toBe('grey-darken-3');
+      expect(socNotifications.getNotificationToastColor(null)).toBe('grey-darken-3');
+    });
+
+    it('opens notification panel when clicking toast', () => {
+      const mockLoadNotifications = jest.fn();
+      const ctx = {
+        notificationToast: true,
+        notificationMenu: false,
+        loadNotifications: mockLoadNotifications
+      };
+
+      socNotifications.openNotificationFromToast.call(ctx);
+      expect(ctx.notificationToast).toBe(false);
+      expect(ctx.notificationMenu).toBe(true);
+      expect(mockLoadNotifications).toHaveBeenCalled();
     });
   });
 });
