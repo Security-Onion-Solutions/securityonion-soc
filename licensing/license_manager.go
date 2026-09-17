@@ -435,7 +435,6 @@ func stopMonitor() {
 			manager.effectiveTimer.Reset(time.Duration(0))
 		}
 		if manager.pillarTimer != nil {
-			pillarFilename = ""
 			manager.pillarTimer.Stop()
 		}
 
