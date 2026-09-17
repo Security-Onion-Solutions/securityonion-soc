@@ -108,10 +108,7 @@ components.push({
             this.$emit('destinations-loaded', this.destinations);
           }
         } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
-          }
+          this.$root.showError(error);
         }
       },
       async getSchedules() {
@@ -275,10 +272,7 @@ components.push({
             this.$emit('destination-saved', payload);
           }
         } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
-          }
+          this.$root.showError(error);
         } finally {
           this.$root?.stopLoading?.();
         }
@@ -298,10 +292,7 @@ components.push({
             this.$emit('destination-deleted', deletedId);
           }
         } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
-          }
+          this.$root.showError(error);
         } finally {
           this.$root?.stopLoading?.();
         }
@@ -318,10 +309,7 @@ components.push({
             this.$root.notification = true;
           }
         } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.testNotificationFailed);
-          }
+          this.$root.showError(error);
         } finally {
           this.testingDestinationId = null;
         }

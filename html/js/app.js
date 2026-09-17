@@ -256,6 +256,7 @@ $(document).ready(function () {
           settingsUrl: null,
           version: '0.0.0',
           elasticVersion: '0.0.0',
+          timezones: [],
           papi: null,
           connectionTimeout: 300000,
           wsConnectionTimeout: 15000,

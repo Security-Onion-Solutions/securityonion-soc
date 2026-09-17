@@ -263,7 +263,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
       this.historicalMetricsEnabled = !this.nodes.every(function(node) { return !node.historicalMetricsEnabled; });
       this.metricsNodeItems = [
-        { title: this.i18n.metricsAllHosts || 'All Hosts', value: '' }
+        { title: this.i18n.metricsAllHosts, value: '' }
       ].concat(this.nodes.map(n => ({ title: n.id, value: n.id })));
 
       this.$root.updateColumnClass(this.headers, this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
@@ -607,7 +607,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         }
       });
       return [
-        { title: this.i18n.metricsAllContainers || 'All Containers', value: 'all' }
+        { title: this.i18n.metricsAllContainers, value: 'all' }
       ].concat(Array.from(containerNames).sort().map(name => ({ title: name, value: name })));
     },
     loadUrlParameters() {

@@ -20,12 +20,12 @@ components.push({
       const daysOfMonthList = [];
       for (let i = 1; i <= 31; i++) {
         daysOfMonthList.push({
-          title: `${this.$root?.i18n?.dayPrefix || 'Day'} ${i}`,
+          title: `${this.$root?.i18n?.dayPrefix} ${i}`,
           value: i,
         });
       }
       daysOfMonthList.push({
-        title: this.$root?.i18n?.lastDayOfMonth || 'Last Day of Month',
+        title: this.$root?.i18n?.lastDayOfMonth,
         value: -1,
       });
 
@@ -35,11 +35,11 @@ components.push({
         now: new Date(),
         activeEvaluationInterval: null,
         scheduleHeaders: [
-          { title: this.$root?.i18n?.name || 'Name', value: 'name' },
-          { title: this.$root?.i18n?.timezone || 'Timezone', value: 'timezone' },
-          { title: this.$root?.i18n?.recurrenceSummary || 'Recurrence Summary', value: 'summary', sortable: false },
-          { title: this.$root?.i18n?.status || 'Status', value: 'status', sortable: false },
-          { title: this.$root?.i18n?.actions || 'Actions', value: 'actions', sortable: false, align: 'end' },
+          { title: this.$root?.i18n?.name, value: 'name' },
+          { title: this.$root?.i18n?.timezone, value: 'timezone' },
+          { title: this.$root?.i18n?.recurrenceSummary, value: 'summary', sortable: false },
+          { title: this.$root?.i18n?.status, value: 'status', sortable: false },
+          { title: this.$root?.i18n?.actions, value: 'actions', sortable: false, align: 'end' },
         ],
         scheduleSortBy: [{ key: 'name', order: 'asc' }],
         scheduleItemsPerPage: 10,
@@ -62,46 +62,46 @@ components.push({
         },
         timezones: [],
         daysOfWeekOptions: [
-          { title: this.$root?.i18n?.daySunday || 'Sunday', value: 0 },
-          { title: this.$root?.i18n?.dayMonday || 'Monday', value: 1 },
-          { title: this.$root?.i18n?.dayTuesday || 'Tuesday', value: 2 },
-          { title: this.$root?.i18n?.dayWednesday || 'Wednesday', value: 3 },
-          { title: this.$root?.i18n?.dayThursday || 'Thursday', value: 4 },
-          { title: this.$root?.i18n?.dayFriday || 'Friday', value: 5 },
-          { title: this.$root?.i18n?.daySaturday || 'Saturday', value: 6 },
+          { title: this.$root?.i18n?.daySunday, value: 0 },
+          { title: this.$root?.i18n?.dayMonday, value: 1 },
+          { title: this.$root?.i18n?.dayTuesday, value: 2 },
+          { title: this.$root?.i18n?.dayWednesday, value: 3 },
+          { title: this.$root?.i18n?.dayThursday, value: 4 },
+          { title: this.$root?.i18n?.dayFriday, value: 5 },
+          { title: this.$root?.i18n?.daySaturday, value: 6 },
         ],
         weekNumberOptions: [
-          { title: this.$root?.i18n?.ordinalFirst || '1st', value: 1 },
-          { title: this.$root?.i18n?.ordinalSecond || '2nd', value: 2 },
-          { title: this.$root?.i18n?.ordinalThird || '3rd', value: 3 },
-          { title: this.$root?.i18n?.ordinalFourth || '4th', value: 4 },
-          { title: this.$root?.i18n?.ordinalFifth || '5th', value: 5 },
-          { title: this.$root?.i18n?.ordinalLast || 'Last', value: -1 },
+          { title: this.$root?.i18n?.ordinalFirst, value: 1 },
+          { title: this.$root?.i18n?.ordinalSecond, value: 2 },
+          { title: this.$root?.i18n?.ordinalThird, value: 3 },
+          { title: this.$root?.i18n?.ordinalFourth, value: 4 },
+          { title: this.$root?.i18n?.ordinalFifth, value: 5 },
+          { title: this.$root?.i18n?.ordinalLast, value: -1 },
         ],
         monthOptions: [
-          { title: this.$root?.i18n?.monthJan || 'January', value: 1 },
-          { title: this.$root?.i18n?.monthFeb || 'February', value: 2 },
-          { title: this.$root?.i18n?.monthMar || 'March', value: 3 },
-          { title: this.$root?.i18n?.monthApr || 'April', value: 4 },
-          { title: this.$root?.i18n?.monthMay || 'May', value: 5 },
-          { title: this.$root?.i18n?.monthJun || 'June', value: 6 },
-          { title: this.$root?.i18n?.monthJul || 'July', value: 7 },
-          { title: this.$root?.i18n?.monthAug || 'August', value: 8 },
-          { title: this.$root?.i18n?.monthSep || 'September', value: 9 },
-          { title: this.$root?.i18n?.monthOct || 'October', value: 10 },
-          { title: this.$root?.i18n?.monthNov || 'November', value: 11 },
-          { title: this.$root?.i18n?.monthDec || 'December', value: 12 },
+          { title: this.$root?.i18n?.monthJan, value: 1 },
+          { title: this.$root?.i18n?.monthFeb, value: 2 },
+          { title: this.$root?.i18n?.monthMar, value: 3 },
+          { title: this.$root?.i18n?.monthApr, value: 4 },
+          { title: this.$root?.i18n?.monthMay, value: 5 },
+          { title: this.$root?.i18n?.monthJun, value: 6 },
+          { title: this.$root?.i18n?.monthJul, value: 7 },
+          { title: this.$root?.i18n?.monthAug, value: 8 },
+          { title: this.$root?.i18n?.monthSep, value: 9 },
+          { title: this.$root?.i18n?.monthOct, value: 10 },
+          { title: this.$root?.i18n?.monthNov, value: 11 },
+          { title: this.$root?.i18n?.monthDec, value: 12 },
         ],
         daysOfMonthOptions: daysOfMonthList,
         patternModeOptions: [
-          { title: this.$root?.i18n?.onDay || 'On day of month', value: 'dayOfMonth' },
-          { title: this.$root?.i18n?.onNthWeekday || 'On the Nth weekday', value: 'nthWeekday' },
+          { title: this.$root?.i18n?.onDayOfMonth, value: 'dayOfMonth' },
+          { title: this.$root?.i18n?.onNthWeekday, value: 'nthWeekday' },
         ],
         recurrenceTypes: [
-          { title: this.$root?.i18n?.daily || 'Daily', value: 'daily' },
-          { title: this.$root?.i18n?.weekly || 'Weekly', value: 'weekly' },
-          { title: this.$root?.i18n?.monthly || 'Monthly', value: 'monthly' },
-          { title: this.$root?.i18n?.annually || 'Annually', value: 'annually' },
+          { title: this.$root?.i18n?.daily, value: 'daily' },
+          { title: this.$root?.i18n?.weekly, value: 'weekly' },
+          { title: this.$root?.i18n?.monthly, value: 'monthly' },
+          { title: this.$root?.i18n?.annually, value: 'annually' },
         ],
       };
     },
@@ -130,11 +130,7 @@ components.push({
     },
     methods: {
       initTimezones() {
-        if (typeof moment !== 'undefined' && moment.tz && typeof moment.tz.names === 'function') {
-          this.timezones = moment.tz.names();
-        } else {
-          this.timezones = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo'];
-        }
+        this.timezones = this.$root?.timezones || [];
       },
       detectBrowserTimezone() {
         try {
@@ -162,10 +158,7 @@ components.push({
             this.$emit('schedules-loaded', this.schedules);
           }
         } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
-          }
+          this.$root.showError(error);
         }
       },
       normalizeDefinition(d) {
@@ -358,12 +351,9 @@ components.push({
             this.$emit('schedule-saved', payload);
           }
           await this.getSchedules();
-        } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (this.i18n.unknownError || 'An error occurred');
-          }
-        } finally {
+         } catch (error) {
+           this.$root.showError(error);
+         } finally {
           this.$root?.stopLoading?.();
         }
       },
@@ -386,12 +376,9 @@ components.push({
             this.$emit('schedule-deleted', deletedId);
           }
           await this.getSchedules();
-        } catch (error) {
-          if (this.$root) {
-            this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
-          }
-        } finally {
+         } catch (error) {
+           this.$root.showError(error);
+         } finally {
           this.$root?.stopLoading?.();
         }
       },

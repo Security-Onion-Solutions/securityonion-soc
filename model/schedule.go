@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -350,13 +351,13 @@ func matchesDay(def ScheduleDefinition, t time.Time) bool {
 		return true
 
 	case ScheduleTypeWeekly:
-		return sliceContains(def.DaysOfWeek, int(t.Weekday()))
+		return slices.Contains(def.DaysOfWeek, int(t.Weekday()))
 
 	case ScheduleTypeMonthly:
 		return matchesMonthlyRecurrence(def, t)
 
 	case ScheduleTypeAnnually:
-		if !sliceContains(def.Months, int(t.Month())) {
+		if !slices.Contains(def.Months, int(t.Month())) {
 			return false
 		}
 		if len(def.DaysOfMonth) == 0 && len(def.WeekNumbers) == 0 {
@@ -385,7 +386,7 @@ func matchesMonthlyRecurrence(def ScheduleDefinition, t time.Time) bool {
 	}
 
 	if len(def.WeekNumbers) > 0 && len(def.DaysOfWeek) > 0 {
-		if sliceContains(def.DaysOfWeek, int(t.Weekday())) {
+		if slices.Contains(def.DaysOfWeek, int(t.Weekday())) {
 			nth := (t.Day()-1)/7 + 1
 			isLast := t.AddDate(0, 0, 7).Month() != t.Month()
 			for _, wn := range def.WeekNumbers {
@@ -396,15 +397,6 @@ func matchesMonthlyRecurrence(def ScheduleDefinition, t time.Time) bool {
 		}
 	}
 
-	return false
-}
-
-func sliceContains(slice []int, val int) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
-	}
 	return false
 }
 
