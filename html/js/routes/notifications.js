@@ -13,11 +13,24 @@ routes.push({
     data() {
       return {
         i18n: this.$root?.i18n || {},
-        tab: 'schedules',
+        tab: 'destinations',
       };
     },
     methods: {
+      addDestination() {
+        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.showAddDestination === 'function') {
+          this.$refs.destinationsManager.showAddDestination();
+        }
+      },
+      addSchedule() {
+        if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.showAddSchedule === 'function') {
+          this.$refs.schedulesManager.showAddSchedule();
+        }
+      },
       refresh() {
+        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
+          this.$refs.destinationsManager.loadData();
+        }
         if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.loadData === 'function') {
           this.$refs.schedulesManager.loadData();
         }

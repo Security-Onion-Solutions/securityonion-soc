@@ -542,10 +542,10 @@
                   <v-list-item-title v-text="i18n.config"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_notifications" v-if="$root.isUserAdmin() && isLicensed('ntf')" :class="{ 'nav-active': $route.name === 'notifications' }">
+              <v-list-item data-aid="nav_admin_notifications" v-if="$root.isUserAdmin() && isLicensed(FEAT_NTF) && notificationsStarted" :class="{ 'nav-active': $route.name === 'notifications' }">
                 <template #prepend>
                   <router-link to="/notifications" class="text-decoration-none" aria-hidden="true" tabindex="-1">
-                    <v-icon>fa-bell</v-icon>
+                    <v-icon>fa-envelope</v-icon>
                   </router-link>
                 </template>
                 <router-link to="/notifications" class="text-decoration-none d-block">
@@ -637,6 +637,7 @@
     <script src="js/components/detection-details-col.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/tool-use-card.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/destinations-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/schedules-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>

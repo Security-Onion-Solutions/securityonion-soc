@@ -6,7 +6,10 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -15,7 +18,18 @@ const (
 	ScheduleTypeWeekly   = "weekly"
 	ScheduleTypeMonthly  = "monthly"
 	ScheduleTypeAnnually = "annually"
+
+	MAX_SCHEDULE_ID_LEN          = 40
+	MAX_SCHEDULE_NAME_LEN        = 50
+	MAX_SCHEDULE_DESCRIPTION_LEN = 1000
 )
+
+var scheduleIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
+// IsValidScheduleID validates that a schedule ID contains only safe alphanumeric, underscore, hyphen, or dot characters and does not exceed the maximum allowed length.
+func IsValidScheduleID(id string) bool {
+	return id != "" && len(id) <= MAX_SCHEDULE_ID_LEN && scheduleIDRegex.MatchString(id)
+}
 
 // @Description ScheduleDefinition represents a single recurrence definition within a schedule.
 type ScheduleDefinition struct {
@@ -39,11 +53,11 @@ type ScheduleDefinition struct {
 
 // @Description Schedule represents a reusable activation schedule.
 type Schedule struct {
-	// Unique identifier for the schedule
+	// Unique identifier for the schedule (max 40 characters)
 	ID string `json:"id" example:"after-hours-and-weekends"`
-	// Human-readable name
+	// Human-readable name (max 50 characters)
 	Name string `json:"name" example:"After Hours & Weekends"`
-	// Description of the schedule
+	// Description of the schedule (max 1000 characters)
 	Description string `json:"description,omitempty" example:"Mon-Fri 17:00-08:00 and all day Saturday and Sunday"`
 	// Indicates whether the schedule is active/enabled
 	Enabled bool `json:"enabled" example:"true"`
@@ -62,6 +76,25 @@ func BuildScheduleLookup(schedules []Schedule) map[string]*Schedule {
 		lookup[schedules[i].ID] = &schedules[i]
 	}
 	return lookup
+}
+
+// ValidateScheduleName verifies that the given schedule name is not empty or pure whitespace and does not exceed the maximum allowed length.
+func ValidateScheduleName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("schedule name cannot be empty")
+	}
+	if len(name) > MAX_SCHEDULE_NAME_LEN {
+		return errors.New("schedule name exceeds maximum allowed length")
+	}
+	return nil
+}
+
+// ValidateScheduleDescription verifies that the schedule description does not exceed the maximum allowed length.
+func ValidateScheduleDescription(description string) error {
+	if len(description) > MAX_SCHEDULE_DESCRIPTION_LEN {
+		return errors.New("schedule description exceeds maximum allowed length")
+	}
+	return nil
 }
 
 // SanitizeScheduleDAG inspects a slice of schedules and returns a sanitized copy
@@ -373,4 +406,70 @@ func sliceContains(slice []int, val int) bool {
 		}
 	}
 	return false
+}
+
+// UnmarshalSchedules parses a schedule string (JSON array, JSON object, or newline-delimited JSON objects)
+// into a slice of sanitized Schedule structs.
+func UnmarshalSchedules(val string) ([]Schedule, error) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return []Schedule{}, nil
+	}
+
+	var schedules []Schedule
+
+	// 1. Try standard JSON array format
+	if strings.HasPrefix(val, "[") {
+		if err := json.Unmarshal([]byte(val), &schedules); err == nil {
+			return SanitizeScheduleDAG(schedules), nil
+		}
+	}
+
+	// 2. Try newline-delimited JSON objects (produced when loaded from YAML pillars)
+	lines := strings.Split(val, "\n")
+	schedules = nil
+	allLinesParsed := true
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var s Schedule
+		if err := json.Unmarshal([]byte(line), &s); err == nil {
+			schedules = append(schedules, s)
+		} else {
+			allLinesParsed = false
+			break
+		}
+	}
+	if allLinesParsed && len(schedules) > 0 {
+		return SanitizeScheduleDAG(schedules), nil
+	}
+
+	// 3. Try single JSON object
+	var single Schedule
+	if err := json.Unmarshal([]byte(val), &single); err == nil {
+		return SanitizeScheduleDAG([]Schedule{single}), nil
+	}
+
+	return nil, errors.New("invalid schedule format: unable to parse JSON")
+}
+
+// IsScheduleIDActive evaluates whether the schedule identified by scheduleID is active at evalTime
+// given a slice of available schedules. If scheduleID is empty, it returns (true, true).
+// If scheduleID is missing or corrupt, it fails open and returns (true, false) so notifications are not dropped.
+func IsScheduleIDActive(schedules []Schedule, scheduleID string, evalTime time.Time) (active bool, found bool) {
+	if scheduleID == "" {
+		return true, true
+	}
+	lookup := BuildScheduleLookup(schedules)
+	sched, exists := lookup[scheduleID]
+	if !exists {
+		return true, false
+	}
+	isActive, err := IsScheduleActive(sched, evalTime, lookup)
+	if err != nil {
+		return true, true
+	}
+	return isActive, true
 }

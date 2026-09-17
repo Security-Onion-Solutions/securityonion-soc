@@ -70,50 +70,25 @@ func (h *ScheduleHandler) respondError(w http.ResponseWriter, r *http.Request, e
 	}
 }
 
-func unmarshalSchedules(val string) ([]model.Schedule, error) {
-	val = strings.TrimSpace(val)
-	if val == "" {
-		return []model.Schedule{}, nil
+// IsScheduleActiveInConfig checks if a given schedule ID is active according to the schedules stored in Configstore.
+// If scheduleID is empty, store is nil, or schedule data is missing/corrupt, it fails open and returns (true, ...).
+func IsScheduleActiveInConfig(ctx context.Context, store Configstore, scheduleID string, evalTime time.Time) (bool, error) {
+	if scheduleID == "" || store == nil {
+		return true, nil
 	}
-
-	var schedules []model.Schedule
-	var err error
-
-	// 1. Try standard JSON array format
-	if strings.HasPrefix(val, "[") {
-		if err = json.Unmarshal([]byte(val), &schedules); err == nil {
-			return model.SanitizeScheduleDAG(schedules), nil
-		}
+	setting, err := store.GetSetting(ctx, "soc.config.server.schedules")
+	if err != nil {
+		return true, err
 	}
-
-	// 2. Try newline-delimited JSON objects (produced by FlattenInterfaceSliceToString when loaded from YAML pillars)
-	lines := strings.Split(val, "\n")
-	schedules = nil
-	allLinesParsed := true
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var s model.Schedule
-		if err := json.Unmarshal([]byte(line), &s); err == nil {
-			schedules = append(schedules, s)
-		} else {
-			allLinesParsed = false
-			break
-		}
+	if setting == nil || setting.Value == "" {
+		return true, nil
 	}
-	if allLinesParsed && len(schedules) > 0 {
-		return model.SanitizeScheduleDAG(schedules), nil
+	schedules, err := model.UnmarshalSchedules(setting.Value)
+	if err != nil {
+		return true, err
 	}
-
-	// 3. Try single JSON object
-	var single model.Schedule
-	if err := json.Unmarshal([]byte(val), &single); err == nil {
-		return model.SanitizeScheduleDAG([]model.Schedule{single}), nil
-	}
-
-	return nil, err
+	active, _ := model.IsScheduleIDActive(schedules, scheduleID, evalTime)
+	return active, nil
 }
 
 func (h *ScheduleHandler) loadSchedules(ctx context.Context) ([]model.Schedule, error) {
@@ -127,7 +102,7 @@ func (h *ScheduleHandler) loadSchedules(ctx context.Context) ([]model.Schedule, 
 	if setting == nil || setting.Value == "" {
 		return []model.Schedule{}, nil
 	}
-	return unmarshalSchedules(setting.Value)
+	return model.UnmarshalSchedules(setting.Value)
 }
 
 func (h *ScheduleHandler) saveSchedules(ctx context.Context, schedules []model.Schedule) error {
@@ -145,7 +120,7 @@ func (h *ScheduleHandler) saveSchedules(ctx context.Context, schedules []model.S
 // @Summary      Get Schedules
 // @Description  Retrieves all reusable activation schedules with live computed active states.
 // @Tags         Schedules
-// @Security     bearer[schedules/read]
+// @Security     bearer[config/read]
 // @Produce      json
 // @Success      200  {array}  model.Schedule  "The list of schedules"
 // @Failure      400         "License is invalid"
@@ -163,7 +138,7 @@ func (h *ScheduleHandler) GetSchedules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "read", "schedules"); err != nil {
+	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		h.respondError(w, r, err)
 		return
 	}
@@ -181,7 +156,7 @@ func (h *ScheduleHandler) GetSchedules(w http.ResponseWriter, r *http.Request) {
 // @Summary      Create Schedule
 // @Description  Creates a new reusable activation schedule in the Pillar configuration.
 // @Tags         Schedules
-// @Security     bearer[schedules/write]
+// @Security     bearer[config/write]
 // @Param        request  body  model.Schedule  true  "The schedule to create"
 // @Accept       json
 // @Produce      json
@@ -201,7 +176,7 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "write", "schedules"); err != nil {
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		h.respondError(w, r, err)
 		return
 	}
@@ -213,13 +188,21 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(req.Name) == "" {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("schedule name cannot be empty"))
+	if err := model.ValidateScheduleName(req.Name); err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := model.ValidateScheduleDescription(req.Description); err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	if req.ID == "" {
 		req.ID = uuid.NewString()
+	} else if !model.IsValidScheduleID(req.ID) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
+		return
 	}
 
 	schedules, err := h.loadSchedules(ctx)
@@ -255,7 +238,7 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 // @Summary      Update Schedule
 // @Description  Updates an existing reusable activation schedule in the Pillar configuration.
 // @Tags         Schedules
-// @Security     bearer[schedules/write]
+// @Security     bearer[config/write]
 // @Param        id       path  string          true  "Schedule ID"
 // @Param        request  body  model.Schedule  true  "The schedule data to update"
 // @Accept       json
@@ -278,12 +261,12 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("missing schedule id"))
+	if !model.IsValidScheduleID(id) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
 		return
 	}
 
-	if err := h.server.CheckAuthorized(ctx, "write", "schedules"); err != nil {
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		h.respondError(w, r, err)
 		return
 	}
@@ -291,6 +274,16 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	var req model.Schedule
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.WithError(err).Error("failed to decode request body")
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := model.ValidateScheduleName(req.Name); err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := model.ValidateScheduleDescription(req.Description); err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
@@ -336,7 +329,7 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 // @Summary      Delete Schedule
 // @Description  Removes a reusable activation schedule from the Pillar configuration.
 // @Tags         Schedules
-// @Security     bearer[schedules/delete]
+// @Security     bearer[config/write]
 // @Param        id  path  string  true  "Schedule ID"
 // @Produce      json
 // @Success      200         "The schedule was successfully deleted"
@@ -357,12 +350,12 @@ func (h *ScheduleHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request)
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("missing schedule id"))
+	if !model.IsValidScheduleID(id) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
 		return
 	}
 
-	if err := h.server.CheckAuthorized(ctx, "delete", "schedules"); err != nil {
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		h.respondError(w, r, err)
 		return
 	}
@@ -414,7 +407,7 @@ type EvaluateScheduleResponse struct {
 // @Summary      Evaluate Schedule
 // @Description  Evaluates a schedule's recurrence definitions against an arbitrary RFC3339 timestamp.
 // @Tags         Schedules
-// @Security     bearer[schedules/read]
+// @Security     bearer[config/read]
 // @Param        request  body  EvaluateScheduleRequest  true  "The evaluation parameters"
 // @Accept       json
 // @Produce      json
@@ -434,7 +427,7 @@ func (h *ScheduleHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "read", "schedules"); err != nil {
+	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		h.respondError(w, r, err)
 		return
 	}

@@ -1,16 +1,7 @@
 <div data-aid="schedules_manager_component">
   <v-row class="mb-2 pt-1 align-center">
     <v-col cols="12" sm="6" md="4">
-      <v-text-field v-model="scheduleSearch" density="compact" prepend-inner-icon="fa-search" :label="i18n.search || 'Search'" single-line hide-details clearable data-aid="schedule_search_input"></v-text-field>
-    </v-col>
-    <v-spacer></v-spacer>
-    <v-col cols="auto" class="d-flex align-center">
-      <v-btn color="primary" variant="flat" prepend-icon="fa-plus" @click.stop="showAddSchedule()" :title="i18n.addSchedule || 'Add Schedule'" :aria-label="i18n.ariaScheduleNew || 'New activation schedule'" data-aid="schedule_create_new">
-        {{ i18n.addSchedule || 'Add Schedule' }}
-      </v-btn>
-      <v-btn icon variant="text" size="small" class="ml-2" @click.stop="loadData()" :title="i18n.refresh || 'Refresh'" :aria-label="i18n.ariaNotificationsRefresh || 'Refresh schedules'" data-aid="schedules_refresh_button">
-        <v-icon size="16">fa-sync</v-icon>
-      </v-btn>
+      <v-text-field v-model="scheduleSearch" density="compact" prepend-inner-icon="fa-search" :label="i18n.search" single-line hide-details clearable data-aid="schedule_search_input"></v-text-field>
     </v-col>
   </v-row>
 
@@ -19,7 +10,7 @@
     <template #item.name="{ item }">
       <div class="d-flex align-center">
         <span class="font-weight-bold" data-aid="schedule_item_name">{{ item.name }}</span>
-        <v-icon v-if="isScheduleActive(item, now)" size="14" color="success" class="ml-2" :title="i18n.currentlyActive || 'Currently Active'" data-aid="schedule_item_active_icon">fa-clock</v-icon>
+        <v-icon v-if="isScheduleActive(item, now)" size="14" color="success" class="ml-2" :title="i18n.currentlyActive" data-aid="schedule_item_active_icon">fa-clock</v-icon>
       </div>
     </template>
     <template #item.timezone="{ item }">
@@ -30,17 +21,17 @@
     </template>
     <template #item.status="{ item }">
       <v-chip size="small" :color="item.enabled !== false ? 'success' : 'grey'" :variant="item.enabled !== false ? 'flat' : 'tonal'" density="compact" data-aid="schedule_status_chip">
-        {{ item.enabled !== false ? (i18n.enabled || 'Enabled') : (i18n.disabled || 'Disabled') }}
+        {{ item.enabled !== false ? i18n.enabled : i18n.disabled }}
       </v-chip>
     </template>
     <template #item.actions="{ item }">
-      <v-btn icon size="small" variant="text" @click.stop="showEditSchedule(item)" :title="i18n.editSchedule || 'Edit Schedule'" :aria-label="i18n.ariaScheduleEdit || 'Edit activation schedule'" data-aid="schedule_action_edit">
+      <v-btn icon size="small" variant="text" @click.stop="showEditSchedule(item)" :title="i18n.editSchedule" :aria-label="i18n.ariaScheduleEdit" data-aid="schedule_action_edit">
         <v-icon size="16">fa-pencil</v-icon>
       </v-btn>
-      <v-btn icon size="small" variant="text" @click.stop="duplicateSchedule(item)" :title="i18n.duplicateSchedule || 'Duplicate Schedule'" :aria-label="i18n.ariaScheduleDuplicate || 'Duplicate activation schedule'" data-aid="schedule_action_duplicate">
+      <v-btn icon size="small" variant="text" @click.stop="duplicateSchedule(item)" :title="i18n.duplicateSchedule" :aria-label="i18n.ariaScheduleDuplicate" data-aid="schedule_action_duplicate">
         <v-icon size="16">fa-copy</v-icon>
       </v-btn>
-      <v-btn icon size="small" variant="text" color="error" @click.stop="showDeleteSchedule(item)" :title="i18n.delete || 'Delete'" :aria-label="i18n.ariaScheduleDelete || 'Delete activation schedule'" data-aid="schedule_action_delete">
+      <v-btn icon size="small" variant="text" color="error" @click.stop="showDeleteSchedule(item)" :title="i18n.delete" :aria-label="i18n.ariaScheduleDelete" data-aid="schedule_action_delete">
         <v-icon size="16">fa-trash</v-icon>
       </v-btn>
     </template>
@@ -50,26 +41,26 @@
   <v-dialog v-model="scheduleDialog" persistent max-width="850" scrollable data-aid="schedule_editor_dialog">
     <v-card>
       <v-card-title class="py-4" role="heading" aria-level="2">
-        {{ form.isEdit ? (i18n.editSchedule || 'Edit Schedule') : (i18n.addSchedule || 'Add Schedule') }}
+        {{ form.isEdit ? i18n.editSchedule : i18n.addSchedule }}
       </v-card-title>
       <v-card-text>
         <v-row dense>
           <v-col cols="12">
-            <v-text-field v-model="form.name" :label="i18n.name || 'Name'" :rules="[$root.validators.required]" required data-aid="schedule_form_name"></v-text-field>
+            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required data-aid="schedule_form_name"></v-text-field>
           </v-col>
           <v-col cols="12">
-            <v-textarea v-model="form.description" :label="i18n.description || 'Description'" rows="2" auto-grow density="comfortable" data-aid="schedule_form_description"></v-textarea>
+            <v-textarea v-model="form.description" :label="i18n.description" rows="2" auto-grow maxlength="1000" density="comfortable" data-aid="schedule_form_description"></v-textarea>
           </v-col>
           <v-col cols="12" sm="8">
-            <v-autocomplete v-model="form.timezone" :items="timezones" :label="i18n.timezone || 'Timezone'" density="comfortable" data-aid="schedule_form_timezone"></v-autocomplete>
+            <v-autocomplete v-model="form.timezone" :items="timezones" :label="i18n.timezone" density="comfortable" data-aid="schedule_form_timezone"></v-autocomplete>
           </v-col>
           <v-col cols="12" sm="4" class="d-flex align-center">
             <v-btn variant="outlined" size="small" prepend-icon="fa-location-crosshairs" @click="detectBrowserTimezone()" data-aid="schedule_form_detect_tz">
-              {{ i18n.autoDetect || 'Auto-detect' }}
+              {{ i18n.autoDetect }}
             </v-btn>
           </v-col>
           <v-col cols="12">
-            <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? (i18n.enabled || 'Enabled') : (i18n.disabled || 'Disabled')" density="compact" data-aid="schedule_form_enabled"></v-switch>
+            <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="schedule_form_enabled"></v-switch>
           </v-col>
           <v-col cols="12">
             <v-autocomplete
@@ -77,16 +68,16 @@
               :items="eligibleExceptionSchedules"
               item-title="name"
               item-value="id"
-              :label="i18n.exceptionSchedules || 'Exception Schedules'"
-              :placeholder="i18n.exceptionSchedulesPlaceholder || 'Select exception / blackout schedules...'"
+              :label="i18n.exceptionSchedules"
+              :placeholder="i18n.exceptionSchedulesPlaceholder"
               multiple
               chips
               closable-chips
               density="comfortable"
-              :hint="i18n.exceptionSchedulesHint || 'Select blackout schedules (e.g. holidays or maintenance windows) during which this schedule will be inactive.'"
+              :hint="i18n.exceptionSchedulesHint"
               persistent-hint
-              :no-data-text="i18n.noExceptionSchedulesAvailable || 'No eligible exception schedules available'"
-              :aria-label="i18n.ariaScheduleExceptions || 'Exception schedules'"
+              :no-data-text="i18n.noExceptionSchedulesAvailable"
+              :aria-label="i18n.ariaScheduleExceptions"
               data-aid="schedule_form_exceptions">
             </v-autocomplete>
           </v-col>
@@ -95,25 +86,25 @@
         <v-divider class="my-4"></v-divider>
 
         <div class="d-flex align-center mb-3">
-          <div class="text-subtitle-1 font-weight-bold">{{ i18n.definitions || 'Definitions' }}</div>
+          <div class="text-subtitle-1 font-weight-bold">{{ i18n.definitions }}</div>
           <v-spacer></v-spacer>
           <v-btn size="small" variant="tonal" color="primary" prepend-icon="fa-plus" @click="addDefinition()" data-aid="schedule_add_definition_button">
-            {{ i18n.addDefinition || 'Add Definition' }}
+            {{ i18n.addDefinition }}
           </v-btn>
         </div>
 
         <div v-if="!form.definitions || form.definitions.length === 0" class="pa-4 text-center text-medium-emphasis border rounded mb-3">
-          {{ i18n.alwaysActive || 'Always Active' }} (0 definitions)
+          {{ i18n.alwaysActive }} (0 definitions)
         </div>
 
         <v-expansion-panels v-else v-model="expandedDefinitions" multiple variant="accordion" class="mb-3" data-aid="schedule_definitions_panels">
           <v-expansion-panel v-for="(def, idx) in form.definitions" :key="idx" class="border" data-aid="schedule_definition_card">
             <v-expansion-panel-title class="py-2" expand-icon="fa-chevron-down" collapse-icon="fa-chevron-up">
               <div class="d-flex align-center w-100 mr-2">
-                <span class="font-weight-bold text-uppercase mr-2 text-body-2">{{ i18n.recurrence || 'Recurrence' }} #{{ idx + 1 }}</span>
+                <span class="font-weight-bold text-uppercase mr-2 text-body-2">{{ i18n.recurrence }} #{{ idx + 1 }}</span>
                 <span class="text-caption text-medium-emphasis text-truncate mr-2">{{ formatDefinitionSummary(def) }}</span>
                 <v-spacer></v-spacer>
-                <v-btn icon size="x-small" variant="text" color="error" @click.stop="removeDefinition(idx)" :title="i18n.deleteDefinition || 'Delete Definition'" :aria-label="i18n.deleteDefinition || 'Delete Definition'" data-aid="schedule_remove_definition_button">
+                <v-btn icon size="x-small" variant="text" color="error" @click.stop="removeDefinition(idx)" :title="i18n.deleteDefinition" :aria-label="i18n.deleteDefinition" data-aid="schedule_remove_definition_button">
                   <v-icon size="14">fa-times</v-icon>
                 </v-btn>
               </div>
@@ -121,20 +112,20 @@
             <v-expansion-panel-text class="pt-3">
               <v-row dense>
                 <v-col cols="12" sm="6">
-                  <v-select v-model="def.type" :items="recurrenceTypes" :label="i18n.recurrence || 'Recurrence'" density="compact" data-aid="schedule_def_type"></v-select>
+                  <v-select v-model="def.type" :items="recurrenceTypes" :label="i18n.recurrence" density="compact" data-aid="schedule_def_type"></v-select>
                 </v-col>
               </v-row>
 
               <v-row dense align="center" class="my-1">
                 <v-col cols="12" sm="4" class="d-flex align-center mb-sm-0 mb-2">
-                  <v-switch v-model="def.allDay" color="primary" inset :label="i18n.allDay || 'All Day'" density="compact" hide-details data-aid="schedule_def_allday"></v-switch>
+                  <v-switch v-model="def.allDay" color="primary" inset :label="i18n.allDay" density="compact" hide-details data-aid="schedule_def_allday"></v-switch>
                 </v-col>
                 <template v-if="!def.allDay">
                   <v-col cols="12" sm="4">
-                    <v-text-field v-model="def.startTime" :label="i18n.startTime || 'Start Time'" type="time" density="compact" hide-details="auto" data-aid="schedule_def_starttime"></v-text-field>
+                    <v-text-field v-model="def.startTime" :label="i18n.startTime" type="time" density="compact" hide-details="auto" data-aid="schedule_def_starttime"></v-text-field>
                   </v-col>
                   <v-col cols="12" sm="4">
-                    <v-text-field v-model="def.endTime" :label="i18n.endTime || 'End Time'" type="time" density="compact" hide-details="auto" data-aid="schedule_def_endtime"></v-text-field>
+                    <v-text-field v-model="def.endTime" :label="i18n.endTime" type="time" density="compact" hide-details="auto" data-aid="schedule_def_endtime"></v-text-field>
                   </v-col>
                 </template>
               </v-row>
@@ -142,7 +133,7 @@
               <!-- Weekly Days of Week -->
               <v-row dense v-if="def.type === 'weekly'">
                 <v-col cols="12">
-                  <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek || 'Days of Week'" multiple chips closable-chips density="compact" data-aid="schedule_def_daysofweek"></v-select>
+                  <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_daysofweek"></v-select>
                 </v-col>
               </v-row>
 
@@ -150,17 +141,17 @@
               <template v-if="def.type === 'monthly'">
                 <v-row dense>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence || 'Recurrence'" density="compact" data-aid="schedule_def_monthly_mode"></v-select>
+                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence" density="compact" data-aid="schedule_def_monthly_mode"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" v-if="def.mode === 'dayOfMonth'">
-                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth || 'Days of Month'" multiple chips closable-chips density="compact" data-aid="schedule_def_monthly_daysofmonth"></v-select>
+                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_monthly_daysofmonth"></v-select>
                   </v-col>
                   <template v-else>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers || 'Week Numbers'" multiple chips closable-chips density="compact" data-aid="schedule_def_weeknumbers"></v-select>
+                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_weeknumbers"></v-select>
                     </v-col>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek || 'Days of Week'" multiple chips closable-chips density="compact" data-aid="schedule_def_month_daysofweek"></v-select>
+                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_month_daysofweek"></v-select>
                     </v-col>
                   </template>
                 </v-row>
@@ -170,22 +161,22 @@
               <template v-if="def.type === 'annually'">
                 <v-row dense>
                   <v-col cols="12">
-                    <v-select v-model="def.months" :items="monthOptions" :label="i18n.months || 'Months'" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
+                    <v-select v-model="def.months" :items="monthOptions" :label="i18n.months" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
                   </v-col>
                 </v-row>
                 <v-row dense>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence || 'Recurrence'" density="compact" data-aid="schedule_def_annual_mode"></v-select>
+                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence" density="compact" data-aid="schedule_def_annual_mode"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" v-if="def.mode === 'dayOfMonth'">
-                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth || 'Days of Month'" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofmonth"></v-select>
+                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofmonth"></v-select>
                   </v-col>
                   <template v-else>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers || 'Week Numbers'" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_weeknumbers"></v-select>
+                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_weeknumbers"></v-select>
                     </v-col>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek || 'Days of Week'" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofweek"></v-select>
+                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofweek"></v-select>
                     </v-col>
                   </template>
                 </v-row>
@@ -200,8 +191,8 @@
       </v-card-text>
       <v-card-actions class="pa-4">
         <v-spacer></v-spacer>
-        <v-btn variant="text" @click="scheduleDialog = false" data-aid="schedule_editor_cancel">{{ i18n.cancel || 'Cancel' }}</v-btn>
-        <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveSchedule()" data-aid="schedule_editor_save">{{ i18n.save || 'Save' }}</v-btn>
+        <v-btn variant="text" @click="scheduleDialog = false" data-aid="schedule_editor_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveSchedule()" data-aid="schedule_editor_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -209,18 +200,18 @@
   <!-- Delete Confirmation Dialog -->
   <v-dialog v-model="deleteScheduleDialog" persistent max-width="480" data-aid="schedule_delete_dialog">
     <v-card>
-      <v-card-title class="headline" role="heading" aria-level="2">{{ i18n.deleteScheduleTitle || 'Delete Schedule' }}</v-card-title>
+      <v-card-title class="headline" role="heading" aria-level="2">{{ i18n.deleteScheduleTitle }}</v-card-title>
       <v-card-text>
-        <div class="mb-2">{{ i18n.deleteScheduleConfirm || 'Are you sure you want to delete this schedule?' }}</div>
+        <div class="mb-2">{{ i18n.deleteScheduleConfirm }}</div>
         <div v-if="scheduleToDelete" class="font-weight-bold mb-3">{{ scheduleToDelete.name }}</div>
         <v-alert type="warning" variant="tonal" density="compact" class="text-body-2" data-aid="schedule_delete_warning">
-          {{ i18n.deleteScheduleWarning || 'Any entities that reference this schedule will effectively have an inactive schedule.' }}
+          {{ i18n.deleteScheduleWarning }}
         </v-alert>
       </v-card-text>
       <v-card-actions class="pa-4">
         <v-spacer></v-spacer>
-        <v-btn variant="text" @click.stop="hideDeleteSchedule()" data-aid="schedule_delete_cancel">{{ i18n.cancel || 'Cancel' }}</v-btn>
-        <v-btn color="error" variant="flat" @click.stop="deleteSchedule()" data-aid="schedule_delete_confirm">{{ i18n.delete || 'Delete' }}</v-btn>
+        <v-btn variant="text" @click.stop="hideDeleteSchedule()" data-aid="schedule_delete_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="error" variant="flat" @click.stop="deleteSchedule()" data-aid="schedule_delete_confirm">{{ i18n.delete }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

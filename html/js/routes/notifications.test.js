@@ -4,6 +4,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('../components/destinations-manager.js');
 require('../components/schedules-manager.js');
 require('./notifications.js');
 
@@ -15,15 +16,43 @@ beforeEach(() => {
 });
 
 test('initializes with default tab and delegates refresh', () => {
-  expect(comp.tab).toBe('schedules');
+  expect(comp.tab).toBe('destinations');
 
-  const loadDataMock = jest.fn();
+  const loadDestDataMock = jest.fn();
+  const loadSchedDataMock = jest.fn();
   comp.$refs = {
+    destinationsManager: {
+      loadData: loadDestDataMock,
+    },
     schedulesManager: {
-      loadData: loadDataMock,
+      loadData: loadSchedDataMock,
     },
   };
 
   comp.refresh();
-  expect(loadDataMock).toHaveBeenCalled();
+  expect(loadDestDataMock).toHaveBeenCalled();
+  expect(loadSchedDataMock).toHaveBeenCalled();
+});
+
+test('delegates add actions based on active tab', () => {
+  const showAddDestMock = jest.fn();
+  const showAddSchedMock = jest.fn();
+
+  comp.$refs = {
+    destinationsManager: {
+      showAddDestination: showAddDestMock,
+    },
+    schedulesManager: {
+      showAddSchedule: showAddSchedMock,
+    },
+  };
+
+  comp.tab = 'destinations';
+  comp.addDestination();
+  expect(showAddDestMock).toHaveBeenCalled();
+  expect(showAddSchedMock).not.toHaveBeenCalled();
+
+  comp.tab = 'schedules';
+  comp.addSchedule();
+  expect(showAddSchedMock).toHaveBeenCalled();
 });

@@ -23,8 +23,6 @@ node-monitor:      analyst limited-analyst auditor limited-auditor superuser
 notification-admin: analyst limited-analyst superuser
 notification-monitor: auditor limited-auditor
 notification-auditor: auditor superuser
-schedule-admin:       superuser
-schedule-monitor:     analyst limited-analyst auditor limited-auditor superuser
 user-admin:        superuser
 user-monitor:      agent analyst auditor
 job-admin:         analyst superuser

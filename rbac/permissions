@@ -43,9 +43,6 @@ users/delete:              user-admin
 notifications/read:        notification-monitor
 notifications/read_all:    notification-auditor
 notifications/write:       notification-admin
-schedules/read:            schedule-monitor
-schedules/write:           schedule-admin
-schedules/delete:          schedule-admin
 playbooks/read:            playbook-monitor
 playbooks/write:           playbook-admin
 playbooks/delete:          playbook-admin
@@ -78,7 +75,6 @@ job-monitor:        job-admin
 job-user:           job-admin
 node-monitor:       node-admin
 notification-monitor: notification-admin notification-auditor
-schedule-monitor:     schedule-admin
 query-monitor:      query-admin
 subgrid-monitor:    subgrid-admin
 user-monitor:       user-admin

@@ -164,7 +164,7 @@ components.push({
         } catch (error) {
           if (this.$root) {
             this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : (this.i18n.unknownError || 'An error occurred'));
+            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
           }
         }
       },
@@ -213,7 +213,7 @@ components.push({
           name: schedule.name,
           description: schedule.description || '',
           enabled: schedule.enabled !== false,
-          timezone: schedule.timezone || 'UTC',
+          timezone: schedule.timezone || schedule.Timezone || 'UTC',
           excludeScheduleIds: Array.isArray(schedule.excludeScheduleIds) ? [...schedule.excludeScheduleIds] : [],
           definitions: (schedule.definitions || []).map((d) => this.normalizeDefinition(d)),
         };
@@ -225,10 +225,10 @@ components.push({
           isEdit: false,
           valid: true,
           id: '',
-          name: `${schedule.name} ${this.i18n.scheduleCopySuffix || '(Copy)'}`,
+          name: `${schedule.name} ${this.i18n.scheduleCopySuffix || ''}`.trim(),
           description: schedule.description || '',
           enabled: schedule.enabled !== false,
-          timezone: schedule.timezone || 'UTC',
+          timezone: schedule.timezone || schedule.Timezone || 'UTC',
           excludeScheduleIds: Array.isArray(schedule.excludeScheduleIds) ? [...schedule.excludeScheduleIds] : [],
           definitions: (schedule.definitions || []).map((d) => this.normalizeDefinition(d)),
         };
@@ -389,7 +389,7 @@ components.push({
         } catch (error) {
           if (this.$root) {
             this.$root.error = true;
-            this.$root.errorMessage = error?.response?.data?.message || error?.message || (this.i18n.unknownError || 'An error occurred');
+            this.$root.errorMessage = error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.unknownError);
           }
         } finally {
           this.$root?.stopLoading?.();
@@ -397,11 +397,11 @@ components.push({
       },
       formatScheduleSummary(schedule) {
         if (!schedule) {
-          return this.i18n.alwaysActive || 'Always Active';
+          return this.i18n.alwaysActive;
         }
         let summary = '';
         if (!schedule.definitions || schedule.definitions.length === 0) {
-          summary = this.i18n.alwaysActive || 'Always Active';
+          summary = this.i18n.alwaysActive;
         } else {
           summary = schedule.definitions.map((d) => this.formatDefinitionSummary(d)).join('; ');
         }
@@ -413,7 +413,7 @@ components.push({
             })
             .join(', ');
           if (exceptionNames) {
-            summary += ` (${this.i18n.exceptionsPrefix || 'Exceptions'}: ${exceptionNames})`;
+            summary += ` (${this.i18n.exceptionsPrefix}: ${exceptionNames})`;
           }
         }
         return summary;
@@ -421,70 +421,70 @@ components.push({
       formatDefinitionSummary(def) {
         if (!def) return '';
         const dayNames = [
-          this.i18n.daySunAbbr || 'Sun',
-          this.i18n.dayMonAbbr || 'Mon',
-          this.i18n.dayTueAbbr || 'Tue',
-          this.i18n.dayWedAbbr || 'Wed',
-          this.i18n.dayThuAbbr || 'Thu',
-          this.i18n.dayFriAbbr || 'Fri',
-          this.i18n.daySatAbbr || 'Sat',
+          this.i18n.daySunAbbr,
+          this.i18n.dayMonAbbr,
+          this.i18n.dayTueAbbr,
+          this.i18n.dayWedAbbr,
+          this.i18n.dayThuAbbr,
+          this.i18n.dayFriAbbr,
+          this.i18n.daySatAbbr,
         ];
         const monthNames = [
           '',
-          this.i18n.monthJanAbbr || 'Jan',
-          this.i18n.monthFebAbbr || 'Feb',
-          this.i18n.monthMarAbbr || 'Mar',
-          this.i18n.monthAprAbbr || 'Apr',
-          this.i18n.monthMayAbbr || 'May',
-          this.i18n.monthJunAbbr || 'Jun',
-          this.i18n.monthJulAbbr || 'Jul',
-          this.i18n.monthAugAbbr || 'Aug',
-          this.i18n.monthSepAbbr || 'Sep',
-          this.i18n.monthOctAbbr || 'Oct',
-          this.i18n.monthNovAbbr || 'Nov',
-          this.i18n.monthDecAbbr || 'Dec',
+          this.i18n.monthJanAbbr,
+          this.i18n.monthFebAbbr,
+          this.i18n.monthMarAbbr,
+          this.i18n.monthAprAbbr,
+          this.i18n.monthMayAbbr,
+          this.i18n.monthJunAbbr,
+          this.i18n.monthJulAbbr,
+          this.i18n.monthAugAbbr,
+          this.i18n.monthSepAbbr,
+          this.i18n.monthOctAbbr,
+          this.i18n.monthNovAbbr,
+          this.i18n.monthDecAbbr,
         ];
         const ordinals = {
-          1: this.i18n.ordinalFirst || '1st',
-          2: this.i18n.ordinalSecond || '2nd',
-          3: this.i18n.ordinalThird || '3rd',
-          4: this.i18n.ordinalFourth || '4th',
-          5: this.i18n.ordinalFifth || '5th',
-          '-1': this.i18n.ordinalLast || 'Last',
+          1: this.i18n.ordinalFirst,
+          2: this.i18n.ordinalSecond,
+          3: this.i18n.ordinalThird,
+          4: this.i18n.ordinalFourth,
+          5: this.i18n.ordinalFifth,
+          '-1': this.i18n.ordinalLast,
         };
-        const timeStr = def.allDay ? (this.i18n.allDay || 'All Day') : `${def.startTime} - ${def.endTime}`;
+        const timeStr = def.allDay ? this.i18n.allDay : `${def.startTime} - ${def.endTime}`;
 
         if (def.type === 'daily') {
-          return `${this.i18n.daily || 'Daily'} (${timeStr})`;
+          return `${this.i18n.daily} (${timeStr})`;
         }
         if (def.type === 'weekly') {
           const days = (def.daysOfWeek || []).map((d) => dayNames[d]).join(', ');
-          return `${this.i18n.weekly || 'Weekly'}: ${days} (${timeStr})`;
+          return `${this.i18n.weekly}: ${days} (${timeStr})`;
         }
         if (def.type === 'monthly') {
           if (def.daysOfMonth && def.daysOfMonth.length > 0) {
-            const doms = def.daysOfMonth.map((d) => (d === -1 ? (this.i18n.lastDayOfMonth || 'Last Day of Month') : `${this.i18n.dayPrefix || 'Day'} ${d}`)).join(', ');
-            return `${this.i18n.monthly || 'Monthly'}: ${doms} (${timeStr})`;
+            const doms = def.daysOfMonth.map((d) => (d === -1 ? this.i18n.lastDayOfMonth : `${this.i18n.dayPrefix} ${d}`)).join(', ');
+            return `${this.i18n.monthly}: ${doms} (${timeStr})`;
           }
           if (def.weekNumbers && def.weekNumbers.length > 0 && def.daysOfWeek && def.daysOfWeek.length > 0) {
             const ords = def.weekNumbers.map((w) => ordinals[w] || `${w}`).join(', ');
             const days = def.daysOfWeek.map((d) => dayNames[d]).join(', ');
-            return `${this.i18n.monthly || 'Monthly'}: ${ords} ${days} (${timeStr})`;
+            return `${this.i18n.monthly}: ${ords} ${days} (${timeStr})`;
           }
-          return `${this.i18n.monthly || 'Monthly'} (${timeStr})`;
+          return `${this.i18n.monthly} (${timeStr})`;
         }
         if (def.type === 'annually') {
           const months = (def.months || []).map((m) => monthNames[m]).join(', ');
           if (def.daysOfMonth && def.daysOfMonth.length > 0) {
-            const doms = def.daysOfMonth.map((d) => (d === -1 ? (this.i18n.lastDayOfMonth || 'Last Day of Month') : `${this.i18n.dayPrefix || 'Day'} ${d}`)).join(', ');
-            return `${this.i18n.annually || 'Annually'}: ${months}, ${doms} (${timeStr})`;
+            const doms = def.daysOfMonth.map((d) => (d === -1 ? this.i18n.lastDayOfMonth : `${this.i18n.dayPrefix} ${d}`)).join(', ');
+            return `${this.i18n.annually}: ${months}, ${doms} (${timeStr})`;
           }
           if (def.weekNumbers && def.weekNumbers.length > 0 && def.daysOfWeek && def.daysOfWeek.length > 0) {
             const ords = def.weekNumbers.map((w) => ordinals[w] || `${w}`).join(', ');
             const days = def.daysOfWeek.map((d) => dayNames[d]).join(', ');
-            return `${this.i18n.annually || 'Annually'}: ${months}, ${ords} ${days} (${timeStr})`;
+            return `${this.i18n.annually}: ${months}, ${ords} ${days} (${timeStr})`;
           }
-          return `${this.i18n.annually || 'Annually'}: ${months} (${timeStr})`;
+          return `${this.i18n.annually}: ${months} (${timeStr})`;
         }
         return `${timeStr}`;
       },

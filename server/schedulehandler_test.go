@@ -208,6 +208,35 @@ func TestPutSchedule(t *testing.T) {
 	assert.Equal(t, "New Name", schedules[0].Name)
 }
 
+func TestPutSchedule_EmptyName(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore(nil)
+
+	h := NewScheduleHandler(srv)
+
+	sched := model.Schedule{
+		ID:   "sch-1",
+		Name: "   ",
+	}
+	body, _ := json.Marshal(sched)
+
+	r := httptest.NewRequest("PUT", "/api/schedules/sch-1", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "sch-1")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutSchedule(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestDeleteSchedule(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
@@ -515,4 +544,161 @@ func TestGetSchedules_ManualCycleSanitizedOnLoad(t *testing.T) {
 	assert.Equal(t, []string{"sch-b"}, resp[0].ExcludeScheduleIDs)
 	assert.Equal(t, []string{"sch-c"}, resp[1].ExcludeScheduleIDs)
 	assert.Empty(t, resp[2].ExcludeScheduleIDs)
+}
+
+func TestIsScheduleActiveInConfig(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// 1. Empty scheduleID -> true, nil
+	active, err := IsScheduleActiveInConfig(ctx, nil, "", now)
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	// 2. Nil store -> true, nil
+	active, err = IsScheduleActiveInConfig(ctx, nil, "any-sched", now)
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	// 3. Store with active schedule
+	scheds := []model.Schedule{
+		{
+			ID:       "sched-active",
+			Name:     "Active",
+			Enabled:  true,
+			Timezone: "UTC",
+			Definitions: []model.ScheduleDefinition{
+				{Type: model.ScheduleTypeDaily, AllDay: true},
+			},
+		},
+		{
+			ID:          "sched-disabled",
+			Name:        "Disabled",
+			Enabled:     false,
+			Timezone:    "UTC",
+			Definitions: []model.ScheduleDefinition{},
+		},
+	}
+	schedulesJSON, _ := json.Marshal(scheds)
+	store := NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.schedules",
+			Value: string(schedulesJSON),
+		},
+	})
+
+	active, err = IsScheduleActiveInConfig(ctx, store, "sched-active", now)
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	active, err = IsScheduleActiveInConfig(ctx, store, "sched-disabled", now)
+	assert.NoError(t, err)
+	assert.False(t, active)
+
+	active, err = IsScheduleActiveInConfig(ctx, store, "non-existent", now)
+	assert.NoError(t, err)
+	assert.True(t, active)
+}
+
+func TestPostSchedule_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore(nil)
+
+	h := NewScheduleHandler(srv)
+
+	sched := model.Schedule{
+		ID:   "invalid schedule id with spaces!",
+		Name: "Valid Name",
+	}
+	body, _ := json.Marshal(sched)
+
+	r := httptest.NewRequest("POST", "/api/schedules", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSchedule(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPostSchedule_DescriptionTooLong(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore(nil)
+
+	h := NewScheduleHandler(srv)
+
+	sched := model.Schedule{
+		Name:        "Valid Name",
+		Description: string(make([]byte, model.MAX_SCHEDULE_DESCRIPTION_LEN+1)),
+	}
+	body, _ := json.Marshal(sched)
+
+	r := httptest.NewRequest("POST", "/api/schedules", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSchedule(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPutSchedule_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore(nil)
+
+	h := NewScheduleHandler(srv)
+
+	sched := model.Schedule{
+		Name: "Valid Name",
+	}
+	body, _ := json.Marshal(sched)
+
+	r := httptest.NewRequest("PUT", "/api/schedules/bad!id", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "bad!id")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutSchedule(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteSchedule_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore(nil)
+
+	h := NewScheduleHandler(srv)
+
+	r := httptest.NewRequest("DELETE", "/api/schedules/bad!id", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "bad!id")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.DeleteSchedule(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

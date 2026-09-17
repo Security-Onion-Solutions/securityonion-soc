@@ -9,7 +9,6 @@ package notify
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/apex/log"
@@ -36,30 +35,6 @@ func (c *SOCChannel) Type() string {
 }
 
 func (c *SOCChannel) ValidateConfig(params map[string]interface{}) error {
-	if params == nil {
-		return nil
-	}
-
-	if modeVal, ok := params["attachmentMode"]; ok {
-		modeStr, isStr := modeVal.(string)
-		if !isStr {
-			return errors.New("attachmentMode must be a string")
-		}
-		switch modeStr {
-		case model.AttachmentModeLink, model.AttachmentModeAttach, model.AttachmentModeBoth:
-			// Valid
-		default:
-			return fmt.Errorf("invalid attachmentMode: %s (must be '%s', '%s', or '%s')",
-				modeStr, model.AttachmentModeLink, model.AttachmentModeAttach, model.AttachmentModeBoth)
-		}
-	}
-
-	if storeVal, ok := params["storeInPostgres"]; ok {
-		if _, isBool := storeVal.(bool); !isBool {
-			return errors.New("storeInPostgres must be a boolean")
-		}
-	}
-
 	return nil
 }
 
@@ -77,30 +52,17 @@ func (c *SOCChannel) Send(ctx context.Context, params map[string]interface{}, pa
 
 	payload.Links = database.SanitizeLinks(payload.Links)
 
-	storeInPostgres := true
-	if params != nil {
-		if val, ok := params["storeInPostgres"]; ok {
-			if boolVal, isBool := val.(bool); isBool {
-				storeInPostgres = boolVal
-			}
-		}
-	}
-
 	var err error
-	if storeInPostgres {
-		if c.store != nil {
-			err = c.store.InsertNotification(ctx, payload)
-		} else if c.server != nil && c.server.DB != nil {
-			var store *database.Store
-			store, err = database.New(ctx, c.server.DB)
-			if err == nil {
-				err = store.InsertNotification(ctx, payload)
-			}
-		} else {
-			log.WithField("notificationId", payload.ID).Debug("PostgreSQL DB not configured or available; skipping database insertion")
+	if c.store != nil {
+		err = c.store.InsertNotification(ctx, payload)
+	} else if c.server != nil && c.server.DB != nil {
+		var store *database.Store
+		store, err = database.New(ctx, c.server.DB)
+		if err == nil {
+			err = store.InsertNotification(ctx, payload)
 		}
 	} else {
-		log.WithField("notificationId", payload.ID).Debug("storeInPostgres is false; skipping database insertion")
+		log.WithField("notificationId", payload.ID).Debug("PostgreSQL DB not configured or available; skipping database insertion")
 	}
 
 	if err != nil {

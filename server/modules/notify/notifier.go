@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -91,6 +92,52 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 		if !destCfg.Enabled {
 			log.WithField("destination", destName).Debug("Destination is disabled; skipping")
 			continue
+		}
+
+		if len(destCfg.Severities) > 0 {
+			allowed := false
+			for _, sev := range destCfg.Severities {
+				if strings.EqualFold(sev, payload.Severity) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				log.WithFields(log.Fields{
+					"destination": destName,
+					"severity":    payload.Severity,
+				}).Debug("Notification severity filtered out by destination configuration; skipping")
+				continue
+			}
+		}
+
+		if len(destCfg.ScheduleIDs) > 0 {
+			if n.server != nil && n.server.Configstore != nil {
+				now := time.Now().UTC()
+				anyActive := false
+				for _, schedID := range destCfg.ScheduleIDs {
+					if schedID == "" {
+						anyActive = true
+						break
+					}
+					active, err := server.IsScheduleActiveInConfig(ctx, n.server.Configstore, schedID, now)
+					if err != nil {
+						log.WithError(err).WithField("scheduleId", schedID).Warn("Failed to evaluate destination schedule; failing open and treating as active")
+						active = true
+					}
+					if active {
+						anyActive = true
+						break
+					}
+				}
+				if !anyActive {
+					log.WithFields(log.Fields{
+						"destination": destName,
+						"scheduleIds": destCfg.ScheduleIDs,
+					}).Debug("None of the destination schedules are currently active; skipping")
+					continue
+				}
+			}
 		}
 
 		channel, found := n.registry.Get(destCfg.Type)

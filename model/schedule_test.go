@@ -545,3 +545,129 @@ func TestSanitizeScheduleDAG(t *testing.T) {
 	sanitizedValid := SanitizeScheduleDAG(validSchedules)
 	assert.Equal(t, validSchedules, sanitizedValid)
 }
+
+func TestUnmarshalSchedules(t *testing.T) {
+	// 1. Empty string
+	res, err := UnmarshalSchedules("")
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+
+	// 2. Whitespace only
+	res, err = UnmarshalSchedules("   \n\t  ")
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+
+	// 3. JSON Array
+	jsonArray := `[{"id":"sch-1","name":"Work","enabled":true,"definitions":[]}]`
+	res, err = UnmarshalSchedules(jsonArray)
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+	assert.Equal(t, "sch-1", res[0].ID)
+
+	// 4. Single JSON Object
+	singleObj := `{"id":"sch-2","name":"Weekends","enabled":true,"definitions":[]}`
+	res, err = UnmarshalSchedules(singleObj)
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+	assert.Equal(t, "sch-2", res[0].ID)
+
+	// 5. NDJSON format
+	ndjson := `{"id":"sch-1","name":"Work","enabled":true,"definitions":[]}` + "\n" +
+		`{"id":"sch-2","name":"Weekends","enabled":true,"definitions":[]}`
+	res, err = UnmarshalSchedules(ndjson)
+	assert.NoError(t, err)
+	assert.Len(t, res, 2)
+	assert.Equal(t, "sch-1", res[0].ID)
+	assert.Equal(t, "sch-2", res[1].ID)
+
+	// 6. Invalid JSON
+	_, err = UnmarshalSchedules("invalid-json{")
+	assert.Error(t, err)
+}
+
+func TestIsScheduleIDActive(t *testing.T) {
+	schedules := []Schedule{
+		{
+			ID:       "sched-active",
+			Name:     "Active Daily",
+			Enabled:  true,
+			Timezone: "UTC",
+			Definitions: []ScheduleDefinition{
+				{
+					Type:   ScheduleTypeDaily,
+					AllDay: true,
+				},
+			},
+		},
+		{
+			ID:          "sched-disabled",
+			Name:        "Disabled",
+			Enabled:     false,
+			Timezone:    "UTC",
+			Definitions: []ScheduleDefinition{},
+		},
+	}
+
+	now := time.Now().UTC()
+
+	// Empty scheduleID -> always active (true, true)
+	active, found := IsScheduleIDActive(schedules, "", now)
+	assert.True(t, active)
+	assert.True(t, found)
+
+	// Existing active schedule -> (true, true)
+	active, found = IsScheduleIDActive(schedules, "sched-active", now)
+	assert.True(t, active)
+	assert.True(t, found)
+
+	// Existing disabled schedule -> (false, true)
+	active, found = IsScheduleIDActive(schedules, "sched-disabled", now)
+	assert.False(t, active)
+	assert.True(t, found)
+
+	// Non-existent schedule -> fail open (true, false)
+	active, found = IsScheduleIDActive(schedules, "non-existent", now)
+	assert.True(t, active)
+	assert.False(t, found)
+}
+
+func TestValidateScheduleName(t *testing.T) {
+	assert.Error(t, ValidateScheduleName(""))
+	assert.Error(t, ValidateScheduleName("   "))
+	assert.NoError(t, ValidateScheduleName("Standard Work Hours"))
+	assert.NoError(t, ValidateScheduleName(string(make([]byte, MAX_SCHEDULE_NAME_LEN))))
+	assert.Error(t, ValidateScheduleName(string(make([]byte, MAX_SCHEDULE_NAME_LEN+1))))
+}
+
+func TestValidateScheduleDescription(t *testing.T) {
+	assert.NoError(t, ValidateScheduleDescription(""))
+	assert.NoError(t, ValidateScheduleDescription("Short description"))
+	assert.NoError(t, ValidateScheduleDescription(string(make([]byte, MAX_SCHEDULE_DESCRIPTION_LEN))))
+	assert.Error(t, ValidateScheduleDescription(string(make([]byte, MAX_SCHEDULE_DESCRIPTION_LEN+1))))
+}
+
+func TestIsValidScheduleID(t *testing.T) {
+	validIDs := []string{
+		"after-hours",
+		"after-hours-and-weekends",
+		"work_hours.v1",
+		"123e4567-e89b-12d3-a456-426614174000",
+		"sch-1",
+	}
+	for _, id := range validIDs {
+		assert.True(t, IsValidScheduleID(id), "expected valid: %s", id)
+	}
+
+	invalidIDs := []string{
+		"",
+		" ",
+		"after hours",
+		"sch/invalid",
+		"sch?query",
+		"sch#hash",
+		string(make([]byte, MAX_SCHEDULE_ID_LEN+1)), // too long
+	}
+	for _, id := range invalidIDs {
+		assert.False(t, IsValidScheduleID(id), "expected invalid: %s", id)
+	}
+}

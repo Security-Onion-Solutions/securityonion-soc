@@ -1,0 +1,142 @@
+<div data-aid="destinations_manager_component">
+  <v-row class="mb-2 pt-1 align-center">
+    <v-col cols="12" sm="6" md="4">
+      <v-text-field v-model="destinationSearch" density="compact" prepend-inner-icon="fa-search" :label="i18n.search" single-line hide-details clearable data-aid="destination_search_input"></v-text-field>
+    </v-col>
+  </v-row>
+
+  <v-data-table :sort-by="destinationSortBy" @update:sort-by="val => destinationSortBy = val" @update:items-per-page="val => destinationItemsPerPage = val"
+    :items-per-page-options="destinationItemsPerPageOptions" :items-per-page="destinationItemsPerPage" :headers="destinationHeaders" :items="destinations" :search="destinationSearch" data-aid="destinations_table">
+    <template #item.name="{ item }">
+      <div class="d-flex align-center">
+        <span class="font-weight-bold" data-aid="destination_item_name">{{ getDestinationName(item) }}</span>
+      </div>
+    </template>
+    <template #item.type="{ item }">
+      <v-chip size="small" variant="tonal" color="primary" density="compact" :prepend-icon="getChannelIcon(item.type)" data-aid="destination_type_chip">
+        {{ getChannelLabel(item.type) }}
+      </v-chip>
+    </template>
+    <template #item.severities="{ item }">
+      <div v-if="!item.severities || item.severities.length === 0" class="text-caption text-medium-emphasis">
+        {{ i18n.allSeverities }}
+      </div>
+      <div v-else class="d-flex flex-wrap ga-1">
+        <v-chip v-for="sev in item.severities" :key="sev" size="x-small" :color="getSeverityColor(sev)" variant="flat" density="compact">
+          {{ getSeverityLabel(sev) }}
+        </v-chip>
+      </div>
+    </template>
+    <template #item.schedule="{ item }">
+      <div v-if="getDestinationScheduleNames(item).length > 0" class="d-flex align-center flex-wrap ga-1">
+        <span class="text-body-2 mr-1">{{ getDestinationScheduleNames(item).join(', ') }}</span>
+        <v-icon v-if="isDestinationScheduleActive(item)" size="14" color="success" class="ml-1" :title="i18n.currentlyActive" data-aid="destination_schedule_active_icon">fa-clock</v-icon>
+      </div>
+      <div v-else class="d-flex align-center">
+        <span class="text-caption text-medium-emphasis mr-1">{{ i18n.alwaysActive }}</span>
+        <v-icon size="14" color="success" class="ml-1" :title="i18n.currentlyActive" data-aid="destination_schedule_active_icon">fa-clock</v-icon>
+      </div>
+    </template>
+    <template #item.status="{ item }">
+      <v-chip size="small" :color="item.enabled !== false ? 'success' : 'grey'" :variant="item.enabled !== false ? 'flat' : 'tonal'" density="compact" data-aid="destination_status_chip">
+        {{ item.enabled !== false ? i18n.enabled : i18n.disabled }}
+      </v-chip>
+    </template>
+    <template #item.actions="{ item }">
+      <v-btn icon size="small" variant="text" color="primary" @click.stop="testDestination(item)" :loading="testingDestinationId === item.id" :title="i18n.testDestination" :aria-label="i18n.ariaDestinationTest" data-aid="destination_action_test">
+        <v-icon size="16">fa-paper-plane</v-icon>
+      </v-btn>
+      <v-btn icon size="small" variant="text" @click.stop="showEditDestination(item)" :title="i18n.editDestination" :aria-label="i18n.ariaDestinationEdit" data-aid="destination_action_edit">
+        <v-icon size="16">fa-pencil</v-icon>
+      </v-btn>
+      <v-btn icon size="small" variant="text" color="error" :disabled="isDefaultDestination(item)" @click.stop="showDeleteDestination(item)" :title="i18n.delete" :aria-label="i18n.ariaDestinationDelete" data-aid="destination_action_delete">
+        <v-icon size="16">fa-trash</v-icon>
+      </v-btn>
+    </template>
+  </v-data-table>
+
+  <!-- Destination Add/Edit Dialog -->
+  <v-dialog v-model="destinationDialog" persistent max-width="750" scrollable data-aid="destination_editor_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        {{ form.isEdit ? i18n.editDestination : i18n.addDestination }}
+      </v-card-title>
+      <v-card-text>
+        <v-alert v-if="testResult" :type="testResult.success ? 'success' : 'error'" variant="tonal" density="compact" class="mb-4" closable @click:close="testResult = null" data-aid="destination_test_alert">
+          {{ testResult.message }}
+        </v-alert>
+
+        <v-row dense>
+          <v-col cols="12" sm="8">
+            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required data-aid="destination_form_name"></v-text-field>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType" density="comfortable" :disabled="form.isEdit" data-aid="destination_form_type"></v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="destination_form_enabled"></v-switch>
+          </v-col>
+          <v-col cols="12">
+            <v-select
+              v-model="form.severities"
+              :items="severityOptions"
+              :label="i18n.severities"
+              :placeholder="i18n.severitiesPlaceholder"
+              multiple
+              chips
+              closable-chips
+              clearable
+              density="comfortable"
+              :hint="i18n.severitiesHint"
+              persistent-hint
+              data-aid="destination_form_severities">
+            </v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-select
+              v-model="form.scheduleIds"
+              :items="scheduleOptions"
+              :label="i18n.activationSchedules"
+              :placeholder="i18n.activationSchedulePlaceholder"
+              multiple
+              chips
+              closable-chips
+              clearable
+              density="comfortable"
+              :hint="i18n.activationScheduleHint"
+              persistent-hint
+              data-aid="destination_form_schedule">
+            </v-select>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-card-actions class="pa-4">
+        <v-btn v-if="form.isEdit" variant="outlined" color="primary" prepend-icon="fa-paper-plane" @click="testCurrentForm()" :loading="isTestingForm" data-aid="destination_dialog_test_button">
+          {{ i18n.testConnection }}
+        </v-btn>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="destinationDialog = false" data-aid="destination_editor_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveDestination()" data-aid="destination_editor_save">{{ i18n.save }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Delete Confirmation Dialog -->
+  <v-dialog v-model="deleteDestinationDialog" persistent max-width="480" data-aid="destination_delete_dialog">
+    <v-card>
+      <v-card-title class="headline" role="heading" aria-level="2">{{ i18n.deleteDestinationTitle }}</v-card-title>
+      <v-card-text>
+        <div class="mb-2">{{ i18n.deleteDestinationConfirm }}</div>
+        <div v-if="destinationToDelete" class="font-weight-bold mb-3">{{ getDestinationName(destinationToDelete) }}</div>
+        <v-alert type="warning" variant="tonal" density="compact" class="text-body-2" data-aid="destination_delete_warning">
+          {{ i18n.deleteDestinationWarning }}
+        </v-alert>
+      </v-card-text>
+      <v-card-actions class="pa-4">
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click.stop="hideDeleteDestination()" data-aid="destination_delete_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="error" variant="flat" @click.stop="deleteDestination()" data-aid="destination_delete_confirm">{{ i18n.delete }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+</div>

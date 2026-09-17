@@ -7,8 +7,30 @@
 package model
 
 import (
+	"errors"
+	"regexp"
 	"time"
 )
+
+const (
+	MAX_DESTINATION_ID_LEN   = 40
+	MAX_DESTINATION_NAME_LEN = 50
+)
+
+var destinationIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
+// IsValidDestinationID validates that a destination ID contains only safe alphanumeric, underscore, hyphen, or dot characters and does not exceed the maximum allowed length.
+func IsValidDestinationID(id string) bool {
+	return id != "" && len(id) <= MAX_DESTINATION_ID_LEN && destinationIDRegex.MatchString(id)
+}
+
+// ValidateDestinationName verifies that the given destination name does not exceed the maximum allowed length.
+func ValidateDestinationName(name string) error {
+	if len(name) > MAX_DESTINATION_NAME_LEN {
+		return errors.New("destination name exceeds maximum allowed length")
+	}
+	return nil
+}
 
 const (
 	NotificationSeverityInfo     = "info"
@@ -29,6 +51,24 @@ const (
 	DefaultDestinationSOCBell = "soc-bell"
 	ChannelTypeSOC            = "soc"
 )
+
+// DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
+// The Name field is left empty so the client side can determine the localized display name.
+func DefaultDestinationSOCBellConfig() DestinationConfig {
+	return DestinationConfig{
+		ID:      DefaultDestinationSOCBell,
+		Name:    "",
+		Type:    ChannelTypeSOC,
+		Enabled: true,
+	}
+}
+
+// DefaultDestinationsMap returns a map containing the default SOC Bell destination.
+func DefaultDestinationsMap() map[string]DestinationConfig {
+	return map[string]DestinationConfig{
+		DefaultDestinationSOCBell: DefaultDestinationSOCBellConfig(),
+	}
+}
 
 // @Description Attachment represents a file or graph payload to be sent with a notification.
 type Attachment struct {
@@ -78,14 +118,18 @@ type SilenceParams struct {
 
 // @Description DestinationConfig defines the configuration for an individual notification destination channel.
 type DestinationConfig struct {
-	// Human-readable display name for this destination.
+	// The unique identifier for this destination (optional in config map, populated in API responses; max 40 characters).
+	ID string `json:"id,omitempty" example:"soc-bell"`
+	// Human-readable display name for this destination (max 50 characters).
 	Name string `json:"name" example:"SOC Notification Bell"`
 	// The channel driver type (e.g. soc, smtp, slack, matrix, msteams, pagerduty, webhook).
 	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,msteams,pagerduty,webhook"`
 	// Indicates whether this destination is currently active and receiving alerts.
 	Enabled bool `json:"enabled" example:"true"`
-	// The ID of the reusable activation schedule linked to this destination.
-	ScheduleID string `json:"scheduleId,omitempty" example:"after-hours-and-weekends"`
+	// The IDs of the reusable activation schedules linked to this destination.
+	ScheduleIDs []string `json:"scheduleIds,omitempty" example:"after-hours,weekends"`
+	// Optional list of severities to limit notifications to (e.g. ["high", "critical"]). If empty, all severities are allowed.
+	Severities []string `json:"severities,omitempty" example:"high,critical"`
 	// Channel-specific driver parameters (e.g. webhook URLs, hostnames, credentials).
 	Params map[string]interface{} `json:"params,omitempty"`
 }
