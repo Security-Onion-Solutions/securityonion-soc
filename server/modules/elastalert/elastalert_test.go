@@ -597,9 +597,9 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 	})
 
 	engine := ElastAlertEngine{
-		IOManager:       iom,
-		useEsql:         true,
-		caseInsensitive: true,
+		IOManager:           iom,
+		useEsql:             true,
+		esqlCaseInsensitive: true,
 	}
 
 	det := &model.Detection{
@@ -2835,7 +2835,7 @@ func TestWriteFileWithCleanup(t *testing.T) {
 	}
 }
 
-func TestSigmaToElastAlertCaseInsensitiveDisabled(t *testing.T) {
+func TestSigmaToElastAlertEsqlCaseInsensitiveDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2848,9 +2848,9 @@ func TestSigmaToElastAlertCaseInsensitiveDisabled(t *testing.T) {
 	})
 
 	engine := ElastAlertEngine{
-		IOManager:       iom,
-		useEsql:         true,
-		caseInsensitive: false,
+		IOManager:           iom,
+		useEsql:             true,
+		esqlCaseInsensitive: false,
 	}
 
 	det := &model.Detection{
@@ -2867,7 +2867,7 @@ func TestSigmaToElastAlertCaseInsensitiveDisabled(t *testing.T) {
 	assert.NotContains(t, capturedArgs, "case_insensitive=false")
 }
 
-func TestSigmaToElastAlertCaseInsensitiveNotSentForEql(t *testing.T) {
+func TestSigmaToElastAlertEsqlCaseInsensitiveNotSentForEql(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -2880,9 +2880,9 @@ func TestSigmaToElastAlertCaseInsensitiveNotSentForEql(t *testing.T) {
 	})
 
 	engine := ElastAlertEngine{
-		IOManager:       iom,
-		useEsql:         false,
-		caseInsensitive: true,
+		IOManager:           iom,
+		useEsql:             false,
+		esqlCaseInsensitive: true,
 	}
 
 	det := &model.Detection{

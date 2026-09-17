@@ -134,7 +134,7 @@ type ElastAlertEngine struct {
 	customAlerters                     *map[string]interface{}
 	autoUpdateEnabled                  bool
 	useEsql                            bool
-	caseInsensitive                    bool
+	esqlCaseInsensitive                bool
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -284,8 +284,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.criticalSeverityAlerterParams = module.GetStringDefault(config, "additionalSev5AlertersParams", "")
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	e.useEsql = module.GetBoolDefault(config, "useEsql", false)
-	// EQL is already case-insensitive, this is for useEsql
-	e.caseInsensitive = module.GetBoolDefault(config, "caseInsensitive", true)
+	// Case-insensitive matching of string values in generated queries. ES|QL only;
+	e.esqlCaseInsensitive = module.GetBoolDefault(config, "esqlCaseInsensitive", true)
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -1670,7 +1670,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 		target = "esql"
 	}
 	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
-	if e.useEsql && e.caseInsensitive {
+	if e.useEsql && e.esqlCaseInsensitive {
 		args = append(args, "-O", "case_insensitive=true")
 	}
 
