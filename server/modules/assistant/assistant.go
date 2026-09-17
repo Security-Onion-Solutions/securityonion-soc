@@ -691,12 +691,14 @@ func (ac *AssistantCoordinator) Start() error {
 	ac.isRunning = true
 
 	if ac.srv != nil && ac.srv.DB != nil {
-		store, err := database.New(context.Background(), ac.srv.DB)
+		store, err := database.New(ac.srv.Context, ac.srv.DB)
 		if err != nil {
 			log.WithError(err).Error("assistant: database init failed")
 			return err
 		}
 		ac.store = store
+
+		ac.reconcileAutomationRuns(ac.srv.Context)
 	}
 
 	// Agent definitions and limits can be managed as config settings (some

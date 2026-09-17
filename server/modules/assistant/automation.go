@@ -12,6 +12,8 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+
+	"github.com/apex/log"
 )
 
 type AutomationKind interface {
@@ -57,6 +59,43 @@ type AutomationRun struct {
 	// be traced back to its transcript. Not the scheduler's dedupe key, which is the
 	// automation name: two runs of one automation must never be in flight at once.
 	RunId string
+
+	// Store is how a kind records its own work: enqueue, claim, store each conclusion
+	// before applying it, close out. Never nil, because a run is not opened at all
+	// without Postgres, so kinds do not check.
+	Store AutomationStore
+
+	// OpenItems is every unfinished item for this task, oldest first: what an earlier
+	// process left behind plus anything this run has already enqueued. A kind starts by
+	// draining this rather than rescanning, so a restart costs only the work it had not
+	// finished. Empty on a first run. Resumption arrives as data, not as a second
+	// method every kind would have to implement.
+	OpenItems []*model.AutomationWorkItem
+}
+
+// reconcileAutomationRuns closes out runs a previous process left open and requeues the
+// work they had in flight. It runs once, as the store is constructed and before anything
+// can schedule, which is the window in which every open run is known to be abandoned.
+//
+// A failure here strands one automation behind a run nothing will close, so it is logged
+// rather than returned: an unreachable reconcile must not stop the assistant serving
+// chat.
+func (ac *AssistantCoordinator) reconcileAutomationRuns(ctx context.Context) {
+	result, err := ac.store.ReconcileAutomationRuns(ctx)
+	if err != nil {
+		log.WithError(err).Error("assistant: automation run reconciliation failed")
+
+		return
+	}
+
+	if result.FailedRuns == 0 && result.ResetItems == 0 {
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"failedRuns": result.FailedRuns,
+		"resetItems": result.ResetItems,
+	}).Info("assistant: recovered automation runs left open by a previous process")
 }
 
 // lookupAutomationKind is unexported because every caller is in this package; the

@@ -47,3 +47,120 @@ type Automation struct {
 	// The time this automation last finished a run; absent until the first run ends.
 	LastRunTime *time.Time `json:"lastRunTime,omitempty" example:"2026-09-15T16:03:02Z"`
 }
+
+// AutomationRunState is the lifecycle of one run.
+type AutomationRunState string
+
+const (
+	// Set once the run row is open but the execution pool has not dispatched it yet.
+	// Nothing writes it today -- OpenAutomationRun inserts running directly -- but it is
+	// inside the in-flight index predicate, so a queued run still blocks a second run of
+	// the same automation and a restart still sweeps it.
+	AutomationRunQueued    AutomationRunState = "queued"
+	AutomationRunRunning   AutomationRunState = "running"
+	AutomationRunSucceeded AutomationRunState = "succeeded"
+	AutomationRunFailed    AutomationRunState = "failed"
+)
+
+// IsTerminal reports whether this state indicates the automation has completed.
+func (s AutomationRunState) IsTerminal() bool {
+	return s == AutomationRunSucceeded || s == AutomationRunFailed
+}
+
+// AutomationWorkItemState is the lifecycle of one unit of automation work.
+type AutomationWorkItemState string
+
+const (
+	AutomationWorkItemPending  AutomationWorkItemState = "pending"
+	AutomationWorkItemRunning  AutomationWorkItemState = "running"
+	AutomationWorkItemApplying AutomationWorkItemState = "applying"
+	AutomationWorkItemDone     AutomationWorkItemState = "done"
+	AutomationWorkItemFailed   AutomationWorkItemState = "failed"
+)
+
+// IsTerminal reports whether this item is finished.
+func (s AutomationWorkItemState) IsTerminal() bool {
+	return s == AutomationWorkItemDone || s == AutomationWorkItemFailed
+}
+
+// @Description One execution of one automation: opened before its kind runs, closed when it stops.
+type AutomationRunRecord struct {
+	// The unique id of this run, stamped on the sessions it creates.
+	Id string `json:"id" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
+	// The automation this run belongs to.
+	AutomationName string `json:"automationName" example:"Nightly Alert Triage"`
+	// The current state of this run.
+	State AutomationRunState `json:"state" example:"running"`
+	// The time this run started.
+	StartTime *time.Time `json:"startTime,omitempty" example:"2026-09-15T16:00:02Z"`
+	// The time this run stopped; absent while it is in flight.
+	EndTime *time.Time `json:"endTime,omitempty" example:"2026-09-15T16:03:02Z"`
+	// Why this run failed; absent unless it did.
+	Error string `json:"error,omitempty"`
+}
+
+// @Description One unit of work inside an automation: what a kind enqueues, claims, runs a session for, and applies the outcome of.
+type AutomationWorkItem struct {
+	// The unique id of this work item.
+	Id string `json:"id" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
+	// The automation this item belongs to.
+	AutomationName string `json:"automationName" example:"Nightly Alert Triage"`
+	// The run that created this item. Absent once that run is gone; items outlive their
+	// runs so a later run can finish them.
+	RunId string `json:"runId,omitempty"`
+	// Identifies what this item is about, in whatever terms its kind uses. Only one item
+	// per group is ever in flight.
+	GroupKey string `json:"groupKey" example:"rule.name:Suspicious PowerShell"`
+	// The kind's description of the work. Opaque to everything but that kind.
+	Payload json.RawMessage `json:"payload" swaggertype:"object"`
+	// The current state of this item.
+	State AutomationWorkItemState `json:"state" example:"pending"`
+	// How many times this item has been claimed, including attempts that died with the
+	// process. Bounds retries so a payload that cannot succeed stops being retried.
+	Attempts int `json:"attempts" example:"1"`
+	// The session that produced Result; absent until one runs.
+	SessionId string `json:"sessionId,omitempty"`
+	// The kind's conclusion, stored in the same statement that moves the item to
+	// applying, so a process that dies after that point resumes at the apply step
+	// instead of paying for the session again.
+	Result json.RawMessage `json:"result,omitempty" swaggertype:"object"`
+	// Why this item failed; absent unless it did.
+	Error string `json:"error,omitempty"`
+	// The time this item was created.
+	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:00:05Z"`
+	// The time this item last changed state.
+	UpdateTime *time.Time `json:"updateTime,omitempty" example:"2026-09-15T16:02:41Z"`
+}
+
+// @Description One session an automation run created, linking the run to its transcript.
+type AutomationRunSession struct {
+	// The run that created this session.
+	RunId string `json:"runId"`
+	// The session's id, for drilling into the conversation.
+	SessionId string `json:"sessionId"`
+	// The work item this session was analyzing; absent if it served the run as a whole.
+	WorkItemId string `json:"workItemId,omitempty"`
+	// The kind's name for this session's role in the run.
+	Purpose string `json:"purpose,omitempty" example:"triage"`
+	// The time this session was recorded.
+	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:00:07Z"`
+}
+
+// @Description One recorded outcome from an automation run: what it concluded about one alert, and whether it analyzed that alert directly.
+type AutomationRunResultAudit struct {
+	// The run that reached this conclusion.
+	RunId string `json:"runId"`
+	// The alert this conclusion is about.
+	AlertId string `json:"alertId"`
+	// The work item that produced this conclusion.
+	WorkItemId string `json:"workItemId,omitempty"`
+	// What the automation decided to do with this alert.
+	Recommendation string `json:"recommendation" example:"acknowledge"`
+	// The agent's justification, shown alongside the recommendation.
+	Reason string `json:"reason,omitempty"`
+	// True when this alert was not analyzed itself: the conclusion came from the sampled
+	// alert that stood in for its group.
+	Inherited bool `json:"inherited" example:"true"`
+	// The time this conclusion was recorded.
+	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:02:44Z"`
+}

@@ -13,11 +13,14 @@ import (
 	"strings"
 	"testing"
 
+	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -224,4 +227,49 @@ func TestExposeAgentsPublishesAutomationKinds(t *testing.T) {
 	assert.Equal(t, "Alert Triage", published[0].DisplayName)
 	require.NotNil(t, published[0].ParamSchema.Json)
 	assert.Contains(t, published[0].ParamSchema.Json.Properties, "sample_size")
+}
+
+// expectEmptyAutomationRunReconcile scripts the reconcile pass Start runs as it builds the
+// store: a transaction whose updates match nothing.
+func expectEmptyAutomationRunReconcile(mDB *mockdb.MockDB) {
+	mTx := &mockdb.MockTx{}
+	mRows := &mockdb.MockRows{}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	mTx.On("Query", mock.Anything, mock.Anything).Return(mRows, nil)
+	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Rollback", mock.Anything).Return(nil)
+
+	mDB.On("Begin", mock.Anything).Return(mTx, nil)
+}
+
+func TestReconcileAutomationRunsLogsRatherThanFailing(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mDB.On("Begin", mock.Anything).Return((*mockdb.MockTx)(nil), errors.New("postgres is down"))
+
+	ac := &AssistantCoordinator{store: newAutomationTestStore(mDB)}
+
+	// A stuck run strands one automation; it must not stop the assistant starting.
+	assert.NotPanics(t, func() { ac.reconcileAutomationRuns(context.Background()) })
+
+	mDB.AssertExpectations(t)
+}
+
+// The concrete store must satisfy the interface kinds are handed. Asserted here rather
+// than beside the interface so the production build of this package never imports the
+// database package just to prove it.
+var _ AutomationStore = (*database.Store)(nil)
+
+func newAutomationTestStore(mDB *mockdb.MockDB) *database.Store {
+	mDB.On("Migrate", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	s, err := database.New(context.Background(), mDB)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
 }

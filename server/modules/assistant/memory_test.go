@@ -2135,7 +2135,10 @@ func TestStartStopMemoryWorker(t *testing.T) {
 	store := servermock.NewMockAssistantstore(ctrl)
 	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).Return(nil, nil).AnyTimes()
 
-	ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+	mDB := &mockdb.MockDB{}
+	expectEmptyAutomationRunReconcile(mDB)
+
+	ac := newScanTestCoordinator(store, mDB, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
 	ac.memory.useMemory = true
 	ac.memory.useScanner = true
 	ac.memory.scanInterval = time.Hour
