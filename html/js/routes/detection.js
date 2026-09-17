@@ -1403,25 +1403,33 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		copyConvertToClipboard() {
 			this.$root.copyToClipboard(this.convertedRule);
 		},
-		runQueryInDiscover() {
-			let query;
-			if (this.isEsql) {
-				query = `POST /_query
+		risonEscape(value) {
+			// Rison escapes with '!', not backslash.
+			return value.replace(/!/g, '!!').replace(/'/g, "!'");
+		},
+		buildEsqlDiscoverUrl(esql) {
+			const query = this.risonEscape(esql.trim());
+			const appState = `(columns:!(),dataSource:(type:esql),filters:!(),interval:auto,query:(esql:'${query}'),sort:!(!('@timestamp',desc)))`;
+			const globalState = `(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h,to:now))`;
+
+			return `/kibana/app/discover#/?_a=${encodeURIComponent(appState)}&_g=${encodeURIComponent(globalState)}`;
+		},
+		buildEqlDevToolsUrl(eql) {
+			const query = `GET /.ds-logs-*/_eql/search
 {
 	"query": """
-	${this.convertedRule}
+	${eql}
 	"""
 }`;
-			} else {
-				query = `GET /.ds-logs-*/_eql/search
-{
-	"query": """
-	${this.convertedRule}
-	"""
-}`;
-			}
 			const compress = LZString.compressToEncodedURIComponent(query);
-			const url = `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
+
+			return `/kibana/app/dev_tools#/console?load_from=data:text/plain,${compress}`;
+		},
+		runQueryInDiscover() {
+			// EQL has no Discover equivalent, so it still goes to Dev Tools.
+			const url = this.isEsql
+				? this.buildEsqlDiscoverUrl(this.convertedRule)
+				: this.buildEqlDevToolsUrl(this.convertedRule);
 			window.open(url, '_blank');
 		},
 		isFieldValid(refName) {
