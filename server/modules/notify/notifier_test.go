@@ -8,6 +8,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -319,4 +321,179 @@ func TestNotifierGettersAndUpdateConfig(t *testing.T) {
 	notifier.UpdateConfig(newCfg)
 	assert.Equal(t, []string{"new-dest"}, notifier.GetDefaultDestinations())
 	assert.Empty(t, notifier.GetDestinations())
+}
+
+func TestNotifierSendSeverityFiltering(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	reg := NewChannelRegistry()
+	mockCh := &mockChannel{channelType: "soc"}
+	_ = reg.Register(mockCh)
+
+	cfg := model.NotificationConfig{
+		Enabled:             true,
+		DefaultDestinations: []string{"critical-only"},
+		Destinations: map[string]model.DestinationConfig{
+			"critical-only": {
+				Name:       "Critical Alerts Only",
+				Type:       "soc",
+				Enabled:    true,
+				Severities: []string{model.NotificationSeverityHigh, model.NotificationSeverityCritical},
+			},
+		},
+	}
+	notifier := NewNotifier(nil, reg, cfg)
+
+	// Low severity should be skipped
+	lowPayload := &model.NotificationPayload{
+		Title:    "Low alert",
+		Severity: model.NotificationSeverityLow,
+	}
+	err := notifier.Send(context.Background(), lowPayload)
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// High severity should be delivered
+	highPayload := &model.NotificationPayload{
+		Title:    "High alert",
+		Severity: model.NotificationSeverityHigh,
+	}
+	err = notifier.Send(context.Background(), highPayload)
+	assert.NoError(t, err)
+	assert.Equal(t, highPayload, mockCh.sentPayload)
+
+	// Critical severity should be delivered
+	mockCh.sentPayload = nil
+	critPayload := &model.NotificationPayload{
+		Title:    "Critical alert",
+		Severity: model.NotificationSeverityCritical,
+	}
+	err = notifier.Send(context.Background(), critPayload)
+	assert.NoError(t, err)
+	assert.Equal(t, critPayload, mockCh.sentPayload)
+}
+
+func TestNotifierSendScheduleEvaluation(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	reg := NewChannelRegistry()
+	mockCh := &mockChannel{channelType: "soc"}
+	_ = reg.Register(mockCh)
+
+	activeSched := model.Schedule{
+		ID:       "sched-active",
+		Name:     "Always Active Schedule",
+		Enabled:  true,
+		Timezone: "UTC",
+		Definitions: []model.ScheduleDefinition{
+			{
+				Type:   model.ScheduleTypeDaily,
+				AllDay: true,
+			},
+		},
+	}
+
+	inactiveSched := model.Schedule{
+		ID:          "sched-inactive",
+		Name:        "Disabled Schedule",
+		Enabled:     false,
+		Timezone:    "UTC",
+		Definitions: []model.ScheduleDefinition{},
+	}
+
+	schedulesJSON, _ := json.Marshal([]model.Schedule{activeSched, inactiveSched})
+	srv := &server.Server{
+		Configstore: server.NewMemConfigStore([]*model.Setting{
+			{
+				Id:    "soc.config.server.schedules",
+				Value: string(schedulesJSON),
+			},
+		}),
+	}
+
+	cfg := model.NotificationConfig{
+		Enabled:             true,
+		DefaultDestinations: []string{"dest-active", "dest-inactive"},
+		Destinations: map[string]model.DestinationConfig{
+			"dest-active": {
+				Name:        "Active Scheduled Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{"sched-active"},
+			},
+			"dest-inactive": {
+				Name:        "Inactive Scheduled Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{"sched-inactive"},
+			},
+			"dest-multi": {
+				Name:        "Multi Scheduled Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{"sched-inactive", "sched-active"},
+			},
+			"dest-no-sched": {
+				Name:        "No Schedule Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{},
+			},
+			"dest-all-inactive": {
+				Name:        "All Inactive Multi Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{"sched-inactive", "sched-inactive"},
+			},
+			"dest-unknown": {
+				Name:        "Unknown Schedule Dest",
+				Type:        "soc",
+				Enabled:     true,
+				ScheduleIDs: []string{"sched-does-not-exist"},
+			},
+		},
+	}
+	notifier := NewNotifier(srv, reg, cfg)
+
+	payload := &model.NotificationPayload{
+		Title:    "Scheduled Alert",
+		Severity: model.NotificationSeverityInfo,
+	}
+
+	// Active schedule dest should receive payload
+	err := notifier.Send(context.Background(), payload, "dest-active")
+	assert.NoError(t, err)
+	assert.Equal(t, payload, mockCh.sentPayload)
+
+	// Multi schedule dest with at least one active schedule should receive payload
+	mockCh.sentPayload = nil
+	err = notifier.Send(context.Background(), payload, "dest-multi")
+	assert.NoError(t, err)
+	assert.Equal(t, payload, mockCh.sentPayload)
+
+	// Destination with no schedules (empty ScheduleIDs) is always active
+	mockCh.sentPayload = nil
+	err = notifier.Send(context.Background(), payload, "dest-no-sched")
+	assert.NoError(t, err)
+	assert.Equal(t, payload, mockCh.sentPayload)
+
+	// Inactive schedule dest should be skipped
+	mockCh.sentPayload = nil
+	err = notifier.Send(context.Background(), payload, "dest-inactive")
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// Multi schedule with all inactive schedules should be skipped
+	mockCh.sentPayload = nil
+	err = notifier.Send(context.Background(), payload, "dest-all-inactive")
+	assert.NoError(t, err)
+	assert.Nil(t, mockCh.sentPayload)
+
+	// Unknown schedule ID should fail open and receive payload
+	mockCh.sentPayload = nil
+	err = notifier.Send(context.Background(), payload, "dest-unknown")
+	assert.NoError(t, err)
+	assert.Equal(t, payload, mockCh.sentPayload)
 }

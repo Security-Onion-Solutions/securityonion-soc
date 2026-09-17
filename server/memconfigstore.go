@@ -27,6 +27,15 @@ func (m *MemConfigStore) GetSettings(ctx context.Context, advanced bool) ([]*mod
 	return m.settings, nil
 }
 
+func (m *MemConfigStore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	for _, s := range m.settings {
+		if s.Id == id && s.NodeId == "" {
+			return s, nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
 	_, index, ok := lo.FindIndexOf(m.settings, func(s *model.Setting) bool {
 		return s.Id == setting.Id

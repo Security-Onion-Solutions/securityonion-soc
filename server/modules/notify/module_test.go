@@ -110,3 +110,41 @@ func TestNotificationModuleInitWithCustomDestinations_Licensed(t *testing.T) {
 	assert.Equal(t, "Custom Bell", dests["custom-soc"].Name)
 	assert.Equal(t, []string{"custom-soc"}, srv.Notifier.GetDefaultDestinations())
 }
+
+func TestNotificationModuleOnConfigSettingUpdated(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := &server.Server{}
+	mod := NewNotificationModule(srv)
+
+	err := mod.Init(module.ModuleConfig{})
+	assert.NoError(t, err)
+
+	// Update destinations via callback
+	destJSON := `{"updated-bell": {"name": "Updated Bell", "type": "soc", "enabled": true, "severities": ["critical"]}}`
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id:    ConfigSettingNotificationDestinations,
+		Value: destJSON,
+	}, false)
+
+	dests := srv.Notifier.GetDestinations()
+	assert.Len(t, dests, 1)
+	assert.Contains(t, dests, "updated-bell")
+	assert.Equal(t, "Updated Bell", dests["updated-bell"].Name)
+	assert.Equal(t, []string{"critical"}, dests["updated-bell"].Severities)
+
+	// Update enabled via callback
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id:    ConfigSettingNotificationEnabled,
+		Value: "false",
+	}, false)
+	assert.False(t, mod.notifier.config.Enabled)
+
+	// Setting removed -> reverts to defaults
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id: ConfigSettingNotificationDestinations,
+	}, true)
+	dests = srv.Notifier.GetDestinations()
+	assert.Contains(t, dests, model.DefaultDestinationSOCBell)
+}

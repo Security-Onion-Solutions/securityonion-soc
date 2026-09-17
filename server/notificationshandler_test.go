@@ -347,3 +347,668 @@ func TestGetAudit_NoLicense(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, "ERROR_LICENSE_INVALID", w.Body.String())
 }
+
+type fakeTestChannel struct {
+	channelType string
+	lastPayload *model.NotificationPayload
+	sendErr     error
+}
+
+func (f *fakeTestChannel) Type() string {
+	return f.channelType
+}
+
+func (f *fakeTestChannel) ValidateConfig(params map[string]interface{}) error {
+	return nil
+}
+
+func (f *fakeTestChannel) Send(ctx context.Context, params map[string]interface{}, payload *model.NotificationPayload) error {
+	f.lastPayload = payload
+	return f.sendErr
+}
+
+type fakeTestNotifier struct {
+	channels     map[string]NotificationChannel
+	destinations map[string]model.DestinationConfig
+}
+
+func (f *fakeTestNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
+	return nil
+}
+
+func (f *fakeTestNotifier) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
+	return nil
+}
+
+func (f *fakeTestNotifier) RegisterChannel(channel NotificationChannel) {
+	if f.channels == nil {
+		f.channels = make(map[string]NotificationChannel)
+	}
+	f.channels[channel.Type()] = channel
+}
+
+func (f *fakeTestNotifier) GetChannel(channelType string) (NotificationChannel, bool) {
+	ch, ok := f.channels[channelType]
+	return ch, ok
+}
+
+func (f *fakeTestNotifier) GetDestinations() map[string]model.DestinationConfig {
+	return f.destinations
+}
+
+func (f *fakeTestNotifier) GetDefaultDestinations() []string {
+	return []string{model.DefaultDestinationSOCBell}
+}
+
+func (f *fakeTestNotifier) UpdateConfig(cfg model.NotificationConfig) {
+	f.destinations = cfg.Destinations
+}
+
+func TestGetDestinations_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	dests := map[string]model.DestinationConfig{
+		"soc-bell": {
+			ID:          "soc-bell",
+			Name:        "SOC Bell",
+			Type:        "soc",
+			Enabled:     true,
+			ScheduleIDs: []string{"work-hours"},
+			Severities:  []string{"high", "critical"},
+		},
+	}
+	destsJSON, _ := json.Marshal(dests)
+
+	scheds := []model.Schedule{
+		{
+			ID:       "work-hours",
+			Name:     "Work Hours",
+			Enabled:  true,
+			Timezone: "UTC",
+			Definitions: []model.ScheduleDefinition{
+				{
+					Type:   model.ScheduleTypeDaily,
+					AllDay: true,
+				},
+			},
+		},
+	}
+	schedsJSON, _ := json.Marshal(scheds)
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+		{
+			Id:    "soc.config.server.schedules",
+			Value: string(schedsJSON),
+		},
+	})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("GET", "/api/notifications/destinations", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.GetDestinations(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []model.DestinationConfig
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp, 1)
+	assert.Equal(t, "soc-bell", resp[0].ID)
+	assert.Equal(t, "SOC Bell", resp[0].Name)
+	assert.Equal(t, []string{"work-hours"}, resp[0].ScheduleIDs)
+	assert.Equal(t, []string{"high", "critical"}, resp[0].Severities)
+}
+
+func TestGetDestinations_DefaultFallback(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("GET", "/api/notifications/destinations", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.GetDestinations(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []model.DestinationConfig
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp, 1)
+	assert.Equal(t, "soc-bell", resp[0].ID)
+}
+
+func TestPostDestination_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	newDest := model.DestinationConfig{
+		ID:         "new-dest",
+		Name:       "New Destination",
+		Type:       "soc",
+		Enabled:    true,
+		Severities: []string{"critical"},
+	}
+	body, _ := json.Marshal(newDest)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify saved to configstore
+	setting, err := srv.Configstore.GetSetting(ctx, "soc.config.server.modules.notification.destinations")
+	assert.NoError(t, err)
+	assert.Contains(t, setting.Value, "new-dest")
+	assert.Contains(t, setting.Value, "New Destination")
+}
+
+func TestPostDestination_DuplicateID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"dest-1": {
+			ID:   "dest-1",
+			Name: "Dest 1",
+			Type: "soc",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	h := NewNotificationHandler(srv)
+
+	duplicateDest := model.DestinationConfig{
+		ID:   "dest-1",
+		Name: "Duplicate",
+		Type: "soc",
+	}
+	body, _ := json.Marshal(duplicateDest)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPostDestination_EmptyName(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	destWithEmptyName := model.DestinationConfig{
+		ID:   "custom-soc",
+		Name: "",
+		Type: "soc",
+	}
+	body, _ := json.Marshal(destWithEmptyName)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPutDestination_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"dest-1": {
+			ID:      "dest-1",
+			Name:    "Old Name",
+			Type:    "soc",
+			Enabled: true,
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	updatedDest := model.DestinationConfig{
+		Name:       "Updated Name",
+		Type:       "soc",
+		Enabled:    false,
+		Severities: []string{"high"},
+	}
+	body, _ := json.Marshal(updatedDest)
+
+	r := httptest.NewRequest("PUT", "/api/notifications/destinations/dest-1", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "dest-1")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	setting, err := srv.Configstore.GetSetting(ctx, "soc.config.server.modules.notification.destinations")
+	assert.NoError(t, err)
+	assert.Contains(t, setting.Value, "Updated Name")
+	assert.Contains(t, setting.Value, `"enabled":false`)
+}
+
+func TestPutDestination_NotFound(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	h := NewNotificationHandler(srv)
+
+	updatedDest := model.DestinationConfig{
+		Name: "Non-existent",
+		Type: "soc",
+	}
+	body, _ := json.Marshal(updatedDest)
+
+	r := httptest.NewRequest("PUT", "/api/notifications/destinations/nonexistent", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "nonexistent")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutDestination(w, r)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestDeleteDestination_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"dest-1": {
+			ID:   "dest-1",
+			Name: "Dest To Delete",
+			Type: "soc",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/dest-1", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "dest-1")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.DeleteDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	setting, err := srv.Configstore.GetSetting(ctx, "soc.config.server.modules.notification.destinations")
+	assert.NoError(t, err)
+	assert.NotContains(t, setting.Value, "dest-1")
+}
+
+func TestDeleteDestination_DefaultSOCBell(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/soc-bell", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.DeleteDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteDestination_NotFound(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/nonexistent", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "nonexistent")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.DeleteDestination(w, r)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestPostTestDestination_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"soc-bell": {
+			ID:   "soc-bell",
+			Name: "SOC Notification Bell",
+			Type: "soc",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	ch := &fakeTestChannel{channelType: "soc"}
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": ch,
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, ch.lastPayload)
+	assert.Contains(t, ch.lastPayload.Title, "Test: SOC Notification Bell")
+}
+
+func TestPostTestDestination_NotFound(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/nonexistent/test", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "nonexistent")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestPostTestDestination_DriverMissing(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"matrix-dest": {
+			ID:   "matrix-dest",
+			Name: "Matrix Alert",
+			Type: "matrix",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/matrix-dest/test", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "matrix-dest")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPostDestination_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+
+	h := NewNotificationHandler(srv)
+
+	newDest := model.DestinationConfig{
+		ID:   "invalid id with spaces!",
+		Name: "Invalid Channel",
+		Type: "soc",
+	}
+	body, _ := json.Marshal(newDest)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}
+
+func TestPutDestination_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+
+	h := NewNotificationHandler(srv)
+
+	dest := model.DestinationConfig{
+		Name: "Channel",
+		Type: "soc",
+	}
+	body, _ := json.Marshal(dest)
+
+	r := httptest.NewRequest("PUT", "/api/notifications/destinations/bad!id", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "bad!id")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}
+
+func TestPostDestination_NameTooLong(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+
+	h := NewNotificationHandler(srv)
+
+	newDest := model.DestinationConfig{
+		Name: string(make([]byte, model.MAX_DESTINATION_NAME_LEN+1)),
+		Type: "soc",
+	}
+	body, _ := json.Marshal(newDest)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}
+
+func TestPutDestination_NameTooLong(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+
+	h := NewNotificationHandler(srv)
+
+	dest := model.DestinationConfig{
+		Name: string(make([]byte, model.MAX_DESTINATION_NAME_LEN+1)),
+		Type: "soc",
+	}
+	body, _ := json.Marshal(dest)
+
+	r := httptest.NewRequest("PUT", "/api/notifications/destinations/dest-1", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "dest-1")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}
+
+func TestDeleteDestination_InvalidID(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/bad!id", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "bad!id")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.DeleteDestination(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}

@@ -26,6 +26,18 @@ func (f *fakeLoader) GetAllSettings(_ context.Context) ([]database.SettingRow, e
 	return f.rows, f.err
 }
 
+func (f *fakeLoader) GetSetting(_ context.Context, settingID, nodeID string) (*database.SettingRow, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	for _, r := range f.rows {
+		if r.SettingID == settingID && r.NodeID == nodeID {
+			return &r, nil
+		}
+	}
+	return nil, nil
+}
+
 func testTime(year, month, day, hour, min int) time.Time {
 	return time.Date(year, time.Month(month), day, hour, min, 0, 0, time.UTC)
 }

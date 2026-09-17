@@ -127,6 +127,7 @@ func (server *Server) Start() {
 		RegisterAssistantRoutes(server, server.ApiRouter, "/api/assistant")
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 		RegisterNotificationRoutes(server, server.ApiRouter, "/api/notifications")
+		RegisterScheduleRoutes(server, server.ApiRouter, "/api/schedules")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)
 

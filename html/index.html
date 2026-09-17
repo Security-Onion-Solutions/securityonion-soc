@@ -305,6 +305,29 @@
             </template>
             <div v-html="tipMessage" class="tip-message"></div>
           </v-snackbar>
+          <v-snackbar
+            v-if="isLicensed(FEAT_NTF) && notificationsStarted"
+            id="notification-toast"
+            location="top end"
+            :timeout="notificationToastTimeout"
+            v-model="notificationToast"
+            :color="getNotificationToastColor(notificationToastSeverity)"
+            transition="slide-x-reverse-transition"
+            elevation="8"
+            rounded="lg"
+            class="mt-1 mr-2"
+            data-aid="notification_toast"
+          >
+            <div class="d-flex align-center cursor-pointer text-white" @click="openNotificationFromToast">
+              <v-icon class="mr-2" size="small">fa-envelope</v-icon>
+              <span class="font-weight-medium text-truncate" style="max-width: 320px;">{{ notificationToastTitle }}</span>
+            </div>
+            <template #actions>
+              <v-btn icon size="x-small" variant="text" color="white" @click="notificationToast = false" data-aid="notification_toast_close" :aria-label="i18n.close">
+                <v-icon size="small">fa-times</v-icon>
+              </v-btn>
+            </template>
+          </v-snackbar>
           <template v-if="disclaimer">
             <v-container id="disclaimer" class="disclaimer-container pa-0" fluid data-aid="banner_disclaimer">
               <v-card class="disclaimer-card h-100">
@@ -542,6 +565,16 @@
                   <v-list-item-title v-text="i18n.config"></v-list-item-title>
                 </router-link>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_notifications" v-if="$root.isUserAdmin() && isLicensed(FEAT_NTF) && notificationsStarted" :class="{ 'nav-active': $route.name === 'notifications' }">
+                <template #prepend>
+                  <router-link to="/notifications" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-envelope</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/notifications" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.notifications"></v-list-item-title>
+                </router-link>
+              </v-list-item>
               <v-list-item data-aid="nav_admin_license" v-if="$root.isUserAdmin()">
                 <template #prepend>
                   <router-link to="/licensekey" class="text-decoration-none" aria-hidden="true" tabindex="-1">
@@ -627,6 +660,8 @@
     <script src="js/components/detection-details-col.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/tool-use-card.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/destinations-manager.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/schedules-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/colors.js?v=VERSION_PLACEHOLDER"></script>
@@ -652,6 +687,7 @@
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/agentstudio.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/notifications.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>
 </html>

@@ -20,6 +20,7 @@ type ConfigHistory struct {
 
 type Configstore interface {
 	GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error)
+	GetSetting(ctx context.Context, id string) (*model.Setting, error)
 	UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error
 	GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*ConfigHistory, error)
 	GetAllAuditHistory(ctx context.Context, limit, offset int, sort, order string) (*ConfigHistory, error)

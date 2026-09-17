@@ -8,13 +8,20 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/notify/database"
+)
+
+const (
+	ConfigSettingNotificationDestinations = "soc.config.server.modules.notification.destinations"
+	ConfigSettingNotificationEnabled      = "soc.config.server.modules.notification.enabled"
 )
 
 type NotificationModule struct {
@@ -76,6 +83,7 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
 		mod.server.Notificationstore = NewNotificationstore(mod.server, mod.store)
+		mod.registerConfigCallbacks()
 	}
 
 	log.WithFields(log.Fields{
@@ -84,6 +92,59 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 	}).Info("Notification module initialized")
 
 	return nil
+}
+
+func (mod *NotificationModule) registerConfigCallbacks() {
+	if mod.server == nil || mod.server.Configstore == nil {
+		return
+	}
+	registrar, ok := mod.server.Configstore.(server.ConfigSettingCallbackRegistrar)
+	if !ok {
+		return
+	}
+	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDestinations, mod)
+	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationEnabled, mod)
+}
+
+func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
+	if setting == nil || mod.notifier == nil {
+		return
+	}
+
+	log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading notification configuration after config change")
+
+	mod.mu.Lock()
+	defer mod.mu.Unlock()
+
+	mod.notifier.mu.RLock()
+	cfg := mod.notifier.config
+	mod.notifier.mu.RUnlock()
+
+	switch setting.Id {
+	case ConfigSettingNotificationDestinations:
+		if removed || setting.Value == "" {
+			cfg.Destinations = model.DefaultDestinationsMap()
+		} else {
+			var dests map[string]model.DestinationConfig
+			if err := json.Unmarshal([]byte(setting.Value), &dests); err == nil {
+				for k, v := range dests {
+					if v.ID == "" {
+						v.ID = k
+					}
+					dests[k] = v
+				}
+				cfg.Destinations = dests
+			}
+		}
+	case ConfigSettingNotificationEnabled:
+		if removed || setting.Value == "" {
+			cfg.Enabled = true
+		} else {
+			cfg.Enabled = setting.Value == "true"
+		}
+	}
+
+	mod.notifier.UpdateConfig(cfg)
 }
 
 func (mod *NotificationModule) Start() error {

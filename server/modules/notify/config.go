@@ -13,7 +13,6 @@ import (
 
 const (
 	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 300
-	DEFAULT_DESTINATION_NAME              = "SOC Notification Bell"
 )
 
 // ParseConfig parses and validates module configuration, ensuring default destinations
@@ -31,9 +30,11 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 		case map[string]interface{}:
 			for destKey, destVal := range dests {
 				if destMap, ok := destVal.(map[string]interface{}); ok {
-					destName := module.GetStringDefault(destMap, "name", destKey)
+					destName := module.GetStringDefault(destMap, "name", "")
 					destType := module.GetStringDefault(destMap, "type", "")
 					destEnabled := module.GetBoolDefault(destMap, "enabled", true)
+					destScheduleIDs := module.GetStringArrayDefault(destMap, "scheduleIds", nil)
+					destSeverities := module.GetStringArrayDefault(destMap, "severities", nil)
 					var params map[string]interface{}
 					if p, ok := destMap["params"].(map[string]interface{}); ok {
 						params = p
@@ -41,29 +42,29 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 						params = make(map[string]interface{})
 					}
 					config.Destinations[destKey] = model.DestinationConfig{
-						Name:    destName,
-						Type:    destType,
-						Enabled: destEnabled,
-						Params:  params,
+						ID:          destKey,
+						Name:        destName,
+						Type:        destType,
+						Enabled:     destEnabled,
+						ScheduleIDs: destScheduleIDs,
+						Severities:  destSeverities,
+						Params:      params,
 					}
 				}
 			}
 		case map[string]model.DestinationConfig:
-			config.Destinations = dests
+			for k, v := range dests {
+				if v.ID == "" {
+					v.ID = k
+				}
+				config.Destinations[k] = v
+			}
 		}
 	}
 
 	// If no destinations are defined, configure default soc-bell destination
 	if len(config.Destinations) == 0 {
-		config.Destinations[model.DefaultDestinationSOCBell] = model.DestinationConfig{
-			Name:    DEFAULT_DESTINATION_NAME,
-			Type:    model.ChannelTypeSOC,
-			Enabled: true,
-			Params: map[string]interface{}{
-				"storeInPostgres": true,
-				"attachmentMode":  model.AttachmentModeLink,
-			},
-		}
+		config.Destinations = model.DefaultDestinationsMap()
 	}
 
 	// Ensure default destinations list has at least soc-bell if empty

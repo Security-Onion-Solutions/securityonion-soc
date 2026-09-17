@@ -25,11 +25,9 @@ func TestParseConfigDefaults(t *testing.T) {
 	// Check default soc-bell destination
 	dest, exists := parsed.Destinations[model.DefaultDestinationSOCBell]
 	assert.True(t, exists)
-	assert.Equal(t, "SOC Notification Bell", dest.Name)
+	assert.Equal(t, "", dest.Name)
 	assert.Equal(t, model.ChannelTypeSOC, dest.Type)
 	assert.True(t, dest.Enabled)
-	assert.Equal(t, true, dest.Params["storeInPostgres"])
-	assert.Equal(t, model.AttachmentModeLink, dest.Params["attachmentMode"])
 }
 
 func TestParseConfigCustom(t *testing.T) {
@@ -39,9 +37,11 @@ func TestParseConfigCustom(t *testing.T) {
 		"globalSilenceWindowSeconds": float64(600),
 		"destinations": map[string]interface{}{
 			"email-alerts": map[string]interface{}{
-				"name":    "SOC Email",
-				"type":    "smtp",
-				"enabled": true,
+				"name":       "SOC Email",
+				"type":       "smtp",
+				"enabled":    true,
+				"scheduleIds": []interface{}{"work-hours"},
+				"severities": []interface{}{"high", "critical"},
 				"params": map[string]interface{}{
 					"host": "mail.example.com",
 					"port": float64(587),
@@ -67,9 +67,12 @@ func TestParseConfigCustom(t *testing.T) {
 
 	emailDest, ok := parsed.Destinations["email-alerts"]
 	assert.True(t, ok)
+	assert.Equal(t, "email-alerts", emailDest.ID)
 	assert.Equal(t, "SOC Email", emailDest.Name)
 	assert.Equal(t, "smtp", emailDest.Type)
 	assert.True(t, emailDest.Enabled)
+	assert.Equal(t, []string{"work-hours"}, emailDest.ScheduleIDs)
+	assert.Equal(t, []string{"high", "critical"}, emailDest.Severities)
 	assert.Equal(t, "mail.example.com", emailDest.Params["host"])
 
 	slackDest, ok := parsed.Destinations["slack-alerts"]

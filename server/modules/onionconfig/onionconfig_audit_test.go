@@ -35,6 +35,18 @@ func (f *fakeStore) GetAllSettings(_ context.Context) ([]database.SettingRow, er
 	return f.dbSettings, nil
 }
 
+func (f *fakeStore) GetSetting(_ context.Context, settingID, nodeID string) (*database.SettingRow, error) {
+	if f.getSettingErr != nil {
+		return nil, f.getSettingErr
+	}
+	for _, r := range f.dbSettings {
+		if r.SettingID == settingID && r.NodeID == nodeID {
+			return &r, nil
+		}
+	}
+	return nil, nil
+}
+
 func (f *fakeStore) GetAuditHistory(_ context.Context, settingID, nodeID string, limit, offset int, sort, order string) ([]database.AuditEntry, int, error) {
 	if f.getAuditErr != nil {
 		return nil, 0, f.getAuditErr
