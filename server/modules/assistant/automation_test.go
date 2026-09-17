@@ -147,10 +147,9 @@ func TestValidateParamsErrorIsMappable(t *testing.T) {
 func TestAutomationRunPlumbing(t *testing.T) {
 	srv := &server.Server{}
 	task := &model.Automation{
-		Name:   "Nightly Alert Triage",
-		Kind:   "alert_triage",
-		Owner:  "owner-1",
-		Params: json.RawMessage(`{"sampleSize":5}`),
+		Auditable:      model.Auditable{Id: "automation-1", UserId: "user-1"},
+		AutomationKind: "alert_triage",
+		Params:         json.RawMessage(`{"sampleSize":5}`),
 	}
 
 	ctrl := gomock.NewController(t)
@@ -179,7 +178,7 @@ func TestAutomationRunPlumbing(t *testing.T) {
 			result, err := run.Srv.AssistantManager.RunAgentSession(ctx, &model.AgentSessionRequest{
 				Objective: "triage group A",
 				Agent:     "Hunter",
-				OwnerId:   run.Task.Owner,
+				OwnerId:   run.Task.UserId,
 				MaxTurns:  8,
 			})
 			if err != nil {
@@ -204,7 +203,7 @@ func TestAutomationRunPlumbing(t *testing.T) {
 	require.NotNil(t, gotReq)
 	assert.Equal(t, "triage group A", gotReq.Objective)
 	assert.Equal(t, "Hunter", gotReq.Agent)
-	assert.Equal(t, "owner-1", gotReq.OwnerId)
+	assert.Equal(t, "user-1", gotReq.OwnerId)
 	assert.Equal(t, 8, gotReq.MaxTurns)
 }
 

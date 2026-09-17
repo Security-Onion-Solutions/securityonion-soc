@@ -17,7 +17,7 @@ import (
 // ErrAutomationRunInFlight and must not catch any other unique index.
 const idxRunsOneInFlight = "idx_automation_runs_one_in_flight"
 
-const automationRunColumns = `id, automation_name, state, started_at, ended_at, error`
+const automationRunColumns = `id, automation_id, state, started_at, ended_at, error`
 
 func scanAutomationRunRow(rows db.Rows) (*model.AutomationRunRecord, error) {
 	run := &model.AutomationRunRecord{}
@@ -25,7 +25,7 @@ func scanAutomationRunRow(rows db.Rows) (*model.AutomationRunRecord, error) {
 	var state string
 	var failure *string
 
-	if err := rows.Scan(&run.Id, &run.AutomationName, &state, &run.StartTime, &run.EndTime, &failure); err != nil {
+	if err := rows.Scan(&run.Id, &run.AutomationId, &state, &run.StartTime, &run.EndTime, &failure); err != nil {
 		return nil, err
 	}
 
@@ -41,9 +41,9 @@ func scanAutomationRunRow(rows db.Rows) (*model.AutomationRunRecord, error) {
 // OpenAutomationRun starts a run. It returns ErrAutomationRunInFlight when the partial
 // unique index refuses it, which is the only correct way to answer "is this already
 // running": asking first and inserting second races every other caller.
-func (s *Store) OpenAutomationRun(ctx context.Context, automationName string) (*model.AutomationRunRecord, error) {
-	if automationName == "" {
-		return nil, fmt.Errorf("cannot open a run without an automation name")
+func (s *Store) OpenAutomationRun(ctx context.Context, automationId string) (*model.AutomationRunRecord, error) {
+	if automationId == "" {
+		return nil, fmt.Errorf("cannot open a run without an automation id")
 	}
 
 	run := &model.AutomationRunRecord{}
@@ -52,11 +52,11 @@ func (s *Store) OpenAutomationRun(ctx context.Context, automationName string) (*
 	var failure *string
 
 	err := s.db.QueryRow(ctx, `
-		INSERT INTO automation_runs (automation_name, state)
+		INSERT INTO automation_runs (automation_id, state)
 		VALUES ($1, 'running')
 		RETURNING `+automationRunColumns,
-		automationName).
-		Scan(&run.Id, &run.AutomationName, &state, &run.StartTime, &run.EndTime, &failure)
+		automationId).
+		Scan(&run.Id, &run.AutomationId, &state, &run.StartTime, &run.EndTime, &failure)
 
 	if isUniqueViolation(err, idxRunsOneInFlight) {
 		return nil, ErrAutomationRunInFlight
@@ -93,13 +93,13 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 			UPDATE automation_runs
 			SET state = $2, ended_at = now(), error = NULLIF($3, '')
 			WHERE id = $1 AND ended_at IS NULL
-			RETURNING automation_name, ended_at
+			RETURNING automation_id, ended_at
 		)
-		UPDATE automations t
+		UPDATE automations a
 		SET last_run_time = closed.ended_at, updated_at = now()
 		FROM closed
-		WHERE t.name = closed.automation_name
-		RETURNING t.last_run_time`,
+		WHERE a.id = closed.automation_id
+		RETURNING a.last_run_time`,
 		runId, string(state), cause)
 	if err != nil {
 		return err
@@ -140,18 +140,18 @@ func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.Auto
 // AutomationRunQuery narrows a run listing. The zero value lists every run, newest
 // first.
 type AutomationRunQuery struct {
-	AutomationName string
-	Limit          int
-	Offset         int
+	AutomationId string
+	Limit        int
+	Offset       int
 }
 
 func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery) ([]*model.AutomationRunRecord, error) {
 	stmt := `SELECT ` + automationRunColumns + ` FROM automation_runs`
 	args := []any{}
 
-	if query.AutomationName != "" {
-		args = append(args, query.AutomationName)
-		stmt += fmt.Sprintf(` WHERE automation_name = $%d`, len(args))
+	if query.AutomationId != "" {
+		args = append(args, query.AutomationId)
+		stmt += fmt.Sprintf(` WHERE automation_id = $%d`, len(args))
 	}
 
 	stmt += ` ORDER BY started_at DESC, id`

@@ -87,3 +87,27 @@ func TestMigrationDoesNotCascadeWorkItemsFromRuns(t *testing.T) {
 
 	assert.Contains(t, sql, "REFERENCES automation_runs (id) ON DELETE SET NULL")
 }
+
+// The id is the only identity an automation has. A name column reappearing, or the id
+// losing its default, would mean something durable could key on a mutable value again.
+func TestMigrationAutomationsAreIdentifiedOnlyById(t *testing.T) {
+	sql := automationMigration(t)
+
+	assert.Contains(t, sql, "id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid()")
+	assert.Contains(t, sql, "user_id            text        NOT NULL")
+
+	// display_name is cosmetic; a bare `name` column would mean identity crept back onto
+	// something renameable.
+	assert.Contains(t, sql, "display_name       text        NOT NULL DEFAULT ''")
+	assert.NotRegexp(t, `(?m)^\s+name\s+text`, sql)
+}
+
+// Runs and work items must key on the immutable id, never on anything renameable.
+func TestMigrationRunsAndItemsKeyOnAutomationId(t *testing.T) {
+	sql := automationMigration(t)
+
+	assert.NotContains(t, sql, "automation_name")
+	assert.Contains(t, sql, "ON automation_runs (automation_id)")
+	assert.Contains(t, sql, "ON automation_work_items (automation_id, created_at)")
+	assert.Contains(t, sql, "ON automation_work_items (automation_id, group_key)")
+}

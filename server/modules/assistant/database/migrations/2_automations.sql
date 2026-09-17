@@ -1,21 +1,26 @@
 CREATE TABLE IF NOT EXISTS automations (
-    name               text        PRIMARY KEY,
+    -- The only identity an automation has. Runs, work items and the triage stamps on
+    -- alerts all reference it, so it must never change.
+    id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Cosmetic label for the UI. Deliberately not unique and referenced by nothing, so
+    -- editing it cannot orphan history or reset an alert's attempt counts.
+    display_name       text        NOT NULL DEFAULT '',
     kind               text        NOT NULL,  -- AutomationKind.GetName(); fixed once created
     params             jsonb       NOT NULL DEFAULT '{}'::jsonb,
     enabled            boolean     NOT NULL DEFAULT FALSE,
     interval_seconds   int         NOT NULL,
-    owner              text        NOT NULL,  -- user each run's sessions execute as
+    user_id            text        NOT NULL,  -- owner; each run's sessions execute as this user
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now(),
     last_run_time      timestamptz            -- NULL until the first run ends
 );
 
--- Runs and work items reference automations by name but carry no foreign key: deleting an
+-- Runs and work items reference automations by id but carry no foreign key: deleting an
 -- automation with work in flight must be refused, and a cascade would silently do the
 -- opposite. DeleteAutomation clears the history explicitly instead.
 CREATE TABLE IF NOT EXISTS automation_runs (
     id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-    automation_name    text        NOT NULL,
+    automation_id      uuid        NOT NULL,
     -- CHECK rather than a comment because idx_automation_runs_one_in_flight below is
     -- only correct while this vocabulary stays closed: a state added without extending
     -- the index predicate would silently stop being deduped.
@@ -35,16 +40,16 @@ CREATE TABLE IF NOT EXISTS automation_runs (
 -- a run can sit queued while nothing executes it. Dropping it here would let a second run
 -- open during that window, which is the race this index exists to prevent.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_one_in_flight
-    ON automation_runs (automation_name)
+    ON automation_runs (automation_id)
     WHERE state IN ('queued', 'running');
 
 -- The run history view reads one automation newest-first.
-CREATE INDEX IF NOT EXISTS idx_automation_runs_name_started_at
-    ON automation_runs (automation_name, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_id_started_at
+    ON automation_runs (automation_id, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS automation_work_items (
     id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-    automation_name    text        NOT NULL,
+    automation_id      uuid        NOT NULL,
     -- The run that created this item. Items are owned by the automation, not the run:
     -- unfinished work survives the run that found it so a later run resumes it, which
     -- is why this is nullable and does not cascade.
@@ -65,7 +70,7 @@ CREATE TABLE IF NOT EXISTS automation_work_items (
 -- items, oldest first. Partial, so a task claims as fast on its three-hundredth run as
 -- on its first.
 CREATE INDEX IF NOT EXISTS idx_automation_work_items_open
-    ON automation_work_items (automation_name, created_at)
+    ON automation_work_items (automation_id, created_at)
     WHERE state IN ('pending', 'running', 'applying');
 
 -- One open item per group. A kind that rescans and re-enqueues would otherwise open a
@@ -73,7 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_automation_work_items_open
 -- ON CONFLICT DO NOTHING, which is what makes enqueueing idempotent after a crash --
 -- inference requires the predicate below to match the statement's verbatim.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_work_items_one_open_per_group
-    ON automation_work_items (automation_name, group_key)
+    ON automation_work_items (automation_id, group_key)
     WHERE state IN ('pending', 'running', 'applying');
 
 CREATE TABLE IF NOT EXISTS automation_run_sessions (

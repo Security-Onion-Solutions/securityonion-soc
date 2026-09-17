@@ -18,7 +18,7 @@ import (
 // unique index only from an identical one, and a mismatch is a runtime 42P10.
 const openWorkItemStates = `('pending', 'running', 'applying')`
 
-const automationWorkItemColumns = `id, automation_name, run_id, group_key, payload, state, attempts, session_id, result, error, created_at, updated_at`
+const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_id, result, error, created_at, updated_at`
 
 func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) {
 	item := &model.AutomationWorkItem{}
@@ -27,7 +27,7 @@ func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) 
 	var runId, sessionId, failure *string
 	var payload, result []byte
 
-	err := rows.Scan(&item.Id, &item.AutomationName, &runId, &item.GroupKey, &payload, &state,
+	err := rows.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
 		&item.Attempts, &sessionId, &result, &failure, &item.CreateTime, &item.UpdateTime)
 	if err != nil {
 		return nil, err
@@ -66,12 +66,12 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 		return nil, nil
 	}
 
-	automationName := items[0].AutomationName
+	automationId := items[0].AutomationId
 	groupKeys := make([]string, 0, len(items))
 	payloads := make([]string, 0, len(items))
 
 	for _, item := range items {
-		if item.AutomationName != automationName {
+		if item.AutomationId != automationId {
 			return nil, fmt.Errorf("cannot enqueue work items for more than one automation at a time")
 		}
 
@@ -82,13 +82,13 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 	// The ON CONFLICT predicate must match idx_automation_work_items_one_open_per_group
 	// verbatim or Postgres cannot infer the index and raises 42P10.
 	rows, err := s.db.Query(ctx, `
-		INSERT INTO automation_work_items (automation_name, run_id, group_key, payload)
+		INSERT INTO automation_work_items (automation_id, run_id, group_key, payload)
 		SELECT $1, NULLIF($2, '')::uuid, w.group_key, w.payload::jsonb
 		FROM unnest($3::text[], $4::text[]) AS w(group_key, payload)
-		ON CONFLICT (automation_name, group_key) WHERE state IN `+openWorkItemStates+`
+		ON CONFLICT (automation_id, group_key) WHERE state IN `+openWorkItemStates+`
 		DO NOTHING
 		RETURNING `+automationWorkItemColumns,
-		automationName, runId, groupKeys, payloads)
+		automationId, runId, groupKeys, payloads)
 	if err != nil {
 		return nil, err
 	}
@@ -98,25 +98,28 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 	return collectWorkItems(rows)
 }
 
-// ClaimNextAutomationWorkItem takes the oldest claimable item for one automation and
-// counts the attempt. It returns nil when there is nothing to claim. maxAttempts of 0
-// means uncapped; any other value stops an item that cannot succeed from being retried
-// forever, since reconciliation puts a died-mid-flight item straight back in the queue.
-func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationName string, maxAttempts int) (*model.AutomationWorkItem, error) {
+// ClaimNextAutomationWorkItem takes the oldest pending item for one automation and counts
+// the attempt. It returns nil when there is nothing to claim.
+//
+// It deliberately does not filter on attempts. Retry policy belongs to the kind, and an
+// item the store refused to hand out would sit pending forever: unclaimable, yet still in
+// the open set blocking its group from being enqueued again. Claiming unconditionally means
+// every item can always be driven to a terminal state, so the caller checks Attempts on
+// what it receives and either runs the work or gives up on it.
+func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error) {
 	rows, err := s.db.Query(ctx, `
 		UPDATE automation_work_items
 		SET state = 'running', attempts = attempts + 1,
 		    session_id = NULL, result = NULL, error = NULL, updated_at = now()
 		WHERE id = (
 			SELECT id FROM automation_work_items
-			WHERE automation_name = $1 AND state = 'pending'
-			  AND ($2 = 0 OR attempts < $2)
+			WHERE automation_id = $1 AND state = 'pending'
 			ORDER BY created_at
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING `+automationWorkItemColumns,
-		automationName, maxAttempts)
+		automationId)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +167,24 @@ func (s *Store) CompleteAutomationWorkItem(ctx context.Context, itemId string) e
 		RETURNING id`, itemId)
 }
 
+// RequeueAutomationWorkItem returns a claimed item to the queue after a failure it may
+// recover from. attempts is deliberately left alone: the claim already counted this try.
+func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error {
+	return s.transitionWorkItem(ctx, `
+		UPDATE automation_work_items
+		SET state = 'pending', session_id = NULL, result = NULL,
+		    error = NULLIF($2, ''), updated_at = now()
+		WHERE id = $1
+		RETURNING id`, itemId, cause)
+}
+
+// FailAutomationWorkItem ends an item for good. Reserved for a failure retrying cannot
+// fix, and for the caller giving up after too many attempts; a retryable failure goes
+// through RequeueAutomationWorkItem instead.
+//
+// The caller must have stamped this item's alerts before calling: an item that goes
+// terminal with its alerts unstamped is re-found by the next scan, enqueued as a fresh
+// item with attempts back at zero, and retried forever.
 func (s *Store) FailAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
@@ -200,12 +221,12 @@ func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, arg
 
 // ListOpenAutomationWorkItems returns every unfinished item for one automation, oldest
 // first: what an earlier process left behind plus anything the current run enqueued.
-func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationName string) ([]*model.AutomationWorkItem, error) {
+func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT `+automationWorkItemColumns+`
 		FROM automation_work_items
-		WHERE automation_name = $1 AND state IN `+openWorkItemStates+`
-		ORDER BY created_at`, automationName)
+		WHERE automation_id = $1 AND state IN `+openWorkItemStates+`
+		ORDER BY created_at`, automationId)
 	if err != nil {
 		return nil, err
 	}

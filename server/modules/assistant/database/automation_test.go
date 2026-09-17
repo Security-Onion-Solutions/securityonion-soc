@@ -142,20 +142,75 @@ func TestClaimNextAutomationWorkItemUsesSkipLocked(t *testing.T) {
 	s := &Store{db: mDB}
 
 	// SKIP LOCKED is what keeps two pool goroutines inside one run from claiming the
-	// same item; the attempt counter is what bounds retries of a poison payload.
+	// same item; the attempt counter is what lets the caller bound retries.
 	claim := mock.MatchedBy(func(sql string) bool {
 		return strings.Contains(sql, "FOR UPDATE SKIP LOCKED") &&
 			strings.Contains(sql, "attempts = attempts + 1") &&
 			strings.Contains(sql, "ORDER BY created_at")
 	})
 
-	mDB.On("Query", mock.Anything, claim, "nightly", 3).Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, claim, "nightly").Return(emptyRows(), nil)
 
-	item, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly", 3)
+	item, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
 
 	assert.Nil(t, item)
 	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
+}
+
+// An attempts filter here is what created the unclaimable-but-open wedge: the item could
+// not be handed out, yet still blocked its group from being enqueued again, so nothing
+// could ever drive it to a terminal state. Retry policy lives in the kind.
+func TestClaimNextAutomationWorkItemDoesNotFilterOnAttempts(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "nightly").Return(emptyRows(), nil)
+
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
+	require.NoError(t, err)
+
+	capped := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "attempts <")
+	})
+	mDB.AssertNotCalled(t, "Query", mock.Anything, capped, mock.Anything)
+}
+
+// Requeueing must preserve attempts. Resetting it is the bug: a count that restarts every
+// pass can never reach a cap, which is how a failing group retried forever.
+func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	requeue := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "state = 'pending'") &&
+			strings.Contains(sql, "session_id = NULL") &&
+			strings.Contains(sql, "result = NULL")
+	})
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(true).Once()
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, requeue, "item-1", "truncated").Return(mRows, nil)
+
+	require.NoError(t, s.RequeueAutomationWorkItem(context.Background(), "item-1", "truncated"))
+
+	touchesAttempts := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "attempts")
+	})
+	mDB.AssertNotCalled(t, "Query", mock.Anything, touchesAttempts, mock.Anything, mock.Anything)
+}
+
+func TestRequeueAutomationWorkItemOnVanishedItem(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "item-1", "boom").Return(emptyRows(), nil)
+
+	err := s.RequeueAutomationWorkItem(context.Background(), "item-1", "boom")
+
+	assert.ErrorIs(t, err, ErrAutomationWorkItemGone)
 }
 
 func TestEnsureAutomationWorkItemsEmptyBatchTouchesNothing(t *testing.T) {
@@ -176,7 +231,7 @@ func TestEnsureAutomationWorkItemsIsIdempotent(t *testing.T) {
 	s := &Store{db: mDB}
 
 	upsert := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "ON CONFLICT (automation_name, group_key) WHERE state IN "+openWorkItemStates) &&
+		return strings.Contains(sql, "ON CONFLICT (automation_id, group_key) WHERE state IN "+openWorkItemStates) &&
 			strings.Contains(sql, "DO NOTHING")
 	})
 
@@ -184,7 +239,7 @@ func TestEnsureAutomationWorkItemsIsIdempotent(t *testing.T) {
 		[]string{"group-a"}, []string{`{"ids":["1"]}`}).Return(emptyRows(), nil)
 
 	items, err := s.EnsureAutomationWorkItems(context.Background(), "run-1", []*model.AutomationWorkItem{
-		{AutomationName: "nightly", GroupKey: "group-a", Payload: json.RawMessage(`{"ids":["1"]}`)},
+		{AutomationId: "nightly", GroupKey: "group-a", Payload: json.RawMessage(`{"ids":["1"]}`)},
 	})
 
 	require.NoError(t, err)
@@ -201,7 +256,7 @@ func TestEnsureAutomationWorkItemsDefaultsNilPayload(t *testing.T) {
 		[]string{"group-a"}, []string{"{}"}).Return(emptyRows(), nil)
 
 	_, err := s.EnsureAutomationWorkItems(context.Background(), "run-1",
-		[]*model.AutomationWorkItem{{AutomationName: "nightly", GroupKey: "group-a"}})
+		[]*model.AutomationWorkItem{{AutomationId: "nightly", GroupKey: "group-a"}})
 
 	require.NoError(t, err)
 	mDB.AssertExpectations(t)
@@ -212,8 +267,8 @@ func TestEnsureAutomationWorkItemsRejectsMixedAutomations(t *testing.T) {
 	s := &Store{db: mDB}
 
 	_, err := s.EnsureAutomationWorkItems(context.Background(), "run-1", []*model.AutomationWorkItem{
-		{AutomationName: "nightly", GroupKey: "a"},
-		{AutomationName: "hourly", GroupKey: "b"},
+		{AutomationId: "nightly", GroupKey: "a"},
+		{AutomationId: "hourly", GroupKey: "b"},
 	})
 
 	assert.Error(t, err)
@@ -354,37 +409,58 @@ func TestDeleteAutomationNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAutomationNotFound)
 }
 
-func TestAddAutomationDuplicateName(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything).
-		Return(&pgconn.PgError{Code: "23505", ConstraintName: "automations_pkey"})
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automations"),
-		"nightly", "alert_triage", "{}", false, 300, "owner-1").Return(mRow)
-
-	err := s.AddAutomation(context.Background(), &model.Automation{
-		Name: "nightly", Kind: "alert_triage", IntervalSeconds: 300, Owner: "owner-1",
-	})
-
-	assert.ErrorIs(t, err, ErrAutomationExists)
-	mDB.AssertExpectations(t)
-}
-
 func TestUpdateAutomationNotFound(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
 	mDB.On("Query", mock.Anything, sqlContains("UPDATE automations"),
-		"gone", "{}", false, 300, "owner-1").Return(emptyRows(), nil)
+		"gone-id", "Renamed", "{}", false, 300, "user-1").Return(emptyRows(), nil)
 
 	err := s.UpdateAutomation(context.Background(), &model.Automation{
-		Name: "gone", IntervalSeconds: 300, Owner: "owner-1",
+		Auditable:       model.Auditable{Id: "gone-id", UserId: "user-1"},
+		DisplayName:     "Renamed",
+		IntervalSeconds: 300,
 	})
 
 	assert.ErrorIs(t, err, ErrAutomationNotFound)
+}
+
+// The id is the server's to assign: a caller-supplied one is ignored and the generated
+// one is scanned back, because runs, work items and alert stamps all key on it.
+func TestAddAutomationReturnsGeneratedId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mRow := &mockdb.MockRow{}
+	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			*(args.Get(0).(*string)) = "generated-id"
+		}).Return(nil)
+
+	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automations"),
+		"Nightly Alert Triage", "alert_triage", "{}", true, 300, "user-1").Return(mRow)
+
+	automation := &model.Automation{
+		Auditable:       model.Auditable{Id: "ignored", UserId: "user-1"},
+		DisplayName:     "Nightly Alert Triage",
+		AutomationKind:  "alert_triage",
+		Enabled:         true,
+		IntervalSeconds: 300,
+	}
+
+	require.NoError(t, s.AddAutomation(context.Background(), automation))
+	assert.Equal(t, "generated-id", automation.Id)
+	mDB.AssertExpectations(t)
+}
+
+func TestAddAutomationRequiresAUser(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	err := s.AddAutomation(context.Background(), &model.Automation{AutomationKind: "alert_triage"})
+
+	assert.Error(t, err)
+	mDB.AssertNotCalled(t, "QueryRow")
 }
 
 // The sweep matches on ended_at rather than a list of states, which is what makes it

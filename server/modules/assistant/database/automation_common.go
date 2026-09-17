@@ -17,7 +17,6 @@ import (
 // queries that use them.
 var (
 	ErrAutomationNotFound     = errors.New("ERROR_AUTOMATION_NOT_FOUND")
-	ErrAutomationExists       = errors.New("ERROR_AUTOMATION_EXISTS")
 	ErrAutomationRunInFlight  = errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT")
 	ErrAutomationRunNotOpen   = errors.New("ERROR_AUTOMATION_RUN_NOT_OPEN")
 	ErrAutomationWorkItemGone = errors.New("ERROR_AUTOMATION_WORK_ITEM_NOT_FOUND")

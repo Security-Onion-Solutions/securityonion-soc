@@ -17,12 +17,13 @@ import (
 //go:generate mockgen -destination mock/mock_automationstore.go -package mock . AutomationStore
 type AutomationStore interface {
 	EnsureAutomationWorkItems(ctx context.Context, runId string, items []*model.AutomationWorkItem) ([]*model.AutomationWorkItem, error)
-	ClaimNextAutomationWorkItem(ctx context.Context, automationName string, maxAttempts int) (*model.AutomationWorkItem, error)
+	ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error)
 	SetAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error
 	MarkAutomationWorkItemApplying(ctx context.Context, itemId string, result json.RawMessage) error
 	CompleteAutomationWorkItem(ctx context.Context, itemId string) error
+	RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error
 	FailAutomationWorkItem(ctx context.Context, itemId, cause string) error
-	ListOpenAutomationWorkItems(ctx context.Context, automationName string) ([]*model.AutomationWorkItem, error)
+	ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error)
 	EnsureAutomationRunSession(ctx context.Context, rs *model.AutomationRunSession) error
 	EnsureAutomationRunResultAudit(ctx context.Context, runId string, alerts []*model.AutomationRunResultAudit) error
 }

@@ -18,32 +18,33 @@ type AutomationKindDefinition struct {
 	DisplayName string `json:"displayName" example:"Alert Triage"`
 	// A summary of what this kind does, shown alongside the label.
 	Description string `json:"description" example:"Groups, samples and triages alerts"`
-	// The settings this kind accepts, one property per form field. Name, interval and
-	// owner belong to the automation rather than the kind, so they are absent here.
+	// The settings this kind accepts, one property per form field. Interval and owning
+	// user belong to the automation rather than the kind, so they are absent here.
 	ParamSchema JSONSchema `json:"paramSchema"`
 }
 
 // @Description A task the grid runs on a schedule, with an agent doing the work and no user driving it.
 type Automation struct {
-	// The unique name of this automation.
-	Name string `json:"name" example:"Nightly Alert Triage"`
-	// The kind that runs this automation. Fixed once created, since the params are
-	// only meaningful to the kind that validated them.
-	Kind string `json:"kind" example:"alert_triage"`
+	// Auditable.Id is the only identity an automation has, and it never changes: runs,
+	// work items and the triage stamps on alerts all reference it. Auditable.UserId is the
+	// user this automation belongs to, and the identity its unattended sessions execute
+	// as, so tool calls carry that user's RBAC.
+	Auditable
+	// What this automation is called in the UI. Cosmetic only: it is not an identifier,
+	// need not be unique, and nothing durable references it, so it can be changed freely
+	// without orphaning runs or resetting an alert's attempt counts.
+	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
+	// The kind that runs this automation. Named AutomationKind rather than Kind because
+	// Auditable.Kind is the entity kind. Fixed once created, since the params are only
+	// meaningful to the kind that validated them.
+	AutomationKind string `json:"automationKind" example:"alert_triage"`
 	// Indicates whether the scheduler runs this automation.
 	Enabled bool `json:"enabled" example:"true"`
 	// How often this automation comes due, in seconds.
 	IntervalSeconds int `json:"intervalSeconds" example:"300"`
-	// The user each run's sessions execute as, so unattended tool calls carry that
-	// user's RBAC.
-	Owner string `json:"owner" example:"8beae4b5-275b-4669-b678-8cff894911b5"`
 	// The settings for this automation, matching its kind's paramSchema. Opaque to
 	// everything but that kind.
 	Params json.RawMessage `json:"params" swaggertype:"object"`
-	// The time this automation was created.
-	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T15:03:22Z"`
-	// The time this automation was last modified.
-	UpdateTime *time.Time `json:"updateTime,omitempty" example:"2026-09-15T15:33:02Z"`
 	// The time this automation last finished a run; absent until the first run ends.
 	LastRunTime *time.Time `json:"lastRunTime,omitempty" example:"2026-09-15T16:03:02Z"`
 }
@@ -88,7 +89,7 @@ type AutomationRunRecord struct {
 	// The unique id of this run, stamped on the sessions it creates.
 	Id string `json:"id" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
 	// The automation this run belongs to.
-	AutomationName string `json:"automationName" example:"Nightly Alert Triage"`
+	AutomationId string `json:"automationId" example:"5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"`
 	// The current state of this run.
 	State AutomationRunState `json:"state" example:"running"`
 	// The time this run started.
@@ -104,7 +105,7 @@ type AutomationWorkItem struct {
 	// The unique id of this work item.
 	Id string `json:"id" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
 	// The automation this item belongs to.
-	AutomationName string `json:"automationName" example:"Nightly Alert Triage"`
+	AutomationId string `json:"automationId" example:"5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"`
 	// The run that created this item. Absent once that run is gone; items outlive their
 	// runs so a later run can finish them.
 	RunId string `json:"runId,omitempty"`

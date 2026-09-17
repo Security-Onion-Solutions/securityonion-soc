@@ -43,18 +43,18 @@ func (m *MockAutomationStore) EXPECT() *MockAutomationStoreMockRecorder {
 }
 
 // ClaimNextAutomationWorkItem mocks base method.
-func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationName string, maxAttempts int) (*model.AutomationWorkItem, error) {
+func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationName, maxAttempts)
+	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationId)
 	ret0, _ := ret[0].(*model.AutomationWorkItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ClaimNextAutomationWorkItem indicates an expected call of ClaimNextAutomationWorkItem.
-func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationName, maxAttempts any) *gomock.Call {
+func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationName, maxAttempts)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationId)
 }
 
 // CompleteAutomationWorkItem mocks base method.
@@ -129,18 +129,18 @@ func (mr *MockAutomationStoreMockRecorder) FailAutomationWorkItem(ctx, itemId, c
 }
 
 // ListOpenAutomationWorkItems mocks base method.
-func (m *MockAutomationStore) ListOpenAutomationWorkItems(ctx context.Context, automationName string) ([]*model.AutomationWorkItem, error) {
+func (m *MockAutomationStore) ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListOpenAutomationWorkItems", ctx, automationName)
+	ret := m.ctrl.Call(m, "ListOpenAutomationWorkItems", ctx, automationId)
 	ret0, _ := ret[0].([]*model.AutomationWorkItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListOpenAutomationWorkItems indicates an expected call of ListOpenAutomationWorkItems.
-func (mr *MockAutomationStoreMockRecorder) ListOpenAutomationWorkItems(ctx, automationName any) *gomock.Call {
+func (mr *MockAutomationStoreMockRecorder) ListOpenAutomationWorkItems(ctx, automationId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenAutomationWorkItems", reflect.TypeOf((*MockAutomationStore)(nil).ListOpenAutomationWorkItems), ctx, automationName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenAutomationWorkItems", reflect.TypeOf((*MockAutomationStore)(nil).ListOpenAutomationWorkItems), ctx, automationId)
 }
 
 // MarkAutomationWorkItemApplying mocks base method.
@@ -155,6 +155,20 @@ func (m *MockAutomationStore) MarkAutomationWorkItemApplying(ctx context.Context
 func (mr *MockAutomationStoreMockRecorder) MarkAutomationWorkItemApplying(ctx, itemId, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkAutomationWorkItemApplying", reflect.TypeOf((*MockAutomationStore)(nil).MarkAutomationWorkItemApplying), ctx, itemId, result)
+}
+
+// RequeueAutomationWorkItem mocks base method.
+func (m *MockAutomationStore) RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RequeueAutomationWorkItem", ctx, itemId, cause)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RequeueAutomationWorkItem indicates an expected call of RequeueAutomationWorkItem.
+func (mr *MockAutomationStoreMockRecorder) RequeueAutomationWorkItem(ctx, itemId, cause any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequeueAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).RequeueAutomationWorkItem), ctx, itemId, cause)
 }
 
 // SetAutomationWorkItemSession mocks base method.

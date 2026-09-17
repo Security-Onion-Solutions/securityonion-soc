@@ -14,15 +14,16 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-const automationColumns = `name, kind, params, enabled, interval_seconds, owner, created_at, updated_at, last_run_time`
+const automationColumns = `id, display_name, kind, params, enabled, interval_seconds, user_id, created_at, updated_at, last_run_time`
 
 func scanAutomationRow(rows db.Rows) (*model.Automation, error) {
-	automation := &model.Automation{}
+	automation := &model.Automation{Auditable: model.Auditable{Kind: "automation"}}
 
 	var params []byte
 
-	err := rows.Scan(&automation.Name, &automation.Kind, &params, &automation.Enabled, &automation.IntervalSeconds,
-		&automation.Owner, &automation.CreateTime, &automation.UpdateTime, &automation.LastRunTime)
+	err := rows.Scan(&automation.Id, &automation.DisplayName, &automation.AutomationKind, &params,
+		&automation.Enabled, &automation.IntervalSeconds, &automation.UserId,
+		&automation.CreateTime, &automation.UpdateTime, &automation.LastRunTime)
 	if err != nil {
 		return nil, err
 	}
@@ -32,40 +33,39 @@ func scanAutomationRow(rows db.Rows) (*model.Automation, error) {
 	return automation, nil
 }
 
-// AddAutomation inserts a new automation, returning ErrAutomationExists when one already owns
-// the name so the caller can answer 409 without asking first.
+// AddAutomation inserts a new automation and fills in the id the database generated. A
+// caller-supplied id is ignored: identity is the server's to assign, and everything
+// downstream keys on it.
 func (s *Store) AddAutomation(ctx context.Context, automation *model.Automation) error {
-	if automation.Name == "" {
-		return fmt.Errorf("cannot save an automation without a name")
+	if automation.UserId == "" {
+		return fmt.Errorf("cannot save an automation without a user")
 	}
 
-	err := s.db.QueryRow(ctx, `
-		INSERT INTO automations (name, kind, params, enabled, interval_seconds, owner)
+	return s.db.QueryRow(ctx, `
+		INSERT INTO automations (display_name, kind, params, enabled, interval_seconds, user_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING created_at, updated_at`,
-		automation.Name, automation.Kind, jsonbOrEmpty(automation.Params), automation.Enabled, automation.IntervalSeconds, automation.Owner).
-		Scan(&automation.CreateTime, &automation.UpdateTime)
-
-	if isUniqueViolation(err, "automations_pkey") {
-		return ErrAutomationExists
-	}
-
-	return err
+		RETURNING id, created_at, updated_at`,
+		automation.DisplayName, automation.AutomationKind, jsonbOrEmpty(automation.Params),
+		automation.Enabled, automation.IntervalSeconds, automation.UserId).
+		Scan(&automation.Id, &automation.CreateTime, &automation.UpdateTime)
 }
 
-// UpdateAutomation rewrites an automation in place. The kind is not settable: the params were
-// validated against it, so changing kinds is a delete and a create.
+// UpdateAutomation rewrites an automation in place. Neither the id nor the kind is
+// settable: the id is identity, and the params were validated against the kind, so
+// changing kinds is a delete and a create.
 func (s *Store) UpdateAutomation(ctx context.Context, automation *model.Automation) error {
-	if automation.Name == "" {
-		return fmt.Errorf("cannot update an automation without a name")
+	if automation.Id == "" {
+		return fmt.Errorf("cannot update an automation without an id")
 	}
 
 	rows, err := s.db.Query(ctx, `
 		UPDATE automations
-		SET params = $2, enabled = $3, interval_seconds = $4, owner = $5, updated_at = now()
-		WHERE name = $1
+		SET display_name = $2, params = $3, enabled = $4, interval_seconds = $5,
+		    user_id = $6, updated_at = now()
+		WHERE id = $1
 		RETURNING kind, created_at, updated_at`,
-		automation.Name, jsonbOrEmpty(automation.Params), automation.Enabled, automation.IntervalSeconds, automation.Owner)
+		automation.Id, automation.DisplayName, jsonbOrEmpty(automation.Params),
+		automation.Enabled, automation.IntervalSeconds, automation.UserId)
 	if err != nil {
 		return err
 	}
@@ -80,11 +80,11 @@ func (s *Store) UpdateAutomation(ctx context.Context, automation *model.Automati
 		return ErrAutomationNotFound
 	}
 
-	return rows.Scan(&automation.Kind, &automation.CreateTime, &automation.UpdateTime)
+	return rows.Scan(&automation.AutomationKind, &automation.CreateTime, &automation.UpdateTime)
 }
 
-func (s *Store) GetAutomation(ctx context.Context, name string) (*model.Automation, error) {
-	rows, err := s.db.Query(ctx, `SELECT `+automationColumns+` FROM automations WHERE name = $1`, name)
+func (s *Store) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+automationColumns+` FROM automations WHERE id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (s *Store) GetAutomation(ctx context.Context, name string) (*model.Automati
 }
 
 func (s *Store) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
-	rows, err := s.db.Query(ctx, `SELECT `+automationColumns+` FROM automations ORDER BY name`)
+	rows, err := s.db.Query(ctx, `SELECT `+automationColumns+` FROM automations ORDER BY display_name, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +129,9 @@ func (s *Store) ListAutomations(ctx context.Context) ([]*model.Automation, error
 // no longer exists. The history is cleared here rather than by a cascade so that refusal
 // stays possible: a foreign key would have to choose between cascading and blocking, and
 // blocking would strand the automation behind runs nothing ever closes.
-func (s *Store) DeleteAutomation(ctx context.Context, name string) error {
-	if name == "" {
-		return fmt.Errorf("cannot delete an automation without a name")
+func (s *Store) DeleteAutomation(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("cannot delete an automation without an id")
 	}
 
 	tx, err := s.db.Begin(ctx)
@@ -142,12 +142,12 @@ func (s *Store) DeleteAutomation(ctx context.Context, name string) error {
 	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx, `
-		DELETE FROM automations t
-		WHERE t.name = $1
+		DELETE FROM automations a
+		WHERE a.id = $1
 		  AND NOT EXISTS (SELECT 1 FROM automation_runs r
-		                  WHERE r.automation_name = t.name
+		                  WHERE r.automation_id = a.id
 		                    AND r.state IN ('queued', 'running'))
-		RETURNING t.name`, name)
+		RETURNING a.id`, id)
 	if err != nil {
 		return err
 	}
@@ -164,16 +164,16 @@ func (s *Store) DeleteAutomation(ctx context.Context, name string) error {
 	if !deleted {
 		// Either the automation is gone or a run holds it. Read inside the same transaction
 		// rather than on a second connection, which would see its own snapshot.
-		return explainFailedDelete(ctx, tx, name)
+		return explainFailedDelete(ctx, tx, id)
 	}
 
 	// Runs cascade to their own audit rows; work items reference runs with ON DELETE
-	// SET NULL, so they must be cleared by name.
-	if err := tx.Exec(ctx, `DELETE FROM automation_work_items WHERE automation_name = $1`, name); err != nil {
+	// SET NULL, so they must be cleared by automation.
+	if err := tx.Exec(ctx, `DELETE FROM automation_work_items WHERE automation_id = $1`, id); err != nil {
 		return err
 	}
 
-	if err := tx.Exec(ctx, `DELETE FROM automation_runs WHERE automation_name = $1`, name); err != nil {
+	if err := tx.Exec(ctx, `DELETE FROM automation_runs WHERE automation_id = $1`, id); err != nil {
 		return err
 	}
 
@@ -181,8 +181,8 @@ func (s *Store) DeleteAutomation(ctx context.Context, name string) error {
 }
 
 // explainFailedDelete tells a refusal apart from a miss after the delete matched nothing.
-func explainFailedDelete(ctx context.Context, tx db.Tx, name string) error {
-	rows, err := tx.Query(ctx, `SELECT 1 FROM automations WHERE name = $1`, name)
+func explainFailedDelete(ctx context.Context, tx db.Tx, id string) error {
+	rows, err := tx.Query(ctx, `SELECT 1 FROM automations WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

@@ -15,34 +15,40 @@ import (
 )
 
 func TestAutomationTaskJSON(t *testing.T) {
-	disabled := false
 	created := time.Date(2026, 9, 15, 15, 3, 22, 0, time.UTC)
 
-	task := &Automation{
-		Name:            "Nightly Alert Triage",
-		Kind:            "alert_triage",
-		Enabled:         disabled,
+	automation := &Automation{
+		Auditable: Auditable{
+			Id:         "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90",
+			UserId:     "8beae4b5-275b-4669-b678-8cff894911b5",
+			CreateTime: &created,
+		},
+		DisplayName:     "Nightly Alert Triage",
+		AutomationKind:  "alert_triage",
+		Enabled:         false,
 		IntervalSeconds: 3600,
-		Owner:           "8beae4b5-275b-4669-b678-8cff894911b5",
 		Params:          json.RawMessage(`{"sampleSize":5,"query":"tags:alert"}`),
-		CreateTime:      &created,
 	}
 
-	raw, err := json.Marshal(task)
+	raw, err := json.Marshal(automation)
 	require.NoError(t, err)
 
 	var round Automation
 	require.NoError(t, json.Unmarshal(raw, &round))
 
-	assert.Equal(t, task.Name, round.Name)
-	assert.Equal(t, task.Kind, round.Kind)
-	assert.Equal(t, task.IntervalSeconds, round.IntervalSeconds)
-	assert.Equal(t, task.Owner, round.Owner)
+	assert.Equal(t, automation.Id, round.Id)
+	assert.Equal(t, "Nightly Alert Triage", round.DisplayName)
+	assert.Equal(t, automation.UserId, round.UserId)
+	assert.Equal(t, automation.IntervalSeconds, round.IntervalSeconds)
 	assert.False(t, round.Enabled)
 
+	// AutomationKind must not collide with Auditable.Kind, which is the entity kind.
+	assert.Equal(t, "alert_triage", round.AutomationKind)
+	assert.Contains(t, string(raw), `"automationKind":"alert_triage"`)
+
 	// Params is stored exactly as submitted, so a kind that changes a default
-	// reaches existing tasks rather than finding its old default baked in.
-	assert.JSONEq(t, string(task.Params), string(round.Params))
+	// reaches existing automations rather than finding its old default baked in.
+	assert.JSONEq(t, string(automation.Params), string(round.Params))
 
 	assert.NotContains(t, string(raw), "updateTime")
 	assert.NotContains(t, string(raw), "lastRunTime")
