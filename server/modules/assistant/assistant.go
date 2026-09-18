@@ -155,8 +155,9 @@ type AssistantCoordinator struct {
 
 	// watchedAutomations records which automation settings already have a callback
 	// registered, because registering one twice delivers every update twice and there is
-	// no way to unregister. Guarded by agentMu.
+	// no way to unregister.
 	watchedAutomations map[string]bool
+	watchMu            sync.Mutex
 
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
@@ -808,6 +809,15 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 	if slices.Contains(memoryConfigSettings, setting.Id) {
 		log.FromContext(ctx).WithField("setting", setting.Id).Info("reloading memory configuration after config change")
 		ac.reloadMemoryConfiguration(ctx)
+
+		return
+	}
+
+	if automationId := automationIdFromSetting(setting.Id); automationId != "" {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"automationId": automationId,
+			"removed":      removed,
+		}).Info("automation configuration changed")
 
 		return
 	}

@@ -12,12 +12,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
-// AutomationStore is the slice of the assistant's Postgres store that automations use.
-//
-//go:generate mockgen -destination mock/mock_automationstore.go -package mock . AutomationStore
 type AutomationStore interface {
 	EnsureAutomationWorkItems(ctx context.Context, runId string, items []*model.AutomationWorkItem) ([]*model.AutomationWorkItem, error)
-	ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error)
+	ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error)
 	EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error
 	MarkAutomationWorkItemApplying(ctx context.Context, itemId string, result json.RawMessage) error
 	CompleteAutomationWorkItem(ctx context.Context, itemId string) error
@@ -25,3 +22,5 @@ type AutomationStore interface {
 	FailAutomationWorkItem(ctx context.Context, itemId, cause string) error
 	ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error)
 }
+
+//go:generate mockgen -destination mock/mock_automationstore.go -package mock . AutomationStore

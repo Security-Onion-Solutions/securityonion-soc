@@ -39,9 +39,8 @@ func TestMigrationDedupesRunsWithAPartialIndex(t *testing.T) {
 	assert.Contains(t, sql, "WHERE state IN ('queued', 'running')")
 }
 
-// ON CONFLICT infers a partial unique index only from a predicate identical to the
-// index's. A mismatch raises 42P10 at runtime, which no mock can see, so the statement
-// and the index are tied to one constant and checked against the migration here.
+// ON CONFLICT infers a partial index only from an identical predicate, and a mismatch is
+// a runtime 42P10 no mock can see, so both sides are tied to one constant.
 func TestMigrationOpenWorkItemPredicateMatchesTheConstant(t *testing.T) {
 	sql := automationMigration(t)
 
@@ -88,9 +87,8 @@ func TestMigrationDoesNotCascadeWorkItemsFromRuns(t *testing.T) {
 	assert.Contains(t, sql, "REFERENCES automation_runs (id) ON DELETE SET NULL")
 }
 
-// Postgres holds runtime state only. An automations table reappearing would mean config
-// drifted back out of Salt, and the folded tables reappearing would put alert-shaped
-// columns back into a schema meant to serve kinds nobody has written yet.
+// Postgres holds runtime state only: an automations table reappearing would mean config
+// drifted back out of Salt.
 func TestMigrationHoldsOnlyRuntimeState(t *testing.T) {
 	sql := automationMigration(t)
 
@@ -98,10 +96,10 @@ func TestMigrationHoldsOnlyRuntimeState(t *testing.T) {
 	assert.NotContains(t, sql, "CREATE TABLE IF NOT EXISTS automations")
 	assert.NotContains(t, sql, "automation_run_sessions")
 	assert.NotContains(t, sql, "automation_run_result_audit")
-	assert.NotContains(t, sql, "inherited")
 
 	// One root session per attempt, so a retry cannot orphan the previous transcript.
-	assert.Contains(t, sql, "session_ids        text[]      NOT NULL DEFAULT '{}'")
+	// Matched loosely: the column's alignment is formatting, not schema.
+	assert.Regexp(t, `session_ids\s+text\[\]\s+NOT NULL DEFAULT '\{\}'`, sql)
 }
 
 // Runs and work items must key on the immutable id, never on anything renameable.

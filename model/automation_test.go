@@ -50,8 +50,9 @@ func TestAutomationTaskJSON(t *testing.T) {
 	// reaches existing automations rather than finding its old default baked in.
 	assert.JSONEq(t, string(automation.Params), string(round.Params))
 
+	// An automation that has never been edited carries no updateTime; last run is derived
+	// from the run history rather than stored, so it is not a field at all.
 	assert.NotContains(t, string(raw), "updateTime")
-	assert.NotContains(t, string(raw), "lastRunTime")
 }
 
 func TestAutomationKindJSON(t *testing.T) {

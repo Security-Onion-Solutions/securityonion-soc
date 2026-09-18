@@ -43,18 +43,18 @@ func (m *MockAutomationStore) EXPECT() *MockAutomationStoreMockRecorder {
 }
 
 // ClaimNextAutomationWorkItem mocks base method.
-func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error) {
+func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationId)
+	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationId, runId)
 	ret0, _ := ret[0].(*model.AutomationWorkItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ClaimNextAutomationWorkItem indicates an expected call of ClaimNextAutomationWorkItem.
-func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationId any) *gomock.Call {
+func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationId, runId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationId, runId)
 }
 
 // CompleteAutomationWorkItem mocks base method.

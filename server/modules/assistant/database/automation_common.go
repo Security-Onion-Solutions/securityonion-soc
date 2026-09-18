@@ -13,13 +13,13 @@ import (
 )
 
 // The automation store's error surface, grouped so callers mapping them to status codes
-// can see the whole set. Each table's columns, scanner and index names live beside the
-// queries that use them.
+// can see the whole set. ErrAutomationWorkItemNotFound also covers an item that is no
+// longer in a state its transition is legal from.
 var (
-	ErrAutomationNotFound     = errors.New("ERROR_AUTOMATION_NOT_FOUND")
-	ErrAutomationRunInFlight  = errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT")
-	ErrAutomationRunNotOpen   = errors.New("ERROR_AUTOMATION_RUN_NOT_OPEN")
-	ErrAutomationWorkItemGone = errors.New("ERROR_AUTOMATION_WORK_ITEM_NOT_FOUND")
+	ErrAutomationRunNotFound      = errors.New("ERROR_AUTOMATION_RUN_NOT_FOUND")
+	ErrAutomationRunInFlight      = errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT")
+	ErrAutomationRunNotOpen       = errors.New("ERROR_AUTOMATION_RUN_NOT_OPEN")
+	ErrAutomationWorkItemNotFound = errors.New("ERROR_AUTOMATION_WORK_ITEM_NOT_FOUND")
 )
 
 // isUniqueViolation reports whether err is Postgres refusing a duplicate against the

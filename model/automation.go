@@ -25,18 +25,10 @@ type AutomationKindDefinition struct {
 
 // @Description A task the grid runs on a schedule, with an agent doing the work and no user driving it.
 type Automation struct {
-	// Auditable.Id is the only identity an automation has, and it never changes: runs,
-	// work items and the triage stamps on alerts all reference it. Auditable.UserId is the
-	// user this automation belongs to, and the identity its unattended sessions execute
-	// as, so tool calls carry that user's RBAC.
 	Auditable
-	// What this automation is called in the UI. Cosmetic only: it is not an identifier,
-	// need not be unique, and nothing durable references it, so it can be changed freely
-	// without orphaning runs or resetting an alert's attempt counts.
+	// What this automation is called in the UI.
 	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
-	// The kind that runs this automation. Named AutomationKind rather than Kind because
-	// Auditable.Kind is the entity kind. Fixed once created, since the params are only
-	// meaningful to the kind that validated them.
+	// The kind that runs this automation.
 	AutomationKind string `json:"automationKind" example:"alert_triage"`
 	// Indicates whether the scheduler runs this automation.
 	Enabled bool `json:"enabled" example:"true"`
@@ -51,10 +43,8 @@ type Automation struct {
 type AutomationRunState string
 
 const (
-	// Set once the run row is open but the execution pool has not dispatched it yet.
-	// Nothing writes it today -- OpenAutomationRun inserts running directly -- but it is
-	// inside the in-flight index predicate, so a queued run still blocks a second run of
-	// the same automation and a restart still sweeps it.
+	// Unwritten today, but inside the in-flight index predicate so a run admitted before
+	// it executes still blocks a second run of the same automation.
 	AutomationRunQueued    AutomationRunState = "queued"
 	AutomationRunRunning   AutomationRunState = "running"
 	AutomationRunSucceeded AutomationRunState = "succeeded"
@@ -104,8 +94,9 @@ type AutomationWorkItem struct {
 	Id string `json:"id" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
 	// The automation this item belongs to.
 	AutomationId string `json:"automationId" example:"5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"`
-	// The run that created this item. Absent once that run is gone; items outlive their
-	// runs so a later run can finish them.
+	// The run that last worked this item: the one that enqueued it until another claims
+	// it. Absent once that run is gone; items outlive their runs so a later run can
+	// finish them.
 	RunId string `json:"runId,omitempty"`
 	// Identifies what this item is about, in whatever terms its kind uses. Only one item
 	// per group is ever in flight.
@@ -117,12 +108,11 @@ type AutomationWorkItem struct {
 	// How many times this item has been claimed, including attempts that died with the
 	// process. Bounds retries so a payload that cannot succeed stops being retried.
 	Attempts int `json:"attempts" example:"1"`
-	// One root session per attempt, in attempt order, so a failed try's transcript is not
-	// lost when the next one starts. Each root reaches its own delegated children.
+	// One root session per attempt, in attempt order. Each root reaches its own delegated
+	// children.
 	SessionIds []string `json:"sessionIds,omitempty"`
-	// The kind's conclusion, stored in the same statement that moves the item to
-	// applying, so a process that dies after that point resumes at the apply step
-	// instead of paying for the session again.
+	// The kind's conclusion, stored in the same statement that moves the item to applying,
+	// so a process that dies after that point resumes at the apply step.
 	Result json.RawMessage `json:"result,omitempty" swaggertype:"object"`
 	// Why this item failed; absent unless it did.
 	Error string `json:"error,omitempty"`

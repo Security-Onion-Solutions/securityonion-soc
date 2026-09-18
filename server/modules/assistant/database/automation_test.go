@@ -21,6 +21,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Identity is a UUID, matching the column type these ids are bound into.
+const (
+	testAutomationId  = "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"
+	otherAutomationId = "1d7e3a44-88b6-4c0f-9a21-70f5e9c3b812"
+	testRunId         = "3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"
+)
+
+// assertNoStatements fails when a guard let a call through.
+func assertNoStatements(t *testing.T, mDB *mockdb.MockDB) {
+	t.Helper()
+
+	assert.Empty(t, mDB.Calls, "the guard must return before touching the database")
+}
+
 // erroringRow returns a Row whose Scan fails, for the pg error-mapping tests.
 func erroringRow(err error) *mockdb.MockRow {
 	mRow := &mockdb.MockRow{}
@@ -45,10 +59,10 @@ func TestOpenAutomationRunInFlight(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automation_runs"), "nightly").
+	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automation_runs"), testAutomationId).
 		Return(erroringRow(&pgconn.PgError{Code: "23505", ConstraintName: idxRunsOneInFlight}))
 
-	run, err := s.OpenAutomationRun(context.Background(), "nightly")
+	run, err := s.OpenAutomationRun(context.Background(), testAutomationId)
 
 	assert.Nil(t, run)
 	assert.ErrorIs(t, err, ErrAutomationRunInFlight)
@@ -62,9 +76,9 @@ func TestOpenAutomationRunPassesOtherErrorsThrough(t *testing.T) {
 	s := &Store{db: mDB}
 
 	fkViolation := &pgconn.PgError{Code: "23503"}
-	mDB.On("QueryRow", mock.Anything, mock.Anything, "nightly").Return(erroringRow(fkViolation))
+	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId).Return(erroringRow(fkViolation))
 
-	_, err := s.OpenAutomationRun(context.Background(), "nightly")
+	_, err := s.OpenAutomationRun(context.Background(), testAutomationId)
 
 	assert.NotErrorIs(t, err, ErrAutomationRunInFlight)
 	assert.ErrorIs(t, err, fkViolation)
@@ -76,23 +90,24 @@ func TestOpenAutomationRunIgnoresOtherUniqueViolations(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("QueryRow", mock.Anything, mock.Anything, "nightly").
+	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId).
 		Return(erroringRow(&pgconn.PgError{Code: "23505", ConstraintName: "some_other_index"}))
 
-	_, err := s.OpenAutomationRun(context.Background(), "nightly")
+	_, err := s.OpenAutomationRun(context.Background(), testAutomationId)
 
 	assert.NotErrorIs(t, err, ErrAutomationRunInFlight)
 }
 
-func TestOpenAutomationRunRequiresAName(t *testing.T) {
+func TestOpenAutomationRunRequiresAnAutomationId(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
 	_, err := s.OpenAutomationRun(context.Background(), "")
 
 	assert.Error(t, err)
-	mDB.AssertNotCalled(t, "QueryRow")
+	assertNoStatements(t, mDB)
 }
+
 func TestCloseAutomationRunTwiceReports(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -111,7 +126,7 @@ func TestCloseAutomationRunRejectsNonTerminalState(t *testing.T) {
 	err := s.CloseAutomationRun(context.Background(), "run-1", model.AutomationRunRunning, "")
 
 	assert.Error(t, err)
-	mDB.AssertNotCalled(t, "Query")
+	assertNoStatements(t, mDB)
 }
 
 func TestClaimNextAutomationWorkItemUsesSkipLocked(t *testing.T) {
@@ -126,25 +141,24 @@ func TestClaimNextAutomationWorkItemUsesSkipLocked(t *testing.T) {
 			strings.Contains(sql, "ORDER BY created_at")
 	})
 
-	mDB.On("Query", mock.Anything, claim, "nightly").Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, claim, testAutomationId, testRunId).Return(emptyRows(), nil)
 
-	item, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
+	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
 
 	assert.Nil(t, item)
 	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
 }
 
-// An attempts filter here is what created the unclaimable-but-open wedge: the item could
-// not be handed out, yet still blocked its group from being enqueued again, so nothing
-// could ever drive it to a terminal state. Retry policy lives in the kind.
+// An attempts filter would wedge the item: unclaimable, yet still blocking its group.
+// Retry policy lives in the kind.
 func TestClaimNextAutomationWorkItemDoesNotFilterOnAttempts(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, "nightly").Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId).Return(emptyRows(), nil)
 
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
 	require.NoError(t, err)
 
 	capped := mock.MatchedBy(func(sql string) bool {
@@ -188,7 +202,7 @@ func TestRequeueAutomationWorkItemOnVanishedItem(t *testing.T) {
 
 	err := s.RequeueAutomationWorkItem(context.Background(), "item-1", "boom")
 
-	assert.ErrorIs(t, err, ErrAutomationWorkItemGone)
+	assert.ErrorIs(t, err, ErrAutomationWorkItemNotFound)
 }
 
 func TestEnsureAutomationWorkItemsEmptyBatchTouchesNothing(t *testing.T) {
@@ -199,7 +213,7 @@ func TestEnsureAutomationWorkItemsEmptyBatchTouchesNothing(t *testing.T) {
 
 	assert.Nil(t, items)
 	assert.NoError(t, err)
-	mDB.AssertNotCalled(t, "Query")
+	assertNoStatements(t, mDB)
 }
 
 // ON CONFLICT infers a partial unique index only from an identical predicate, so the
@@ -213,11 +227,11 @@ func TestEnsureAutomationWorkItemsIsIdempotent(t *testing.T) {
 			strings.Contains(sql, "DO NOTHING")
 	})
 
-	mDB.On("Query", mock.Anything, upsert, "nightly", "run-1",
+	mDB.On("Query", mock.Anything, upsert, testAutomationId, "run-1",
 		[]string{"group-a"}, []string{`{"ids":["1"]}`}).Return(emptyRows(), nil)
 
 	items, err := s.EnsureAutomationWorkItems(context.Background(), "run-1", []*model.AutomationWorkItem{
-		{AutomationId: "nightly", GroupKey: "group-a", Payload: json.RawMessage(`{"ids":["1"]}`)},
+		{AutomationId: testAutomationId, GroupKey: "group-a", Payload: json.RawMessage(`{"ids":["1"]}`)},
 	})
 
 	require.NoError(t, err)
@@ -230,11 +244,11 @@ func TestEnsureAutomationWorkItemsDefaultsNilPayload(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, "nightly", "run-1",
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, "run-1",
 		[]string{"group-a"}, []string{"{}"}).Return(emptyRows(), nil)
 
 	_, err := s.EnsureAutomationWorkItems(context.Background(), "run-1",
-		[]*model.AutomationWorkItem{{AutomationId: "nightly", GroupKey: "group-a"}})
+		[]*model.AutomationWorkItem{{AutomationId: testAutomationId, GroupKey: "group-a"}})
 
 	require.NoError(t, err)
 	mDB.AssertExpectations(t)
@@ -245,12 +259,12 @@ func TestEnsureAutomationWorkItemsRejectsMixedAutomations(t *testing.T) {
 	s := &Store{db: mDB}
 
 	_, err := s.EnsureAutomationWorkItems(context.Background(), "run-1", []*model.AutomationWorkItem{
-		{AutomationId: "nightly", GroupKey: "a"},
-		{AutomationId: "hourly", GroupKey: "b"},
+		{AutomationId: testAutomationId, GroupKey: "a"},
+		{AutomationId: otherAutomationId, GroupKey: "b"},
 	})
 
 	assert.Error(t, err)
-	mDB.AssertNotCalled(t, "Query")
+	assertNoStatements(t, mDB)
 }
 
 // The conclusion must be stored byte-for-byte: it is the kind's own structured output
@@ -272,6 +286,57 @@ func TestMarkAutomationWorkItemApplyingStoresResultVerbatim(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+// Moving to applying is the checkpoint the apply step resumes from, so an item parked there
+// with nothing stored would be unrecoverable: reconciliation leaves applying items alone.
+func TestMarkAutomationWorkItemApplyingRefusesAnEmptyResult(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	assert.Error(t, s.MarkAutomationWorkItemApplying(context.Background(), "item-1", nil))
+	assertNoStatements(t, mDB)
+}
+
+// Every transition guards the state it is legal from, so a replayed call cannot pull a
+// finished item back out and hand its group a second session.
+func TestWorkItemTransitionsGuardTheirFromState(t *testing.T) {
+	guards := map[string]struct {
+		states string
+		call   func(*Store) error
+	}{
+		"applying": {claimedWorkItemStates, func(s *Store) error {
+			return s.MarkAutomationWorkItemApplying(context.Background(), "item-1", json.RawMessage(`{"ok":true}`))
+		}},
+		"complete": {claimedWorkItemStates, func(s *Store) error {
+			return s.CompleteAutomationWorkItem(context.Background(), "item-1")
+		}},
+		"requeue": {claimedWorkItemStates, func(s *Store) error {
+			return s.RequeueAutomationWorkItem(context.Background(), "item-1", "truncated")
+		}},
+		"fail": {openWorkItemStates, func(s *Store) error {
+			return s.FailAutomationWorkItem(context.Background(), "item-1", "gave up")
+		}},
+		"session": {openWorkItemStates, func(s *Store) error {
+			return s.EnsureAutomationWorkItemSession(context.Background(), "item-1", "session-9")
+		}},
+	}
+
+	for name, guard := range guards {
+		t.Run(name, func(t *testing.T) {
+			mDB := &mockdb.MockDB{}
+			s := &Store{db: mDB}
+
+			mDB.On("Query", mock.Anything, sqlContains("state IN "+guard.states), mock.Anything, mock.Anything).
+				Return(emptyRows(), nil).Maybe()
+			mDB.On("Query", mock.Anything, sqlContains("state IN "+guard.states), mock.Anything).
+				Return(emptyRows(), nil).Maybe()
+
+			// A guarded statement that matches nothing reports it rather than passing.
+			assert.ErrorIs(t, guard.call(s), ErrAutomationWorkItemNotFound)
+			mDB.AssertExpectations(t)
+		})
+	}
+}
+
 func TestWorkItemTransitionOnVanishedItem(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -280,7 +345,7 @@ func TestWorkItemTransitionOnVanishedItem(t *testing.T) {
 
 	err := s.CompleteAutomationWorkItem(context.Background(), "item-1")
 
-	assert.ErrorIs(t, err, ErrAutomationWorkItemGone)
+	assert.ErrorIs(t, err, ErrAutomationWorkItemNotFound)
 }
 
 func TestWorkItemTransitionRequiresAnId(t *testing.T) {
@@ -288,7 +353,7 @@ func TestWorkItemTransitionRequiresAnId(t *testing.T) {
 	s := &Store{db: mDB}
 
 	assert.Error(t, s.CompleteAutomationWorkItem(context.Background(), ""))
-	mDB.AssertNotCalled(t, "Query")
+	assertNoStatements(t, mDB)
 }
 
 func TestReconcileAutomationRunsSweepsEveryOpenRun(t *testing.T) {
@@ -440,9 +505,9 @@ func TestClaimNextAutomationWorkItemKeepsSessionHistory(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, "nightly").Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId).Return(emptyRows(), nil)
 
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
 	require.NoError(t, err)
 
 	clearsSessions := mock.MatchedBy(func(sql string) bool {
@@ -450,4 +515,74 @@ func TestClaimNextAutomationWorkItemKeepsSessionHistory(t *testing.T) {
 			strings.Contains(sql, "session_ids = '{}'")
 	})
 	mDB.AssertNotCalled(t, "Query", mock.Anything, clearsSessions, mock.Anything)
+}
+
+// The claiming run takes ownership, so a run that resumes an item another run enqueued is
+// credited with the work rather than the dead run that found it.
+func TestClaimNextAutomationWorkItemTakesOverTheRun(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, sqlContains("run_id = $2"), testAutomationId, testRunId).
+		Return(emptyRows(), nil)
+
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+
+	require.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestClaimNextAutomationWorkItemRequiresARunId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, "")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+// error is the failure reason, so a run that succeeded records none even when the caller
+// passes one.
+func TestCloseAutomationRunDropsTheCauseOnSuccess(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "run-1", "succeeded", "").Return(emptyRows(), nil)
+
+	err := s.CloseAutomationRun(context.Background(), "run-1", model.AutomationRunSucceeded, "boom")
+
+	assert.ErrorIs(t, err, ErrAutomationRunNotOpen)
+	mDB.AssertExpectations(t)
+}
+
+func TestGetAutomationRunRequiresAnId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.GetAutomationRun(context.Background(), "")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+func TestListOpenAutomationWorkItemsRequiresAnAutomationId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.ListOpenAutomationWorkItems(context.Background(), "")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+func TestEnsureAutomationWorkItemsRequiresAnAutomationId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.EnsureAutomationWorkItems(context.Background(), "run-1",
+		[]*model.AutomationWorkItem{{GroupKey: "group-a"}})
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
 }

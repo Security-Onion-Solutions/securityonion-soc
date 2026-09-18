@@ -20,14 +20,14 @@ const openWorkItemStates = `('pending', 'running', 'applying')`
 
 const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, result, error, created_at, updated_at`
 
-func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) {
+func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
 	item := &model.AutomationWorkItem{}
 
 	var state string
 	var runId, failure *string
 	var payload, result []byte
 
-	err := rows.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
+	err := row.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
 		&item.Attempts, &item.SessionIds, &result, &failure, &item.CreateTime, &item.UpdateTime)
 	if err != nil {
 		return nil, err
@@ -52,17 +52,18 @@ func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) 
 }
 
 // EnsureAutomationWorkItems enqueues a batch, skipping any group that already has an item
-// in flight, so a kind that died partway through enqueueing can simply enqueue again.
-//
-// It returns the items it inserted, not every item for the given groups: the caller wants
-// the work that is newly its own to submit, and anything skipped is already queued or
-// running somewhere.
+// in flight, so a kind that died partway through enqueueing can simply enqueue again. It
+// returns only what it inserted: anything skipped is already being worked elsewhere.
 func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, items []*model.AutomationWorkItem) ([]*model.AutomationWorkItem, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
 
 	automationId := items[0].AutomationId
+	if automationId == "" {
+		return nil, fmt.Errorf("cannot enqueue work items without an automation id")
+	}
+
 	groupKeys := make([]string, 0, len(items))
 	payloads := make([]string, 0, len(items))
 
@@ -95,17 +96,20 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 }
 
 // ClaimNextAutomationWorkItem takes the oldest pending item for one automation and counts
-// the attempt. It returns nil when there is nothing to claim.
+// the attempt, returning nil when there is nothing to claim. It deliberately does not
+// filter on attempts: an item the store refused to hand out would sit unclaimable in the
+// open set forever, blocking its group. The caller checks Attempts and gives up instead.
 //
-// It deliberately does not filter on attempts. Retry policy belongs to the kind, and an
-// item the store refused to hand out would sit pending forever: unclaimable, yet still in
-// the open set blocking its group from being enqueued again. Claiming unconditionally means
-// every item can always be driven to a terminal state, so the caller checks Attempts on
-// what it receives and either runs the work or gives up on it.
-func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId string) (*model.AutomationWorkItem, error) {
+// run_id moves to the claiming run, so an item a later run resumes is credited to that
+// run rather than to the dead one that enqueued it.
+func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error) {
+	if runId == "" {
+		return nil, fmt.Errorf("cannot claim a work item without a run id")
+	}
+
 	rows, err := s.db.Query(ctx, `
 		UPDATE automation_work_items
-		SET state = 'running', attempts = attempts + 1,
+		SET state = 'running', run_id = $2, attempts = attempts + 1,
 		    result = NULL, error = NULL, updated_at = now()
 		WHERE id = (
 			SELECT id FROM automation_work_items
@@ -115,7 +119,7 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId st
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING `+automationWorkItemColumns,
-		automationId)
+		automationId, runId)
 	if err != nil {
 		return nil, err
 	}
@@ -129,10 +133,13 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId st
 	return scanAutomationWorkItemRow(rows)
 }
 
-// EnsureAutomationWorkItemSession appends the session analyzing a claimed item, keeping
-// every attempt's root rather than overwriting. Idempotent, so a replayed write does not
-// double-add. The array is ordered by attempt, and each root reaches its own delegated
-// children through parentSessionId.
+// The states a claimed item can still be transitioned from; pulling one back out of a
+// terminal state is how a completed group gets worked a second time.
+const claimedWorkItemStates = `('running', 'applying')`
+
+// EnsureAutomationWorkItemSession appends the session analyzing a claimed item rather than
+// overwriting, so each attempt's root stays reachable. Idempotent, so a replayed write does
+// not double-add.
 func (s *Store) EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
@@ -140,31 +147,31 @@ func (s *Store) EnsureAutomationWorkItemSession(ctx context.Context, itemId, ses
 		                       THEN session_ids
 		                       ELSE array_append(session_ids, $2) END,
 		    updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND state IN `+openWorkItemStates+`
 		RETURNING id`, itemId, sessionId)
 }
 
 // MarkAutomationWorkItemApplying stores the kind's conclusion and moves the item to
-// applying in one statement. Everything past this point is replayable from the stored
-// result, which is why reconciliation leaves applying items alone.
+// applying in one statement. Reconciliation leaves applying items alone because everything
+// past this point replays from the stored result, so an empty result is refused: it would
+// park the item in the one state nothing recovers.
 func (s *Store) MarkAutomationWorkItemApplying(ctx context.Context, itemId string, result json.RawMessage) error {
-	var stored any
-	if len(result) > 0 {
-		stored = string(result)
+	if len(result) == 0 {
+		return fmt.Errorf("cannot move a work item to applying without a result")
 	}
 
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
 		SET state = 'applying', result = $2::jsonb, updated_at = now()
-		WHERE id = $1
-		RETURNING id`, itemId, stored)
+		WHERE id = $1 AND state IN `+claimedWorkItemStates+`
+		RETURNING id`, itemId, string(result))
 }
 
 func (s *Store) CompleteAutomationWorkItem(ctx context.Context, itemId string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
 		SET state = 'done', error = NULL, updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND state IN `+claimedWorkItemStates+`
 		RETURNING id`, itemId)
 }
 
@@ -175,28 +182,25 @@ func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause str
 		UPDATE automation_work_items
 		SET state = 'pending', result = NULL,
 		    error = NULLIF($2, ''), updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND state IN `+claimedWorkItemStates+`
 		RETURNING id`, itemId, cause)
 }
 
-// FailAutomationWorkItem ends an item for good. Reserved for a failure retrying cannot
-// fix, and for the caller giving up after too many attempts; a retryable failure goes
-// through RequeueAutomationWorkItem instead.
-//
-// The caller must have stamped this item's alerts before calling: an item that goes
-// terminal with its alerts unstamped is re-found by the next scan, enqueued as a fresh
-// item with attempts back at zero, and retried forever.
+// FailAutomationWorkItem ends an item for good; a retryable failure goes through
+// RequeueAutomationWorkItem instead. The caller must have stamped this item's alerts
+// first, or the next scan re-enqueues them as a fresh item with attempts back at zero.
 func (s *Store) FailAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
 		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND state IN `+openWorkItemStates+`
 		RETURNING id`, itemId, cause)
 }
 
-// transitionWorkItem runs a statement that returns the id it changed, so a write against
-// a vanished item is an error rather than a silent no-op -- db.DB.Exec discards the
-// rows-affected count, so RETURNING is the only way to tell.
+// transitionWorkItem runs a statement that returns the id it changed, because db.DB.Exec
+// discards the rows-affected count and RETURNING is the only way to tell a write against a
+// vanished item from a silent no-op. Every transition also guards the state it is legal
+// from, so an item that has already gone terminal collapses into the same error.
 func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, args ...any) error {
 	if itemId == "" {
 		return fmt.Errorf("cannot update a work item without an id")
@@ -214,7 +218,7 @@ func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, arg
 			return err
 		}
 
-		return ErrAutomationWorkItemGone
+		return ErrAutomationWorkItemNotFound
 	}
 
 	return nil
@@ -223,6 +227,10 @@ func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, arg
 // ListOpenAutomationWorkItems returns every unfinished item for one automation, oldest
 // first: what an earlier process left behind plus anything the current run enqueued.
 func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error) {
+	if automationId == "" {
+		return nil, fmt.Errorf("cannot list open work items without an automation id")
+	}
+
 	rows, err := s.db.Query(ctx, `
 		SELECT `+automationWorkItemColumns+`
 		FROM automation_work_items
@@ -237,8 +245,12 @@ func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId st
 	return collectWorkItems(rows)
 }
 
-// ListAutomationWorkItems returns the items one run created, for the run detail view.
+// ListAutomationWorkItems returns the items one run worked, for the run detail view.
 func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*model.AutomationWorkItem, error) {
+	if runId == "" {
+		return nil, fmt.Errorf("cannot list work items without a run id")
+	}
+
 	rows, err := s.db.Query(ctx, `
 		SELECT `+automationWorkItemColumns+`
 		FROM automation_work_items

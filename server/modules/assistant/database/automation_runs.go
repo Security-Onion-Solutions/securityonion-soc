@@ -20,13 +20,17 @@ const idxRunsOneInFlight = "idx_automation_runs_one_in_flight"
 
 const automationRunColumns = `id, automation_id, state, started_at, ended_at, error`
 
-func scanAutomationRunRow(rows db.Rows) (*model.AutomationRunRecord, error) {
+const defaultAutomationRunLimit = 10000
+
+// Takes db.Row rather than db.Rows so the single-row insert and the multi-row reads share
+// one mapping: db.Rows satisfies db.Row, and nothing here needs more than Scan.
+func scanAutomationRunRow(row db.Row) (*model.AutomationRunRecord, error) {
 	run := &model.AutomationRunRecord{}
 
 	var state string
 	var failure *string
 
-	if err := rows.Scan(&run.Id, &run.AutomationId, &state, &run.StartTime, &run.EndTime, &failure); err != nil {
+	if err := row.Scan(&run.Id, &run.AutomationId, &state, &run.StartTime, &run.EndTime, &failure); err != nil {
 		return nil, err
 	}
 
@@ -47,17 +51,11 @@ func (s *Store) OpenAutomationRun(ctx context.Context, automationId string) (*mo
 		return nil, fmt.Errorf("cannot open a run without an automation id")
 	}
 
-	run := &model.AutomationRunRecord{}
-
-	var state string
-	var failure *string
-
-	err := s.db.QueryRow(ctx, `
+	run, err := scanAutomationRunRow(s.db.QueryRow(ctx, `
 		INSERT INTO automation_runs (automation_id, state)
 		VALUES ($1, 'running')
 		RETURNING `+automationRunColumns,
-		automationId).
-		Scan(&run.Id, &run.AutomationId, &state, &run.StartTime, &run.EndTime, &failure)
+		automationId))
 
 	if isUniqueViolation(err, idxRunsOneInFlight) {
 		return nil, ErrAutomationRunInFlight
@@ -65,12 +63,6 @@ func (s *Store) OpenAutomationRun(ctx context.Context, automationId string) (*mo
 
 	if err != nil {
 		return nil, err
-	}
-
-	run.State = model.AutomationRunState(state)
-
-	if failure != nil {
-		run.Error = *failure
 	}
 
 	return run, nil
@@ -86,6 +78,11 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 
 	if !state.IsTerminal() {
 		return fmt.Errorf("cannot close a run into non-terminal state %q", state)
+	}
+
+	// The column is the failure reason; a succeeded run has none to record.
+	if state != model.AutomationRunFailed {
+		cause = ""
 	}
 
 	rows, err := s.db.Query(ctx, `
@@ -112,6 +109,10 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 }
 
 func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.AutomationRunRecord, error) {
+	if runId == "" {
+		return nil, fmt.Errorf("cannot get a run without an id")
+	}
+
 	rows, err := s.db.Query(ctx, `SELECT `+automationRunColumns+` FROM automation_runs WHERE id = $1`, runId)
 	if err != nil {
 		return nil, err
@@ -124,14 +125,14 @@ func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.Auto
 			return nil, err
 		}
 
-		return nil, ErrAutomationNotFound
+		return nil, ErrAutomationRunNotFound
 	}
 
 	return scanAutomationRunRow(rows)
 }
 
-// AutomationRunQuery narrows a run listing. The zero value lists every run, newest
-// first.
+// AutomationRunQuery narrows a run listing. The zero value lists the newest
+// defaultAutomationRunLimit runs.
 type AutomationRunQuery struct {
 	AutomationId string
 	Limit        int
@@ -149,10 +150,13 @@ func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery
 
 	stmt += ` ORDER BY started_at DESC, id`
 
-	if query.Limit > 0 {
-		args = append(args, query.Limit)
-		stmt += fmt.Sprintf(` LIMIT $%d`, len(args))
+	limit := query.Limit
+	if limit <= 0 {
+		limit = defaultAutomationRunLimit
 	}
+
+	args = append(args, limit)
+	stmt += fmt.Sprintf(` LIMIT $%d`, len(args))
 
 	if query.Offset > 0 {
 		args = append(args, query.Offset)

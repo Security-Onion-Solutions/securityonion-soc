@@ -22,13 +22,11 @@ type AutomationRunReconcileResult struct {
 	ResetItems int
 }
 
-// ReconcileAutomationRuns closes out runs that started but never finished themselves,
-// and returns the work those runs had in flight to the queue. A run left open blocks its
-// automation forever, because the in-flight index cannot tell an abandoned run from a
-// live one.
-//
-// Correct only while nothing is running: it assumes every open row belongs to a process
-// that is gone. Call it once, from Start, before anything schedules.
+// ReconcileAutomationRuns closes out runs that started but never finished themselves and
+// requeues the work they had in flight; the in-flight index cannot tell an abandoned run
+// from a live one, so a run left open blocks its automation forever. It assumes every open
+// row belongs to a process that is gone, so call it once from Start before anything
+// schedules.
 func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReconcileResult, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -48,13 +46,12 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 		return nil, err
 	}
 
-	// A running item's session is half-finished and cannot be continued, so the item
-	// goes back in the queue and is redone from the beginning. attempts is deliberately
-	// not incremented: the claim that died already counted itself, and counting again
-	// would halve the retry budget.
+	// A half-finished session cannot be continued, so the item is redone from the start.
+	// attempts is not incremented -- the claim that died already counted itself -- and
+	// session_ids is left alone as the only way back to that attempt's transcript.
 	resetItems, err := countAffected(ctx, tx, `
 		UPDATE automation_work_items
-		SET state = 'pending', session_id = NULL, result = NULL,
+		SET state = 'pending', result = NULL,
 		    error = 'ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED', updated_at = now()
 		WHERE state = 'running'
 		RETURNING id`)
