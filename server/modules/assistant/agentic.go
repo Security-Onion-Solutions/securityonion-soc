@@ -801,7 +801,7 @@ func (ac *AssistantCoordinator) updateStoredSkills(ctx context.Context, mutate f
 // absent or empty setting leaves out empty.
 func (ac *AssistantCoordinator) readStoredSetting(ctx context.Context, settingID string, out any) error {
 	if ac.srv.Configstore == nil {
-		return errors.New("ERROR_CONFIGSTORE_UNAVAILABLE")
+		return ErrConfigstoreUnavailable
 	}
 
 	settings, err := ac.srv.Configstore.GetSettings(ctx, true)
