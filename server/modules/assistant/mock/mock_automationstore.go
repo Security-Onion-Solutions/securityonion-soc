@@ -71,32 +71,18 @@ func (mr *MockAutomationStoreMockRecorder) CompleteAutomationWorkItem(ctx, itemI
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).CompleteAutomationWorkItem), ctx, itemId)
 }
 
-// EnsureAutomationRunResultAudit mocks base method.
-func (m *MockAutomationStore) EnsureAutomationRunResultAudit(ctx context.Context, runId string, alerts []*model.AutomationRunResultAudit) error {
+// EnsureAutomationWorkItemSession mocks base method.
+func (m *MockAutomationStore) EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureAutomationRunResultAudit", ctx, runId, alerts)
+	ret := m.ctrl.Call(m, "EnsureAutomationWorkItemSession", ctx, itemId, sessionId)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// EnsureAutomationRunResultAudit indicates an expected call of EnsureAutomationRunResultAudit.
-func (mr *MockAutomationStoreMockRecorder) EnsureAutomationRunResultAudit(ctx, runId, alerts any) *gomock.Call {
+// EnsureAutomationWorkItemSession indicates an expected call of EnsureAutomationWorkItemSession.
+func (mr *MockAutomationStoreMockRecorder) EnsureAutomationWorkItemSession(ctx, itemId, sessionId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureAutomationRunResultAudit", reflect.TypeOf((*MockAutomationStore)(nil).EnsureAutomationRunResultAudit), ctx, runId, alerts)
-}
-
-// EnsureAutomationRunSession mocks base method.
-func (m *MockAutomationStore) EnsureAutomationRunSession(ctx context.Context, rs *model.AutomationRunSession) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureAutomationRunSession", ctx, rs)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// EnsureAutomationRunSession indicates an expected call of EnsureAutomationRunSession.
-func (mr *MockAutomationStoreMockRecorder) EnsureAutomationRunSession(ctx, rs any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureAutomationRunSession", reflect.TypeOf((*MockAutomationStore)(nil).EnsureAutomationRunSession), ctx, rs)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureAutomationWorkItemSession", reflect.TypeOf((*MockAutomationStore)(nil).EnsureAutomationWorkItemSession), ctx, itemId, sessionId)
 }
 
 // EnsureAutomationWorkItems mocks base method.
@@ -169,18 +155,4 @@ func (m *MockAutomationStore) RequeueAutomationWorkItem(ctx context.Context, ite
 func (mr *MockAutomationStoreMockRecorder) RequeueAutomationWorkItem(ctx, itemId, cause any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequeueAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).RequeueAutomationWorkItem), ctx, itemId, cause)
-}
-
-// SetAutomationWorkItemSession mocks base method.
-func (m *MockAutomationStore) SetAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetAutomationWorkItemSession", ctx, itemId, sessionId)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetAutomationWorkItemSession indicates an expected call of SetAutomationWorkItemSession.
-func (mr *MockAutomationStoreMockRecorder) SetAutomationWorkItemSession(ctx, itemId, sessionId any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutomationWorkItemSession", reflect.TypeOf((*MockAutomationStore)(nil).SetAutomationWorkItemSession), ctx, itemId, sessionId)
 }

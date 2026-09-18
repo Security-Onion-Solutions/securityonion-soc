@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -75,10 +76,9 @@ func (s *Store) OpenAutomationRun(ctx context.Context, automationId string) (*mo
 	return run, nil
 }
 
-// CloseAutomationRun moves a run to a terminal state and stamps its automation's
-// last_run_time from the same statement, so the two can never disagree. Closing an
-// already-closed run returns ErrAutomationRunNotOpen rather than succeeding quietly,
-// because a double close means something miscounted and that should be visible.
+// CloseAutomationRun moves a run to a terminal state. Closing an already-closed run returns
+// ErrAutomationRunNotOpen rather than succeeding quietly, because a double close means
+// something miscounted and that should be visible.
 func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state model.AutomationRunState, cause string) error {
 	if runId == "" {
 		return fmt.Errorf("cannot close a run without an id")
@@ -89,17 +89,10 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 	}
 
 	rows, err := s.db.Query(ctx, `
-		WITH closed AS (
-			UPDATE automation_runs
-			SET state = $2, ended_at = now(), error = NULLIF($3, '')
-			WHERE id = $1 AND ended_at IS NULL
-			RETURNING automation_id, ended_at
-		)
-		UPDATE automations a
-		SET last_run_time = closed.ended_at, updated_at = now()
-		FROM closed
-		WHERE a.id = closed.automation_id
-		RETURNING a.last_run_time`,
+		UPDATE automation_runs
+		SET state = $2, ended_at = now(), error = NULLIF($3, '')
+		WHERE id = $1 AND ended_at IS NULL
+		RETURNING id`,
 		runId, string(state), cause)
 	if err != nil {
 		return err
@@ -185,4 +178,16 @@ func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery
 	}
 
 	return runs, rows.Err()
+}
+
+// LatestAutomationRunTime reports when an automation last finished, derived from its run
+// history rather than stored, so config carries only what a human set.
+func (s *Store) LatestAutomationRunTime(ctx context.Context, automationId string) (*time.Time, error) {
+	var endedAt *time.Time
+
+	err := s.db.QueryRow(ctx,
+		`SELECT MAX(ended_at) FROM automation_runs WHERE automation_id = $1`, automationId).
+		Scan(&endedAt)
+
+	return endedAt, err
 }

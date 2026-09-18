@@ -45,8 +45,6 @@ type Automation struct {
 	// The settings for this automation, matching its kind's paramSchema. Opaque to
 	// everything but that kind.
 	Params json.RawMessage `json:"params" swaggertype:"object"`
-	// The time this automation last finished a run; absent until the first run ends.
-	LastRunTime *time.Time `json:"lastRunTime,omitempty" example:"2026-09-15T16:03:02Z"`
 }
 
 // AutomationRunState is the lifecycle of one run.
@@ -119,8 +117,9 @@ type AutomationWorkItem struct {
 	// How many times this item has been claimed, including attempts that died with the
 	// process. Bounds retries so a payload that cannot succeed stops being retried.
 	Attempts int `json:"attempts" example:"1"`
-	// The session that produced Result; absent until one runs.
-	SessionId string `json:"sessionId,omitempty"`
+	// One root session per attempt, in attempt order, so a failed try's transcript is not
+	// lost when the next one starts. Each root reaches its own delegated children.
+	SessionIds []string `json:"sessionIds,omitempty"`
 	// The kind's conclusion, stored in the same statement that moves the item to
 	// applying, so a process that dies after that point resumes at the apply step
 	// instead of paying for the session again.
@@ -131,37 +130,4 @@ type AutomationWorkItem struct {
 	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:00:05Z"`
 	// The time this item last changed state.
 	UpdateTime *time.Time `json:"updateTime,omitempty" example:"2026-09-15T16:02:41Z"`
-}
-
-// @Description One session an automation run created, linking the run to its transcript.
-type AutomationRunSession struct {
-	// The run that created this session.
-	RunId string `json:"runId"`
-	// The session's id, for drilling into the conversation.
-	SessionId string `json:"sessionId"`
-	// The work item this session was analyzing; absent if it served the run as a whole.
-	WorkItemId string `json:"workItemId,omitempty"`
-	// The kind's name for this session's role in the run.
-	Purpose string `json:"purpose,omitempty" example:"triage"`
-	// The time this session was recorded.
-	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:00:07Z"`
-}
-
-// @Description One recorded outcome from an automation run: what it concluded about one alert, and whether it analyzed that alert directly.
-type AutomationRunResultAudit struct {
-	// The run that reached this conclusion.
-	RunId string `json:"runId"`
-	// The alert this conclusion is about.
-	AlertId string `json:"alertId"`
-	// The work item that produced this conclusion.
-	WorkItemId string `json:"workItemId,omitempty"`
-	// What the automation decided to do with this alert.
-	Recommendation string `json:"recommendation" example:"acknowledge"`
-	// The agent's justification, shown alongside the recommendation.
-	Reason string `json:"reason,omitempty"`
-	// True when this alert was not analyzed itself: the conclusion came from the sampled
-	// alert that stood in for its group.
-	Inherited bool `json:"inherited" example:"true"`
-	// The time this conclusion was recorded.
-	CreateTime *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:02:44Z"`
 }

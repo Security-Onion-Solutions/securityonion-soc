@@ -88,18 +88,20 @@ func TestMigrationDoesNotCascadeWorkItemsFromRuns(t *testing.T) {
 	assert.Contains(t, sql, "REFERENCES automation_runs (id) ON DELETE SET NULL")
 }
 
-// The id is the only identity an automation has. A name column reappearing, or the id
-// losing its default, would mean something durable could key on a mutable value again.
-func TestMigrationAutomationsAreIdentifiedOnlyById(t *testing.T) {
+// Postgres holds runtime state only. An automations table reappearing would mean config
+// drifted back out of Salt, and the folded tables reappearing would put alert-shaped
+// columns back into a schema meant to serve kinds nobody has written yet.
+func TestMigrationHoldsOnlyRuntimeState(t *testing.T) {
 	sql := automationMigration(t)
 
-	assert.Contains(t, sql, "id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid()")
-	assert.Contains(t, sql, "user_id            text        NOT NULL")
+	// Automations live in Salt pillar now, so this migration must not recreate them.
+	assert.NotContains(t, sql, "CREATE TABLE IF NOT EXISTS automations")
+	assert.NotContains(t, sql, "automation_run_sessions")
+	assert.NotContains(t, sql, "automation_run_result_audit")
+	assert.NotContains(t, sql, "inherited")
 
-	// display_name is cosmetic; a bare `name` column would mean identity crept back onto
-	// something renameable.
-	assert.Contains(t, sql, "display_name       text        NOT NULL DEFAULT ''")
-	assert.NotRegexp(t, `(?m)^\s+name\s+text`, sql)
+	// One root session per attempt, so a retry cannot orphan the previous transcript.
+	assert.Contains(t, sql, "session_ids        text[]      NOT NULL DEFAULT '{}'")
 }
 
 // Runs and work items must key on the immutable id, never on anything renameable.

@@ -18,17 +18,17 @@ import (
 // unique index only from an identical one, and a mismatch is a runtime 42P10.
 const openWorkItemStates = `('pending', 'running', 'applying')`
 
-const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_id, result, error, created_at, updated_at`
+const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, result, error, created_at, updated_at`
 
 func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) {
 	item := &model.AutomationWorkItem{}
 
 	var state string
-	var runId, sessionId, failure *string
+	var runId, failure *string
 	var payload, result []byte
 
 	err := rows.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
-		&item.Attempts, &sessionId, &result, &failure, &item.CreateTime, &item.UpdateTime)
+		&item.Attempts, &item.SessionIds, &result, &failure, &item.CreateTime, &item.UpdateTime)
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +42,6 @@ func scanAutomationWorkItemRow(rows db.Rows) (*model.AutomationWorkItem, error) 
 
 	if runId != nil {
 		item.RunId = *runId
-	}
-
-	if sessionId != nil {
-		item.SessionId = *sessionId
 	}
 
 	if failure != nil {
@@ -110,7 +106,7 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId st
 	rows, err := s.db.Query(ctx, `
 		UPDATE automation_work_items
 		SET state = 'running', attempts = attempts + 1,
-		    session_id = NULL, result = NULL, error = NULL, updated_at = now()
+		    result = NULL, error = NULL, updated_at = now()
 		WHERE id = (
 			SELECT id FROM automation_work_items
 			WHERE automation_id = $1 AND state = 'pending'
@@ -133,12 +129,17 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId st
 	return scanAutomationWorkItemRow(rows)
 }
 
-// SetAutomationWorkItemSession records the session analyzing a claimed item, so work
-// interrupted mid-flight can still be traced to its transcript.
-func (s *Store) SetAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
+// EnsureAutomationWorkItemSession appends the session analyzing a claimed item, keeping
+// every attempt's root rather than overwriting. Idempotent, so a replayed write does not
+// double-add. The array is ordered by attempt, and each root reaches its own delegated
+// children through parentSessionId.
+func (s *Store) EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
-		SET session_id = $2, updated_at = now()
+		SET session_ids = CASE WHEN $2 = ANY(session_ids)
+		                       THEN session_ids
+		                       ELSE array_append(session_ids, $2) END,
+		    updated_at = now()
 		WHERE id = $1
 		RETURNING id`, itemId, sessionId)
 }
@@ -172,7 +173,7 @@ func (s *Store) CompleteAutomationWorkItem(ctx context.Context, itemId string) e
 func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
-		SET state = 'pending', session_id = NULL, result = NULL,
+		SET state = 'pending', result = NULL,
 		    error = NULLIF($2, ''), updated_at = now()
 		WHERE id = $1
 		RETURNING id`, itemId, cause)

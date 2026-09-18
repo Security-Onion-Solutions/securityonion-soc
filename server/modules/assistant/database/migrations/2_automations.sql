@@ -1,23 +1,5 @@
-CREATE TABLE IF NOT EXISTS automations (
-    -- The only identity an automation has. Runs, work items and the triage stamps on
-    -- alerts all reference it, so it must never change.
-    id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-    -- Cosmetic label for the UI. Deliberately not unique and referenced by nothing, so
-    -- editing it cannot orphan history or reset an alert's attempt counts.
-    display_name       text        NOT NULL DEFAULT '',
-    kind               text        NOT NULL,  -- AutomationKind.GetName(); fixed once created
-    params             jsonb       NOT NULL DEFAULT '{}'::jsonb,
-    enabled            boolean     NOT NULL DEFAULT FALSE,
-    interval_seconds   int         NOT NULL,
-    user_id            text        NOT NULL,  -- owner; each run's sessions execute as this user
-    created_at         timestamptz NOT NULL DEFAULT now(),
-    updated_at         timestamptz NOT NULL DEFAULT now(),
-    last_run_time      timestamptz            -- NULL until the first run ends
-);
-
--- Runs and work items reference automations by id but carry no foreign key: deleting an
--- automation with work in flight must be refused, and a cascade would silently do the
--- opposite. DeleteAutomation clears the history explicitly instead.
+-- automation_id names an automation defined in Salt pillar, not a row in this database, so
+-- there is nothing to reference.
 CREATE TABLE IF NOT EXISTS automation_runs (
     id                 uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     automation_id      uuid        NOT NULL,
@@ -59,7 +41,10 @@ CREATE TABLE IF NOT EXISTS automation_work_items (
     state              text        NOT NULL DEFAULT 'pending'
                                    CHECK (state IN ('pending', 'running', 'applying', 'done', 'failed')),
     attempts           int         NOT NULL DEFAULT 0,
-    session_id         text,                  -- lives in Elasticsearch, so no foreign key
+    -- One root session per attempt, in attempt order. Sessions live in Elasticsearch, so
+    -- there is nothing to reference; a root's delegated children are reachable from it by
+    -- walking parentSessionId.
+    session_ids        text[]      NOT NULL DEFAULT '{}',
     result             jsonb,                 -- the kind's conclusion, opaque outside the kind
     error              text,
     created_at         timestamptz NOT NULL DEFAULT now(),
@@ -80,25 +65,3 @@ CREATE INDEX IF NOT EXISTS idx_automation_work_items_open
 CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_work_items_one_open_per_group
     ON automation_work_items (automation_id, group_key)
     WHERE state IN ('pending', 'running', 'applying');
-
-CREATE TABLE IF NOT EXISTS automation_run_sessions (
-    run_id             uuid        NOT NULL REFERENCES automation_runs (id) ON DELETE CASCADE,
-    session_id         text        NOT NULL,  -- Elasticsearch document id; no foreign key
-    work_item_id       uuid        REFERENCES automation_work_items (id) ON DELETE SET NULL,
-    purpose            text        NOT NULL DEFAULT '',  -- the kind's name for this session's role
-    created_at         timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (run_id, session_id)
-);
-
-CREATE TABLE IF NOT EXISTS automation_run_result_audit (
-    run_id             uuid        NOT NULL REFERENCES automation_runs (id) ON DELETE CASCADE,
-    alert_id           text        NOT NULL,  -- Elasticsearch document id; no foreign key
-    work_item_id       uuid        REFERENCES automation_work_items (id) ON DELETE SET NULL,
-    recommendation     text        NOT NULL,
-    reason             text        NOT NULL DEFAULT '',
-    -- True when this alert was never analyzed on its own: the conclusion came from the
-    -- sampled alert that stood in for its group.
-    inherited          boolean     NOT NULL DEFAULT FALSE,
-    created_at         timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (run_id, alert_id)
-);

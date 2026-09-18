@@ -93,29 +93,6 @@ func TestOpenAutomationRunRequiresAName(t *testing.T) {
 	assert.Error(t, err)
 	mDB.AssertNotCalled(t, "QueryRow")
 }
-
-// last_run_time is stamped from the same statement that closes the run, so the task and
-// its history cannot disagree.
-func TestCloseAutomationRunStampsTheTask(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	bothTables := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "automation_runs") && strings.Contains(sql, "automations")
-	})
-
-	mRows := &mockdb.MockRows{}
-	mRows.On("Next").Return(true).Once()
-	mRows.On("Close").Return()
-
-	mDB.On("Query", mock.Anything, bothTables, "run-1", "succeeded", "").Return(mRows, nil)
-
-	require.NoError(t, s.CloseAutomationRun(context.Background(), "run-1", model.AutomationRunSucceeded, ""))
-	mDB.AssertExpectations(t)
-}
-
-// Closing an already-closed run must be visible: a double close means something
-// miscounted, and swallowing it hides reconciliation bugs.
 func TestCloseAutomationRunTwiceReports(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -184,7 +161,6 @@ func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 
 	requeue := mock.MatchedBy(func(sql string) bool {
 		return strings.Contains(sql, "state = 'pending'") &&
-			strings.Contains(sql, "session_id = NULL") &&
 			strings.Contains(sql, "result = NULL")
 	})
 
@@ -196,10 +172,12 @@ func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 
 	require.NoError(t, s.RequeueAutomationWorkItem(context.Background(), "item-1", "truncated"))
 
-	touchesAttempts := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "attempts")
+	// Neither attempts nor the session history may be reset: attempts is what reaches the
+	// cap, and session_ids is what keeps a failed try's transcript reachable.
+	resets := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "attempts") || strings.Contains(sql, "session_ids")
 	})
-	mDB.AssertNotCalled(t, "Query", mock.Anything, touchesAttempts, mock.Anything, mock.Anything)
+	mDB.AssertNotCalled(t, "Query", mock.Anything, resets, mock.Anything, mock.Anything)
 }
 
 func TestRequeueAutomationWorkItemOnVanishedItem(t *testing.T) {
@@ -313,160 +291,6 @@ func TestWorkItemTransitionRequiresAnId(t *testing.T) {
 	mDB.AssertNotCalled(t, "Query")
 }
 
-func TestListOpenAutomationWorkItemsReturnsEmptySlice(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mDB.On("Query", mock.Anything, sqlContains("state IN "+openWorkItemStates), "nightly").
-		Return(emptyRows(), nil)
-
-	items, err := s.ListOpenAutomationWorkItems(context.Background(), "nightly")
-
-	require.NoError(t, err)
-	assert.NotNil(t, items, "an empty list must marshal as [] rather than null")
-	assert.Empty(t, items)
-}
-
-func TestEnsureAutomationRunResultAuditRejectsDuplicatesInOneBatch(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	// ON CONFLICT DO UPDATE cannot affect a row twice; Postgres raises rather than
-	// picking a winner, so the batch is checked before it is sent.
-	err := s.EnsureAutomationRunResultAudit(context.Background(), "run-1", []*model.AutomationRunResultAudit{
-		{AlertId: "alert-1", Recommendation: "acknowledge"},
-		{AlertId: "alert-1", Recommendation: "escalate"},
-	})
-
-	assert.Error(t, err)
-	mDB.AssertNotCalled(t, "Exec")
-}
-
-func TestEnsureAutomationRunResultAuditEmptyBatchTouchesNothing(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	require.NoError(t, s.EnsureAutomationRunResultAudit(context.Background(), "run-1", nil))
-	mDB.AssertNotCalled(t, "Exec")
-}
-
-func TestEnsureAutomationRunResultAuditUpsertsSoAResumedApplyConverges(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	upsert := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "ON CONFLICT (run_id, alert_id) DO UPDATE")
-	})
-
-	mDB.On("Exec", mock.Anything, upsert, "run-1",
-		[]string{"alert-1"}, []string{"item-1"}, []string{"acknowledge"}, []string{"benign"}, []bool{true}).
-		Return(nil)
-
-	err := s.EnsureAutomationRunResultAudit(context.Background(), "run-1", []*model.AutomationRunResultAudit{
-		{AlertId: "alert-1", WorkItemId: "item-1", Recommendation: "acknowledge", Reason: "benign", Inherited: true},
-	})
-
-	require.NoError(t, err)
-	mDB.AssertExpectations(t)
-}
-
-func TestDeleteAutomationRefusesWhileARunIsInFlight(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	mTx := &mockdb.MockTx{}
-	s := &Store{db: mDB}
-
-	mDB.On("Begin", mock.Anything).Return(mTx, nil)
-	mTx.On("Rollback", mock.Anything).Return(nil)
-	mTx.On("Query", mock.Anything, sqlContains("DELETE FROM automations"), "nightly").
-		Return(emptyRows(), nil)
-
-	// The task still exists, so the delete was refused rather than missing.
-	stillThere := &mockdb.MockRows{}
-	stillThere.On("Next").Return(true).Once()
-	stillThere.On("Close").Return()
-	mTx.On("Query", mock.Anything, sqlContains("SELECT 1 FROM automations"), "nightly").
-		Return(stillThere, nil)
-
-	err := s.DeleteAutomation(context.Background(), "nightly")
-
-	assert.ErrorIs(t, err, ErrAutomationRunInFlight)
-	mTx.AssertNotCalled(t, "Commit")
-}
-
-func TestDeleteAutomationNotFound(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	mTx := &mockdb.MockTx{}
-	s := &Store{db: mDB}
-
-	mDB.On("Begin", mock.Anything).Return(mTx, nil)
-	mTx.On("Rollback", mock.Anything).Return(nil)
-	mTx.On("Query", mock.Anything, mock.Anything, "gone").Return(emptyRows(), nil)
-	mTx.On("Query", mock.Anything, sqlContains("SELECT 1 FROM automations"), "gone").
-		Return(emptyRows(), nil)
-
-	err := s.DeleteAutomation(context.Background(), "gone")
-
-	assert.ErrorIs(t, err, ErrAutomationNotFound)
-}
-
-func TestUpdateAutomationNotFound(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mDB.On("Query", mock.Anything, sqlContains("UPDATE automations"),
-		"gone-id", "Renamed", "{}", false, 300, "user-1").Return(emptyRows(), nil)
-
-	err := s.UpdateAutomation(context.Background(), &model.Automation{
-		Auditable:       model.Auditable{Id: "gone-id", UserId: "user-1"},
-		DisplayName:     "Renamed",
-		IntervalSeconds: 300,
-	})
-
-	assert.ErrorIs(t, err, ErrAutomationNotFound)
-}
-
-// The id is the server's to assign: a caller-supplied one is ignored and the generated
-// one is scanned back, because runs, work items and alert stamps all key on it.
-func TestAddAutomationReturnsGeneratedId(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything).
-		Run(func(args mock.Arguments) {
-			*(args.Get(0).(*string)) = "generated-id"
-		}).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automations"),
-		"Nightly Alert Triage", "alert_triage", "{}", true, 300, "user-1").Return(mRow)
-
-	automation := &model.Automation{
-		Auditable:       model.Auditable{Id: "ignored", UserId: "user-1"},
-		DisplayName:     "Nightly Alert Triage",
-		AutomationKind:  "alert_triage",
-		Enabled:         true,
-		IntervalSeconds: 300,
-	}
-
-	require.NoError(t, s.AddAutomation(context.Background(), automation))
-	assert.Equal(t, "generated-id", automation.Id)
-	mDB.AssertExpectations(t)
-}
-
-func TestAddAutomationRequiresAUser(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	err := s.AddAutomation(context.Background(), &model.Automation{AutomationKind: "alert_triage"})
-
-	assert.Error(t, err)
-	mDB.AssertNotCalled(t, "QueryRow")
-}
-
-// The sweep matches on ended_at rather than a list of states, which is what makes it
-// cover 'queued' -- and anything added later -- without someone remembering to extend an
-// enumeration. Narrowing it to state = 'running' would strand a queued run inside the
-// in-flight index and block its automation forever.
 func TestReconcileAutomationRunsSweepsEveryOpenRun(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	mTx := &mockdb.MockTx{}
@@ -587,4 +411,43 @@ func rowsYielding(n int) *mockdb.MockRows {
 	mRows.On("Close").Return()
 
 	return mRows
+}
+
+// Appending rather than overwriting is what keeps a failed attempt's transcript reachable:
+// each claim starts a fresh root session, and the previous one is only findable from here.
+func TestEnsureAutomationWorkItemSessionAppends(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	appendOnly := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "array_append(session_ids, $2)") &&
+			strings.Contains(sql, "$2 = ANY(session_ids)")
+	})
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(true).Once()
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, appendOnly, "item-1", "session-9").Return(mRows, nil)
+
+	require.NoError(t, s.EnsureAutomationWorkItemSession(context.Background(), "item-1", "session-9"))
+	mDB.AssertExpectations(t)
+}
+
+// The claim starts a new attempt, so it clears the previous conclusion -- but not the
+// session history, which is the record of what earlier attempts did.
+func TestClaimNextAutomationWorkItemKeepsSessionHistory(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "nightly").Return(emptyRows(), nil)
+
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), "nightly")
+	require.NoError(t, err)
+
+	clearsSessions := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "session_ids = NULL") ||
+			strings.Contains(sql, "session_ids = '{}'")
+	})
+	mDB.AssertNotCalled(t, "Query", mock.Anything, clearsSessions, mock.Anything)
 }

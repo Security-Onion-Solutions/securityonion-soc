@@ -153,6 +153,11 @@ type AssistantCoordinator struct {
 	adapters              map[string]server.AssistantAdapter
 	isAgentic             bool
 
+	// watchedAutomations records which automation settings already have a callback
+	// registered, because registering one twice delivers every update twice and there is
+	// no way to unregister. Guarded by agentMu.
+	watchedAutomations map[string]bool
+
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
 	// (request handlers) take RLock; a reload rebuilds the whole set under Lock.
@@ -712,6 +717,11 @@ func (ac *AssistantCoordinator) Start() error {
 	}
 
 	ac.registerConfigCallbacks()
+
+	// Automation settings carry a generated id apiece, so they cannot be subscribed from a
+	// fixed list the way every other setting is; each one has to be picked up as it is
+	// found.
+	ac.watchStoredAutomations(ac.srv.Context)
 
 	if ac.isAgentic {
 		ac.reloadAgentConfiguration(ac.srv.Context)
