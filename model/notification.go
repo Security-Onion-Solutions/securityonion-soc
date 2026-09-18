@@ -43,6 +43,7 @@ const (
 	SourceMetric    = "metric"
 	SourceAgentAI   = "agent_ai"
 	SourceReport    = "report"
+	SourcePcap      = "pcap"
 
 	AttachmentModeLink   = "link"
 	AttachmentModeAttach = "attach"
@@ -87,7 +88,7 @@ type NotificationPayload struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
@@ -151,7 +152,7 @@ type NotificationRecord struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
