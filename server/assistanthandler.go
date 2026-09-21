@@ -639,7 +639,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, root)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history for session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -667,7 +667,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	for _, sub := range subSessions {
-		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub.SessionId)
+		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub)
 		if err != nil {
 			logger.WithError(err).WithField("subSessionId", sub.SessionId).Error("unable to get chat history for sub-session")
 			continue
@@ -1069,7 +1069,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessions[0])
 	if err != nil {
 		logger.WithError(err).Error("unable to manage session history")
 		web.Respond(w, r, http.StatusInternalServerError, err)

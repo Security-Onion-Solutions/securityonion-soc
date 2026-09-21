@@ -760,7 +760,7 @@ func TestManageSessionHistory(t *testing.T) {
 		return mockSessions, nil
 	})
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), mockSessions[0]).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.ManageSessionHistory(w, req)
@@ -1110,7 +1110,7 @@ func TestGetSessionDetails(t *testing.T) {
 		return mockSessions, nil
 	})
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), mockSessions[0]).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.GetSessionDetails(w, req)
@@ -1153,8 +1153,8 @@ func TestGetSessionDetails_WithSubSessions(t *testing.T) {
 
 	rootHistory := []*model.StoredMessage{{SessionId: sessionId, Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "delegating"}}}}}
 	childHistory := []*model.StoredMessage{{SessionId: "child-1", Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "found 3 domains"}}}}}
-	mockStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(rootHistory, nil)
-	mockStore.EXPECT().GetChatHistory(gomock.Any(), "child-1").Return(childHistory, nil)
+	mockStore.EXPECT().GetChatHistory(gomock.Any(), root).Return(rootHistory, nil)
+	mockStore.EXPECT().GetChatHistory(gomock.Any(), child).Return(childHistory, nil)
 
 	handler.GetSessionDetails(w, req)
 

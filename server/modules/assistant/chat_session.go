@@ -9,7 +9,6 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -136,13 +135,27 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 func (ac *AssistantCoordinator) loadHistory(ctx context.Context, sessionId string) ([]*model.Message, bool, error) {
 	logger := log.FromContext(ctx)
 
-	history, err := ac.srv.Assistantstore.GetChatHistory(ctx, sessionId)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		logger.WithError(err).Error("unable to get chat history")
+	sessions, err := ac.srv.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionId(sessionId),
+		model.GetSessionsWithIncludeDeleted(true),
+		model.GetSessionsWithMemorySessions(true),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
 		return nil, false, err
 	}
 
-	return HistoryToContext(history), len(history) == 0, nil
+	if len(sessions) == 0 {
+		return nil, true, nil
+	}
+
+	messages, err := ac.loadSessionHistory(ctx, sessions[0])
+	if err != nil {
+		return nil, false, err
+	}
+
+	return messages, len(messages) == 0, nil
 }
 
 func newUserMessage(text string) *model.Message {

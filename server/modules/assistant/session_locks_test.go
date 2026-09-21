@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -178,11 +179,37 @@ func (f *fakeAssistantstore) seed(sessionId string, msg *model.Message) {
 func (f *fakeAssistantstore) SaveChat(_ context.Context, m *model.StoredMessage) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.msgs[m.SessionId] = append(f.msgs[m.SessionId], m)
+	f.upsert(m)
 	return nil
 }
 
-func (f *fakeAssistantstore) GetChatMessages(_ context.Context, s *model.AssistantSession) ([]*model.StoredMessage, error) {
+func (f *fakeAssistantstore) SavePartialChat(_ context.Context, m *model.StoredMessage) error {
+	if m.Id == "" {
+		return errors.New("a partial chat message requires an Id")
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.upsert(m)
+	return nil
+}
+
+// upsert mirrors the elastic store: a message carrying an Id replaces the one
+// already at that Id instead of appending a second copy of the same turn.
+func (f *fakeAssistantstore) upsert(m *model.StoredMessage) {
+	if m.Id != "" {
+		for i, existing := range f.msgs[m.SessionId] {
+			if existing.Id == m.Id {
+				f.msgs[m.SessionId][i] = m
+				return
+			}
+		}
+	}
+
+	f.msgs[m.SessionId] = append(f.msgs[m.SessionId], m)
+}
+
+func (f *fakeAssistantstore) GetChatHistory(_ context.Context, s *model.AssistantSession) ([]*model.StoredMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	src := f.msgs[s.SessionId]
@@ -208,9 +235,6 @@ func (f *fakeAssistantstore) countToolResults(sessionId, toolUseId string) int {
 	return n
 }
 
-func (f *fakeAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	return f.GetChatMessages(ctx, &model.AssistantSession{SessionId: sessionId})
-}
 func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
 	o := &model.GetSessionsOpts{}
 	for _, opt := range opts {

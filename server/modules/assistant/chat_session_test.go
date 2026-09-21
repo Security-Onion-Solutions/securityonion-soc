@@ -26,8 +26,12 @@ import (
 func TestLoadHistory(t *testing.T) {
 	const sessionId = "session-load-1"
 
+	session := &model.AssistantSession{SessionId: sessionId}
+
 	testCases := []struct {
 		name          string
+		sessionReturn []*model.AssistantSession
+		sessionErr    error
 		historyReturn []*model.StoredMessage
 		historyErr    error
 		wantIsNew     bool
@@ -35,7 +39,8 @@ func TestLoadHistory(t *testing.T) {
 		wantErr       bool
 	}{
 		{
-			name: "existing history returns messages and isNew=false",
+			name:          "existing history returns messages and isNew=false",
+			sessionReturn: []*model.AssistantSession{session},
 			historyReturn: []*model.StoredMessage{
 				{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "hi"}}}},
 			},
@@ -44,19 +49,25 @@ func TestLoadHistory(t *testing.T) {
 		},
 		{
 			name:          "empty history reports isNew=true",
+			sessionReturn: []*model.AssistantSession{session},
 			historyReturn: []*model.StoredMessage{},
 			wantIsNew:     true,
 			wantLen:       0,
 		},
 		{
-			name:       "not-found error is tolerated as a new session",
-			historyErr: errors.New("session not found"),
-			wantIsNew:  true,
-			wantLen:    0,
+			name:      "missing session reports isNew=true without reading messages",
+			wantIsNew: true,
+			wantLen:   0,
 		},
 		{
-			name:       "non-not-found error propagates",
-			historyErr: errors.New("network error"),
+			name:          "history error propagates",
+			sessionReturn: []*model.AssistantSession{session},
+			historyErr:    errors.New("network error"),
+			wantErr:       true,
+		},
+		{
+			name:       "session lookup error propagates",
+			sessionErr: errors.New("network error"),
 			wantErr:    true,
 		},
 	}
@@ -68,7 +79,27 @@ func TestLoadHistory(t *testing.T) {
 
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(tc.historyReturn, tc.historyErr)
+
+			// The chat lookup must not filter out deleted, memory, or automation
+			// sessions, and nothing on this path reads message metadata.
+			mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+					applied := &model.GetSessionsOpts{}
+					for _, opt := range opts {
+						opt(applied)
+					}
+					assert.Equal(t, sessionId, applied.SessionId())
+					assert.True(t, applied.IncludeDeleted())
+					assert.True(t, applied.IncludeMemorySessions())
+					assert.True(t, applied.IncludeAutomationSessions())
+					assert.False(t, applied.MessageMeta())
+
+					return tc.sessionReturn, tc.sessionErr
+				})
+
+			if tc.sessionErr == nil && len(tc.sessionReturn) > 0 {
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), session).Return(tc.historyReturn, tc.historyErr)
+			}
 
 			ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
 
@@ -174,7 +205,7 @@ func TestChatInSession_SurvivesRequestCancellation(t *testing.T) {
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	store := servermock.NewMockAssistantstore(ctrl)
 
-	store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
 		Body: io.NopCloser(strings.NewReader(
@@ -223,7 +254,7 @@ func TestCreateSessionIfNeeded_IncognitoTag(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			store := servermock.NewMockAssistantstore(ctrl)
 
-			store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+			store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 			store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, s *model.AssistantSession) error {
 					assert.Equal(t, tc.wantTags, s.Tags)
@@ -284,7 +315,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 			// saved and returned.
 			name: "create session failure does not discard the billed response",
 			setup: func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
 				// A new session records the model it runs on, so it can later be resumed
 				// server-side without trusting the client-supplied model.
@@ -302,7 +333,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 			name: "save user message failure does not discard the billed response",
 			setup: func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				// Non-empty history keeps isNew=false so CreateSession is skipped.
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 					{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 				}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
@@ -316,7 +347,7 @@ func TestAssistantCoordinator_ChatInSession_ErrorPaths(t *testing.T) {
 		{
 			name: "save response message error propagates",
 			setup: func(t *testing.T, store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 					{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 				}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(okResponse())
@@ -372,7 +403,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		{
 			name: "history load error propagates",
 			setup: func(store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(nil, errors.New("network error"))
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
 			wantNilReturns: true,
 			wantErr:        true,
@@ -380,7 +411,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 		{
 			name: "upstream stream error propagates",
 			setup: func(store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
@@ -391,7 +422,7 @@ func TestAssistantCoordinator_ChatStreamInSession_ErrorPaths(t *testing.T) {
 			name: "save user message failure does not abandon the billed stream",
 			setup: func(store *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
 				// Non-empty history keeps isNew=false so CreateSession is skipped.
-				store.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
+				store.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 					{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 				}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
@@ -441,7 +472,7 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeToleratesTerminalOnlyS
 
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 	}, nil)
 	mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{

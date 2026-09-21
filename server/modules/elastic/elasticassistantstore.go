@@ -48,16 +48,19 @@ func (store *ElasticAssistantstore) Init(chatIndex string, sessionIndex string, 
 	return nil
 }
 
-func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string, id string, created time.Time) (*model.EventIndexResults, error) {
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
+	// GetChatHistory sorts on @timestamp, so re-upserting a partial must not
+	// advance its sort key past the messages that followed it.
+	document["@timestamp"] = created
 
-	results, err := store.indexDoc(ctx, index, document)
+	results, err := store.indexDoc(ctx, index, document, id)
 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any, id string) (*model.EventIndexResults, error) {
 	logger := log.FromContext(ctx)
 
 	results := model.NewEventIndexResults()
@@ -67,7 +70,7 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 		var response string
 
 		logger.Debug("Sending index request to primary Elasticsearch client")
-		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request)
+		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
@@ -81,17 +84,20 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string) (string, error) {
+func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"documentIndex": index,
+		"documentId":    id,
 		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
+	// An empty id leaves the write a POST, letting Elasticsearch mint the id.
 	res, err := store.esClient.Index(index,
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
+		store.esClient.Index.WithDocumentID(id),
 		store.esClient.Index.WithContext(ctx),
 	)
 
@@ -205,21 +211,10 @@ func (store *ElasticAssistantstore) validateSession(session *model.AssistantSess
 	return nil
 }
 
+// SaveChat stores a finished message, overwriting the partial at chat.Id when
+// SavePartialChat wrote one, and counts it.
 func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
-	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
-		return err
-	}
-
-	err := store.validateChat(chat)
-	if err != nil {
-		return err
-	}
-
-	chat.CreateTime = util.Ptr(time.Now())
-	store.prepareForSave(ctx, &chat.Auditable)
-
-	_, err = store.save(ctx, chat, store.chatIndex, "chat")
-	if err != nil {
+	if err := store.saveChat(ctx, chat, false); err != nil {
 		return err
 	}
 
@@ -231,6 +226,57 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	}
 
 	return nil
+}
+
+// SavePartialChat upserts a still-generating message at chat.Id so a streaming
+// turn can persist text before it finishes. The message is not counted; the
+// final SaveChat at the same id counts it once. The caller must reuse the same
+// chat across flushes: Id identifies the document and CreateTime is its sort
+// key, so a fresh value for either forks the turn into a second message.
+func (store *ElasticAssistantstore) SavePartialChat(ctx context.Context, chat *model.StoredMessage) error {
+	if chat.Id == "" {
+		return fmt.Errorf("a partial chat message requires an Id")
+	}
+
+	return store.saveChat(ctx, chat, true)
+}
+
+func (store *ElasticAssistantstore) saveChat(ctx context.Context, chat *model.StoredMessage, partial bool) error {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
+	if err := store.validateChat(chat); err != nil {
+		return err
+	}
+
+	if chat.Id != "" {
+		if err := store.validateId(chat.Id, "Id"); err != nil {
+			return err
+		}
+	}
+
+	if partial {
+		chat.Tags = append(chat.Tags, model.MessageTagPartial)
+	} else {
+		chat.Tags = slices.DeleteFunc(chat.Tags, func(tag string) bool {
+			return tag == model.MessageTagPartial
+		})
+	}
+
+	if chat.CreateTime == nil {
+		chat.CreateTime = util.Ptr(time.Now())
+	}
+
+	// prepareForSave clears Id, and a streaming turn re-saves the same message.
+	id := chat.Id
+	defer func() { chat.Id = id }()
+
+	store.prepareForSave(ctx, &chat.Auditable)
+
+	_, err := store.save(ctx, chat, store.chatIndex, "chat", id, *chat.CreateTime)
+
+	return err
 }
 
 // incrementSessionMessageCount bumps the denormalized messageCount on the
@@ -301,24 +347,12 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 	return nil
 }
 
-func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, sessionId string) ([]*model.StoredMessage, error) {
-	existing, err := store.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true), model.GetSessionsWithAutomationSessions(true))
-	if err != nil {
-		return nil, err
+// Use only with sessions pulled from ES.
+func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, session *model.AssistantSession) ([]*model.StoredMessage, error) {
+	if session == nil {
+		return nil, fmt.Errorf("session is required")
 	}
 
-	if len(existing) == 0 {
-		return nil, fmt.Errorf("Object not found")
-	}
-
-	return store.GetChatMessages(ctx, existing[0])
-}
-
-// GetChatMessages returns the messages for an already-loaded session, applying
-// the same read authorization as GetChatHistory but without re-fetching the
-// session record. Callers that already hold the session (e.g. the per-turn
-// continuation path) use this to avoid a redundant session lookup.
-func (store *ElasticAssistantstore) GetChatMessages(ctx context.Context, session *model.AssistantSession) ([]*model.StoredMessage, error) {
 	logger := log.FromContext(ctx)
 	sessionId := session.SessionId
 
@@ -1245,10 +1279,16 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 		return err
 	}
 
-	session.CreateTime = util.Ptr(time.Now())
-	store.prepareForSave(ctx, &session.Auditable)
+	if session.Id != "" {
+		if err := store.validateId(session.Id, "Id"); err != nil {
+			return err
+		}
+	}
 
-	_, err = store.save(ctx, session, store.sessionIndex, "session")
+	session.CreateTime = util.Ptr(time.Now())
+	id := store.prepareForSave(ctx, &session.Auditable)
+
+	_, err = store.save(ctx, session, store.sessionIndex, "session", id, *session.CreateTime)
 
 	return err
 }
@@ -1528,7 +1568,7 @@ func (store *ElasticAssistantstore) FindSessionsPendingMemoryScan(ctx context.Co
 
 	details := []*model.AssistantSessionDetails{}
 	for _, session := range sessions {
-		history, err := store.GetChatMessages(ctx, session)
+		history, err := store.GetChatHistory(ctx, session)
 		if err != nil {
 			// One bad session shouldn't starve the scan; it is retried next tick.
 			logger.WithError(err).WithField("sessionId", session.SessionId).Error("failed to fetch history for session pending memory scan")

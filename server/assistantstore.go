@@ -15,11 +15,8 @@ import (
 
 type Assistantstore interface {
 	SaveChat(context.Context, *model.StoredMessage) error
-	GetChatHistory(context.Context, string) ([]*model.StoredMessage, error)
-	// GetChatMessages returns the messages for an already-loaded session,
-	// applying the same read authorization as GetChatHistory without
-	// re-fetching the session record.
-	GetChatMessages(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
+	SavePartialChat(context.Context, *model.StoredMessage) error
+	GetChatHistory(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
 	GetSessions(context.Context, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
 	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, err error)
 	CreateSession(context.Context, *model.AssistantSession) error

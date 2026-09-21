@@ -2219,14 +2219,13 @@ func modelForSession(sess *model.AssistantSession, fallback string) string {
 }
 
 // loadSessionHistory returns the conversation context for an already-loaded
-// session. A nil session yields empty history, matching loadHistory's tolerance
-// of brand-new sessions.
+// session.
 func (ac *AssistantCoordinator) loadSessionHistory(ctx context.Context, sess *model.AssistantSession) ([]*model.Message, error) {
 	if sess == nil {
 		return nil, nil
 	}
 
-	history, err := ac.srv.Assistantstore.GetChatMessages(ctx, sess)
+	history, err := ac.srv.Assistantstore.GetChatHistory(ctx, sess)
 	if err != nil {
 		log.FromContext(ctx).WithError(err).Error("unable to get chat history")
 		return nil, err
@@ -2837,6 +2836,12 @@ func (ac *AssistantCoordinator) setupAgent(ctx context.Context, req *model.ChatR
 func HistoryToContext(history []*model.StoredMessage) []*model.Message {
 	messages := make([]*model.Message, 0, len(history))
 	for _, msg := range history {
+		// An abandoned partial turn can carry tool_use blocks that never got a result.
+		// drop partial messages
+		if slices.Contains(msg.Tags, model.MessageTagPartial) {
+			continue
+		}
+
 		if slices.Contains(msg.Tags, model.MessageTagContextCompression) {
 			messages = messages[:0]
 		}

@@ -17,6 +17,9 @@ import (
 
 const (
 	MessageTagContextCompression = "context_compression"
+	// MessageTagPartial marks a message still being streamed. A stored message
+	// that kept the tag is one whose turn never finished.
+	MessageTagPartial = "partial"
 
 	SessionTagMemory     = "memory"
 	SessionTagEmbed      = "embed"
