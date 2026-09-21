@@ -16,6 +16,7 @@ import (
 
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
@@ -72,6 +73,8 @@ type automationConfigstore struct {
 	removals   []string
 	updateErr  error
 	registered []string
+	// Lets an ordering test see where the write falls among the steps around it.
+	onUpdate func()
 }
 
 func (f *automationConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
@@ -85,6 +88,10 @@ func (f *automationConfigstore) UpdateSetting(ctx context.Context, setting *mode
 		f.updates = append(f.updates, setting)
 	}
 
+	if f.onUpdate != nil {
+		f.onUpdate()
+	}
+
 	return nil
 }
 
@@ -95,8 +102,16 @@ func (f *automationConfigstore) RegisterConfigSettingCallback(settingID string, 
 var _ server.ConfigSettingCallbackRegistrar = (*automationConfigstore)(nil)
 
 func automationCoordinator(cfg *automationConfigstore) *AssistantCoordinator {
+	return automationCoordinatorAs(cfg, true)
+}
+
+func automationCoordinatorAs(cfg *automationConfigstore, authorized bool) *AssistantCoordinator {
 	return &AssistantCoordinator{
-		srv: &server.Server{Context: context.Background(), Configstore: cfg},
+		srv: &server.Server{
+			Context:     context.Background(),
+			Configstore: cfg,
+			Authorizer:  rbac.FakeAuthorizer{Authorized: authorized},
+		},
 		AutomationKindLibrary: map[string]AutomationKind{
 			"alert_triage": &fakeAutomationKind{name: "alert_triage"},
 		},
@@ -397,6 +412,11 @@ func TestSaveAutomationAssignsIdAndDuplicatesTemplate(t *testing.T) {
 	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
 
 	assert.NotEmpty(t, automation.Id, "the server assigns identity")
+
+	// A read stamps this from the setting id, so a save has to agree or the two paths
+	// hand the UI different shapes.
+	assert.Equal(t, "automation", automation.Kind)
+
 	require.Len(t, cfg.updates, 1)
 	assert.Equal(t, automationSettingId(automation.Id), cfg.updates[0].Id)
 
@@ -408,6 +428,8 @@ func TestSaveAutomationAssignsIdAndDuplicatesTemplate(t *testing.T) {
 // The metadata is resolved on every write, not remembered from the first one.
 func TestSaveAutomationKeepsDuplicatedFromIdOnUpdate(t *testing.T) {
 	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
 	ac := automationCoordinator(cfg)
 
 	automation := validAutomation()
@@ -418,6 +440,21 @@ func TestSaveAutomationKeepsDuplicatedFromIdOnUpdate(t *testing.T) {
 	require.Len(t, cfg.updates, 1)
 	assert.Equal(t, automationTestId, automation.Id, "an existing id is not reassigned")
 	assert.Equal(t, ConfigSettingAutomationTemplate, cfg.updates[0].DuplicatedFromID)
+}
+
+// The handler puts the path id here, so a body carrying an unknown id is a PUT to something
+// that does not exist, not a create at an id of the client's choosing.
+func TestSaveAutomationRejectsAnUnknownId(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+
+	automation := validAutomation()
+	automation.Id = automationTestId
+
+	err := ac.SaveAutomation(automationSaveCtx(), automation)
+
+	assert.ErrorIs(t, err, ErrAutomationNotFound)
+	assert.Empty(t, cfg.updates)
 }
 
 func TestSaveAutomationRejectsANonUuidId(t *testing.T) {
@@ -566,6 +603,8 @@ func TestSaveAutomationRejectsUnknownKind(t *testing.T) {
 
 func TestSaveAutomationRegistersEachSettingOnce(t *testing.T) {
 	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
 	ac := automationCoordinator(cfg)
 
 	automation := validAutomation()
@@ -577,27 +616,100 @@ func TestSaveAutomationRegistersEachSettingOnce(t *testing.T) {
 	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
 }
 
-// Delete must not be blocked by the run
+// Delete must not be blocked by the run, and must leave it whatever it has already claimed.
 func TestDeleteAutomationProceedsWhileARunIsInFlight(t *testing.T) {
 	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
 	ac := automationCoordinator(cfg)
 
 	mDB := &mockdb.MockDB{}
 	ac.store = automationTestStore(mDB)
 
+	expectSweep(mDB, ErrAutomationDeleted, 1)
+
+	cancelled := false
+	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+	defer release()
+
 	require.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
 
 	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.removals)
+	assert.False(t, cancelled, "an in-flight run is often the reason for the delete")
+	mDB.AssertExpectations(t)
+}
 
-	// AssertNotCalled with no argument matchers never matches a recorded call, so the
-	// methods are checked directly. Migrate is the store's own construction.
+// Work nothing will ever claim, because the automation that would have claimed it is gone.
+func TestDeleteAutomationDropsPendingWork(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	expectSweep(mDB, ErrAutomationDeleted, 2)
+
+	require.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
+
+	mDB.AssertExpectations(t)
+}
+
+// The removal lands first, so work the failed sweep left behind is orphaned rather than
+// stranded: the next Start reaches it, because the automation is gone.
+func TestDeleteAutomationReportsASweepFailureAfterRemoving(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return((*mockdb.MockRows)(nil), errors.New("postgres is down"))
+
+	assert.Error(t, ac.DeleteAutomation(context.Background(), automationTestId))
+	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.removals)
+}
+
+// The permission check comes before the existence probe, so an unauthorized requestor cannot
+// tell a stored id from one that was never there.
+func TestDeleteAutomationRefusesAnUnknownIdWithoutRevealingIt(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinatorAs(cfg, false)
+
+	var unauthorized *model.Unauthorized
+	assert.ErrorAs(t, ac.DeleteAutomation(context.Background(), otherAutomationTestId), &unauthorized)
+}
+
+// Neither the removal nor the sweep can be undone, so a requestor the removal would reject
+// must not reach either.
+func TestDeleteAutomationRefusesBeforeSweepingWhenConfigWriteIsDenied(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinatorAs(cfg, false)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	var unauthorized *model.Unauthorized
+	assert.ErrorAs(t, ac.DeleteAutomation(context.Background(), automationTestId), &unauthorized)
+	assert.Empty(t, cfg.removals)
+
 	for _, call := range mDB.Calls {
-		assert.Equal(t, "Migrate", call.Method, "delete must not touch run state")
+		assert.Equal(t, "Migrate", call.Method, "a denied delete must not touch work items")
 	}
 }
 
 func TestDeleteAutomationTreatsMissingPillarAsAlreadyGone(t *testing.T) {
 	cfg := &automationConfigstore{updateErr: os.ErrNotExist}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
 	ac := automationCoordinator(cfg)
 
 	assert.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
@@ -665,3 +777,297 @@ func TestReconcileAutomationRunsLogsRatherThanFailing(t *testing.T) {
 // The concrete store must satisfy the interface kinds are handed. Asserted here so the
 // production build of this package never imports the database package just to prove it.
 var _ AutomationStore = (*database.Store)(nil)
+
+// storedAutomationWithParams seeds an automation whose params a save can then change.
+func storedAutomationWithParams(t *testing.T, id, params string) *model.Setting {
+	t.Helper()
+
+	raw, err := json.Marshal(&model.Automation{
+		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
+		DisplayName:     "Nightly",
+		AutomationKind:  "alert_triage",
+		IntervalSeconds: 300,
+		Params:          json.RawMessage(params),
+	})
+	require.NoError(t, err)
+
+	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
+}
+
+// rowsYielding returns a Rows that reports n changed rows, which is how the sweeps count
+// what they failed.
+func rowsYielding(n int) *mockdb.MockRows {
+	mRows := &mockdb.MockRows{}
+
+	for i := 0; i < n; i++ {
+		mRows.On("Next").Return(true).Once()
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	return mRows
+}
+
+// expectSweep scripts a work item sweep carrying cause and reports how many rows it claims
+// to have failed.
+func expectSweep(mDB *mockdb.MockDB, cause error, failed int) *mock.Call {
+	mRows := rowsYielding(failed)
+
+	return mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_work_items") &&
+			strings.Contains(sql, "state = 'failed'")
+	}), automationTestId, cause.Error()).Return(mRows, nil)
+}
+
+// paramsChangeCoordinator seeds one stored automation and a store whose sweep is scripted.
+func paramsChangeCoordinator(t *testing.T, storedParams string) (*AssistantCoordinator, *automationConfigstore, *mockdb.MockDB) {
+	t.Helper()
+
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, storedParams)}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	return ac, cfg, mDB
+}
+
+func automationWithParams(params string) *model.Automation {
+	automation := validAutomation()
+	automation.Id = automationTestId
+	automation.Params = json.RawMessage(params)
+
+	return automation
+}
+
+// Nothing is discarded until the new definition is durable, and the run has to stop before
+// the sweep, or it claims an item the sweep is about to fail.
+func TestSaveAutomationWritesBeforeInterruptingAndSweeping(t *testing.T) {
+	ac, cfg, mDB := paramsChangeCoordinator(t, `{"limit":10}`)
+
+	var order []string
+
+	cfg.onUpdate = func() { order = append(order, "write") }
+	expectSweep(mDB, ErrAutomationParamsChanged, 2).Run(func(mock.Arguments) { order = append(order, "sweep") })
+
+	release := ac.registerAutomationRun(automationTestId, func(cause error) {
+		order = append(order, "cancel")
+		assert.ErrorIs(t, cause, ErrAutomationParamsChanged)
+	})
+	defer release()
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automationWithParams(`{"limit":25}`)))
+
+	assert.Equal(t, []string{"write", "cancel", "sweep"}, order)
+}
+
+func TestSaveAutomationSweepsWithNoRunRegistered(t *testing.T) {
+	ac, cfg, mDB := paramsChangeCoordinator(t, `{"limit":10}`)
+
+	expectSweep(mDB, ErrAutomationParamsChanged, 1)
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automationWithParams(`{"limit":25}`)))
+
+	assert.Len(t, cfg.updates, 1)
+	mDB.AssertExpectations(t)
+}
+
+// The params are raw JSON, so a byte comparison would drop the queue on a reformat.
+func TestSaveAutomationKeepsWorkWhenParamsAreOnlyReformatted(t *testing.T) {
+	ac, cfg, mDB := paramsChangeCoordinator(t, `{"a":1,"b":[1,2]}`)
+
+	cancelled := false
+	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+	defer release()
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(),
+		automationWithParams(` { "b": [1, 2], "a": 1 } `)))
+
+	assert.False(t, cancelled)
+	assert.Len(t, cfg.updates, 1)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "unchanged params must not touch work items")
+	}
+}
+
+func TestSaveAutomationSweepsNothingOnCreate(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	automation := validAutomation()
+	automation.Params = json.RawMessage(`{"limit":10}`)
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "a create has no earlier work to drop")
+	}
+}
+
+// Postgres is optional, and an automation must still be editable without it.
+func TestSaveAutomationSurvivesWithoutAStore(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, `{"limit":10}`)}
+
+	ac := automationCoordinator(cfg)
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automationWithParams(`{"limit":25}`)))
+	assert.Len(t, cfg.updates, 1)
+}
+
+// The write lands first, so the save stands and the caller is told only that the cleanup
+// behind it did not finish.
+func TestSaveAutomationReportsASweepFailureAfterWriting(t *testing.T) {
+	ac, cfg, mDB := paramsChangeCoordinator(t, `{"limit":10}`)
+
+	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return((*mockdb.MockRows)(nil), errors.New("postgres is down"))
+
+	err := ac.SaveAutomation(automationSaveCtx(), automationWithParams(`{"limit":25}`))
+
+	assert.Error(t, err)
+	assert.Len(t, cfg.updates, 1, "the new definition is durable even when its sweep fails")
+}
+
+func TestSaveAutomationRefusesBeforeSweepingWhenConfigWriteIsDenied(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, `{"limit":10}`)}
+
+	ac := automationCoordinatorAs(cfg, false)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	err := ac.SaveAutomation(automationSaveCtx(), automationWithParams(`{"limit":25}`))
+
+	var unauthorized *model.Unauthorized
+	assert.ErrorAs(t, err, &unauthorized)
+	assert.Empty(t, cfg.updates)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "a denied save must not touch work items")
+	}
+}
+
+func TestReleasingAnAutomationRunStopsItBeingInterrupted(t *testing.T) {
+	ac := &AssistantCoordinator{}
+
+	cancelled := false
+	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+	release()
+
+	ac.interruptAutomationRun(automationTestId)
+	ac.interruptAutomationRun(otherAutomationTestId)
+
+	assert.False(t, cancelled)
+}
+
+func TestDeleteAutomationRejectsAnUnknownId(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	assert.ErrorIs(t, ac.DeleteAutomation(context.Background(), automationTestId), ErrAutomationNotFound)
+	assert.Empty(t, cfg.removals)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "an id that was never stored must not touch work items")
+	}
+}
+
+// expectOrphanSweep scripts the startup sweep and reports the live ids it was given.
+func expectOrphanSweep(mDB *mockdb.MockDB, failed int) *[]string {
+	live := &[]string{}
+
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "NOT (automation_id = ANY($1::uuid[]))")
+	}), mock.Anything, ErrAutomationDeleted.Error()).
+		Run(func(args mock.Arguments) {
+			ids, _ := args.Get(2).([]string)
+			*live = ids
+		}).
+		Return(rowsYielding(failed), nil)
+
+	return live
+}
+
+func TestWatchStoredAutomationsDropsOrphanedWork(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	live := expectOrphanSweep(mDB, 3)
+
+	ac.watchStoredAutomations(context.Background())
+
+	assert.Equal(t, []string{automationTestId}, *live, "a stored automation's work is not orphaned")
+	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
+	mDB.AssertExpectations(t)
+}
+
+// Deleting the last automation is the likeliest way to strand work, so an empty grid still
+// sweeps rather than treating "nothing live" as "nothing to do".
+func TestWatchStoredAutomationsSweepsWhenNoAutomationIsDefined(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	live := expectOrphanSweep(mDB, 1)
+
+	ac.watchStoredAutomations(context.Background())
+
+	assert.Empty(t, *live)
+	mDB.AssertExpectations(t)
+}
+
+// An unreadable automation is indistinguishable from a deleted one, so the sweep would drop
+// a live automation's queue.
+func TestWatchStoredAutomationsSkipsTheSweepWhenAnAutomationIsUnreadable(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{
+		storedAutomation(t, automationTestId, "Nightly"),
+		{Id: automationSettingId(otherAutomationTestId), Value: "{not json"},
+	}
+
+	ac := automationCoordinator(cfg)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	ac.watchStoredAutomations(context.Background())
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "partial knowledge must not drop work")
+	}
+}
+
+// Without Postgres there are no work items, and without a readable Configstore there is no
+// list to judge them against.
+func TestWatchStoredAutomationsSurvivesWithoutAStore(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(cfg)
+
+	ac.watchStoredAutomations(context.Background())
+
+	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
+}

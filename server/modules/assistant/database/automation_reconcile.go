@@ -8,8 +8,6 @@ package database
 import (
 	"context"
 	"fmt"
-
-	"github.com/security-onion-solutions/securityonion-soc/db"
 )
 
 // AutomationRunReconcileResult counts what a reconcile pass recovered, so the caller can
@@ -67,23 +65,4 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 	}
 
 	return &AutomationRunReconcileResult{FailedRuns: failedRuns, ResetItems: resetItems}, nil
-}
-
-// countAffected runs a statement that returns one row per row it changed, because
-// db.Tx.Exec discards the rows-affected count.
-func countAffected(ctx context.Context, tx db.Tx, stmt string) (int, error) {
-	rows, err := tx.Query(ctx, stmt)
-	if err != nil {
-		return 0, err
-	}
-
-	defer rows.Close()
-
-	count := 0
-
-	for rows.Next() {
-		count++
-	}
-
-	return count, rows.Err()
 }

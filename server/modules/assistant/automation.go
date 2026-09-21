@@ -43,6 +43,13 @@ var (
 	ErrAutomationKindNotFound  = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
 	ErrInvalidAutomationParams = errors.New("ERROR_AUTOMATION_PARAMS_INVALID")
 	ErrConfigstoreUnavailable  = errors.New("ERROR_CONFIGSTORE_UNAVAILABLE")
+
+	// The cancel cause a redefined automation gives its run, so a run that unwinds can tell
+	// this from a shutdown, and the reason recorded on the work it was holding.
+	ErrAutomationParamsChanged = errors.New("ERROR_AUTOMATION_PARAMS_CHANGED")
+
+	// The reason recorded on work that outlived the automation it was queued for.
+	ErrAutomationDeleted = errors.New("ERROR_AUTOMATION_DELETED")
 )
 
 type AutomationKind interface {
@@ -141,16 +148,25 @@ func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
 }
 
 func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
+	automations, _, err := ac.scanAutomations(ctx)
+
+	return automations, err
+}
+
+// scanAutomations returns every readable automation and how many settings could not be read,
+// so a caller that acts on an automation's absence can refuse to act on partial knowledge.
+func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.Automation, int, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
-		return nil, ErrConfigstoreUnavailable
+		return nil, 0, ErrConfigstoreUnavailable
 	}
 
 	settings, err := ac.srv.Configstore.GetSettings(ctx, true)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	automations := []*model.Automation{}
+	unreadable := 0
 
 	for _, setting := range settings {
 		if automationIdFromSetting(setting.Id) == "" {
@@ -163,13 +179,15 @@ func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.A
 			log.FromContext(ctx).WithError(err).WithField("settingId", setting.Id).
 				Warn("skipping unreadable automation")
 
+			unreadable++
+
 			continue
 		}
 
 		automations = append(automations, automation)
 	}
 
-	return automations, nil
+	return automations, unreadable, nil
 }
 
 func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
@@ -202,6 +220,14 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return ErrInvalidAutomationParams
 	}
 
+	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return err
+	}
+
+	if err := validateAutomation(automation); err != nil {
+		return err
+	}
+
 	kind, err := ac.lookupAutomationKind(automation.AutomationKind)
 	if err != nil {
 		return err
@@ -211,14 +237,11 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
-	if err := validateAutomation(automation); err != nil {
-		return err
-	}
-
 	ac.configWriteMu.Lock()
 	defer ac.configWriteMu.Unlock()
 
-	if err := ac.stampAutomation(ctx, automation); err != nil {
+	existing, err := ac.stampAutomation(ctx, automation)
+	if err != nil {
 		return err
 	}
 
@@ -239,6 +262,21 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	}
 
 	ac.watchAutomationSetting(automation.Id)
+
+	// The new definition is stored, so the work the old params derived is now stale. Cancel
+	// first so the run stops claiming, then finalize what it was holding. A failed sweep
+	// leaves that stale work in place.
+	if existing != nil && !jsonEqual(existing.Params, automation.Params) {
+		ac.interruptAutomationRun(automation.Id)
+
+		if ac.store != nil {
+			if err := ac.sweepAutomationWork(ctx, ac.store.FailStaleAutomationWorkItems, automation.Id,
+				ErrAutomationParamsChanged,
+				"assistant: dropped automation work derived from superseded params"); err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -266,38 +304,45 @@ func validateAutomation(automation *model.Automation) error {
 }
 
 // stampAutomation settles the fields an automation does not set for itself: identity, owner
-// and timestamps. Caller holds configWriteMu, which is what makes the read of the stored copy
-// and the write that follows it one edit rather than two. Nothing is written back to
-// automation until every check has passed, so a rejected save leaves it as it arrived.
-func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation *model.Automation) error {
+// and timestamps, returning the stored copy it read so the caller can see what changed.
+// Caller holds configWriteMu, which is what makes that read and the write that follows it one
+// edit rather than two. Nothing is written back to automation until every check has passed,
+// so a rejected save leaves it as it arrived.
+func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation *model.Automation) (*model.Automation, error) {
 	id := automation.Id
+	// The handler puts the path id here, so an absent id is the only thing that means create.
+	create := id == ""
 
-	if id == "" {
+	if create {
 		id = uuid.NewString()
 	} else if !isAutomationId(id) {
-		return fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
+		return nil, fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
 	}
 
 	existing, err := ac.GetAutomation(ctx, id)
 	if err != nil && !errors.Is(err, ErrAutomationNotFound) {
-		return err
+		return nil, err
+	}
+
+	if !create && existing == nil {
+		return nil, ErrAutomationNotFound
 	}
 
 	now := time.Now()
 	createTime := &now
 	userId := ""
 
-	if existing == nil {
+	if create {
 		requestor, ok := ctx.Value(web.ContextKeyRequestorId).(string)
 		if !ok {
-			return errors.New("context is missing RequestorId")
+			return nil, errors.New("context is missing RequestorId")
 		}
 
 		userId = requestor
 	} else {
 		// Existing runs and work items hold payloads only the original kind can read.
 		if existing.AutomationKind != automation.AutomationKind {
-			return fmt.Errorf("%w: automationKind cannot be changed", ErrInvalidAutomationParams)
+			return nil, fmt.Errorf("%w: automationKind cannot be changed", ErrInvalidAutomationParams)
 		}
 
 		// The owner is the identity unattended sessions execute as, so an edit by a second
@@ -307,9 +352,62 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 	}
 
 	automation.Id = id
+	automation.Kind = "automation"
 	automation.CreateTime = createTime
 	automation.UpdateTime = &now
 	automation.UserId = userId
+
+	return existing, nil
+}
+
+// registerAutomationRun records a run's cancel so a params change can reach it, returning the
+// release the engine defers.
+func (ac *AssistantCoordinator) registerAutomationRun(id string, cancel context.CancelCauseFunc) func() {
+	ac.automationRunMu.Lock()
+	defer ac.automationRunMu.Unlock()
+
+	if ac.automationRuns == nil {
+		ac.automationRuns = map[string]context.CancelCauseFunc{}
+	}
+
+	ac.automationRuns[id] = cancel
+
+	return func() {
+		ac.automationRunMu.Lock()
+		defer ac.automationRunMu.Unlock()
+
+		delete(ac.automationRuns, id)
+	}
+}
+
+// interruptAutomationRun signals the run executing this automation to stop. It does not wait:
+// a config write must not block on an LLM turn. The stale work is finalized immediately after,
+// so a run still unwinding finds nothing left to claim.
+func (ac *AssistantCoordinator) interruptAutomationRun(id string) {
+	ac.automationRunMu.Lock()
+	defer ac.automationRunMu.Unlock()
+
+	if cancel := ac.automationRuns[id]; cancel != nil {
+		cancel(ErrAutomationParamsChanged)
+	}
+}
+
+type workItemSweep func(ctx context.Context, automationId, cause string) (int, error)
+
+// sweepAutomationWork runs one of the store's sweeps and reports what it dropped.
+func (ac *AssistantCoordinator) sweepAutomationWork(ctx context.Context, sweep workItemSweep,
+	id string, cause error, message string) error {
+	failed, err := sweep(ctx, id, cause.Error())
+	if err != nil {
+		return err
+	}
+
+	if failed > 0 {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"automationId": id,
+			"failedItems":  failed,
+		}).Info(message)
+	}
 
 	return nil
 }
@@ -320,20 +418,34 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 		return ErrConfigstoreUnavailable
 	}
 
-	// Without this, DeleteAutomation("template") removes the annotation anchor every
-	// automation inherits its forced type from.
 	if !isAutomationId(id) {
 		return ErrAutomationNotFound
 	}
 
+	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return err
+	}
+
 	ac.configWriteMu.Lock()
 	defer ac.configWriteMu.Unlock()
+
+	if _, err := ac.GetAutomation(ctx, id); err != nil {
+		return err
+	}
 
 	setting := model.NewSetting(automationSettingId(id))
 
 	if err := ac.srv.Configstore.UpdateSetting(ctx, setting, true); err != nil {
 		// Removing from a pillar file that was never created reports the missing file.
 		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+
+	if ac.store != nil {
+		if err := ac.sweepAutomationWork(ctx, ac.store.FailPendingAutomationWorkItems, id,
+			ErrAutomationDeleted,
+			"assistant: dropped automation work queued for a deleted automation"); err != nil {
 			return err
 		}
 	}
@@ -366,8 +478,10 @@ func (ac *AssistantCoordinator) watchAutomationSetting(id string) {
 	registrar.RegisterConfigSettingCallback(automationSettingId(id), ac)
 }
 
+// watchStoredAutomations subscribes to every stored automation and drops the work items left
+// behind by automations that no longer exist.
 func (ac *AssistantCoordinator) watchStoredAutomations(ctx context.Context) {
-	automations, err := ac.ListAutomations(ctx)
+	automations, unreadable, err := ac.scanAutomations(ctx)
 	if err != nil {
 		log.FromContext(ctx).WithError(err).Warn("unable to list automations; config changes will not hot-reload")
 
@@ -376,6 +490,45 @@ func (ac *AssistantCoordinator) watchStoredAutomations(ctx context.Context) {
 
 	for _, automation := range automations {
 		ac.watchAutomationSetting(automation.Id)
+	}
+
+	ac.failOrphanedWorkItems(ctx, automations, unreadable)
+}
+
+// failOrphanedWorkItems drops open work whose automation is no longer defined: a delete
+// leaves an in-flight run's items behind, and a restart would otherwise return them to a
+// queue nothing claims. Called once from Start, after reconcileAutomationRuns -- reconcile
+// resets running items to pending, so sweeping first would let it resurrect them.
+func (ac *AssistantCoordinator) failOrphanedWorkItems(ctx context.Context, live []*model.Automation, unreadable int) {
+	if ac.store == nil {
+		return
+	}
+
+	logger := log.FromContext(ctx)
+
+	// An unreadable automation is indistinguishable from a deleted one here.
+	if unreadable > 0 {
+		logger.WithField("unreadable", unreadable).
+			Warn("assistant: skipping orphaned automation work sweep; some automations are unreadable")
+
+		return
+	}
+
+	liveIds := make([]string, 0, len(live))
+	for _, automation := range live {
+		liveIds = append(liveIds, automation.Id)
+	}
+
+	failed, err := ac.store.FailOrphanedAutomationWorkItems(ctx, liveIds, ErrAutomationDeleted.Error())
+	if err != nil {
+		logger.WithError(err).Error("assistant: unable to drop orphaned automation work")
+
+		return
+	}
+
+	if failed > 0 {
+		logger.WithField("failedItems", failed).
+			Info("assistant: dropped automation work left by automations that no longer exist")
 	}
 }
 

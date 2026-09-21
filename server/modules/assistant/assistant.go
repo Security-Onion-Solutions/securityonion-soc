@@ -159,6 +159,10 @@ type AssistantCoordinator struct {
 	watchedAutomations map[string]bool
 	watchMu            sync.Mutex
 
+	// automationRunMu guards the AutomationRun cancels. An entry exists only while a run is executing.
+	automationRunMu sync.Mutex
+	automationRuns  map[string]context.CancelCauseFunc
+
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
 	// (request handlers) take RLock; a reload rebuilds the whole set under Lock.

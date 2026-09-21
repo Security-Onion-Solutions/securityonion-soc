@@ -18,6 +18,19 @@ import (
 // unique index only from an identical one, and a mismatch is a runtime 42P10.
 const openWorkItemStates = `('pending', 'running', 'applying')`
 
+// The states a claimed item can still be transitioned from; pulling one back out of a
+// terminal state is how a completed group gets worked a second time.
+const claimedWorkItemStates = `('running', 'applying')`
+
+// The states whose payload came from the automation's params, and which are therefore
+// stale when those params change. applying is excluded: its conclusion is already reached
+// and its alerts still need stamping.
+const staleWorkItemStates = `('pending', 'running')`
+
+// Work a deleted automation had queued but never started. running and applying are excluded:
+// a run already under way is allowed to finish.
+const pendingWorkItemStates = `('pending')`
+
 const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, result, error, created_at, updated_at`
 
 func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
@@ -133,10 +146,6 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, r
 	return scanAutomationWorkItemRow(rows)
 }
 
-// The states a claimed item can still be transitioned from; pulling one back out of a
-// terminal state is how a completed group gets worked a second time.
-const claimedWorkItemStates = `('running', 'applying')`
-
 // EnsureAutomationWorkItemSession appends the session analyzing a claimed item rather than
 // overwriting, so each attempt's root stays reachable. Idempotent, so a replayed write does
 // not double-add.
@@ -195,6 +204,48 @@ func (s *Store) FailAutomationWorkItem(ctx context.Context, itemId, cause string
 		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
 		WHERE id = $1 AND state IN `+openWorkItemStates+`
 		RETURNING id`, itemId, cause)
+}
+
+// failWorkItems terminalizes every item an automation holds in one of states, which is a
+// SQL literal list from this file rather than anything a caller composes.
+func (s *Store) failWorkItems(ctx context.Context, automationId, cause, states string) (int, error) {
+	if automationId == "" {
+		return 0, fmt.Errorf("cannot fail work items without an automation id")
+	}
+
+	return countAffected(ctx, s.db, `
+		UPDATE automation_work_items
+		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
+		WHERE automation_id = $1 AND state IN `+states+`
+		RETURNING id`, automationId, cause)
+}
+
+// FailStaleAutomationWorkItems terminalizes work whose payload was derived from params that
+// have since changed. Their alerts were never stamped, so the next scan re-derives them under
+// the new params with attempts back at zero -- the old budget belonged to a definition that
+// no longer exists.
+func (s *Store) FailStaleAutomationWorkItems(ctx context.Context, automationId, cause string) (int, error) {
+	return s.failWorkItems(ctx, automationId, cause, staleWorkItemStates)
+}
+
+// FailPendingAutomationWorkItems terminalizes work that will never be claimed, because the
+// automation that would have claimed it is gone.
+func (s *Store) FailPendingAutomationWorkItems(ctx context.Context, automationId, cause string) (int, error) {
+	return s.failWorkItems(ctx, automationId, cause, pendingWorkItemStates)
+}
+
+// FailOrphanedAutomationWorkItems terminalizes open work whose automation is no longer
+// defined. Unlike the per-automation sweeps this includes applying: an orphaned item has no
+// run left to resume its apply step. An empty liveIds means no automation is defined at all,
+// so everything open is orphaned.
+func (s *Store) FailOrphanedAutomationWorkItems(ctx context.Context, liveIds []string, cause string) (int, error) {
+	// pgx sends []string as text[]; automation_id is uuid.
+	return countAffected(ctx, s.db, `
+		UPDATE automation_work_items
+		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
+		WHERE state IN `+openWorkItemStates+`
+		  AND NOT (automation_id = ANY($1::uuid[]))
+		RETURNING id`, liveIds, cause)
 }
 
 // transitionWorkItem runs a statement that returns the id it changed, because db.DB.Exec

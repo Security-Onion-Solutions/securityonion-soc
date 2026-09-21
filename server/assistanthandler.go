@@ -55,6 +55,12 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/skills/{name}", h.SaveSkill)
 		r.Delete("/skills/{name}", h.DeleteSkill)
 
+		r.Get("/automations", h.GetAutomations)
+		r.Post("/automations", h.CreateAutomation)
+		r.Get("/automations/{id}", h.GetAutomation)
+		r.Put("/automations/{id}", h.UpdateAutomation)
+		r.Delete("/automations/{id}", h.DeleteAutomation)
+
 		r.Get("/memories", h.GetMemories)
 		r.Post("/memories", h.CreateMemory)
 		r.Put("/memories/{id}", h.UpdateMemory)
@@ -1671,6 +1677,17 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/agents/{name} [put]
 func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	agent := &model.StoredAgent{}
 	if !h.decodeConfigRequest(w, r, agent) {
 		return
@@ -1696,11 +1713,18 @@ func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/agents/{name} [delete]
 func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
-	if !h.checkConfigWriteAuthorized(w, r) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
 		return
 	}
 
-	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(r.Context(), urlParamName(r)))
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(ctx, urlParamName(r)))
 }
 
 // @Summary      Save an Assistant Skill
@@ -1717,6 +1741,17 @@ func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/skills/{name} [put]
 func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
 	skill := &model.StoredSkill{}
 	if !h.decodeConfigRequest(w, r, skill) {
 		return
@@ -1742,11 +1777,185 @@ func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/skills/{name} [delete]
 func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
-	if !h.checkConfigWriteAuthorized(w, r) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
 		return
 	}
 
-	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(r.Context(), urlParamName(r)))
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(ctx, urlParamName(r)))
+}
+
+// @Summary      List Automations
+// @Description  Retrieve every scheduled automation defined on the grid.
+// @Tags         Assistant
+// @Security     bearer[automation/read, config/read]
+// @Produce      json
+// @Success      200 {array} model.Automation "The list of automations"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations [get]
+func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automation"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	// An automation lives in a config setting, so reaching one needs the config permission too.
+	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	automations, err := h.server.AssistantManager.ListAutomations(ctx)
+	h.respondAutomation(w, r, automations, err)
+}
+
+// @Summary      Get an Automation
+// @Description  Retrieve a single automation by its immutable UUID.
+// @Tags         Assistant
+// @Security     bearer[automation/read, config/read]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200 {object} model.Automation "The automation"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [get]
+func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automation"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	automation, err := h.server.AssistantManager.GetAutomation(ctx, urlParamId(r))
+	h.respondAutomation(w, r, automation, err)
+}
+
+// @Summary      Create an Automation
+// @Description  Define a new scheduled automation. The server assigns its id and owner; changing an automation's params drops the work its previous definition had queued.
+// @Tags         Assistant
+// @Security     bearer[automation/write, config/write]
+// @Param        request  body  model.Automation  true  "Automation definition"
+// @Produce      json
+// @Success      200 {object} model.Automation "The created automation"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations [post]
+func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Request) {
+	h.saveAutomation(w, r, "")
+}
+
+// @Summary      Update an Automation
+// @Description  Replace an automation's definition. Changing its params drops the work its previous definition had queued.
+// @Tags         Assistant
+// @Security     bearer[automation/write, config/write]
+// @Param        id       path  string            true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        request  body  model.Automation  true  "Automation definition"
+// @Produce      json
+// @Success      200 {object} model.Automation "The updated automation"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [put]
+func (h *AssistantHandler) UpdateAutomation(w http.ResponseWriter, r *http.Request) {
+	h.saveAutomation(w, r, urlParamId(r))
+}
+
+func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request, id string) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "automation"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	automation := &model.Automation{}
+	if err := json.NewDecoder(r.Body).Decode(automation); err != nil {
+		log.FromContext(ctx).WithError(err).Error("unable to decode automation request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	// The path owns identity; a body id must not redirect the write.
+	automation.Id = id
+	automation.Kind = ""
+	automation.Operation = ""
+
+	err := h.server.AssistantManager.SaveAutomation(ctx, automation)
+	h.respondAutomation(w, r, automation, err)
+}
+
+// @Summary      Delete an Automation
+// @Description  Remove an automation. An in-flight run is allowed to finish, since that run is often the reason the automation is being removed.
+// @Tags         Assistant
+// @Security     bearer[automation/write, config/write]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200           "Automation deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [delete]
+func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "automation"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	err := h.server.AssistantManager.DeleteAutomation(ctx, urlParamId(r))
+
+	h.respondAutomation(w, r, nil, err)
 }
 
 // @Summary      List Assistant Memories
@@ -1826,7 +2035,7 @@ func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) 
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/memories/{id} [put]
 func (h *AssistantHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
-	h.saveMemory(w, r, decodePathValue(chi.URLParam(r, "id")))
+	h.saveMemory(w, r, urlParamId(r))
 }
 
 func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id string) {
@@ -1890,7 +2099,7 @@ func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.server.AssistantManager.RemoveMemory(ctx, decodePathValue(chi.URLParam(r, "id"))); err != nil {
+	if err := h.server.AssistantManager.RemoveMemory(ctx, urlParamId(r)); err != nil {
 		h.respondMemoryError(w, r, err, "unable to delete memory")
 		return
 	}
@@ -1928,22 +2137,32 @@ func urlParamName(r *http.Request) string {
 	return decodePathValue(chi.URLParam(r, "name"))
 }
 
-// checkConfigWriteAuthorized gates the agent/skill endpoints on the same
-// permission a direct config write needs.
-func (h *AssistantHandler) checkConfigWriteAuthorized(w http.ResponseWriter, r *http.Request) bool {
-	if err := h.server.CheckAuthorized(r.Context(), "write", "config"); err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
-		return false
+func urlParamId(r *http.Request) string {
+	return decodePathValue(chi.URLParam(r, "id"))
+}
+
+// respondAutomation maps the manager's errors onto status codes, or answers with payload.
+func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Request, payload any, err error) {
+	if err == nil {
+		web.Respond(w, r, http.StatusOK, payload)
+
+		return
 	}
 
-	return h.checkAssistantAvailable(r.Context(), w, r)
+	switch {
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_KIND_NOT_FOUND"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_PARAMS_INVALID"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	default:
+		log.FromContext(r.Context()).WithError(err).Error("unable to service automation request")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
 }
 
 func (h *AssistantHandler) decodeConfigRequest(w http.ResponseWriter, r *http.Request, out any) bool {
-	if !h.checkConfigWriteAuthorized(w, r) {
-		return false
-	}
-
 	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
 		log.FromContext(r.Context()).WithError(err).Error("unable to decode agent configuration request")
 		web.Respond(w, r, http.StatusBadRequest, err)

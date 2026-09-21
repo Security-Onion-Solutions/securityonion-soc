@@ -103,6 +103,20 @@ func (mr *MockAssistantManagerMockRecorder) DeleteAgent(ctx, name any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAgent", reflect.TypeOf((*MockAssistantManager)(nil).DeleteAgent), ctx, name)
 }
 
+// DeleteAutomation mocks base method.
+func (m *MockAssistantManager) DeleteAutomation(ctx context.Context, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAutomation", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAutomation indicates an expected call of DeleteAutomation.
+func (mr *MockAssistantManagerMockRecorder) DeleteAutomation(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAutomation", reflect.TypeOf((*MockAssistantManager)(nil).DeleteAutomation), ctx, id)
+}
+
 // DeleteSkill mocks base method.
 func (m *MockAssistantManager) DeleteSkill(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
@@ -166,6 +180,21 @@ func (mr *MockAssistantManagerMockRecorder) FilterEvents(events any, extraFields
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterEvents", reflect.TypeOf((*MockAssistantManager)(nil).FilterEvents), varargs...)
 }
 
+// GetAutomation mocks base method.
+func (m *MockAssistantManager) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomation", ctx, id)
+	ret0, _ := ret[0].(*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomation indicates an expected call of GetAutomation.
+func (mr *MockAssistantManagerMockRecorder) GetAutomation(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomation", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomation), ctx, id)
+}
+
 // Health mocks base method.
 func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()
@@ -179,6 +208,21 @@ func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*mod
 func (mr *MockAssistantManagerMockRecorder) Health(ctx, aiModel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx, aiModel)
+}
+
+// ListAutomations mocks base method.
+func (m *MockAssistantManager) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAutomations", ctx)
+	ret0, _ := ret[0].([]*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAutomations indicates an expected call of ListAutomations.
+func (mr *MockAssistantManagerMockRecorder) ListAutomations(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAutomations", reflect.TypeOf((*MockAssistantManager)(nil).ListAutomations), ctx)
 }
 
 // ListMemories mocks base method.
@@ -252,6 +296,20 @@ func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName strin
 func (mr *MockAssistantManagerMockRecorder) SaveAgent(ctx, originalName, agent any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveAgent", reflect.TypeOf((*MockAssistantManager)(nil).SaveAgent), ctx, originalName, agent)
+}
+
+// SaveAutomation mocks base method.
+func (m *MockAssistantManager) SaveAutomation(ctx context.Context, automation *model.Automation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveAutomation", ctx, automation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveAutomation indicates an expected call of SaveAutomation.
+func (mr *MockAssistantManagerMockRecorder) SaveAutomation(ctx, automation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveAutomation", reflect.TypeOf((*MockAssistantManager)(nil).SaveAutomation), ctx, automation)
 }
 
 // SaveMemory mocks base method.

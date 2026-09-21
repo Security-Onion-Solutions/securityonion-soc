@@ -4480,3 +4480,273 @@ func TestDeleteMemoryMapsErrors(t *testing.T) {
 		})
 	}
 }
+
+// The assistant module owns the real error values, which the server package cannot import.
+var (
+	errAutomationNotFoundStub     = errors.New("ERROR_AUTOMATION_NOT_FOUND")
+	errAutomationKindNotFoundStub = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
+	errAutomationParamsStub       = fmt.Errorf("%w: displayName is required", errors.New("ERROR_AUTOMATION_PARAMS_INVALID"))
+)
+
+// recordingAuthorizer answers every check the same way but records what was asked, which is
+// how the automation routes' permissions are pinned; FakeAuthorizer is all-or-nothing.
+type recordingAuthorizer struct {
+	authorized bool
+	// Refuses this one target, so a route's second permission can be denied on its own.
+	denyTarget string
+	asked      []string
+}
+
+func (a *recordingAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation, target string) error {
+	a.asked = append(a.asked, target+"/"+operation)
+
+	if a.authorized && target != a.denyTarget {
+		return nil
+	}
+
+	return model.NewUnauthorized("fake-subject", operation, target)
+}
+
+func (a *recordingAuthorizer) CheckUserOperationAuthorized(userId, operation, target string) error {
+	return a.CheckContextOperationAuthorized(context.Background(), operation, target)
+}
+
+func automationRouter(t *testing.T, authorized bool) (*chi.Mux, *mock.MockAssistantManager, *recordingAuthorizer) {
+	t.Helper()
+
+	auth := &recordingAuthorizer{authorized: authorized}
+	srv := &Server{Authorizer: auth}
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	manager := mock.NewMockAssistantManager(ctrl)
+	srv.AssistantManager = manager
+
+	r := chi.NewRouter()
+	RegisterAssistantRoutes(srv, r, "/assistant")
+
+	return r, manager, auth
+}
+
+const automationHandlerTestId = "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"
+
+func TestGetAutomationsListsAndRequiresRead(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().ListAutomations(gomock.Any()).
+		Return([]*model.Automation{{DisplayName: "Nightly"}}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"Nightly"`)
+	assert.Equal(t, []string{"automation/read", "config/read"}, auth.asked)
+}
+
+func TestGetAutomationMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "found", err: nil, wantStatus: http.StatusOK},
+		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "denied", err: model.NewUnauthorized("user-1", "read", "config"), wantStatus: http.StatusForbidden},
+		{name: "broken", err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager, _ := automationRouter(t, true)
+			manager.EXPECT().GetAutomation(gomock.Any(), automationHandlerTestId).
+				Return(&model.Automation{}, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId, nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+// The create branch is the only way to reach the server-side UUID mint.
+func TestCreateAutomationPassesNoId(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	var got model.Auditable
+	manager.EXPECT().SaveAutomation(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, automation *model.Automation) error {
+			got = automation.Auditable
+			automation.Id = automationHandlerTestId
+			automation.UserId = "user-1"
+			automation.Kind = "automation"
+
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations",
+		model.Automation{
+			Auditable:   model.Auditable{Id: "ignored", Kind: "forged", Operation: "forged"},
+			DisplayName: "Nightly",
+		}))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, got.Id)
+	assert.Equal(t, []string{"automation/write", "config/write"}, auth.asked)
+
+	// Read-only Auditable fields belong to the server, so a body cannot seed what is stored,
+	// and the kind the response carries is the one the manager stamped rather than the forgery.
+	assert.Empty(t, got.Kind)
+	assert.Empty(t, got.Operation)
+	assert.Contains(t, w.Body.String(), `"kind":"automation"`)
+
+	// The client cannot learn the generated id any other way.
+	assert.Contains(t, w.Body.String(), automationHandlerTestId)
+	assert.Contains(t, w.Body.String(), `"user-1"`)
+}
+
+// Identity comes from the path, or a body could redirect the write onto another automation.
+func TestUpdateAutomationPrefersThePathId(t *testing.T) {
+	r, manager, _ := automationRouter(t, true)
+
+	var got *model.Automation
+	manager.EXPECT().SaveAutomation(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, automation *model.Automation) error {
+			got = automation
+			return nil
+		})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/automations/"+automationHandlerTestId,
+		model.Automation{Auditable: model.Auditable{Id: "1d7e3a44-88b6-4c0f-9a21-70f5e9c3b812"}}))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, automationHandlerTestId, got.Id)
+}
+
+func TestSaveAutomationMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "saved", err: nil, wantStatus: http.StatusOK},
+		{name: "unknown kind", err: errAutomationKindNotFoundStub, wantStatus: http.StatusBadRequest},
+		{name: "bad params", err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
+		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "broken", err: errors.New("no requestor in context"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager, _ := automationRouter(t, true)
+			manager.EXPECT().SaveAutomation(gomock.Any(), gomock.Any()).Return(c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodPut, "/assistant/automations/"+automationHandlerTestId,
+				model.Automation{DisplayName: "Nightly"}))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestSaveAutomationRejectsAMalformedBody(t *testing.T) {
+	r, _, _ := automationRouter(t, true)
+
+	req := httptest.NewRequest(http.MethodPut, "/assistant/automations/"+automationHandlerTestId,
+		strings.NewReader("{not json"))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req.WithContext(agentConfigContext(req.Context())))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteAutomationRequiresWrite(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().DeleteAutomation(gomock.Any(), automationHandlerTestId).Return(nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/automations/"+automationHandlerTestId, nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, []string{"automation/write", "config/write"}, auth.asked)
+}
+
+func TestDeleteAutomationMapsMissingToNotFound(t *testing.T) {
+	r, manager, _ := automationRouter(t, true)
+
+	manager.EXPECT().DeleteAutomation(gomock.Any(), automationHandlerTestId).
+		Return(errAutomationNotFoundStub)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/automations/"+automationHandlerTestId, nil))
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// The manager is a strict mock, so an unauthorized request that still reached it would fail
+// the controller rather than pass quietly. web.Respond answers a model.Unauthorized with 403
+// whatever status the handler passed, matching the agent and skill routes.
+func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
+	cases := []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "/assistant/automations"},
+		{http.MethodPost, "/assistant/automations"},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId},
+		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId},
+		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId},
+	}
+
+	for _, c := range cases {
+		t.Run(c.method+" "+c.target, func(t *testing.T) {
+			r, _, _ := automationRouter(t, false)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, model.Automation{}))
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+		})
+	}
+}
+
+// An automation lives in a config setting, so its route needs the config permission as well.
+// It is checked on arrival, before the manager is consulted: the strict mock would fail the
+// controller if a refused request reached it.
+func TestAutomationRoutesRefuseARequestorWithoutTheConfigPermission(t *testing.T) {
+	read := []string{"automation/read", "config/read"}
+	write := []string{"automation/write", "config/write"}
+
+	cases := []struct {
+		method string
+		target string
+		asked  []string
+	}{
+		{http.MethodGet, "/assistant/automations", read},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId, read},
+		{http.MethodPost, "/assistant/automations", write},
+		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId, write},
+		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId, write},
+	}
+
+	for _, c := range cases {
+		t.Run(c.method+" "+c.target, func(t *testing.T) {
+			r, _, auth := automationRouter(t, true)
+			auth.denyTarget = "config"
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, model.Automation{}))
+
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Equal(t, c.asked, auth.asked)
+		})
+	}
+}
