@@ -4492,15 +4492,13 @@ var (
 // how the automation routes' permissions are pinned; FakeAuthorizer is all-or-nothing.
 type recordingAuthorizer struct {
 	authorized bool
-	// Refuses this one target, so a route's second permission can be denied on its own.
-	denyTarget string
 	asked      []string
 }
 
 func (a *recordingAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation, target string) error {
 	a.asked = append(a.asked, target+"/"+operation)
 
-	if a.authorized && target != a.denyTarget {
+	if a.authorized {
 		return nil
 	}
 
@@ -4542,7 +4540,7 @@ func TestGetAutomationsListsAndRequiresRead(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"Nightly"`)
-	assert.Equal(t, []string{"automation/read", "config/read"}, auth.asked)
+	assert.Equal(t, []string{"config/read"}, auth.asked)
 }
 
 func TestGetAutomationMapsErrors(t *testing.T) {
@@ -4595,7 +4593,7 @@ func TestCreateAutomationPassesNoId(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Empty(t, got.Id)
-	assert.Equal(t, []string{"automation/write", "config/write"}, auth.asked)
+	assert.Equal(t, []string{"config/write"}, auth.asked)
 
 	// Read-only Auditable fields belong to the server, so a body cannot seed what is stored,
 	// and the kind the response carries is the one the manager stamped rather than the forgery.
@@ -4676,7 +4674,7 @@ func TestDeleteAutomationRequiresWrite(t *testing.T) {
 	r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/automations/"+automationHandlerTestId, nil))
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, []string{"automation/write", "config/write"}, auth.asked)
+	assert.Equal(t, []string{"config/write"}, auth.asked)
 }
 
 func TestDeleteAutomationMapsMissingToNotFound(t *testing.T) {
@@ -4691,39 +4689,14 @@ func TestDeleteAutomationMapsMissingToNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// The manager is a strict mock, so an unauthorized request that still reached it would fail
-// the controller rather than pass quietly. web.Respond answers a model.Unauthorized with 403
+// An automation lives in a config setting, so config is the only permission its routes ask
+// for, and the verb has to match the route or a read would gate on write. Checked on arrival:
+// the manager is a strict mock, so a refused request that still reached it would fail the
+// controller rather than pass quietly. web.Respond answers a model.Unauthorized with 403
 // whatever status the handler passed, matching the agent and skill routes.
 func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
-	cases := []struct {
-		method string
-		target string
-	}{
-		{http.MethodGet, "/assistant/automations"},
-		{http.MethodPost, "/assistant/automations"},
-		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId},
-		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId},
-		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId},
-	}
-
-	for _, c := range cases {
-		t.Run(c.method+" "+c.target, func(t *testing.T) {
-			r, _, _ := automationRouter(t, false)
-
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, model.Automation{}))
-
-			assert.Equal(t, http.StatusForbidden, w.Code)
-		})
-	}
-}
-
-// An automation lives in a config setting, so its route needs the config permission as well.
-// It is checked on arrival, before the manager is consulted: the strict mock would fail the
-// controller if a refused request reached it.
-func TestAutomationRoutesRefuseARequestorWithoutTheConfigPermission(t *testing.T) {
-	read := []string{"automation/read", "config/read"}
-	write := []string{"automation/write", "config/write"}
+	read := []string{"config/read"}
+	write := []string{"config/write"}
 
 	cases := []struct {
 		method string
@@ -4739,8 +4712,7 @@ func TestAutomationRoutesRefuseARequestorWithoutTheConfigPermission(t *testing.T
 
 	for _, c := range cases {
 		t.Run(c.method+" "+c.target, func(t *testing.T) {
-			r, _, auth := automationRouter(t, true)
-			auth.denyTarget = "config"
+			r, _, auth := automationRouter(t, false)
 
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, agentConfigRequest(c.method, c.target, model.Automation{}))

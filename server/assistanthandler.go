@@ -1794,7 +1794,7 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 // @Summary      List Automations
 // @Description  Retrieve every scheduled automation defined on the grid.
 // @Tags         Assistant
-// @Security     bearer[automation/read, config/read]
+// @Security     bearer[config/read]
 // @Produce      json
 // @Success      200 {array} model.Automation "The list of automations"
 // @Failure      401           "Request was not properly authenticated"
@@ -1804,12 +1804,6 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if err := h.server.CheckAuthorized(ctx, "read", "automation"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	// An automation lives in a config setting, so reaching one needs the config permission too.
 	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
 		return
@@ -1826,7 +1820,7 @@ func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request
 // @Summary      Get an Automation
 // @Description  Retrieve a single automation by its immutable UUID.
 // @Tags         Assistant
-// @Security     bearer[automation/read, config/read]
+// @Security     bearer[config/read]
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200 {object} model.Automation "The automation"
@@ -1837,11 +1831,6 @@ func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request
 // @Router       /connect/assistant/automations/{id} [get]
 func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if err := h.server.CheckAuthorized(ctx, "read", "automation"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
 
 	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
@@ -1859,7 +1848,7 @@ func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request)
 // @Summary      Create an Automation
 // @Description  Define a new scheduled automation. The server assigns its id and owner; changing an automation's params drops the work its previous definition had queued.
 // @Tags         Assistant
-// @Security     bearer[automation/write, config/write]
+// @Security     bearer[config/write]
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
 // @Success      200 {object} model.Automation "The created automation"
@@ -1875,7 +1864,7 @@ func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Reque
 // @Summary      Update an Automation
 // @Description  Replace an automation's definition. Changing its params drops the work its previous definition had queued.
 // @Tags         Assistant
-// @Security     bearer[automation/write, config/write]
+// @Security     bearer[config/write]
 // @Param        id       path  string            true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
@@ -1892,11 +1881,6 @@ func (h *AssistantHandler) UpdateAutomation(w http.ResponseWriter, r *http.Reque
 
 func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
-
-	if err := h.server.CheckAuthorized(ctx, "write", "automation"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
 
 	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
@@ -1927,7 +1911,7 @@ func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request
 // @Summary      Delete an Automation
 // @Description  Remove an automation. An in-flight run is allowed to finish, since that run is often the reason the automation is being removed.
 // @Tags         Assistant
-// @Security     bearer[automation/write, config/write]
+// @Security     bearer[config/write]
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200           "Automation deleted"
@@ -1938,11 +1922,6 @@ func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request
 // @Router       /connect/assistant/automations/{id} [delete]
 func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if err := h.server.CheckAuthorized(ctx, "write", "automation"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
 
 	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
