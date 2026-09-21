@@ -6,8 +6,11 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+
+	"github.com/security-onion-solutions/securityonion-soc/db"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -39,4 +42,29 @@ func jsonbOrEmpty(raw json.RawMessage) string {
 	}
 
 	return string(raw)
+}
+
+// rowQuerier is the one method countAffected needs, so it can run against the pool or
+// inside a transaction.
+type rowQuerier interface {
+	Query(ctx context.Context, sql string, args ...any) (db.Rows, error)
+}
+
+// countAffected runs a statement that returns one row per row it changed, because Exec
+// discards the rows-affected count.
+func countAffected(ctx context.Context, q rowQuerier, stmt string, args ...any) (int, error) {
+	rows, err := q.Query(ctx, stmt, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	defer rows.Close()
+
+	count := 0
+
+	for rows.Next() {
+		count++
+	}
+
+	return count, rows.Err()
 }

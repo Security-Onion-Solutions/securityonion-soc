@@ -49,6 +49,10 @@ type AssistantManager interface {
 	DeleteAgent(ctx context.Context, name string) error
 	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
 	DeleteSkill(ctx context.Context, name string) error
+	ListAutomations(ctx context.Context) ([]*model.Automation, error)
+	GetAutomation(ctx context.Context, id string) (*model.Automation, error)
+	SaveAutomation(ctx context.Context, automation *model.Automation) error
+	DeleteAutomation(ctx context.Context, id string) error
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error

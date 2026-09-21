@@ -586,3 +586,115 @@ func TestEnsureAutomationWorkItemsRequiresAnAutomationId(t *testing.T) {
 	assert.Error(t, err)
 	assertNoStatements(t, mDB)
 }
+
+func TestFailStaleAutomationWorkItemsRequiresAnAutomationId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.FailStaleAutomationWorkItems(context.Background(), "", "cause")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+// applying is the state the sweep must not reach: its conclusion is already paid for and
+// its alerts still need stamping.
+func TestFailStaleAutomationWorkItemsSparesApplying(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	stale := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_work_items") &&
+			strings.Contains(sql, "state = 'failed'") &&
+			strings.Contains(sql, "state IN "+staleWorkItemStates) &&
+			!strings.Contains(sql, "applying")
+	})
+
+	mDB.On("Query", mock.Anything, stale, testAutomationId, "ERROR_AUTOMATION_PARAMS_CHANGED").
+		Return(rowsYielding(3), nil)
+
+	failed, err := s.FailStaleAutomationWorkItems(context.Background(), testAutomationId,
+		"ERROR_AUTOMATION_PARAMS_CHANGED")
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, failed)
+	mDB.AssertExpectations(t)
+}
+
+func TestFailPendingAutomationWorkItemsRequiresAnAutomationId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.FailPendingAutomationWorkItems(context.Background(), "", "cause")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+// A delete leaves a run that already claimed its item alone, so running must stay out of it.
+func TestFailPendingAutomationWorkItemsSparesRunning(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	pending := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_work_items") &&
+			strings.Contains(sql, "state = 'failed'") &&
+			strings.Contains(sql, "state IN "+pendingWorkItemStates) &&
+			!strings.Contains(sql, "running")
+	})
+
+	mDB.On("Query", mock.Anything, pending, testAutomationId, "ERROR_AUTOMATION_DELETED").
+		Return(rowsYielding(2), nil)
+
+	failed, err := s.FailPendingAutomationWorkItems(context.Background(), testAutomationId,
+		"ERROR_AUTOMATION_DELETED")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, failed)
+	mDB.AssertExpectations(t)
+}
+
+// An orphan has no run left to resume its apply step, so unlike the per-automation sweeps
+// this one has to reach applying too.
+func TestFailOrphanedAutomationWorkItemsIncludesApplying(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	orphaned := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_work_items") &&
+			strings.Contains(sql, "state = 'failed'") &&
+			strings.Contains(sql, "state IN "+openWorkItemStates) &&
+			strings.Contains(sql, "NOT (automation_id = ANY($1::uuid[]))")
+	})
+
+	live := []string{testAutomationId}
+
+	mDB.On("Query", mock.Anything, orphaned, live, "ERROR_AUTOMATION_DELETED").
+		Return(rowsYielding(4), nil)
+
+	failed, err := s.FailOrphanedAutomationWorkItems(context.Background(), live,
+		"ERROR_AUTOMATION_DELETED")
+
+	require.NoError(t, err)
+	assert.Equal(t, 4, failed)
+	mDB.AssertExpectations(t)
+}
+
+// No automation is defined, so every open item is orphaned. The empty list has to reach the
+// statement as an empty array rather than being treated as "no filter".
+func TestFailOrphanedAutomationWorkItemsSweepsAllWhenNothingIsLive(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	live := []string{}
+
+	mDB.On("Query", mock.Anything, mock.Anything, live, "ERROR_AUTOMATION_DELETED").
+		Return(rowsYielding(2), nil)
+
+	failed, err := s.FailOrphanedAutomationWorkItems(context.Background(), live,
+		"ERROR_AUTOMATION_DELETED")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, failed)
+	mDB.AssertExpectations(t)
+}
