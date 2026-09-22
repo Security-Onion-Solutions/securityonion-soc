@@ -268,6 +268,7 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
 
 	srv.Datastore = NewFakeDatastore()
 	srv.Metrics = NewFakeMetrics()
+	srv.Notifier = NewFakeNotifier()
 
 	return srv
 }
