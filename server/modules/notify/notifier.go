@@ -58,8 +58,6 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 
 	n.mu.RLock()
 	enabled := n.config.Enabled
-	defaultDests := make([]string, len(n.config.DefaultDestinations))
-	copy(defaultDests, n.config.DefaultDestinations)
 	destinationsMap := make(map[string]model.DestinationConfig, len(n.config.Destinations))
 	for k, v := range n.config.Destinations {
 		destinationsMap[k] = v
@@ -73,10 +71,10 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 
 	targetDests := destinations
 	if len(targetDests) == 0 {
-		targetDests = defaultDests
-	}
-	if len(targetDests) == 0 {
-		targetDests = []string{model.DefaultDestinationSOCBell}
+		targetDests = make([]string, 0, len(destinationsMap))
+		for destKey := range destinationsMap {
+			targetDests = append(targetDests, destKey)
+		}
 	}
 
 	var errs []error
@@ -111,31 +109,33 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 			}
 		}
 
-		if len(destCfg.ScheduleIDs) > 0 {
-			if n.server != nil && n.server.Configstore != nil {
-				now := time.Now().UTC()
-				anyActive := false
-				for _, schedID := range destCfg.ScheduleIDs {
-					if schedID == "" {
-						anyActive = true
-						break
+		if !payload.BypassSchedules {
+			if len(destCfg.ScheduleIDs) > 0 {
+				if n.server != nil && n.server.Configstore != nil {
+					now := time.Now().UTC()
+					anyActive := false
+					for _, schedID := range destCfg.ScheduleIDs {
+						if schedID == "" {
+							anyActive = true
+							break
+						}
+						active, err := server.IsScheduleActiveInConfig(ctx, n.server.Configstore, schedID, now)
+						if err != nil {
+							log.WithError(err).WithField("scheduleId", schedID).Warn("Failed to evaluate destination schedule; failing open and treating as active")
+							active = true
+						}
+						if active {
+							anyActive = true
+							break
+						}
 					}
-					active, err := server.IsScheduleActiveInConfig(ctx, n.server.Configstore, schedID, now)
-					if err != nil {
-						log.WithError(err).WithField("scheduleId", schedID).Warn("Failed to evaluate destination schedule; failing open and treating as active")
-						active = true
+					if !anyActive {
+						log.WithFields(log.Fields{
+							"destination": destName,
+							"scheduleIds": destCfg.ScheduleIDs,
+						}).Debug("None of the destination schedules are currently active; skipping")
+						continue
 					}
-					if active {
-						anyActive = true
-						break
-					}
-				}
-				if !anyActive {
-					log.WithFields(log.Fields{
-						"destination": destName,
-						"scheduleIds": destCfg.ScheduleIDs,
-					}).Debug("None of the destination schedules are currently active; skipping")
-					continue
 				}
 			}
 		}
@@ -148,7 +148,44 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 			continue
 		}
 
-		if err := channel.Send(ctx, destCfg.Params, payload); err != nil {
+		destPayload := payload
+
+		if len(payload.Recipients) > 0 {
+			recipientsEnabled := channel.SupportsRecipients()
+			if destCfg.EnableRecipients != nil {
+				recipientsEnabled = *destCfg.EnableRecipients && channel.SupportsRecipients()
+			}
+			if !recipientsEnabled {
+				if destCfg.SkipIfRecipients {
+					log.WithFields(log.Fields{
+						"destination": destName,
+						"recipients":  payload.Recipients,
+					}).Debug("Destination does not have recipient support enabled and skipIfRecipients is active; skipping")
+					continue
+				}
+				clone := *destPayload
+				clone.Recipients = nil
+				destPayload = &clone
+			}
+		}
+
+		if len(payload.Attachments) > 0 && !channel.SupportsAttachments() {
+			if destPayload == payload {
+				clone := *payload
+				destPayload = &clone
+			}
+			destPayload.Attachments = nil
+		}
+
+		if len(payload.Links) > 0 && !channel.SupportsLinks() {
+			if destPayload == payload {
+				clone := *payload
+				destPayload = &clone
+			}
+			destPayload.Links = nil
+		}
+
+		if err := channel.Send(ctx, destCfg.Params, destPayload); err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"destination": destName,
 				"channelType": destCfg.Type,
@@ -259,14 +296,6 @@ func (n *NotifierImpl) GetDestinations() map[string]model.DestinationConfig {
 	for k, v := range n.config.Destinations {
 		dests[k] = v
 	}
-	return dests
-}
-
-func (n *NotifierImpl) GetDefaultDestinations() []string {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	dests := make([]string, len(n.config.DefaultDestinations))
-	copy(dests, n.config.DefaultDestinations)
 	return dests
 }
 

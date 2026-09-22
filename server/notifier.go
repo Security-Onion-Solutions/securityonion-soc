@@ -19,7 +19,6 @@ type Notifier interface {
 	RegisterChannel(channel NotificationChannel)
 	GetChannel(channelType string) (NotificationChannel, bool)
 	GetDestinations() map[string]model.DestinationConfig
-	GetDefaultDestinations() []string
 }
 
 // NotificationChannel is the interface implemented by all destination drivers.
@@ -27,4 +26,7 @@ type NotificationChannel interface {
 	Type() string
 	ValidateConfig(params map[string]interface{}) error
 	Send(ctx context.Context, params map[string]interface{}, payload *model.NotificationPayload) error
+	SupportsRecipients() bool
+	SupportsAttachments() bool
+	SupportsLinks() bool
 }

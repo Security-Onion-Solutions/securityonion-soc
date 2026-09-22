@@ -148,6 +148,7 @@ func TestJobHandler_PutJob_And_NotificationTrigger(t *testing.T) {
 	assert.Equal(t, "user1@somewhere.invalid", fakeNotif.InputPayloads[0].Fields["user"])
 	assert.Equal(t, "/#/job/1002", fakeNotif.InputPayloads[0].Links["👁"])
 	assert.Equal(t, "/api/stream/1002?ext=pcap", fakeNotif.InputPayloads[0].Links["⬇"])
+	assert.Equal(t, []string{"user-id-1"}, fakeNotif.InputPayloads[0].Recipients)
 
 	// 2. Update job to pending/incomplete -> does not trigger notification
 	fakeNotif.InputPayloads = nil

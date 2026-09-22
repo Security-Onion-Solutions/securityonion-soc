@@ -43,7 +43,7 @@
       </v-chip>
     </template>
     <template #item.actions="{ item }">
-      <v-btn icon size="small" variant="text" color="primary" @click.stop="testDestination(item)" :loading="testingDestinationId === item.id" :title="i18n.testDestination" :aria-label="i18n.ariaDestinationTest" data-aid="destination_action_test">
+      <v-btn icon size="small" variant="text" color="primary" @click.stop="showSendDialog(item)" :title="i18n.sendNotification" :aria-label="i18n.ariaDestinationSend" data-aid="destination_action_send">
         <v-icon size="16">fa-paper-plane</v-icon>
       </v-btn>
       <v-btn icon size="small" variant="text" @click.stop="showEditDestination(item)" :title="i18n.editDestination" :aria-label="i18n.ariaDestinationEdit" data-aid="destination_action_edit">
@@ -62,10 +62,6 @@
         {{ form.isEdit ? i18n.editDestination : i18n.addDestination }}
       </v-card-title>
       <v-card-text>
-        <v-alert v-if="testResult" :type="testResult.success ? 'success' : 'error'" variant="tonal" density="compact" class="mb-4" closable @click:close="testResult = null" data-aid="destination_test_alert">
-          {{ testResult.message }}
-        </v-alert>
-
         <v-row dense>
           <v-col cols="12" sm="8">
             <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required data-aid="destination_form_name"></v-text-field>
@@ -75,6 +71,28 @@
           </v-col>
           <v-col cols="12">
             <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="destination_form_enabled"></v-switch>
+          </v-col>
+          <v-col v-if="form.recipientsSupported" cols="12">
+            <v-switch
+              v-model="form.enableRecipients"
+              color="primary"
+              inset
+              :label="i18n.enableRecipients"
+              :messages="i18n.enableRecipientsHint"
+              density="compact"
+              data-aid="destination_form_enable_recipients">
+            </v-switch>
+          </v-col>
+          <v-col v-if="!form.recipientsSupported || !form.enableRecipients" cols="12">
+            <v-switch
+              v-model="form.skipIfRecipients"
+              color="primary"
+              inset
+              :label="i18n.skipIfRecipients"
+              :messages="i18n.skipIfRecipientsHint"
+              density="compact"
+              data-aid="destination_form_skip_if_recipients">
+            </v-switch>
           </v-col>
           <v-col cols="12">
             <v-select
@@ -111,9 +129,6 @@
         </v-row>
       </v-card-text>
       <v-card-actions class="pa-4">
-        <v-btn v-if="form.isEdit" variant="outlined" color="primary" prepend-icon="fa-paper-plane" @click="testCurrentForm()" :loading="isTestingForm" data-aid="destination_dialog_test_button">
-          {{ i18n.testConnection }}
-        </v-btn>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="destinationDialog = false" data-aid="destination_editor_cancel">{{ i18n.cancel }}</v-btn>
         <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveDestination()" data-aid="destination_editor_save">{{ i18n.save }}</v-btn>
@@ -136,6 +151,59 @@
         <v-spacer></v-spacer>
         <v-btn variant="text" @click.stop="hideDeleteDestination()" data-aid="destination_delete_cancel">{{ i18n.cancel }}</v-btn>
         <v-btn color="error" variant="flat" @click.stop="deleteDestination()" data-aid="destination_delete_confirm">{{ i18n.delete }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Send Notification Dialog -->
+  <v-dialog v-model="sendDialog" persistent max-width="650" scrollable data-aid="send_notification_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2" data-aid="send_notification_dialog_title">
+        {{ getSendDialogTitle() }}
+      </v-card-title>
+      <v-card-text>
+        <v-row dense>
+          <v-col cols="12">
+            <v-text-field v-model="sendForm.title" :label="i18n.title" :rules="[$root.validators.required]" maxlength="255" counter="255" required data-aid="send_notification_title"></v-text-field>
+          </v-col>
+          <v-col cols="12">
+            <v-textarea v-model="sendForm.summary" :label="i18n.summary" rows="3" maxlength="4000" counter="4000" data-aid="send_notification_summary"></v-textarea>
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-select v-model="sendForm.severity" :items="severityOptions" :label="i18n.severity" density="comfortable" data-aid="send_notification_severity"></v-select>
+          </v-col>
+          <v-col cols="12" sm="6">
+            <v-select
+              v-model="sendForm.recipients"
+              :items="userOptions"
+              :label="i18n.recipients"
+              :placeholder="i18n.allUsersPlaceholder"
+              multiple
+              chips
+              closable-chips
+              clearable
+              density="comfortable"
+              :hint="(!sendForm.recipients || sendForm.recipients.length === 0) ? i18n.broadcastToAllUsersHint : ''"
+              persistent-hint
+              data-aid="send_notification_recipients">
+            </v-select>
+          </v-col>
+          <v-col cols="12">
+            <v-switch
+              v-model="sendForm.bypassSchedules"
+              color="primary"
+              inset
+              :label="i18n.bypassSchedules"
+              density="compact"
+              data-aid="send_notification_bypass_schedules">
+            </v-switch>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-card-actions class="pa-4">
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="sendDialog = false" data-aid="send_notification_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="!sendForm.title || !sendForm.title.trim()" :loading="isSending" @click="submitSendNotification()" data-aid="send_notification_submit">{{ i18n.send }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

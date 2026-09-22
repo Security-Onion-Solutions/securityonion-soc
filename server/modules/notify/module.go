@@ -9,7 +9,9 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -20,18 +22,21 @@ import (
 )
 
 const (
-	ConfigSettingNotificationDestinations = "soc.config.server.modules.notification.destinations"
-	ConfigSettingNotificationEnabled      = "soc.config.server.modules.notification.enabled"
+	ConfigSettingNotificationDestinations       = "soc.config.server.modules.notification.destinations"
+	ConfigSettingNotificationEnabled            = "soc.config.server.modules.notification.enabled"
+	ConfigSettingNotificationDismissedPruneDays = "soc.config.server.modules.notification.dismissedPruneDays"
 )
 
 type NotificationModule struct {
-	server    *server.Server
-	config    module.ModuleConfig
-	registry  *ChannelRegistry
-	notifier  *NotifierImpl
-	store     *database.Store
-	isRunning bool
-	mu        sync.RWMutex
+	server        *server.Server
+	config        module.ModuleConfig
+	registry      *ChannelRegistry
+	notifier      *NotifierImpl
+	store         *database.Store
+	stopChan      chan struct{}
+	pruneInterval time.Duration
+	isRunning     bool
+	mu            sync.RWMutex
 }
 
 func NewNotificationModule(srv *server.Server) *NotificationModule {
@@ -42,7 +47,7 @@ func NewNotificationModule(srv *server.Server) *NotificationModule {
 }
 
 func (mod *NotificationModule) PrerequisiteModules() []string {
-	return nil
+	return []string{"onionconfig", "postgres"}
 }
 
 func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
@@ -53,17 +58,12 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 
 	mod.config = cfg
 
-	parsedConfig, err := ParseConfig(cfg)
-	if err != nil {
-		log.WithError(err).Error("Failed to parse notification module configuration")
-		return err
+	ctx := context.Background()
+	if mod.server != nil && mod.server.Context != nil {
+		ctx = mod.server.Context
 	}
 
 	if mod.server != nil && mod.server.DB != nil {
-		ctx := mod.server.Context
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		var err error
 		mod.store, err = database.New(ctx, mod.server.DB)
 		if err != nil {
@@ -79,17 +79,14 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 		return err
 	}
 
-	mod.notifier = NewNotifier(mod.server, mod.registry, parsedConfig)
+	defaultConfig := LoadConfigFromStore(ctx, nil)
+	mod.notifier = NewNotifier(mod.server, mod.registry, defaultConfig)
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
 		mod.server.Notificationstore = NewNotificationstore(mod.server, mod.store)
-		mod.registerConfigCallbacks()
 	}
 
-	log.WithFields(log.Fields{
-		"defaultDestinations": parsedConfig.DefaultDestinations,
-		"destinationCount":    len(parsedConfig.Destinations),
-	}).Info("Notification module initialized")
+	log.Info("Notification module initialized")
 
 	return nil
 }
@@ -104,6 +101,7 @@ func (mod *NotificationModule) registerConfigCallbacks() {
 	}
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDestinations, mod)
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationEnabled, mod)
+	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDismissedPruneDays, mod)
 }
 
 func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
@@ -142,6 +140,12 @@ func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setti
 		} else {
 			cfg.Enabled = setting.Value == "true"
 		}
+	case ConfigSettingNotificationDismissedPruneDays:
+		if removed || setting.Value == "" {
+			cfg.DismissedPruneDays = DEFAULT_DISMISSED_PRUNE_DAYS
+		} else if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
+			cfg.DismissedPruneDays = days
+		}
 	}
 
 	mod.notifier.UpdateConfig(cfg)
@@ -153,16 +157,44 @@ func (mod *NotificationModule) Start() error {
 		return nil
 	}
 
+	ctx := context.Background()
+	var configstore server.Configstore
+	if mod.server != nil {
+		if mod.server.Context != nil {
+			ctx = mod.server.Context
+		}
+		configstore = mod.server.Configstore
+	}
+
+	notificationConfig := LoadConfigFromStore(ctx, configstore)
+	if mod.notifier != nil {
+		mod.notifier.UpdateConfig(notificationConfig)
+	}
+
+	mod.registerConfigCallbacks()
+
 	mod.mu.Lock()
+	mod.stopChan = make(chan struct{})
 	mod.isRunning = true
 	mod.mu.Unlock()
-	log.Info("Notification module started")
+
+	go mod.pruneLoop()
+
+	log.WithFields(log.Fields{
+		"destinationCount": len(notificationConfig.Destinations),
+		"pruneDays":        notificationConfig.DismissedPruneDays,
+	}).Info("Notification module started")
 	return nil
 }
 
 func (mod *NotificationModule) Stop() error {
 	mod.mu.Lock()
-	mod.isRunning = false
+	if mod.isRunning {
+		mod.isRunning = false
+		if mod.stopChan != nil {
+			close(mod.stopChan)
+		}
+	}
 	mod.mu.Unlock()
 	log.Info("Notification module stopped")
 	return nil
@@ -172,4 +204,63 @@ func (mod *NotificationModule) IsRunning() bool {
 	mod.mu.RLock()
 	defer mod.mu.RUnlock()
 	return mod.isRunning
+}
+
+// PruneDismissed removes dismissed notifications that were dismissed on or before the retention cutoff.
+func (mod *NotificationModule) PruneDismissed(ctx context.Context) error {
+	if mod.store == nil {
+		return nil
+	}
+
+	mod.mu.RLock()
+	days := DEFAULT_DISMISSED_PRUNE_DAYS
+	if mod.notifier != nil {
+		mod.notifier.mu.RLock()
+		if mod.notifier.config.DismissedPruneDays > 0 {
+			days = mod.notifier.config.DismissedPruneDays
+		}
+		mod.notifier.mu.RUnlock()
+	}
+	mod.mu.RUnlock()
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+	log.WithFields(log.Fields{
+		"retentionDays": days,
+		"cutoff":        cutoff,
+	}).Debug("Pruning dismissed notifications older than retention cutoff")
+
+	if err := mod.store.PruneDismissedNotifications(ctx, cutoff); err != nil {
+		log.WithError(err).Error("Failed to prune dismissed notifications")
+		return err
+	}
+
+	return nil
+}
+
+func (mod *NotificationModule) pruneLoop() {
+	interval := mod.pruneInterval
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	ctx := context.Background()
+	if mod.server != nil && mod.server.Context != nil {
+		ctx = mod.server.Context
+	}
+
+	// Run an initial prune on startup
+	_ = mod.PruneDismissed(ctx)
+
+	for {
+		select {
+		case <-mod.stopChan:
+			log.Debug("Notification prune loop exiting")
+			return
+		case <-ticker.C:
+			_ = mod.PruneDismissed(ctx)
+		}
+	}
 }

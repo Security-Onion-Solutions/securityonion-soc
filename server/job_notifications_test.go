@@ -90,6 +90,7 @@ func TestBuildJobCompletionNotification_PcapJob(t *testing.T) {
 	assert.Equal(t, "/#/job/1005", payload1.Links["👁"])
 	assert.Equal(t, "/api/stream/1005?ext=pcap", payload1.Links["⬇"])
 	assert.Empty(t, payload1.Attachments)
+	assert.Equal(t, []string{"user-id-1"}, payload1.Recipients)
 
 	// Case 2: Explicit "pcap" kind without user
 	job2 := &model.Job{
@@ -103,6 +104,19 @@ func TestBuildJobCompletionNotification_PcapJob(t *testing.T) {
 	assert.Equal(t, model.SourcePcap, payload2.Source)
 	assert.Equal(t, "PCAP #1006", payload2.Title)
 	assert.Empty(t, payload2.Summary)
+	assert.Nil(t, payload2.Recipients)
+
+	// Case 3: System-generated job (no recipients)
+	job3 := &model.Job{
+		Id:     1007,
+		Status: model.JobStatusCompleted,
+		Kind:   "pcap",
+		NodeId: "sensor-node-1",
+		UserId: SYSTEM_ID,
+	}
+	payload3 := BuildJobCompletionNotification(context.Background(), srv, job3)
+	assert.NotNil(t, payload3)
+	assert.Nil(t, payload3.Recipients)
 }
 
 func TestBuildJobCompletionNotification_ReportJob_WithPdfStream(t *testing.T) {
@@ -143,6 +157,7 @@ func TestBuildJobCompletionNotification_ReportJob_WithPdfStream(t *testing.T) {
 	assert.Equal(t, "Last 24 Hours", payload.Fields["timeframe"])
 	assert.Equal(t, "/#/reports", payload.Links["👁"])
 	assert.Equal(t, "/api/stream/1007?ext=pdf", payload.Links["⬇"])
+	assert.Equal(t, []string{"user-id-2"}, payload.Recipients)
 
 	assert.Len(t, payload.Attachments, 1)
 	att := payload.Attachments[0]
@@ -182,6 +197,7 @@ func TestBuildJobCompletionNotification_ReportJob_CustomReportMarkdownParsing(t 
 	assert.Empty(t, payload.Attachments)
 	assert.Equal(t, "/#/reports", payload.Links["👁"])
 	assert.Equal(t, "/api/stream/1008?ext=pdf", payload.Links["⬇"])
+	assert.Equal(t, []string{"user-id-1"}, payload.Recipients)
 }
 
 func TestSendJobCompletionNotification(t *testing.T) {

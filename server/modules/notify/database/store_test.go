@@ -59,7 +59,7 @@ func TestStore_InsertNotification_Success(t *testing.T) {
 
 	mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "notif-1", "detection", "Title", "Summary", "high", mock.Anything, mock.Anything, mock.Anything, "", payload.Timestamp).
+	}), "notif-1", "detection", "Title", "Summary", "high", mock.Anything, mock.Anything, mock.Anything, "", payload.Timestamp, "[]").
 		Return(nil).Once()
 
 	err := s.InsertNotification(context.Background(), payload)
@@ -83,7 +83,7 @@ func TestStore_GetNotifications(t *testing.T) {
 	mockRows.On("Next").Return(false).Once()
 
 	fixedTime := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
-	mockRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+	mockRows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		*(args[0].(*string)) = "notif-1"
 		*(args[1].(*string)) = "detection"
 		*(args[2].(*string)) = "Title"
@@ -94,22 +94,24 @@ func TestStore_GetNotifications(t *testing.T) {
 		*(args[7].(*[]byte)) = []byte("[]")
 		*(args[8].(**string)) = nil
 		*(args[9].(*time.Time)) = fixedTime
-		*(args[10].(*bool)) = true
-		*(args[11].(**time.Time)) = &fixedTime
-		*(args[12].(*bool)) = false
-		*(args[13].(**time.Time)) = nil
+		*(args[10].(*[]byte)) = []byte(`["admin"]`)
+		*(args[11].(*bool)) = true
+		*(args[12].(**time.Time)) = &fixedTime
+		*(args[13].(*bool)) = false
+		*(args[14].(**time.Time)) = nil
 	}).Return(nil).Once()
 
 	userCreated := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin", userCreated).Return(mockRows, nil).Once()
+	}), "admin", "admin", userCreated).Return(mockRows, nil).Once()
 
-	res, err := s.GetNotifications(context.Background(), "admin", "active", userCreated)
+	res, err := s.GetNotifications(context.Background(), "admin", []string{"admin"}, false, "active", userCreated)
 	assert.NoError(t, err)
 	assert.Len(t, res, 1)
 	assert.Equal(t, "notif-1", res[0].ID)
 	assert.Equal(t, "val", res[0].Fields["key"])
+	assert.Equal(t, []string{"admin"}, res[0].Recipients)
 }
 
 func TestStore_SetRead(t *testing.T) {
@@ -134,6 +136,20 @@ func TestStore_SetDismissed(t *testing.T) {
 	}), "notif-1", "admin", true, mock.Anything).Return(nil).Once()
 
 	err := s.SetDismissed(context.Background(), "notif-1", "admin", true)
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestStore_PruneDismissedNotifications(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	s := &Store{db: mDB}
+
+	cutoff := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), cutoff).Return(nil).Once()
+
+	err := s.PruneDismissedNotifications(context.Background(), cutoff)
 	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
 }
@@ -181,9 +197,9 @@ func TestStore_GetLastUnreadTime_Found(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin").Return(mockRows, nil).Once()
+	}), "admin", "admin").Return(mockRows, nil).Once()
 
-	tRes, err := s.GetLastUnreadTime(context.Background(), "admin", time.Time{})
+	tRes, err := s.GetLastUnreadTime(context.Background(), "admin", []string{"admin"}, false, time.Time{})
 	assert.NoError(t, err)
 	assert.NotNil(t, tRes)
 	assert.Equal(t, fixedTime, *tRes)
@@ -199,9 +215,9 @@ func TestStore_GetLastUnreadTime_NotFound(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin").Return(mockRows, nil).Once()
+	}), "admin", "admin").Return(mockRows, nil).Once()
 
-	tRes, err := s.GetLastUnreadTime(context.Background(), "admin", time.Time{})
+	tRes, err := s.GetLastUnreadTime(context.Background(), "admin", []string{"admin"}, false, time.Time{})
 	assert.NoError(t, err)
 	assert.Nil(t, tRes)
 }

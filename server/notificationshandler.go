@@ -47,7 +47,10 @@ func RegisterNotificationRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/destinations", h.PostDestination)
 		r.Put("/destinations/{id}", h.PutDestination)
 		r.Delete("/destinations/{id}", h.DeleteDestination)
-		r.Post("/destinations/{id}/test", h.PostTestDestination)
+		r.Post("/destinations/{id}/test", h.PostSendNotification)
+		r.Post("/destinations/{id}/send", h.PostSendNotification)
+		r.Post("/send", h.PostSendNotification)
+		r.Post("/test", h.PostSendNotification)
 
 		r.Get("/", h.GetNotifications)
 		r.Put("/{id}/read", h.PutRead)
@@ -227,6 +230,13 @@ func (h *NotificationHandler) GetDestinations(w http.ResponseWriter, r *http.Req
 		if dest.ID == "" {
 			dest.ID = id
 		}
+		if h.server != nil && h.server.Notifier != nil {
+			if ch, found := h.server.Notifier.GetChannel(dest.Type); found {
+				dest.RecipientsSupported = ch.SupportsRecipients()
+				dest.AttachmentsSupported = ch.SupportsAttachments()
+				dest.LinksSupported = ch.SupportsLinks()
+			}
+		}
 		result = append(result, dest)
 	}
 
@@ -278,7 +288,7 @@ func (h *NotificationHandler) PostDestination(w http.ResponseWriter, r *http.Req
 	}
 
 	if strings.TrimSpace(req.Type) == "" {
-		req.Type = model.ChannelTypeSOC
+		req.Type = "soc"
 	}
 
 	if req.ID == "" {
@@ -368,7 +378,7 @@ func (h *NotificationHandler) PutDestination(w http.ResponseWriter, r *http.Requ
 	}
 
 	if strings.TrimSpace(req.Type) == "" {
-		req.Type = model.ChannelTypeSOC
+		req.Type = "soc"
 	}
 
 	req.ID = id
@@ -465,21 +475,26 @@ func (h *NotificationHandler) DeleteDestination(w http.ResponseWriter, r *http.R
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
-// @Summary      Test Notification Destination
-// @Description  Dispatches a test notification payload directly to the specified destination to verify connectivity and driver configuration.
+// @Summary      Send Notification
+// @Description  Dispatches a test or ad-hoc notification payload. When a destination ID is provided in the route, the notification is dispatched specifically to that destination. When omitted, standard notification routing is used across all configured destinations.
 // @Tags         Notifications
 // @Security     bearer[notifications/write]
-// @Param        id  path  string  true  "Destination ID"
+// @Param        id              path   string  false  "Destination ID"
+// @Param        targeted        query  bool    false  "Whether to send a targeted notification to the current user"
+// @Param        title           query  string  false  "Notification title"
+// @Param        summary         query  string  false  "Notification summary"
+// @Param        severity        query  string  false  "Notification severity"
+// @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
-// @Success      200         "The test notification was successfully sent"
-// @Failure      400         "Channel driver not available or invalid configuration"
+// @Success      200         "The notification was successfully sent"
+// @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Notification module has not been enabled on the server"
-// @Failure      500         "Failed to send test notification via channel driver"
-// @Router       /connect/notifications/destinations/{id}/test [post]
-func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http.Request) {
+// @Failure      500         "Failed to send notification via channel driver"
+// @Router       /connect/notifications/send [post]
+func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
@@ -488,27 +503,8 @@ func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	id := chi.URLParam(r, "id")
-	if !model.IsValidDestinationID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
-		return
-	}
-
 	if err := h.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
 		h.respondError(w, r, err)
-		return
-	}
-
-	destsMap, err := h.loadDestinations(ctx)
-	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	destCfg, exists := destsMap[id]
-	if !exists {
-		web.Respond(w, r, http.StatusNotFound, errors.New("destination not found"))
 		return
 	}
 
@@ -517,38 +513,134 @@ func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http
 		return
 	}
 
-	channel, found := h.server.Notifier.GetChannel(destCfg.Type)
-	if !found {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("channel driver '%s' not registered", destCfg.Type))
+	id := chi.URLParam(r, "id")
+	if id != "" {
+		if !model.IsValidDestinationID(id) {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
+			return
+		}
+
+		destsMap, err := h.loadDestinations(ctx)
+		if err != nil {
+			logger.WithError(err).Error("failed to load notification destinations")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		destCfg, exists := destsMap[id]
+		if !exists {
+			web.Respond(w, r, http.StatusNotFound, errors.New("destination not found"))
+			return
+		}
+
+		channel, found := h.server.Notifier.GetChannel(destCfg.Type)
+		if !found {
+			web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("channel driver '%s' not registered", destCfg.Type))
+			return
+		}
+
+		if err := channel.ValidateConfig(destCfg.Params); err != nil {
+			web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel configuration: %w", err))
+			return
+		}
+	}
+
+	var req struct {
+		Title           string   `json:"title"`
+		Summary         string   `json:"summary"`
+		Severity        string   `json:"severity"`
+		Recipients      []string `json:"recipients"`
+		BypassSchedules bool     `json:"bypassSchedules"`
+	}
+
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logger.WithError(err).Error("failed to decode request body")
+			web.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	if req.Title == "" {
+		req.Title = r.URL.Query().Get("title")
+	}
+	if req.Summary == "" {
+		req.Summary = r.URL.Query().Get("summary")
+	}
+	if req.Severity == "" {
+		req.Severity = r.URL.Query().Get("severity")
+	}
+	if !req.BypassSchedules && r.URL.Query().Get("bypassSchedules") == "true" {
+		req.BypassSchedules = true
+	}
+	if len(req.Recipients) == 0 {
+		if r.URL.Query().Get("targeted") == "true" || r.URL.Query().Get("withRecipients") == "true" {
+			if reqId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok && reqId != "" {
+				req.Recipients = []string{reqId}
+			} else if u, ok := ctx.Value(web.ContextKeyRunAsUsername).(string); ok && u != "" {
+				req.Recipients = []string{u}
+			}
+		} else if rawRecipients := r.URL.Query()["recipients"]; len(rawRecipients) > 0 {
+			req.Recipients = rawRecipients
+		}
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("title is required"))
+		return
+	}
+	if len(title) > 255 {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("title exceeds maximum allowed length"))
 		return
 	}
 
-	if err := channel.ValidateConfig(destCfg.Params); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel configuration: %w", err))
+	summary := strings.TrimSpace(req.Summary)
+	if len(summary) > 4000 {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("summary exceeds maximum allowed length"))
 		return
 	}
 
-	destName := destCfg.Name
-	if destName == "" {
-		destName = destCfg.ID
+	severity := strings.ToLower(strings.TrimSpace(req.Severity))
+	if severity == "" {
+		severity = model.NotificationSeverityInfo
+	}
+	switch severity {
+	case model.NotificationSeverityInfo, model.NotificationSeverityLow, model.NotificationSeverityMedium, model.NotificationSeverityHigh, model.NotificationSeverityCritical:
+	default:
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid severity"))
+		return
 	}
 
-	testPayload := &model.NotificationPayload{
-		ID:        uuid.NewString(),
-		Source:    model.SourceMetric,
-		Title:     "Test: " + destName,
-		Summary:   "This is a test notification dispatched to verify destination connectivity.",
-		Severity:  model.NotificationSeverityInfo,
-		Timestamp: time.Now().UTC(),
+	payload := &model.NotificationPayload{
+		ID:              uuid.NewString(),
+		Source:          model.SourceClient,
+		Title:           title,
+		Summary:         summary,
+		Severity:        severity,
+		Timestamp:       time.Now().UTC(),
+		Recipients:      req.Recipients,
+		BypassSchedules: req.BypassSchedules,
 	}
 
-	if err := channel.Send(ctx, destCfg.Params, testPayload); err != nil {
-		logger.WithError(err).WithField("destinationId", id).Error("failed to dispatch test notification")
-		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("test notification delivery failed: %w", err))
+	var sendErr error
+	if id != "" {
+		sendErr = h.server.Notifier.Send(ctx, payload, id)
+	} else {
+		sendErr = h.server.Notifier.Send(ctx, payload)
+	}
+
+	if sendErr != nil {
+		logger.WithError(sendErr).WithField("destinationId", id).Error("failed to dispatch notification")
+		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("notification delivery failed: %w", sendErr))
 		return
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)
+}
+
+func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http.Request) {
+	h.PostSendNotification(w, r)
 }
 
 // @Summary      Get Notifications

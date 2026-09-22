@@ -17,6 +17,11 @@ routes.push({
       };
     },
     methods: {
+      sendNotification() {
+        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.showSendDialog === 'function') {
+          this.$refs.destinationsManager.showSendDialog(null);
+        }
+      },
       addDestination() {
         if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.showAddDestination === 'function') {
           this.$refs.destinationsManager.showAddDestination();

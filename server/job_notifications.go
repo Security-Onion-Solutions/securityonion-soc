@@ -38,6 +38,13 @@ func resolveUserEmail(ctx context.Context, srv *Server, userId string) string {
 	return userId
 }
 
+func resolveJobRecipients(job *model.Job) []string {
+	if job == nil || job.UserId == "" || job.UserId == SYSTEM_ID {
+		return nil
+	}
+	return []string{job.UserId}
+}
+
 func parseReportTitleFromMarkdown(content []byte, deflt string) string {
 	title := deflt
 	prevLine := ""
@@ -138,13 +145,14 @@ func buildPcapCompletionNotification(ctx context.Context, srv *Server, job *mode
 	}
 
 	return &model.NotificationPayload{
-		ID:        uuid.NewString(),
-		Source:    model.SourcePcap,
-		Title:     title,
-		Severity:  model.NotificationSeverityInfo,
-		Timestamp: time.Now().UTC(),
-		Fields:    fields,
-		Links:     links,
+		ID:         uuid.NewString(),
+		Source:     model.SourcePcap,
+		Title:      title,
+		Severity:   model.NotificationSeverityInfo,
+		Timestamp:  time.Now().UTC(),
+		Fields:     fields,
+		Links:      links,
+		Recipients: resolveJobRecipients(job),
 	}
 }
 
@@ -220,6 +228,7 @@ func buildReportCompletionNotification(ctx context.Context, srv *Server, job *mo
 		Fields:      fields,
 		Links:       links,
 		Attachments: attachments,
+		Recipients:  resolveJobRecipients(job),
 	}
 }
 

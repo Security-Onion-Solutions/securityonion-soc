@@ -112,9 +112,14 @@ func (s *Store) InsertNotification(ctx context.Context, payload *model.Notificat
 		attachmentsJSON = []byte("[]")
 	}
 
+	recipientsJSON, err := json.Marshal(payload.Recipients)
+	if err != nil || payload.Recipients == nil {
+		recipientsJSON = []byte("[]")
+	}
+
 	query := `
-		INSERT INTO notifications (id, source, title, summary, severity, fields, links, attachments, silence_key, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO notifications (id, source, title, summary, severity, fields, links, attachments, silence_key, created_at, recipients)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (id) DO NOTHING`
 
 	err = s.db.Exec(ctx, query,
@@ -128,6 +133,7 @@ func (s *Store) InsertNotification(ctx context.Context, payload *model.Notificat
 		string(attachmentsJSON),
 		payload.SilenceKey,
 		payload.Timestamp,
+		string(recipientsJSON),
 	)
 	if err != nil {
 		log.WithError(err).WithField("notificationId", payload.ID).Error("Failed to store notification in PostgreSQL")
@@ -138,9 +144,9 @@ func (s *Store) InsertNotification(ctx context.Context, payload *model.Notificat
 }
 
 // GetNotifications queries notifications and their user states for a given username and optional creation timestamp cutoff.
-func (s *Store) GetNotifications(ctx context.Context, username, filter string, createdAfter time.Time) ([]*model.NotificationRecord, error) {
+func (s *Store) GetNotifications(ctx context.Context, username string, userIdentifiers []string, readAll bool, filter string, createdAfter time.Time) ([]*model.NotificationRecord, error) {
 	query := `
-		SELECT n.id, n.source, n.title, n.summary, n.severity, n.fields, n.links, n.attachments, n.silence_key, n.created_at,
+		SELECT n.id, n.source, n.title, n.summary, n.severity, n.fields, n.links, n.attachments, n.silence_key, n.created_at, n.recipients,
 		       COALESCE(us.is_read, FALSE) AS is_read,
 		       us.read_at,
 		       COALESCE(us.is_dismissed, FALSE) AS is_dismissed,
@@ -151,6 +157,15 @@ func (s *Store) GetNotifications(ctx context.Context, username, filter string, c
 
 	var args []any
 	args = append(args, username)
+
+	if !readAll && len(userIdentifiers) > 0 {
+		var recipientClauses []string
+		for _, id := range userIdentifiers {
+			args = append(args, id)
+			recipientClauses = append(recipientClauses, fmt.Sprintf("n.recipients ? $%d", len(args)))
+		}
+		query += fmt.Sprintf(" AND (n.recipients IS NULL OR n.recipients = '[]'::jsonb OR %s)", strings.Join(recipientClauses, " OR "))
+	}
 
 	if !createdAfter.IsZero() {
 		args = append(args, createdAfter)
@@ -180,13 +195,13 @@ func (s *Store) GetNotifications(ctx context.Context, username, filter string, c
 	var notifications []*model.NotificationRecord
 	for rows.Next() {
 		var id, source, title, summary, severity string
-		var fieldsJSON, linksJSON, attachmentsJSON []byte
+		var fieldsJSON, linksJSON, attachmentsJSON, recipientsJSON []byte
 		var silenceKey *string
 		var createdAt time.Time
 		var isRead, isDismissed bool
 		var readAt, dismissedAt *time.Time
 
-		err := rows.Scan(&id, &source, &title, &summary, &severity, &fieldsJSON, &linksJSON, &attachmentsJSON, &silenceKey, &createdAt, &isRead, &readAt, &isDismissed, &dismissedAt)
+		err := rows.Scan(&id, &source, &title, &summary, &severity, &fieldsJSON, &linksJSON, &attachmentsJSON, &silenceKey, &createdAt, &recipientsJSON, &isRead, &readAt, &isDismissed, &dismissedAt)
 		if err != nil {
 			log.FromContext(ctx).WithError(err).Error("failed to scan notification row")
 			return nil, fmt.Errorf("failed to read notifications: %w", err)
@@ -200,6 +215,9 @@ func (s *Store) GetNotifications(ctx context.Context, username, filter string, c
 
 		var attachments []model.Attachment
 		_ = json.Unmarshal(attachmentsJSON, &attachments)
+
+		var recipients []string
+		_ = json.Unmarshal(recipientsJSON, &recipients)
 
 		var silenceKeyVal string
 		if silenceKey != nil {
@@ -217,6 +235,7 @@ func (s *Store) GetNotifications(ctx context.Context, username, filter string, c
 			Attachments: attachments,
 			SilenceKey:  silenceKeyVal,
 			CreatedAt:   createdAt,
+			Recipients:  recipients,
 			IsRead:      isRead,
 			ReadAt:      readAt,
 			IsDismissed: isDismissed,
@@ -232,7 +251,7 @@ func (s *Store) GetNotifications(ctx context.Context, username, filter string, c
 }
 
 // GetLastUnreadTime returns the created_at timestamp of the newest unread/undismissed notification.
-func (s *Store) GetLastUnreadTime(ctx context.Context, username string, createdAfter time.Time) (*time.Time, error) {
+func (s *Store) GetLastUnreadTime(ctx context.Context, username string, userIdentifiers []string, readAll bool, createdAfter time.Time) (*time.Time, error) {
 	query := `
 		SELECT n.created_at
 		FROM notifications n
@@ -241,6 +260,15 @@ func (s *Store) GetLastUnreadTime(ctx context.Context, username string, createdA
 
 	var args []any
 	args = append(args, username)
+
+	if !readAll && len(userIdentifiers) > 0 {
+		var recipientClauses []string
+		for _, id := range userIdentifiers {
+			args = append(args, id)
+			recipientClauses = append(recipientClauses, fmt.Sprintf("n.recipients ? $%d", len(args)))
+		}
+		query += fmt.Sprintf(" AND (n.recipients IS NULL OR n.recipients = '[]'::jsonb OR %s)", strings.Join(recipientClauses, " OR "))
+	}
 
 	if !createdAfter.IsZero() {
 		args = append(args, createdAfter)
@@ -353,4 +381,30 @@ func (s *Store) GetAuditLogs(ctx context.Context, id string) ([]*model.Notificat
 	}
 
 	return auditList, nil
+}
+
+// PruneDismissedNotifications removes notifications that have been dismissed on or before cutoff time by at least one user.
+// Associated rows in notification_user_states are removed via foreign key CASCADE.
+func (s *Store) PruneDismissedNotifications(ctx context.Context, cutoff time.Time) error {
+	if s.db == nil {
+		return errors.New("database not configured")
+	}
+
+	query := `
+		DELETE FROM notifications
+		WHERE id IN (
+			SELECT notification_id
+			FROM notification_user_states
+			WHERE is_dismissed = TRUE
+			  AND dismissed_at IS NOT NULL
+			  AND dismissed_at <= $1
+		)`
+
+	err := s.db.Exec(ctx, query, cutoff)
+	if err != nil {
+		log.FromContext(ctx).WithError(err).Error("failed to prune dismissed notifications")
+		return fmt.Errorf("failed to prune dismissed notifications: %w", err)
+	}
+
+	return nil
 }

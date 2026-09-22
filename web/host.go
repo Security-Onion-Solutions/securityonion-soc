@@ -40,6 +40,11 @@ type HostHandler interface {
 	Handle(responseWriter http.ResponseWriter, request *http.Request)
 }
 
+// RecipientFilterable represents an object that can specify targeted recipients for broadcasts.
+type RecipientFilterable interface {
+	GetRecipients() []string
+}
+
 type Preprocessor interface {
 	PreprocessPriority() int
 	Preprocess(ctx context.Context, request *http.Request) (context.Context, int, error)
@@ -156,8 +161,32 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 		Kind:   kind,
 		Object: obj,
 	}
+
+	var recipients []string
+	if rf, ok := obj.(RecipientFilterable); ok {
+		recipients = rf.GetRecipients()
+	}
+
 	for _, connection := range host.connections {
 		if err := host.Authorizer.CheckUserOperationAuthorized(connection.userId, "read", reqPermission); err == nil {
+			if len(recipients) > 0 {
+				isRecipient := false
+				for _, r := range recipients {
+					if r == connection.userId {
+						isRecipient = true
+						break
+					}
+				}
+				if !isRecipient && host.Authorizer.CheckUserOperationAuthorized(connection.userId, "read_all", reqPermission) != nil {
+					log.WithFields(log.Fields{
+						"messageKind": kind,
+						"sourceIp":    connection.ip,
+						"userId":      connection.userId,
+					}).Debug("Skipping broadcast because user is not in recipient list")
+					continue
+				}
+			}
+
 			log.WithFields(log.Fields{
 				"messageKind": kind,
 				// "remoteAddr": connection.websocket.RemoteAddr().String(),

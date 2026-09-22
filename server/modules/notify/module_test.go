@@ -8,6 +8,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
@@ -24,7 +25,7 @@ func TestNotificationModuleLifecycle_Licensed(t *testing.T) {
 	srv := &server.Server{}
 	mod := NewNotificationModule(srv)
 
-	assert.Nil(t, mod.PrerequisiteModules())
+	assert.Equal(t, []string{"onionconfig", "postgres"}, mod.PrerequisiteModules())
 	assert.False(t, mod.IsRunning())
 
 	// Init with empty config (should set default soc-bell)
@@ -40,7 +41,7 @@ func TestNotificationModuleLifecycle_Licensed(t *testing.T) {
 	// Verify destinations contain default soc-bell
 	dests := srv.Notifier.GetDestinations()
 	assert.Contains(t, dests, model.DefaultDestinationSOCBell)
-	assert.Equal(t, model.ChannelTypeSOC, dests[model.DefaultDestinationSOCBell].Type)
+	assert.Equal(t, "soc", dests[model.DefaultDestinationSOCBell].Type)
 
 	// Start
 	err = mod.Start()
@@ -84,31 +85,36 @@ func TestNotificationModuleInitWithCustomDestinations_Licensed(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
-	srv := &server.Server{}
-	mod := NewNotificationModule(srv)
-
-	cfg := module.ModuleConfig{
-		"defaultDestinations": []interface{}{"custom-soc"},
-		"destinations": map[string]interface{}{
-			"custom-soc": map[string]interface{}{
-				"name":    "Custom Bell",
-				"type":    "soc",
-				"enabled": true,
-				"params": map[string]interface{}{
-					"storeInPostgres": false,
-				},
-			},
+	dests := map[string]model.DestinationConfig{
+		"custom-soc": {
+			ID:      "custom-soc",
+			Name:    "Custom Bell",
+			Type:    "soc",
+			Enabled: true,
 		},
 	}
+	destsJSON, _ := json.Marshal(dests)
 
-	err := mod.Init(cfg)
+	srv := &server.Server{
+		Configstore: server.NewMemConfigStore([]*model.Setting{
+			{
+				Id:    ConfigSettingNotificationDestinations,
+				Value: string(destsJSON),
+			},
+		}),
+	}
+	mod := NewNotificationModule(srv)
+
+	err := mod.Init(module.ModuleConfig{})
 	assert.NoError(t, err)
 	assert.NotNil(t, srv.Notifier)
 
-	dests := srv.Notifier.GetDestinations()
-	assert.Contains(t, dests, "custom-soc")
-	assert.Equal(t, "Custom Bell", dests["custom-soc"].Name)
-	assert.Equal(t, []string{"custom-soc"}, srv.Notifier.GetDefaultDestinations())
+	err = mod.Start()
+	assert.NoError(t, err)
+
+	notifierDests := srv.Notifier.GetDestinations()
+	assert.Contains(t, notifierDests, "custom-soc")
+	assert.Equal(t, "Custom Bell", notifierDests["custom-soc"].Name)
 }
 
 func TestNotificationModuleOnConfigSettingUpdated(t *testing.T) {
@@ -147,4 +153,24 @@ func TestNotificationModuleOnConfigSettingUpdated(t *testing.T) {
 	}, true)
 	dests = srv.Notifier.GetDestinations()
 	assert.Contains(t, dests, model.DefaultDestinationSOCBell)
+
+	// Update dismissedPruneDays via callback
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id:    ConfigSettingNotificationDismissedPruneDays,
+		Value: "60",
+	}, false)
+	assert.Equal(t, 60, mod.notifier.config.DismissedPruneDays)
+
+	// DismissedPruneDays removed -> reverts to default 30
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id: ConfigSettingNotificationDismissedPruneDays,
+	}, true)
+	assert.Equal(t, DEFAULT_DISMISSED_PRUNE_DAYS, mod.notifier.config.DismissedPruneDays)
+}
+
+func TestNotificationModule_PruneDismissed_NilStore(t *testing.T) {
+	srv := &server.Server{}
+	mod := NewNotificationModule(srv)
+	err := mod.PruneDismissed(context.Background())
+	assert.NoError(t, err)
 }

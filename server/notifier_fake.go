@@ -12,14 +12,13 @@ import (
 )
 
 type FakeNotifier struct {
-	InputContexts       []context.Context
-	InputPayloads       []*model.NotificationPayload
-	InputDestinations   [][]string
-	InputSilences       []*model.SilenceParams
-	RegisteredChannels  []NotificationChannel
-	Err                 error
-	Destinations        map[string]model.DestinationConfig
-	DefaultDestinations []string
+	InputContexts      []context.Context
+	InputPayloads      []*model.NotificationPayload
+	InputDestinations  [][]string
+	InputSilences      []*model.SilenceParams
+	RegisteredChannels []NotificationChannel
+	Err                error
+	Destinations       map[string]model.DestinationConfig
 }
 
 func NewFakeNotifier() *FakeNotifier {
@@ -55,8 +54,4 @@ func (notifier *FakeNotifier) GetChannel(channelType string) (NotificationChanne
 
 func (notifier *FakeNotifier) GetDestinations() map[string]model.DestinationConfig {
 	return notifier.Destinations
-}
-
-func (notifier *FakeNotifier) GetDefaultDestinations() []string {
-	return notifier.DefaultDestinations
 }

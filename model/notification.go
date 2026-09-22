@@ -44,23 +44,26 @@ const (
 	SourceAgentAI   = "agent_ai"
 	SourceReport    = "report"
 	SourcePcap      = "pcap"
+	SourceClient    = "client"
 
 	AttachmentModeLink   = "link"
 	AttachmentModeAttach = "attach"
 	AttachmentModeBoth   = "both"
 
 	DefaultDestinationSOCBell = "soc-bell"
-	ChannelTypeSOC            = "soc"
 )
 
 // DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
 // The Name field is left empty so the client side can determine the localized display name.
 func DefaultDestinationSOCBellConfig() DestinationConfig {
+	enableRecipients := true
 	return DestinationConfig{
-		ID:      DefaultDestinationSOCBell,
-		Name:    "",
-		Type:    ChannelTypeSOC,
-		Enabled: true,
+		ID:                  DefaultDestinationSOCBell,
+		Name:                "",
+		Type:                "soc",
+		Enabled:             true,
+		RecipientsSupported: true,
+		EnableRecipients:    &enableRecipients,
 	}
 }
 
@@ -88,7 +91,7 @@ type NotificationPayload struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap,client"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
@@ -105,6 +108,18 @@ type NotificationPayload struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	// Unique key used for duration silencing and debouncing.
 	SilenceKey string `json:"silenceKey,omitempty" example:"detection:sigma:12345:192.168.1.100"`
+	// Optional recipient user IDs targeted to receive this notification. When empty, broadcasts to all authorized users.
+	Recipients []string `json:"recipients,omitempty" example:"user-1,user-2"`
+	// Optional flag indicating whether destination activation schedules should be bypassed.
+	BypassSchedules bool `json:"bypassSchedules,omitempty" example:"true"`
+}
+
+// GetRecipients returns the targeted recipient list for this notification payload.
+func (p *NotificationPayload) GetRecipients() []string {
+	if p == nil {
+		return nil
+	}
+	return p.Recipients
 }
 
 // @Description SilenceParams specifies duration silencing parameters for debouncing alerts.
@@ -131,6 +146,16 @@ type DestinationConfig struct {
 	ScheduleIDs []string `json:"scheduleIds,omitempty" example:"after-hours,weekends"`
 	// Optional list of severities to limit notifications to (e.g. ["high", "critical"]). If empty, all severities are allowed.
 	Severities []string `json:"severities,omitempty" example:"high,critical"`
+	// Indicates whether the underlying channel driver supports recipient targeting (populated in API responses).
+	RecipientsSupported bool `json:"recipientsSupported,omitempty" example:"true"`
+	// Indicates whether the underlying channel driver supports attachments (populated in API responses).
+	AttachmentsSupported bool `json:"attachmentsSupported,omitempty" example:"true"`
+	// Indicates whether the underlying channel driver supports deep links (populated in API responses).
+	LinksSupported bool `json:"linksSupported,omitempty" example:"true"`
+	// For drivers that support recipient targeting, whether targeting is enabled (defaults to true for SOC).
+	EnableRecipients *bool `json:"enableRecipients,omitempty" example:"true"`
+	// When recipient targeting is not supported or disabled, whether to skip sending targeted notifications.
+	SkipIfRecipients bool `json:"skipIfRecipients,omitempty" example:"false"`
 	// Channel-specific driver parameters (e.g. webhook URLs, hostnames, credentials).
 	Params map[string]interface{} `json:"params,omitempty"`
 }
@@ -139,10 +164,10 @@ type DestinationConfig struct {
 type NotificationConfig struct {
 	// Indicates whether the notification subsystem is globally enabled.
 	Enabled bool `json:"enabled" example:"true"`
-	// The list of default destination names used when no specific destination is requested.
-	DefaultDestinations []string `json:"defaultDestinations" example:"soc-bell"`
 	// Global silence window in seconds applied to debounced notifications.
 	GlobalSilenceWindowSeconds int `json:"globalSilenceWindowSeconds" example:"300"`
+	// Number of days to retain dismissed notifications before daily background pruning.
+	DismissedPruneDays int `json:"dismissedPruneDays" example:"30"`
 	// Map of configured notification destinations keyed by destination identifier.
 	Destinations map[string]DestinationConfig `json:"destinations,omitempty"`
 }
@@ -152,7 +177,7 @@ type NotificationRecord struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap,client"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
@@ -177,6 +202,8 @@ type NotificationRecord struct {
 	IsDismissed bool `json:"isDismissed" example:"false"`
 	// The timestamp when the notification was dismissed.
 	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+	// Optional recipient user IDs targeted to receive this notification.
+	Recipients []string `json:"recipients,omitempty" example:"user-1,user-2"`
 }
 
 // @Description NotificationAuditEntry represents a user view or dismissal audit state record.

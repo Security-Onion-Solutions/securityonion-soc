@@ -349,13 +349,28 @@ func TestGetAudit_NoLicense(t *testing.T) {
 }
 
 type fakeTestChannel struct {
-	channelType string
-	lastPayload *model.NotificationPayload
-	sendErr     error
+	channelType         string
+	supportsRecipients  bool
+	supportsAttachments bool
+	supportsLinks       bool
+	lastPayload         *model.NotificationPayload
+	sendErr             error
 }
 
 func (f *fakeTestChannel) Type() string {
 	return f.channelType
+}
+
+func (f *fakeTestChannel) SupportsRecipients() bool {
+	return f.supportsRecipients
+}
+
+func (f *fakeTestChannel) SupportsAttachments() bool {
+	return f.supportsAttachments
+}
+
+func (f *fakeTestChannel) SupportsLinks() bool {
+	return f.supportsLinks
 }
 
 func (f *fakeTestChannel) ValidateConfig(params map[string]interface{}) error {
@@ -368,12 +383,28 @@ func (f *fakeTestChannel) Send(ctx context.Context, params map[string]interface{
 }
 
 type fakeTestNotifier struct {
-	channels     map[string]NotificationChannel
-	destinations map[string]model.DestinationConfig
+	channels             map[string]NotificationChannel
+	destinations         map[string]model.DestinationConfig
+	lastSentPayload      *model.NotificationPayload
+	lastSentDestinations []string
+	sendErr              error
 }
 
 func (f *fakeTestNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
-	return nil
+	f.lastSentPayload = payload
+	f.lastSentDestinations = destinations
+	if len(destinations) > 0 && f.channels != nil {
+		for _, destId := range destinations {
+			if dest, ok := f.destinations[destId]; ok {
+				if ch, ok := f.channels[dest.Type]; ok {
+					_ = ch.Send(ctx, dest.Params, payload)
+				}
+			} else if ch, ok := f.channels["soc"]; ok && destId == "soc-bell" {
+				_ = ch.Send(ctx, nil, payload)
+			}
+		}
+	}
+	return f.sendErr
 }
 
 func (f *fakeTestNotifier) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
@@ -394,14 +425,6 @@ func (f *fakeTestNotifier) GetChannel(channelType string) (NotificationChannel, 
 
 func (f *fakeTestNotifier) GetDestinations() map[string]model.DestinationConfig {
 	return f.destinations
-}
-
-func (f *fakeTestNotifier) GetDefaultDestinations() []string {
-	return []string{model.DefaultDestinationSOCBell}
-}
-
-func (f *fakeTestNotifier) UpdateConfig(cfg model.NotificationConfig) {
-	f.destinations = cfg.Destinations
 }
 
 func TestGetDestinations_Success(t *testing.T) {
@@ -437,6 +460,12 @@ func TestGetDestinations_Success(t *testing.T) {
 	schedsJSON, _ := json.Marshal(scheds)
 
 	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc", supportsRecipients: true, supportsAttachments: true, supportsLinks: true},
+		},
+	}
+	srv.Notifier = fakeNotif
 	srv.Configstore = NewMemConfigStore([]*model.Setting{
 		{
 			Id:    "soc.config.server.modules.notification.destinations",
@@ -466,6 +495,7 @@ func TestGetDestinations_Success(t *testing.T) {
 	assert.Equal(t, "SOC Bell", resp[0].Name)
 	assert.Equal(t, []string{"work-hours"}, resp[0].ScheduleIDs)
 	assert.Equal(t, []string{"high", "critical"}, resp[0].Severities)
+	assert.True(t, resp[0].RecipientsSupported)
 }
 
 func TestGetDestinations_DefaultFallback(t *testing.T) {
@@ -769,6 +799,78 @@ func TestDeleteDestination_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestPostSendNotification_Global(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"System Wide Alert","summary":"Global notification","severity":"critical","recipients":["user-1","user-2"],"bypassSchedules":true}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Equal(t, "System Wide Alert", fakeNotif.lastSentPayload.Title)
+	assert.Equal(t, "Global notification", fakeNotif.lastSentPayload.Summary)
+	assert.Equal(t, "critical", fakeNotif.lastSentPayload.Severity)
+	assert.Equal(t, []string{"user-1", "user-2"}, fakeNotif.lastSentPayload.Recipients)
+	assert.Equal(t, model.SourceClient, fakeNotif.lastSentPayload.Source)
+	assert.True(t, fakeNotif.lastSentPayload.BypassSchedules)
+	assert.Empty(t, fakeNotif.lastSentDestinations)
+}
+
+func TestPostSendNotification_MissingTitle_ReturnsBadRequest(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"   ","summary":"No title"}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPostSendNotification_TitleTooLong_ReturnsBadRequest(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	longTitle := string(bytes.Repeat([]byte("a"), 256))
+	bodyJSON, _ := json.Marshal(map[string]string{"title": longTitle})
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewReader(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestPostTestDestination_Success(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
@@ -797,7 +899,7 @@ func TestPostTestDestination_Success(t *testing.T) {
 	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test", nil)
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test?title=Test%3A+SOC+Notification+Bell", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	rctx := chi.NewRouteContext()
@@ -809,8 +911,153 @@ func TestPostTestDestination_Success(t *testing.T) {
 	h.PostTestDestination(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.NotNil(t, ch.lastPayload)
-	assert.Contains(t, ch.lastPayload.Title, "Test: SOC Notification Bell")
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Contains(t, fakeNotif.lastSentPayload.Title, "Test: SOC Notification Bell")
+	assert.Equal(t, model.SourceClient, fakeNotif.lastSentPayload.Source)
+	assert.Nil(t, fakeNotif.lastSentPayload.Recipients)
+}
+
+func TestPostTestDestination_Targeted(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"soc-bell": {
+			ID:   "soc-bell",
+			Name: "SOC Notification Bell",
+			Type: "soc",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	ch := &fakeTestChannel{channelType: "soc"}
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": ch,
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test?targeted=true&title=Test+%28Targeted%29%3A+SOC+Notification+Bell", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-uuid-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Contains(t, fakeNotif.lastSentPayload.Title, "Test (Targeted): SOC Notification Bell")
+	assert.Equal(t, model.SourceClient, fakeNotif.lastSentPayload.Source)
+	assert.Equal(t, []string{"user-uuid-123"}, fakeNotif.lastSentPayload.Recipients)
+}
+
+func TestPostTestDestination_LocalizedTitleAndSummary(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	initialDests := map[string]model.DestinationConfig{
+		"soc-bell": {
+			ID:   "soc-bell",
+			Name: "SOC Notification Bell",
+			Type: "soc",
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+	ch := &fakeTestChannel{channelType: "soc"}
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": ch,
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test?title=Prueba%3A+Campana&summary=Resumen+personalizado", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Equal(t, "Prueba: Campana", fakeNotif.lastSentPayload.Title)
+	assert.Equal(t, "Resumen personalizado", fakeNotif.lastSentPayload.Summary)
+}
+
+func TestPostTestDestination_Targeted_RecipientsDisabled_BroadcastsToAll(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	enableFalse := false
+	initialDests := map[string]model.DestinationConfig{
+		"soc-bell": {
+			ID:               "soc-bell",
+			Name:             "SOC Notification Bell",
+			Type:             "soc",
+			Enabled:          true,
+			EnableRecipients: &enableFalse,
+			SkipIfRecipients: false,
+		},
+	}
+	destsJSON, _ := json.Marshal(initialDests)
+	srv.Configstore = NewMemConfigStore([]*model.Setting{
+		{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(destsJSON),
+		},
+	})
+
+	ch := &fakeTestChannel{channelType: "soc", supportsRecipients: true}
+	fakeNotif := &fakeTestNotifier{
+		channels: map[string]NotificationChannel{
+			"soc": ch,
+		},
+		destinations: initialDests,
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test?targeted=true&title=Test+%28Targeted%29%3A+SOC+Notification+Bell", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-uuid-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostTestDestination(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Contains(t, fakeNotif.lastSentPayload.Title, "Test (Targeted): SOC Notification Bell")
 }
 
 func TestPostTestDestination_NotFound(t *testing.T) {
@@ -819,9 +1066,10 @@ func TestPostTestDestination_NotFound(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	srv.Notifier = &fakeTestNotifier{}
 	h := NewNotificationHandler(srv)
 
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/nonexistent/test", nil)
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/nonexistent/test?title=Test", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	rctx := chi.NewRouteContext()
@@ -860,7 +1108,7 @@ func TestPostTestDestination_DriverMissing(t *testing.T) {
 	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/matrix-dest/test", nil)
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/matrix-dest/test?title=Matrix+Test", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 	rctx := chi.NewRouteContext()

@@ -7,21 +7,67 @@
 package notify
 
 import (
+	"context"
+	"encoding/json"
+	"strconv"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 const (
 	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 300
+	DEFAULT_DISMISSED_PRUNE_DAYS          = 30
 )
+
+// LoadConfigFromStore reads notification configuration from onionconfig, ensuring default destinations
+// (such as soc-bell) are set if no destinations are configured.
+func LoadConfigFromStore(ctx context.Context, store server.Configstore) model.NotificationConfig {
+	config := model.NotificationConfig{
+		Enabled:                    true,
+		GlobalSilenceWindowSeconds: DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS,
+		DismissedPruneDays:         DEFAULT_DISMISSED_PRUNE_DAYS,
+		Destinations:               model.DefaultDestinationsMap(),
+	}
+
+	if store == nil {
+		return config
+	}
+
+	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationEnabled); err == nil && setting != nil && setting.Value != "" {
+		config.Enabled = setting.Value == "true"
+	}
+
+	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationDismissedPruneDays); err == nil && setting != nil && setting.Value != "" {
+		if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
+			config.DismissedPruneDays = days
+		}
+	}
+
+	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationDestinations); err == nil && setting != nil && setting.Value != "" {
+		var dests map[string]model.DestinationConfig
+		if err := json.Unmarshal([]byte(setting.Value), &dests); err == nil && len(dests) > 0 {
+			for k, v := range dests {
+				if v.ID == "" {
+					v.ID = k
+				}
+				dests[k] = v
+			}
+			config.Destinations = dests
+		}
+	}
+
+	return config
+}
 
 // ParseConfig parses and validates module configuration, ensuring default destinations
 // (such as soc-bell) are set on new or empty configurations.
 func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 	config := model.NotificationConfig{
 		Enabled:                    module.GetBoolDefault(cfg, "enabled", true),
-		DefaultDestinations:        module.GetStringArrayDefault(cfg, "defaultDestinations", []string{model.DefaultDestinationSOCBell}),
 		GlobalSilenceWindowSeconds: module.GetIntDefault(cfg, "globalSilenceWindowSeconds", DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS),
+		DismissedPruneDays:         module.GetIntDefault(cfg, "dismissedPruneDays", DEFAULT_DISMISSED_PRUNE_DAYS),
 		Destinations:               make(map[string]model.DestinationConfig),
 	}
 
@@ -65,11 +111,6 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 	// If no destinations are defined, configure default soc-bell destination
 	if len(config.Destinations) == 0 {
 		config.Destinations = model.DefaultDestinationsMap()
-	}
-
-	// Ensure default destinations list has at least soc-bell if empty
-	if len(config.DefaultDestinations) == 0 {
-		config.DefaultDestinations = []string{model.DefaultDestinationSOCBell}
 	}
 
 	return config, nil

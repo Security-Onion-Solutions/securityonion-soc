@@ -199,3 +199,75 @@ func TestBroadcastAllowed(tester *testing.T) {
 	time.Sleep(1 * time.Second) // If this test file continues to evolve, replace this with a httptest shutdown
 	assert.Contains(tester, webSocketReadString, "\"Kind\":\"test\"")
 }
+
+type fakeRecipientFilterable struct {
+	recipients []string
+	Content    string
+}
+
+func (f *fakeRecipientFilterable) GetRecipients() []string {
+	return f.recipients
+}
+
+func TestBroadcast_RecipientFilterable_MatchingRecipient(tester *testing.T) {
+	host := setupWebsocket(tester)
+	host.Authorizer = &rbac.FakeAuthorizer{
+		Authorized: true,
+	}
+	payload := &fakeRecipientFilterable{
+		recipients: []string{"myUserId"},
+		Content:    "targeted-content",
+	}
+	host.Broadcast("notification", "notifications", payload)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Contains(tester, webSocketReadString, "\"Kind\":\"notification\"")
+}
+
+type readOnlyAuthorizer struct {
+	rbac.FakeAuthorizer
+}
+
+func (a *readOnlyAuthorizer) CheckUserOperationAuthorized(userId string, op string, target string) error {
+	if op == "read" {
+		return nil
+	}
+	return errors.New("unauthorized")
+}
+
+func TestBroadcast_RecipientFilterable_NonMatchingRecipient_Denied(tester *testing.T) {
+	host := setupWebsocket(tester)
+	host.Authorizer = &readOnlyAuthorizer{}
+	payload := &fakeRecipientFilterable{
+		recipients: []string{"otherUser"},
+		Content:    "targeted-content",
+	}
+	host.Broadcast("notification", "notifications", payload)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(tester, "", webSocketReadString)
+}
+
+type readAllAuthorizer struct {
+	rbac.FakeAuthorizer
+}
+
+func (a *readAllAuthorizer) CheckUserOperationAuthorized(userId string, op string, target string) error {
+	if op == "read" || op == "read_all" {
+		return nil
+	}
+	return errors.New("unauthorized")
+}
+
+func TestBroadcast_RecipientFilterable_NonMatchingRecipient_ReadAllAuditor(tester *testing.T) {
+	host := setupWebsocket(tester)
+	host.Authorizer = &readAllAuthorizer{}
+	payload := &fakeRecipientFilterable{
+		recipients: []string{"otherUser"},
+		Content:    "targeted-content",
+	}
+	host.Broadcast("notification", "notifications", payload)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Contains(tester, webSocketReadString, "\"Kind\":\"notification\"")
+}
