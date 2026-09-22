@@ -102,8 +102,22 @@ func (mr *MockAssistantstoreMockRecorder) FindSessionsPendingMemoryScan(ctx, don
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSessionsPendingMemoryScan", reflect.TypeOf((*MockAssistantstore)(nil).FindSessionsPendingMemoryScan), ctx, dontScanBefore, maxMemoryRetries)
 }
 
+// FinishPartialChat mocks base method.
+func (m *MockAssistantstore) FinishPartialChat(arg0 context.Context, arg1 *model.StoredMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishPartialChat", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FinishPartialChat indicates an expected call of FinishPartialChat.
+func (mr *MockAssistantstoreMockRecorder) FinishPartialChat(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishPartialChat", reflect.TypeOf((*MockAssistantstore)(nil).FinishPartialChat), arg0, arg1)
+}
+
 // GetChatHistory mocks base method.
-func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string) ([]*model.StoredMessage, error) {
+func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 *model.AssistantSession) ([]*model.StoredMessage, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetChatHistory", arg0, arg1)
 	ret0, _ := ret[0].([]*model.StoredMessage)
@@ -115,21 +129,6 @@ func (m *MockAssistantstore) GetChatHistory(arg0 context.Context, arg1 string) (
 func (mr *MockAssistantstoreMockRecorder) GetChatHistory(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatHistory", reflect.TypeOf((*MockAssistantstore)(nil).GetChatHistory), arg0, arg1)
-}
-
-// GetChatMessages mocks base method.
-func (m *MockAssistantstore) GetChatMessages(arg0 context.Context, arg1 *model.AssistantSession) ([]*model.StoredMessage, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetChatMessages", arg0, arg1)
-	ret0, _ := ret[0].([]*model.StoredMessage)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetChatMessages indicates an expected call of GetChatMessages.
-func (mr *MockAssistantstoreMockRecorder) GetChatMessages(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChatMessages", reflect.TypeOf((*MockAssistantstore)(nil).GetChatMessages), arg0, arg1)
 }
 
 // GetSessions mocks base method.
@@ -193,6 +192,20 @@ func (m *MockAssistantstore) SaveChat(arg0 context.Context, arg1 *model.StoredMe
 func (mr *MockAssistantstoreMockRecorder) SaveChat(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveChat", reflect.TypeOf((*MockAssistantstore)(nil).SaveChat), arg0, arg1)
+}
+
+// SavePartialChat mocks base method.
+func (m *MockAssistantstore) SavePartialChat(arg0 context.Context, arg1 *model.StoredMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SavePartialChat", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SavePartialChat indicates an expected call of SavePartialChat.
+func (mr *MockAssistantstoreMockRecorder) SavePartialChat(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SavePartialChat", reflect.TypeOf((*MockAssistantstore)(nil).SavePartialChat), arg0, arg1)
 }
 
 // UpdateSessionMemoryScanIndex mocks base method.

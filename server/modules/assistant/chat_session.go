@@ -9,7 +9,6 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -17,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/google/uuid"
 )
 
 // ChatInSession loads the session history, appends the new user message,
@@ -117,31 +117,59 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 		logger.WithError(err).Error("unable to save user message before streaming response")
 	}
 
-	finalize := func(rawResponse []byte) error {
-		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
+	finalize := ac.streamFinalizer(noTimeOutCtx, aux, incMsg.SessionId, nil, incMsg.Model)
+
+	return response, aux, finalize, nil
+}
+
+// streamFinalizer parses the buffered stream and stores the assistant turn. The
+// message id is minted here rather than taken from the provider: not every
+// adapter supplies one, and the store keys partial rewrites on it.
+func (ac *AssistantCoordinator) streamFinalizer(ctx context.Context, aux *model.AuxMessageData, sessionId string, tags []string, aiModel string) func(rawResponse []byte) error {
+	turnId := uuid.NewString()
+
+	return func(rawResponse []byte) error {
+		msg, err := server.UnstreamResponse(ctx, string(rawResponse), aux)
 		if err != nil {
-			logger.WithError(err).Error("error while piecing stream together")
+			log.FromContext(ctx).WithError(err).Error("error while piecing stream together")
 			return err
 		}
 		if msg == nil {
 			return nil
 		}
 
-		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(incMsg.SessionId, nil, incMsg.Model))
-	}
+		msg.Id = turnId
 
-	return response, aux, finalize, nil
+		return ac.srv.Assistantstore.SaveChat(ctx, msg.PrepareForStorage(sessionId, tags, aiModel))
+	}
 }
 
 func (ac *AssistantCoordinator) loadHistory(ctx context.Context, sessionId string) ([]*model.Message, bool, error) {
 	logger := log.FromContext(ctx)
 
-	history, err := ac.srv.Assistantstore.GetChatHistory(ctx, sessionId)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
+	sessions, err := ac.srv.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionId(sessionId),
+		model.GetSessionsWithIncludeDeleted(true),
+		model.GetSessionsWithMemorySessions(true),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		logger.WithError(err).Error("unable to get session")
+		return nil, false, err
+	}
+
+	if len(sessions) == 0 {
+		return nil, true, nil
+	}
+
+	history, err := ac.srv.Assistantstore.GetChatHistory(ctx, sessions[0])
+	if err != nil {
 		logger.WithError(err).Error("unable to get chat history")
 		return nil, false, err
 	}
 
+	// Stored messages, not context messages: a session whose only messages are
+	// abandoned partials is not new, and creating it again would duplicate it.
 	return HistoryToContext(history), len(history) == 0, nil
 }
 

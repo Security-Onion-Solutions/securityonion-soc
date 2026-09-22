@@ -855,6 +855,11 @@ func TestSaveChat(t *testing.T) {
 	// memory scanner can find the session in a single query.
 	reqs := transport.GetRequests()
 	assert.Len(t, reqs, 2)
+
+	// Without an Id the write stays a POST, leaving Elasticsearch to mint one.
+	assert.Equal(t, "POST", reqs[0].Method)
+	assert.Equal(t, "/chat-index/_doc", reqs[0].URL.Path)
+
 	assert.Contains(t, reqs[1].URL.Path, "_update_by_query")
 	assert.Contains(t, reqs[1].URL.RawQuery, "conflicts=proceed")
 	body, err := io.ReadAll(reqs[1].Body)
@@ -906,6 +911,228 @@ func TestSaveChat_IncrementFailureNonFatal(t *testing.T) {
 	// must not fail the save.
 	err := store.SaveChat(ctx, chat)
 	assert.NoError(t, err)
+}
+
+const streamTestMsgId = "b4d9c6f2-1a7e-4c30-9f85-2ad0e7c14b63"
+
+func newStreamingChat(text string) *model.StoredMessage {
+	return &model.StoredMessage{
+		SessionId: "chat_123456",
+		Message:   &model.Message{Id: streamTestMsgId, ContentStr: text},
+	}
+}
+
+func TestSavePartialChat_StreamingTurnWritesOneDocument(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	chat := newStreamingChat("Hel")
+
+	// First flush misses the probe and appends; the rest rewrite that document.
+	addJsonResponse(transport, 200, `{"took": 1, "total": 0, "updated": 0, "version_conflicts": 0}`)
+	addJsonResponse(transport, 201, `{"_id": "es-generated-1", "result": "created"}`)
+	addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "version_conflicts": 0, "failures": []}`)
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 1, "version_conflicts": 0}`)
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 1, "version_conflicts": 0}`)
+
+	assert.NoError(t, store.SavePartialChat(ctx, chat))
+	firstFlush := *chat.CreateTime
+
+	chat.Message.ContentStr = "Hello, wo"
+	assert.NoError(t, store.SavePartialChat(ctx, chat))
+
+	chat.Message.ContentStr = "Hello, world!"
+	assert.NoError(t, store.FinishPartialChat(ctx, chat))
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 5)
+
+	// Nothing carries a document id: a data stream would reject it.
+	assert.Contains(t, reqs[0].URL.Path, "_update_by_query")
+	assert.Equal(t, "POST", reqs[1].Method)
+	assert.Equal(t, "/chat-index/_doc", reqs[1].URL.Path)
+	assert.Contains(t, reqs[3].URL.Path, "_update_by_query")
+	assert.Contains(t, reqs[4].URL.Path, "_update_by_query")
+
+	bodies := make([]string, len(reqs))
+	for i := range reqs {
+		body, err := reqs[i].GetBody()
+		assert.NoError(t, err)
+		raw, err := io.ReadAll(body)
+		assert.NoError(t, err)
+		bodies[i] = string(raw)
+	}
+
+	for _, i := range []int{0, 3, 4} {
+		assert.Contains(t, bodies[i], "so_chat.message.id")
+		assert.Contains(t, bodies[i], streamTestMsgId)
+		assert.Contains(t, bodies[i], "chat_123456")
+		assert.Contains(t, bodies[i], "ctx._source.so_chat = params.chat;")
+		assert.Contains(t, reqs[i].URL.RawQuery, "conflicts=proceed")
+	}
+
+	assert.Equal(t, firstFlush, *chat.CreateTime)
+
+	// GetChatHistory sorts on @timestamp, so a rewrite must never touch it.
+	assert.Contains(t, bodies[1], "@timestamp")
+	assert.NotContains(t, bodies[4], `"@timestamp"`)
+
+	assert.Contains(t, bodies[0], model.MessageTagPartial)
+	assert.Contains(t, bodies[3], model.MessageTagPartial)
+	assert.NotContains(t, bodies[4], model.MessageTagPartial)
+	assert.Empty(t, chat.Tags)
+
+	// Counted once, by the append; a rewrite adds no message.
+	assert.Contains(t, reqs[2].URL.Path, "_update_by_query")
+	assert.Contains(t, bodies[2], "messageCount")
+	for _, i := range []int{0, 3, 4} {
+		assert.NotContains(t, bodies[i], "messageCount")
+	}
+
+	assert.Contains(t, bodies[4], "Hello, world!")
+}
+
+func TestSavePartialChat_TagIsNotDuplicatedAcrossFlushes(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	chat := newStreamingChat("partial")
+
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 1}`)
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 1}`)
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 1}`)
+
+	for range 3 {
+		assert.NoError(t, store.SavePartialChat(ctx, chat))
+	}
+
+	// The caller reuses one chat across flushes, so an unconditional append would
+	// grow tags to ["partial","partial","partial"].
+	assert.Equal(t, []string{model.MessageTagPartial}, chat.Tags)
+	assert.Len(t, transport.GetRequests(), 3)
+}
+
+func TestFinishPartialChat_AppendsWhenNoPartialLanded(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	addJsonResponse(transport, 200, `{"took": 1, "total": 0, "updated": 0}`)
+	addJsonResponse(transport, 201, `{"_id": "es-generated-1", "result": "created"}`)
+	addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "failures": []}`)
+
+	assert.NoError(t, store.FinishPartialChat(ctx, newStreamingChat("no flush ever landed")))
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 3)
+	assert.Contains(t, reqs[0].URL.Path, "_update_by_query")
+	assert.Equal(t, "/chat-index/_doc", reqs[1].URL.Path)
+	assert.Contains(t, reqs[2].URL.Path, "_update_by_query")
+}
+
+// A version conflict leaves the document in place, so the flush must not append
+// a second copy of the same turn.
+func TestSavePartialChat_VersionConflictDoesNotAppend(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	addJsonResponse(transport, 200, `{"took": 1, "total": 1, "updated": 0, "version_conflicts": 1}`)
+
+	assert.NoError(t, store.SavePartialChat(ctx, newStreamingChat("partial")))
+	assert.Len(t, transport.GetRequests(), 1)
+}
+
+// An empty id would match every message that never set one.
+func TestSavePartialChat_RejectsMissingMessageId(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	chat := newStreamingChat("partial")
+	chat.Message.Id = ""
+
+	assert.Error(t, store.SavePartialChat(ctx, chat))
+	assert.Empty(t, transport.GetRequests())
+}
+
+// SaveChat stays a plain append: it must not pay for an update-by-query probe on
+// the path every ordinary message takes, even though assistant messages carry a
+// provider-assigned Message.Id.
+func TestSaveChat_IgnoresMessageIdAndAppends(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	addJsonResponse(transport, 201, `{"_id": "es-generated-1", "result": "created"}`)
+	addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "failures": []}`)
+
+	assert.NoError(t, store.SaveChat(ctx, newStreamingChat("a finished message")))
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 2)
+	assert.Equal(t, "POST", reqs[0].Method)
+	assert.Equal(t, "/chat-index/_doc", reqs[0].URL.Path)
+	assert.Contains(t, reqs[1].URL.Path, "_update_by_query")
+}
+
+func TestSavePartialChat_DistinctIdsAppendSeparately(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	for range 2 {
+		addJsonResponse(transport, 200, `{"took": 1, "total": 0, "updated": 0}`)
+		addJsonResponse(transport, 201, `{"_id": "es-generated", "result": "created"}`)
+		addJsonResponse(transport, 200, `{"took": 1, "updated": 1, "failures": []}`)
+	}
+
+	first := newStreamingChat("first turn")
+	second := newStreamingChat("second turn")
+	second.Message.Id = "5e1c2a9b-7d43-4f0e-a6b8-91c3d2e4f5a7"
+
+	assert.NoError(t, store.SavePartialChat(ctx, first))
+	assert.NoError(t, store.SavePartialChat(ctx, second))
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 6)
+	assert.Equal(t, "/chat-index/_doc", reqs[1].URL.Path)
+	assert.Equal(t, "/chat-index/_doc", reqs[4].URL.Path)
+}
+
+func TestSavePartialChat_Unauthorized(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	assert.Error(t, store.SavePartialChat(ctx, newStreamingChat("partial")))
+	assert.Empty(t, transport.GetRequests())
 }
 
 func TestCreateSession(t *testing.T) {
@@ -1649,57 +1876,6 @@ func TestGetChatHistory(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
-	// Mock session check
-	sessionCheck := `{
-		"hits": {
-			"total": {
-				"value": 1
-			},
-			"hits": [
-				{
-					"_id": "session1",
-					"_source": {
-						"so_kind": "session",
-						"so_session": {
-							"sessionId": "session1",
-							"userId": "test-user"
-						}
-					}
-				}
-			]
-		}
-	}`
-
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header: http.Header{
-			"X-Elastic-Product": []string{"Elasticsearch"},
-		},
-		Body: io.NopCloser(strings.NewReader(sessionCheck)),
-	}, nil)
-
-	// Mock MSearch response for addMetaFromMessages (update time) - called by GetSessions
-	msearchUpdateTimeResponse := `{
-		"responses": [
-			{
-				"aggregations": {
-					"update_time": {
-						"value": 1234567890000,
-						"value_as_string": "2009-02-13T23:31:30.000Z"
-					}
-				}
-			}
-		]
-	}`
-
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header: http.Header{
-			"X-Elastic-Product": []string{"Elasticsearch"},
-		},
-		Body: io.NopCloser(strings.NewReader(msearchUpdateTimeResponse)),
-	}, nil)
-
 	// Mock search response for chat messages
 	searchResponse := `{
 		"hits": {
@@ -1747,7 +1923,10 @@ func TestGetChatHistory(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(searchResponse)),
 	}, nil)
 
-	messages, err := store.GetChatHistory(ctx, "session1")
+	session := &model.AssistantSession{SessionId: "session1"}
+	session.UserId = "test-user"
+
+	messages, err := store.GetChatHistory(ctx, session)
 	assert.NoError(t, err)
 	assert.Len(t, messages, 2)
 	assert.Equal(t, "msg1", messages[0].Id)
@@ -1755,15 +1934,26 @@ func TestGetChatHistory(t *testing.T) {
 	assert.Equal(t, "Hello", messages[0].Message.ContentStr)
 	assert.Equal(t, "Hi there!", messages[1].Message.ContentStr)
 
-	// ensure GetSession call does not filter out deleted or memory sessions
+	// the caller supplies the session, so the only query is for the messages
 	reqs := transport.GetRequests()
-	assert.Len(t, reqs, 3) // One for GetSessions, one for session meta data, one for chat messages
+	assert.Len(t, reqs, 1)
 	body, err := reqs[0].GetBody()
 	assert.NoError(t, err)
 	data, err := io.ReadAll(body)
 	assert.NoError(t, err)
-	assert.NotContains(t, string(data), "deleteTime")
-	assert.NotContains(t, string(data), "so_session.tags")
+	assert.Contains(t, string(data), "so_chat.sessionId")
+}
+
+func TestGetChatHistoryNilSession(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store.Init("chat-index", "session-index", "so_")
+
+	messages, err := store.GetChatHistory(context.Background(), nil)
+	assert.Error(t, err)
+	assert.Nil(t, messages)
+	assert.Empty(t, transport.GetRequests())
 }
 
 func TestGetSessions_WithFilters(t *testing.T) {

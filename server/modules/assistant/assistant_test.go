@@ -883,15 +883,15 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 	const sessionId = "session-1"
 
 	tests := []struct {
-		name         string
-		history      []*model.StoredMessage
-		historyErr   error
-		msg          string
-		chatType     string
-		entityId     string
-		wantTitle    string
-		wantType     string
-		wantEntityId string
+		name           string
+		history        []*model.StoredMessage
+		sessionMissing bool
+		msg            string
+		chatType       string
+		entityId       string
+		wantTitle      string
+		wantType       string
+		wantEntityId   string
 	}{
 		{
 			name:      "empty history creates a new session",
@@ -910,10 +910,10 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 			wantEntityId: "alert-42",
 		},
 		{
-			name:       "history not-found is tolerated",
-			historyErr: errors.New("session not found"),
-			msg:        "hi",
-			wantTitle:  "hi",
+			name:           "missing session is tolerated",
+			sessionMissing: true,
+			msg:            "hi",
+			wantTitle:      "hi",
 		},
 	}
 
@@ -925,7 +925,11 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(tc.history, tc.historyErr)
+			if tc.sessionMissing {
+				mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(nil, nil)
+			} else {
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(tc.history, nil)
+			}
 			mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, session *model.AssistantSession) error {
 					assert.Equal(t, sessionId, session.SessionId)
@@ -964,7 +968,7 @@ func TestAssistantCoordinator_ChatInSession_ExistingHistoryPersistsMessages(t *t
 		{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier reply"}}}},
 	}
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(history, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(history, nil)
 
 	mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
 		body, err := io.ReadAll(req.Body)
@@ -1004,7 +1008,7 @@ func TestAssistantCoordinator_ChatInSession_UpstreamErrorPropagates(t *testing.T
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
 
 	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
@@ -1027,7 +1031,7 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testi
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 	// User message is saved before the stream begins.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1056,11 +1060,14 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testi
 	stream.Body.Close()
 
 	// Now exercise the finalize callback with a synthetic raw SSE blob; the
-	// coordinator should parse the assistant message and persist it.
+	// coordinator should parse the assistant message and persist it under a
+	// server-minted id, not whatever the provider put in message_start.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, sessionId, stored.SessionId)
 			assert.Equal(t, "assistant", stored.Message.Role)
+			assert.NotEmpty(t, stored.Message.Id)
+			assert.NotEqual(t, "assistant", stored.Message.Id)
 			return nil
 		})
 
@@ -1178,7 +1185,7 @@ func TestAssistantCoordinator_ToolInSession(t *testing.T) {
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 			// Loaded once by validateToolRequest; the continuation reuses the validated history.
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 				storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
 			}, nil)
 
@@ -1226,7 +1233,7 @@ func TestAssistantCoordinator_ToolStreamInSession_FinalizeSavesResponse(t *testi
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
 	}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1306,7 +1313,7 @@ func TestAssistantCoordinator_ToolStreamInSession_RejectedTool(t *testing.T) {
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tool-use-1")}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tool-use-1")}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, []string{"tool_result"}, stored.Tags)
@@ -1361,7 +1368,7 @@ func TestAssistantCoordinator_ToolStreamInSession_RejectedTool_CoalescesWithSibl
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedToolUseTurn("tool-a", "tool-b"),
 	}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1431,7 +1438,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoff(t *testing.T
 	ac.DelegationLibrary = map[string]Tool{delegate.GetName(): delegate}
 
 	// validateToolRequest loads the parent history once; the kickoff itself never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn(delegate.GetName(), json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
 	}, nil)
 
@@ -1474,7 +1481,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// validateToolRequest loads the parent history once; the kickoff itself never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Test_Hunter", json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
 	}, nil)
 
@@ -1617,7 +1624,7 @@ func TestAssistantCoordinator_ToolStreamInSession_UsesSessionModel(t *testing.T)
 			mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
 				{SessionId: tc.sessionId, Model: tc.storedModel},
 			}, nil)
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
 			mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 			mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 				StatusCode: 200,
@@ -1649,7 +1656,7 @@ func TestAssistantCoordinator_ResolveDelegationStream(t *testing.T) {
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// Parent history still has the unanswered delegate tool_use.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
 			{Type: "tool_use", Id: "delegate-tooluse", Name: "delegate_to_Hunter"},
 		}}},
@@ -1712,7 +1719,7 @@ func TestAssistantCoordinator_ResolveDelegationStream_DetachesFromRequestCtx(t *
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
 			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
 			return []*model.StoredMessage{storedToolUseTurn("delegate-tooluse")}, nil
@@ -1762,7 +1769,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DetachesFromRequestCtx(t *test
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
 			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
 			return []*model.StoredMessage{storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1")}, nil
@@ -2062,7 +2069,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
 		},
@@ -2071,7 +2078,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 			// and returned even when the tool_result save fails.
 			name: "save tool_result failure does not discard the billed response",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(assistantOkTextResponse("done"), nil)
 				// First persistence is the tool_result message; fail it. The
 				// assistant response is still saved.
@@ -2119,7 +2126,7 @@ func TestAssistantCoordinator_ToolInSession_AsyncToolNilResult(t *testing.T) {
 
 	// An async tool's turn ends at execution, so history is only loaded once, by
 	// validateToolRequest.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("async_tool", nil, "tu"),
 	}, nil)
 
@@ -2151,7 +2158,7 @@ func TestAssistantCoordinator_ToolInSession_DelegationKickoffParksForApproval(t 
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// validateToolRequest loads the parent history once; the parked kickoff never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Hunter", nil, "tu"),
 	}, nil)
 	// The child session is created and its objective seeded; then the sub-agent's
@@ -2301,7 +2308,7 @@ func TestAssistantCoordinator_ToolInSession_Delegation(t *testing.T) {
 			mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 			// Loaded twice: once by validateToolRequest, once by the delegation fold-back
 			// continuation, which runs after the lock was released and so reloads.
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 				storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
 			}, nil).Times(2)
 			mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -2403,7 +2410,7 @@ func TestAssistantCoordinator_StartDelegation_KickoffStreamErrorResolvesParent(t
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
 	}, nil).AnyTimes()
 	// Two saves: the child's objective, then the parent's error tool_result.
@@ -2503,14 +2510,14 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
 		},
 		{
 			name: "upstream stream error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
@@ -2520,7 +2527,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 			// returned so finalize can save it and its usage.
 			name: "save tool_result failure does not abandon the billed stream",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader("data: stream")),
@@ -4365,7 +4372,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_CoalescesParallelTools(t *t
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(tc.history, nil)
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(tc.history, nil)
 			if tc.wantContinue {
 				mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
@@ -4510,7 +4517,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testin
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 			calls := 0
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error) {
 					calls++
 					return tc.historyProvider(calls)

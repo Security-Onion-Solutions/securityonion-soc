@@ -17,6 +17,9 @@ import (
 
 const (
 	MessageTagContextCompression = "context_compression"
+	// MessageTagPartial marks a message still being streamed. A stored message
+	// that kept the tag is one whose turn never finished.
+	MessageTagPartial = "partial"
 
 	SessionTagMemory     = "memory"
 	SessionTagEmbed      = "embed"
@@ -144,6 +147,10 @@ type saveableMessage struct {
 	StopReason    *string        `json:"stopReason,omitempty"`
 	StopSequence  *string        `json:"stopSequence,omitempty"`
 	Usage         *Usage         `json:"usage,omitempty"`
+}
+
+func (sm *StoredMessage) IsPartial() bool {
+	return slices.Contains(sm.Tags, MessageTagPartial)
 }
 
 func (sm *StoredMessage) MarshalJSON() ([]byte, error) {

@@ -639,7 +639,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, root)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history for session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -667,7 +667,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	for _, sub := range subSessions {
-		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub.SessionId)
+		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub)
 		if err != nil {
 			logger.WithError(err).WithField("subSessionId", sub.SessionId).Error("unable to get chat history for sub-session")
 			continue
@@ -703,6 +703,11 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 	var pending *model.PendingToolApproval
 	for _, sm := range history {
 		if sm.Message == nil || sm.Message.Role != "assistant" {
+			continue
+		}
+		// A turn that never finished streaming never reached the model, so its
+		// tool_use cannot be resumed: approving it would orphan the tool_result.
+		if sm.IsPartial() {
 			continue
 		}
 		for _, cb := range sm.Message.ContentBlocks {
@@ -1069,7 +1074,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessions[0])
 	if err != nil {
 		logger.WithError(err).Error("unable to manage session history")
 		web.Respond(w, r, http.StatusInternalServerError, err)

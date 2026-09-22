@@ -760,7 +760,7 @@ func TestManageSessionHistory(t *testing.T) {
 		return mockSessions, nil
 	})
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), mockSessions[0]).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.ManageSessionHistory(w, req)
@@ -1110,7 +1110,7 @@ func TestGetSessionDetails(t *testing.T) {
 		return mockSessions, nil
 	})
 
-	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(mockHistory, nil)
+	mockAssistantStore.EXPECT().GetChatHistory(gomock.Any(), mockSessions[0]).Return(mockHistory, nil)
 
 	// Execute the handler
 	handler.GetSessionDetails(w, req)
@@ -1153,8 +1153,8 @@ func TestGetSessionDetails_WithSubSessions(t *testing.T) {
 
 	rootHistory := []*model.StoredMessage{{SessionId: sessionId, Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "delegating"}}}}}
 	childHistory := []*model.StoredMessage{{SessionId: "child-1", Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "found 3 domains"}}}}}
-	mockStore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(rootHistory, nil)
-	mockStore.EXPECT().GetChatHistory(gomock.Any(), "child-1").Return(childHistory, nil)
+	mockStore.EXPECT().GetChatHistory(gomock.Any(), root).Return(rootHistory, nil)
+	mockStore.EXPECT().GetChatHistory(gomock.Any(), child).Return(childHistory, nil)
 
 	handler.GetSessionDetails(w, req)
 
@@ -3588,6 +3588,11 @@ func assistantMsg(blocks ...model.ContentBlock) *model.StoredMessage {
 	return &model.StoredMessage{Message: &model.Message{Role: "assistant", ContentBlocks: blocks}}
 }
 
+func partial(msg *model.StoredMessage) *model.StoredMessage {
+	msg.Tags = append(msg.Tags, model.MessageTagPartial)
+	return msg
+}
+
 func toolResultMsg(toolUseId string) *model.StoredMessage {
 	return &model.StoredMessage{
 		Tags:    []string{"tool_result"},
@@ -3642,6 +3647,15 @@ func TestPendingToolApproval(t *testing.T) {
 			sessionId: "s",
 			history:   []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})},
 			wantNil:   true,
+		},
+		{
+			// Its tool_use never reached the model, so a tool_result would be orphaned.
+			name:      "tool_use in an unfinished turn is not pending (nil)",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				partial(assistantMsg(toolUse)),
+			},
+			wantNil: true,
 		},
 	}
 
