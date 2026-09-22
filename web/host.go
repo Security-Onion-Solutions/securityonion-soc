@@ -177,7 +177,7 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 						break
 					}
 				}
-				if !isRecipient && host.Authorizer.CheckUserOperationAuthorized(connection.userId, "read_all", reqPermission) != nil {
+				if !isRecipient {
 					log.WithFields(log.Fields{
 						"messageKind": kind,
 						"sourceIp":    connection.ip,
