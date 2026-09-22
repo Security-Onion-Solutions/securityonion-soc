@@ -179,13 +179,21 @@ func (f *fakeAssistantstore) seed(sessionId string, msg *model.Message) {
 func (f *fakeAssistantstore) SaveChat(_ context.Context, m *model.StoredMessage) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.upsert(m)
+	f.msgs[m.SessionId] = append(f.msgs[m.SessionId], m)
 	return nil
 }
 
 func (f *fakeAssistantstore) SavePartialChat(_ context.Context, m *model.StoredMessage) error {
-	if m.Id == "" {
-		return errors.New("a partial chat message requires an Id")
+	return f.saveStreaming(m)
+}
+
+func (f *fakeAssistantstore) FinishPartialChat(_ context.Context, m *model.StoredMessage) error {
+	return f.saveStreaming(m)
+}
+
+func (f *fakeAssistantstore) saveStreaming(m *model.StoredMessage) error {
+	if m.Message == nil || m.Message.Id == "" {
+		return errors.New("a streaming chat message requires a Message.Id")
 	}
 
 	f.mu.Lock()
@@ -194,12 +202,12 @@ func (f *fakeAssistantstore) SavePartialChat(_ context.Context, m *model.StoredM
 	return nil
 }
 
-// upsert mirrors the elastic store: a message carrying an Id replaces the one
-// already at that Id instead of appending a second copy of the same turn.
+// upsert mirrors the elastic store: a streaming message replaces the one already
+// carrying its Message.Id instead of appending a second copy of the same turn.
 func (f *fakeAssistantstore) upsert(m *model.StoredMessage) {
-	if m.Id != "" {
+	if m.Message != nil && m.Message.Id != "" {
 		for i, existing := range f.msgs[m.SessionId] {
-			if existing.Id == m.Id {
+			if existing.Message != nil && existing.Message.Id == m.Message.Id {
 				f.msgs[m.SessionId][i] = m
 				return
 			}

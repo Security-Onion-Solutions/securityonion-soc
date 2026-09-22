@@ -244,6 +244,51 @@ func storedText(role string, texts ...string) *model.StoredMessage {
 	return &model.StoredMessage{Message: &model.Message{Role: role, ContentBlocks: blocks}}
 }
 
+func TestTrimTrailingPartials(t *testing.T) {
+	finished := storedText("user", "done")
+
+	streaming := func() *model.StoredMessage {
+		msg := storedText("assistant", "half a th")
+		msg.Tags = []string{model.MessageTagPartial}
+
+		return msg
+	}
+
+	tests := []struct {
+		name     string
+		history  []*model.StoredMessage
+		expected []*model.StoredMessage
+	}{
+		{name: "empty history"},
+		{
+			name:     "nothing partial is left whole",
+			history:  []*model.StoredMessage{finished, finished},
+			expected: []*model.StoredMessage{finished, finished},
+		},
+		{
+			name:     "turn still streaming is dropped",
+			history:  []*model.StoredMessage{finished, streaming()},
+			expected: []*model.StoredMessage{finished},
+		},
+		{
+			name:    "history of only partials scans nothing",
+			history: []*model.StoredMessage{streaming()},
+		},
+		{
+			// Abandoned, not streaming: its text is all there will ever be.
+			name:     "partial followed by a finished message is kept",
+			history:  []*model.StoredMessage{streaming(), finished},
+			expected: []*model.StoredMessage{streaming(), finished},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, trimTrailingPartials(tc.history))
+		})
+	}
+}
+
 func TestBuildMemoryExtractTranscripts(t *testing.T) {
 	six := []*model.StoredMessage{
 		storedText("user", "0"),

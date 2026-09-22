@@ -60,6 +60,20 @@ func TestLoadHistory(t *testing.T) {
 			wantLen:   0,
 		},
 		{
+			// Partials are dropped from the context sent to the model, but they are
+			// still stored messages: calling the session new would create it twice.
+			name:          "history of only partials reports isNew=false",
+			sessionReturn: []*model.AssistantSession{session},
+			historyReturn: []*model.StoredMessage{
+				{
+					Tags:    []string{model.MessageTagPartial},
+					Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "half a th"}}},
+				},
+			},
+			wantIsNew: false,
+			wantLen:   0,
+		},
+		{
 			name:          "history error propagates",
 			sessionReturn: []*model.AssistantSession{session},
 			historyErr:    errors.New("network error"),

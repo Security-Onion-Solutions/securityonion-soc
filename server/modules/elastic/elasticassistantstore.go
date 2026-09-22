@@ -48,19 +48,16 @@ func (store *ElasticAssistantstore) Init(chatIndex string, sessionIndex string, 
 	return nil
 }
 
-func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string, id string, created time.Time) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) save(ctx context.Context, obj any, index string, kind string) (*model.EventIndexResults, error) {
 	document := ConvertObjectToDocumentMap(kind, obj, store.schemaPrefix)
 	document[store.schemaPrefix+"kind"] = kind
-	// GetChatHistory sorts on @timestamp, so re-upserting a partial must not
-	// advance its sort key past the messages that followed it.
-	document["@timestamp"] = created
 
-	results, err := store.indexDoc(ctx, index, document, id)
+	results, err := store.indexDoc(ctx, index, document)
 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any, id string) (*model.EventIndexResults, error) {
+func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, document map[string]any) (*model.EventIndexResults, error) {
 	logger := log.FromContext(ctx)
 
 	results := model.NewEventIndexResults()
@@ -70,7 +67,7 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 		var response string
 
 		logger.Debug("Sending index request to primary Elasticsearch client")
-		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request, id)
+		response, err = store.indexDocument(ctx, store.disableCrossClusterIndex(index), request)
 		if err == nil {
 			err = convertFromElasticIndexResults(response, results)
 			if err != nil {
@@ -84,20 +81,19 @@ func (store *ElasticAssistantstore) indexDoc(ctx context.Context, index string, 
 	return results, err
 }
 
-func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string, id string) (string, error) {
+func (store *ElasticAssistantstore) indexDocument(ctx context.Context, index string, document string) (string, error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"documentIndex": index,
-		"documentId":    id,
 		"requestId":     ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Adding document to Elasticsearch")
 
-	// An empty id leaves the write a POST, letting Elasticsearch mint the id.
+	// The assistant indices are data streams, which accept only op_type=create,
+	// so this never carries a document id. Rewrites go through updateChatByMessageId.
 	res, err := store.esClient.Index(index,
 		strings.NewReader(document),
 		store.esClient.Index.WithRefresh("true"),
-		store.esClient.Index.WithDocumentID(id),
 		store.esClient.Index.WithContext(ctx),
 	)
 
@@ -211,10 +207,21 @@ func (store *ElasticAssistantstore) validateSession(session *model.AssistantSess
 	return nil
 }
 
-// SaveChat stores a finished message, overwriting the partial at chat.Id when
-// SavePartialChat wrote one, and counts it.
 func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.StoredMessage) error {
-	if err := store.saveChat(ctx, chat, false); err != nil {
+	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
+		return err
+	}
+
+	err := store.validateChat(chat)
+	if err != nil {
+		return err
+	}
+
+	chat.CreateTime = util.Ptr(time.Now())
+	store.prepareForSave(ctx, &chat.Auditable)
+
+	_, err = store.save(ctx, chat, store.chatIndex, "chat")
+	if err != nil {
 		return err
 	}
 
@@ -228,20 +235,23 @@ func (store *ElasticAssistantstore) SaveChat(ctx context.Context, chat *model.St
 	return nil
 }
 
-// SavePartialChat upserts a still-generating message at chat.Id so a streaming
-// turn can persist text before it finishes. The message is not counted; the
-// final SaveChat at the same id counts it once. The caller must reuse the same
-// chat across flushes: Id identifies the document and CreateTime is its sort
-// key, so a fresh value for either forks the turn into a second message.
+// SavePartialChat stores a still-generating message, tagged partial. It
+// validates like SaveChat, so a stream with no content yet is not flushable.
 func (store *ElasticAssistantstore) SavePartialChat(ctx context.Context, chat *model.StoredMessage) error {
-	if chat.Id == "" {
-		return fmt.Errorf("a partial chat message requires an Id")
-	}
-
-	return store.saveChat(ctx, chat, true)
+	return store.upsertChat(ctx, chat, true)
 }
 
-func (store *ElasticAssistantstore) saveChat(ctx context.Context, chat *model.StoredMessage, partial bool) error {
+// FinishPartialChat stores the final content of a streaming turn and clears the
+// partial tag.
+func (store *ElasticAssistantstore) FinishPartialChat(ctx context.Context, chat *model.StoredMessage) error {
+	return store.upsertChat(ctx, chat, false)
+}
+
+// upsertChat rewrites the document carrying chat.Message.Id, or appends one if
+// none exists yet. The caller keeps one chat across a turn's flushes, so
+// CreateTime and the tags persist, and replaces chat.Message with each freshly
+// parsed version of the stream.
+func (store *ElasticAssistantstore) upsertChat(ctx context.Context, chat *model.StoredMessage, partial bool) error {
 	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
 		return err
 	}
@@ -250,14 +260,15 @@ func (store *ElasticAssistantstore) saveChat(ctx context.Context, chat *model.St
 		return err
 	}
 
-	if chat.Id != "" {
-		if err := store.validateId(chat.Id, "Id"); err != nil {
-			return err
-		}
+	// An empty id would match every message that never set one.
+	if chat.Message.Id == "" {
+		return fmt.Errorf("a streaming chat message requires a Message.Id")
 	}
 
 	if partial {
-		chat.Tags = append(chat.Tags, model.MessageTagPartial)
+		if !slices.Contains(chat.Tags, model.MessageTagPartial) {
+			chat.Tags = append(chat.Tags, model.MessageTagPartial)
+		}
 	} else {
 		chat.Tags = slices.DeleteFunc(chat.Tags, func(tag string) bool {
 			return tag == model.MessageTagPartial
@@ -268,28 +279,130 @@ func (store *ElasticAssistantstore) saveChat(ctx context.Context, chat *model.St
 		chat.CreateTime = util.Ptr(time.Now())
 	}
 
-	// prepareForSave clears Id, and a streaming turn re-saves the same message.
-	id := chat.Id
-	defer func() { chat.Id = id }()
-
 	store.prepareForSave(ctx, &chat.Auditable)
 
-	_, err := store.save(ctx, chat, store.chatIndex, "chat", id, *chat.CreateTime)
+	found, err := store.updateChatByMessageId(ctx, chat)
+	if err != nil || found {
+		return err
+	}
 
-	return err
+	if _, err := store.save(ctx, chat, store.chatIndex, "chat"); err != nil {
+		return err
+	}
+
+	if err := store.incrementSessionMessageCount(ctx, chat.SessionId); err != nil {
+		log.FromContext(ctx).WithError(err).WithField("sessionId", chat.SessionId).Warn("Failed to increment session message count")
+	}
+
+	return nil
+}
+
+// updateChatByMessageId replaces the so_chat object of the document carrying
+// chat.Message.Id, reporting whether one exists. @timestamp is left alone: it is
+// what GetChatHistory sorts on, and a rewrite must not reorder the session.
+func (store *ElasticAssistantstore) updateChatByMessageId(ctx context.Context, chat *model.StoredMessage) (bool, error) {
+	body := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "kind": "chat",
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "chat.sessionId": chat.SessionId,
+						},
+					},
+					map[string]any{
+						"term": map[string]any{
+							store.schemaPrefix + "chat.message.id": chat.Message.Id,
+						},
+					},
+				},
+			},
+		},
+		"script": map[string]any{
+			"source": "ctx._source." + store.schemaPrefix + "chat = params.chat;",
+			"lang":   "painless",
+			"params": map[string]any{
+				"chat": chat,
+			},
+		},
+	}
+
+	total, updated, err := store.updateByQuery(ctx, store.chatIndex, body)
+	if err != nil {
+		return false, err
+	}
+
+	if total > 0 && updated == 0 {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"sessionId": chat.SessionId,
+			"messageId": chat.Message.Id,
+		}).Warn("Chat message rewrite lost a version conflict")
+	}
+
+	return total > 0, nil
+}
+
+// updateByQuery runs body against index with conflicts=proceed and reports how
+// many documents matched and how many were written.
+func (store *ElasticAssistantstore) updateByQuery(ctx context.Context, index string, body map[string]any) (total int, updated int, err error) {
+	logger := log.FromContext(ctx)
+
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
+		return 0, 0, err
+	}
+
+	res, err := store.esClient.UpdateByQuery(
+		[]string{store.disableCrossClusterIndex(index)},
+		store.esClient.UpdateByQuery.WithContext(ctx),
+		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(bodyJSON))),
+		store.esClient.UpdateByQuery.WithRefresh(true),
+		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
+		store.esClient.UpdateByQuery.WithConflicts("proceed"),
+	)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute UpdateByQuery")
+		return 0, 0, err
+	}
+	defer res.Body.Close()
+
+	responseJSON, err := readJsonFromResponse(res)
+	if err != nil {
+		logger.WithError(err).Error("Failed to execute UpdateByQuery")
+		return 0, 0, err
+	}
+
+	var response struct {
+		Total   int `json:"total"`
+		Updated int `json:"updated"`
+	}
+	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
+		logger.WithError(err).Error("Failed to unmarshal UpdateByQuery response")
+		return 0, 0, err
+	}
+
+	logger.WithFields(log.Fields{
+		"index":     index,
+		"total":     response.Total,
+		"updated":   response.Updated,
+		"requestId": ctx.Value(web.ContextKeyRequestId),
+	}).Debug("UpdateByQuery finished")
+
+	return response.Total, response.Updated, nil
 }
 
 // incrementSessionMessageCount bumps the denormalized messageCount on the
 // session document so the memory scanner can find sessions with unscanned
 // messages in a single query. It also clears memoryErrors so new activity gives
-// a session excluded for repeated scan failures another chance. Not scoped to
-// the requestor's userId: the write authorization was already checked by the
-// caller, and messages legitimately land in shared or delegated sessions owned
-// by other users.
+// a session excluded for repeated scan failures another chance.
 func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Context, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	query := map[string]any{
+	body := map[string]any{
 		"query": map[string]any{
 			"bool": map[string]any{
 				"must": []any{
@@ -312,39 +425,11 @@ func (store *ElasticAssistantstore) incrementSessionMessageCount(ctx context.Con
 		},
 	}
 
-	queryJSON, err := json.Marshal(query)
-	if err != nil {
-		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
-		return err
-	}
+	// A conflicting concurrent update loses this increment; that self-heals
+	// when the memory scanner records the true count.
+	_, _, err := store.updateByQuery(ctx, store.sessionIndex, body)
 
-	logger.WithFields(log.Fields{
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Incrementing session message count using UpdateByQuery")
-
-	res, err := store.esClient.UpdateByQuery(
-		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
-		store.esClient.UpdateByQuery.WithContext(ctx),
-		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
-		store.esClient.UpdateByQuery.WithRefresh(true),
-		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
-		// A conflicting concurrent update loses this increment; that self-heals
-		// when the memory scanner records the true count.
-		store.esClient.UpdateByQuery.WithConflicts("proceed"),
-	)
-	if err != nil {
-		logger.WithError(err).Error("Failed to increment session message count")
-		return err
-	}
-	defer res.Body.Close()
-
-	if _, err := readJsonFromResponse(res); err != nil {
-		logger.WithError(err).Error("Failed to increment session message count")
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Use only with sessions pulled from ES.
@@ -1279,16 +1364,10 @@ func (store *ElasticAssistantstore) CreateSession(ctx context.Context, session *
 		return err
 	}
 
-	if session.Id != "" {
-		if err := store.validateId(session.Id, "Id"); err != nil {
-			return err
-		}
-	}
-
 	session.CreateTime = util.Ptr(time.Now())
-	id := store.prepareForSave(ctx, &session.Auditable)
+	store.prepareForSave(ctx, &session.Auditable)
 
-	_, err = store.save(ctx, session, store.sessionIndex, "session", id, *session.CreateTime)
+	_, err = store.save(ctx, session, store.sessionIndex, "session")
 
 	return err
 }
@@ -1606,9 +1685,7 @@ func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Con
 		return err
 	}
 
-	logger := log.FromContext(ctx)
-
-	query := map[string]any{
+	body := map[string]any{
 		"query": map[string]any{
 			"bool": map[string]any{
 				"must": []any{
@@ -1634,40 +1711,11 @@ func (store *ElasticAssistantstore) UpdateSessionMemoryScanIndex(ctx context.Con
 		},
 	}
 
-	queryJSON, err := json.Marshal(query)
-	if err != nil {
-		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
-		return err
-	}
+	// A conflicting concurrent update loses this write; the session is then
+	// rescanned next tick and reconciliation dedupes any repeated facts.
+	_, _, err := store.updateByQuery(ctx, store.sessionIndex, body)
 
-	logger.WithFields(log.Fields{
-		"sessionId":    sessionId,
-		"scannedIndex": scannedIndex,
-		"requestId":    ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Updating session memory scan index using UpdateByQuery")
-
-	res, err := store.esClient.UpdateByQuery(
-		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
-		store.esClient.UpdateByQuery.WithContext(ctx),
-		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
-		store.esClient.UpdateByQuery.WithRefresh(true),
-		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
-		// A conflicting concurrent update loses this write; the session is then
-		// rescanned next tick and reconciliation dedupes any repeated facts.
-		store.esClient.UpdateByQuery.WithConflicts("proceed"),
-	)
-	if err != nil {
-		logger.WithError(err).Error("Failed to update session memory scan index")
-		return err
-	}
-	defer res.Body.Close()
-
-	if _, err := readJsonFromResponse(res); err != nil {
-		logger.WithError(err).Error("Failed to update session memory scan index")
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // IncrementSessionMemoryErrors bumps the session's memoryErrors after a failed
@@ -1679,9 +1727,7 @@ func (store *ElasticAssistantstore) IncrementSessionMemoryErrors(ctx context.Con
 		return err
 	}
 
-	logger := log.FromContext(ctx)
-
-	query := map[string]any{
+	body := map[string]any{
 		"query": map[string]any{
 			"bool": map[string]any{
 				"must": []any{
@@ -1704,38 +1750,10 @@ func (store *ElasticAssistantstore) IncrementSessionMemoryErrors(ctx context.Con
 		},
 	}
 
-	queryJSON, err := json.Marshal(query)
-	if err != nil {
-		logger.WithError(err).Error("Failed to marshal UpdateByQuery request")
-		return err
-	}
+	// A lost increment only delays exclusion by one more failed scan.
+	_, _, err := store.updateByQuery(ctx, store.sessionIndex, body)
 
-	logger.WithFields(log.Fields{
-		"sessionId": sessionId,
-		"requestId": ctx.Value(web.ContextKeyRequestId),
-	}).Debug("Incrementing session memory errors using UpdateByQuery")
-
-	res, err := store.esClient.UpdateByQuery(
-		[]string{store.disableCrossClusterIndex(store.sessionIndex)},
-		store.esClient.UpdateByQuery.WithContext(ctx),
-		store.esClient.UpdateByQuery.WithBody(strings.NewReader(string(queryJSON))),
-		store.esClient.UpdateByQuery.WithRefresh(true),
-		store.esClient.UpdateByQuery.WithWaitForCompletion(true),
-		// A lost increment only delays exclusion by one more failed scan.
-		store.esClient.UpdateByQuery.WithConflicts("proceed"),
-	)
-	if err != nil {
-		logger.WithError(err).Error("Failed to increment session memory errors")
-		return err
-	}
-	defer res.Body.Close()
-
-	if _, err := readJsonFromResponse(res); err != nil {
-		logger.WithError(err).Error("Failed to increment session memory errors")
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Time, end time.Time) ([]*model.UserUsage, error) {

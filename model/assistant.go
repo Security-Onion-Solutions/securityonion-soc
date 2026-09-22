@@ -149,6 +149,10 @@ type saveableMessage struct {
 	Usage         *Usage         `json:"usage,omitempty"`
 }
 
+func (sm *StoredMessage) IsPartial() bool {
+	return slices.Contains(sm.Tags, MessageTagPartial)
+}
+
 func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Auditable

@@ -1060,11 +1060,14 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testi
 	stream.Body.Close()
 
 	// Now exercise the finalize callback with a synthetic raw SSE blob; the
-	// coordinator should parse the assistant message and persist it.
+	// coordinator should parse the assistant message and persist it under a
+	// server-minted id, not whatever the provider put in message_start.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, sessionId, stored.SessionId)
 			assert.Equal(t, "assistant", stored.Message.Role)
+			assert.NotEmpty(t, stored.Message.Id)
+			assert.NotEqual(t, "assistant", stored.Message.Id)
 			return nil
 		})
 

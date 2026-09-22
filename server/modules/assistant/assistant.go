@@ -2155,17 +2155,7 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		}).Error("unable to save tool result message")
 	}
 
-	finalize := func(rawResponse []byte) error {
-		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
-		if err != nil {
-			logger.WithError(err).Error("error while piecing stream together")
-			return err
-		}
-		if msg == nil {
-			return nil
-		}
-		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(sessionId, nil, aiModel))
-	}
+	finalize := ac.streamFinalizer(noTimeOutCtx, aux, sessionId, nil, aiModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2315,17 +2305,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 	}()
 	wg.Wait()
 
-	finalize := func(rawResponse []byte) error {
-		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
-		if err != nil {
-			logger.WithError(err).Error("error while piecing stream together")
-			return err
-		}
-		if msg == nil {
-			return nil
-		}
-		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(sessionId, []string{"subsession_halted"}, aiModel))
-	}
+	finalize := ac.streamFinalizer(noTimeOutCtx, aux, sessionId, []string{"subsession_halted"}, aiModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2409,17 +2389,7 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 		return ac.resolveFailedDelegation(noTimeOutCtx, toolReq, err)
 	}
 
-	finalize := func(rawResponse []byte) error {
-		msg, err := server.UnstreamResponse(noTimeOutCtx, string(rawResponse), aux)
-		if err != nil {
-			logger.WithError(err).Error("error while piecing stream together")
-			return err
-		}
-		if msg == nil {
-			return nil
-		}
-		return ac.srv.Assistantstore.SaveChat(noTimeOutCtx, msg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel))
-	}
+	finalize := ac.streamFinalizer(noTimeOutCtx, aux, kickoff.ChildSessionId, nil, kickoff.ChildModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2837,8 +2807,7 @@ func HistoryToContext(history []*model.StoredMessage) []*model.Message {
 	messages := make([]*model.Message, 0, len(history))
 	for _, msg := range history {
 		// An abandoned partial turn can carry tool_use blocks that never got a result.
-		// drop partial messages
-		if slices.Contains(msg.Tags, model.MessageTagPartial) {
+		if msg.IsPartial() {
 			continue
 		}
 

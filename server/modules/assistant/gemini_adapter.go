@@ -173,7 +173,6 @@ func (a *GeminiAdapter) SendMessage(ctx context.Context, req *model.ChatRequest)
 
 	// Convert response to model.Message
 	message := &model.Message{
-		Id:            "assistant",
 		Role:          "assistant",
 		ContentBlocks: []model.ContentBlock{},
 	}

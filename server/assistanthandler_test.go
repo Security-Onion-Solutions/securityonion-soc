@@ -3588,6 +3588,11 @@ func assistantMsg(blocks ...model.ContentBlock) *model.StoredMessage {
 	return &model.StoredMessage{Message: &model.Message{Role: "assistant", ContentBlocks: blocks}}
 }
 
+func partial(msg *model.StoredMessage) *model.StoredMessage {
+	msg.Tags = append(msg.Tags, model.MessageTagPartial)
+	return msg
+}
+
 func toolResultMsg(toolUseId string) *model.StoredMessage {
 	return &model.StoredMessage{
 		Tags:    []string{"tool_result"},
@@ -3642,6 +3647,15 @@ func TestPendingToolApproval(t *testing.T) {
 			sessionId: "s",
 			history:   []*model.StoredMessage{assistantMsg(model.ContentBlock{Type: "text", Text: "hi"})},
 			wantNil:   true,
+		},
+		{
+			// Its tool_use never reached the model, so a tool_result would be orphaned.
+			name:      "tool_use in an unfinished turn is not pending (nil)",
+			sessionId: "child-1",
+			history: []*model.StoredMessage{
+				partial(assistantMsg(toolUse)),
+			},
+			wantNil: true,
 		},
 	}
 

@@ -705,6 +705,11 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 		if sm.Message == nil || sm.Message.Role != "assistant" {
 			continue
 		}
+		// A turn that never finished streaming never reached the model, so its
+		// tool_use cannot be resumed: approving it would orphan the tool_result.
+		if sm.IsPartial() {
+			continue
+		}
 		for _, cb := range sm.Message.ContentBlocks {
 			if cb.Type != "tool_use" {
 				continue

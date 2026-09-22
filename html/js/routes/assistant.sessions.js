@@ -10,6 +10,7 @@
 // Shared with assistant.streaming.js and assistant.tools.js, so it lives on
 // globalThis (this file loads first).
 globalThis.MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+globalThis.MSGTAG_PARTIAL = "partial";
 
 globalThis.AssistantSessions = (function() {
   return {
@@ -546,7 +547,9 @@ globalThis.AssistantSessions = (function() {
 
       // An unresolved tool awaits approval only while this turn is the active tail (only
       // tool_results follow it); once another message follows, it was abandoned (skipped).
-      const active = this.isActiveToolTurn(backendMessages, i);
+      // A turn still tagged partial never finished, so its tool_use was never sent to the
+      // model and cannot be resumed.
+      const active = this.isActiveToolTurn(backendMessages, i) && !this.isPartialMessage(msg);
 
       frontendMsg.toolUses = toolBlocks.map(block => {
         const base = {
@@ -609,6 +612,10 @@ globalThis.AssistantSessions = (function() {
         }
       }
       return ids;
+    },
+
+    isPartialMessage(msg) {
+      return !!(msg && msg.tags && msg.tags.includes(MSGTAG_PARTIAL));
     },
 
     // True while every message after turn i is a tool_result answering it; once another
