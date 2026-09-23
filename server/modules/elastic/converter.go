@@ -1033,7 +1033,7 @@ func convertToElasticUpdateRequest(store *ElasticEventstore, criteria *model.Eve
 	esMap["query"] = makeQuery(store.fieldDefs, criteria.ParsedQuery, criteria.BeginTime, criteria.EndTime)
 
 	script := make(map[string]any)
-	script["source"] = strings.Join(criteria.UpdateScripts, "; ")
+	script["source"] = strings.Join(criteria.UpdateScripts, "\n")
 	script["lang"] = "painless"
 	if len(criteria.Params) > 0 {
 		script["params"] = criteria.Params

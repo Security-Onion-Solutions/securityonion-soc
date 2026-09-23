@@ -239,8 +239,8 @@ func TestConvertFromElasticResultsInvalid(t *testing.T) {
 
 func TestConvertToElasticUpdateRequest(t *testing.T) {
 	criteria := model.NewEventUpdateCriteria()
-	criteria.AddUpdateScript("ctx._source.event.acknowledged=true")
-	criteria.AddUpdateScript("ctx._source.event.escalated=true")
+	criteria.AddUpdateScript("ctx._source.event.acknowledged=true;")
+	criteria.AddUpdateScript("ctx._source.event.escalated=true;")
 
 	err := criteria.Populate("event.dataset:alerts", "2020/09/24 10:11:12 AM - 2020/09/24 12:14:15 PM", "2006/01/02 3:04:05 PM", "America/New_York", "0", "0")
 	assert.NoError(t, err)
@@ -248,7 +248,7 @@ func TestConvertToElasticUpdateRequest(t *testing.T) {
 	actualJson, err := convertToElasticUpdateRequest(NewTestStore(), criteria)
 	assert.Nil(t, err)
 
-	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-09-24T10:11:12-04:00","lte":"2020-09-24T12:14:15-04:00"}}}],"must_not":[],"should":[]}},"script":{"lang":"painless","source":"ctx._source.event.acknowledged=true; ctx._source.event.escalated=true"}}`
+	expectedJson := `{"query":{"bool":{"filter":[],"must":[{"query_string":{"analyze_wildcard":true,"default_field":"*","query":"event.dataset:alerts"}},{"range":{"@timestamp":{"format":"strict_date_optional_time","gte":"2020-09-24T10:11:12-04:00","lte":"2020-09-24T12:14:15-04:00"}}}],"must_not":[],"should":[]}},"script":{"lang":"painless","source":"ctx._source.event.acknowledged=true;\nctx._source.event.escalated=true;"}}`
 	assert.Equal(t, expectedJson, actualJson)
 }
 
