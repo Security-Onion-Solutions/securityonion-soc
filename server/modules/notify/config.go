@@ -8,8 +8,6 @@ package notify
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
@@ -17,48 +15,24 @@ import (
 )
 
 const (
-	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 300
+	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 0
 	DEFAULT_DISMISSED_PRUNE_DAYS          = 30
 )
 
-// LoadConfigFromStore reads notification configuration from onionconfig, ensuring default destinations
-// (such as soc-bell) are set if no destinations are configured.
-func LoadConfigFromStore(ctx context.Context, store server.Configstore) model.NotificationConfig {
-	config := model.NotificationConfig{
-		Enabled:                    true,
-		GlobalSilenceWindowSeconds: DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS,
-		DismissedPruneDays:         DEFAULT_DISMISSED_PRUNE_DAYS,
-		Destinations:               model.DefaultDestinationsMap(),
-	}
-
+// LoadConfigFromStore reads notification destinations configuration from onionconfig.
+// Returns the destinations map and true if destinations were found in the store.
+func LoadConfigFromStore(ctx context.Context, store server.Configstore) (map[string]model.DestinationConfig, bool) {
 	if store == nil {
-		return config
-	}
-
-	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationEnabled); err == nil && setting != nil && setting.Value != "" {
-		config.Enabled = setting.Value == "true"
-	}
-
-	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationDismissedPruneDays); err == nil && setting != nil && setting.Value != "" {
-		if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
-			config.DismissedPruneDays = days
-		}
+		return nil, false
 	}
 
 	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationDestinations); err == nil && setting != nil && setting.Value != "" {
-		var dests map[string]model.DestinationConfig
-		if err := json.Unmarshal([]byte(setting.Value), &dests); err == nil && len(dests) > 0 {
-			for k, v := range dests {
-				if v.ID == "" {
-					v.ID = k
-				}
-				dests[k] = v
-			}
-			config.Destinations = dests
+		if dests, err := unmarshalDestinations(setting.Value); err == nil && len(dests) > 0 {
+			return dests, true
 		}
 	}
 
-	return config
+	return nil, false
 }
 
 // ParseConfig parses and validates module configuration, ensuring default destinations

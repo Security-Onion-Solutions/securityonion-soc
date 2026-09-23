@@ -46,14 +46,14 @@ func NewNotifier(srv *server.Server, registry *ChannelRegistry, cfg model.Notifi
 	}
 }
 
-func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
+func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) (int, error) {
 	if payload == nil {
-		return errors.New("notification payload cannot be nil")
+		return 0, errors.New("notification payload cannot be nil")
 	}
 
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
 		log.WithField("notificationId", payload.ID).Debug("No active license with notifications enabled; skipping dispatch")
-		return nil
+		return 0, nil
 	}
 
 	n.mu.RLock()
@@ -66,7 +66,7 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 
 	if !enabled {
 		log.WithField("notificationId", payload.ID).Debug("Notification system is disabled; skipping dispatch")
-		return nil
+		return 0, nil
 	}
 
 	targetDests := destinations
@@ -77,6 +77,7 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 		}
 	}
 
+	var sentCount int
 	var errs []error
 	for _, destName := range targetDests {
 		destCfg, found := destinationsMap[destName]
@@ -191,13 +192,15 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 				"channelType": destCfg.Type,
 			}).Error("Channel driver failed to send notification")
 			errs = append(errs, fmt.Errorf("destination '%s' send failed: %w", destName, err))
+		} else {
+			sentCount++
 		}
 	}
 
 	if len(errs) > 0 {
-		return errors.Join(errs...)
+		return sentCount, errors.Join(errs...)
 	}
-	return nil
+	return sentCount, nil
 }
 
 func (n *NotifierImpl) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
@@ -219,7 +222,8 @@ func (n *NotifierImpl) SendWithSilence(ctx context.Context, payload *model.Notif
 			return nil
 		}
 	}
-	return n.Send(ctx, payload, destinations...)
+	_, err := n.Send(ctx, payload, destinations...)
+	return err
 }
 
 func (n *NotifierImpl) checkSilence(source string, silence *model.SilenceParams) (bool, error) {
@@ -247,9 +251,11 @@ func (n *NotifierImpl) checkSilence(source string, silence *model.SilenceParams)
 		n.mu.RUnlock()
 		if gsw > 0 {
 			duration = time.Duration(gsw) * time.Second
-		} else {
-			duration = 300 * time.Second
 		}
+	}
+
+	if duration <= 0 {
+		return false, nil
 	}
 
 	if now.Sub(entry.windowStart) >= duration {

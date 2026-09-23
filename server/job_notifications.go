@@ -45,20 +45,6 @@ func resolveJobRecipients(job *model.Job) []string {
 	return []string{job.UserId}
 }
 
-func parseReportTitleFromMarkdown(content []byte, deflt string) string {
-	title := deflt
-	prevLine := ""
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "===") && prevLine != "" {
-			title = strings.TrimSpace(prevLine)
-			break
-		}
-		prevLine = line
-	}
-	return title
-}
-
 func resolveReportName(srv *Server, job *model.Job) string {
 	if job == nil || job.Filter == nil || job.Filter.Parameters == nil {
 		return "Report"
@@ -77,10 +63,10 @@ func resolveReportName(srv *Server, job *model.Job) string {
 	}
 	if t, ok := job.Filter.Parameters["type"].(string); ok && strings.TrimSpace(t) != "" {
 		typeName := strings.TrimSpace(t)
-		if srv != nil && srv.Config != nil && srv.Config.CustomReportsPath != "" && strings.HasSuffix(typeName, ".md") {
+		if srv != nil && srv.Config != nil && srv.Config.CustomReportsPath != "" && strings.HasSuffix(typeName, ".md") && !strings.Contains(typeName, "/") && !strings.Contains(typeName, `\`) && filepath.Base(typeName) == typeName {
 			filePath := filepath.Join(srv.Config.CustomReportsPath, typeName)
 			if content, err := os.ReadFile(filePath); err == nil {
-				if title := parseReportTitleFromMarkdown(content, typeName); title != typeName {
+				if title := ParseReportTitle(content, typeName); title != typeName {
 					return title
 				}
 			}
@@ -251,7 +237,7 @@ func SendJobCompletionNotification(ctx context.Context, srv *Server, job *model.
 		sendCtx = srv.Context
 	}
 
-	err := srv.Notifier.Send(sendCtx, payload)
+	_, err := srv.Notifier.Send(sendCtx, payload)
 	if err != nil {
 		log.FromContext(ctx).WithError(err).WithField("jobId", job.Id).Error("Failed to send job completion notification")
 		return err

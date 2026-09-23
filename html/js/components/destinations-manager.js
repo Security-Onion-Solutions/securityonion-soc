@@ -345,9 +345,9 @@ components.push({
         let defaultTitle = '';
         if (dest) {
           const destName = this.getDestinationName(dest);
-          defaultTitle = (this.i18n.testNotificationTitle || 'Test: {name}').replace('{name}', destName);
+          defaultTitle = (this.i18n.testNotificationTitle).replace('{name}', destName);
         } else {
-          defaultTitle = this.i18n.testNotificationDefaultTitle || 'Test Notification';
+          defaultTitle = this.i18n.testNotificationDefaultTitle;
         }
         this.sendForm = {
           title: defaultTitle,
@@ -361,7 +361,7 @@ components.push({
       getSendDialogTitle() {
         if (this.sendTargetDestination) {
           const name = this.getDestinationName(this.sendTargetDestination);
-          return (this.i18n.sendDestinationNotification || 'Send Notification to {name}').replace('{name}', name);
+          return (this.i18n.sendDestinationNotification).replace('{name}', name);
         }
         return this.i18n.sendNotification;
       },
@@ -385,56 +385,22 @@ components.push({
             url = `notifications/destinations/${encodeURIComponent(this.sendTargetDestination.id)}/send`;
           }
 
-          await this.$root.papi.post(url, payload);
+          const response = await this.$root.papi.post(url, payload);
+          const count = (response && typeof response.count === 'number') ? response.count : (response?.data?.count ?? 0);
           this.sendDialog = false;
           if (this.$root) {
-            this.$root.notificationMessage = this.i18n.notificationSent;
-            this.$root.notification = true;
+            if (count > 0) {
+              this.$root.notificationMessage = this.i18n.notificationSent;
+              this.$root.notification = true;
+            } else {
+              this.$root.showWarning(this.i18n.noEligibleDestinations);
+            }
           }
         } catch (error) {
           this.$root.showError(error);
         } finally {
           this.isSending = false;
           this.$root?.stopLoading?.();
-        }
-      },
-      async testDestination(dest, targeted = false) {
-        if (!dest || !dest.id) {
-          return;
-        }
-        this.testingDestinationId = dest.id;
-        try {
-          const destName = this.getDestinationName(dest);
-          const title = (targeted
-            ? this.i18n.testTargetedNotificationTitle
-            : this.i18n.testNotificationTitle).replace('{name}', destName);
-          const summary = targeted
-            ? this.i18n.testTargetedNotificationSummary
-            : this.i18n.testNotificationSummary;
-
-          const params = new URLSearchParams();
-          if (targeted) {
-            params.set('targeted', 'true');
-          }
-          if (title) {
-            params.set('title', title);
-          }
-          if (summary) {
-            params.set('summary', summary);
-          }
-          const queryString = params.toString();
-          const url = `notifications/destinations/${encodeURIComponent(dest.id)}/test${queryString ? `?${queryString}` : ''}`;
-          await this.$root.papi.post(url);
-          if (this.$root) {
-            this.$root.notificationMessage = targeted
-              ? this.i18n.testTargetedNotificationSent
-              : this.i18n.testNotificationSent;
-            this.$root.notification = true;
-          }
-        } catch (error) {
-          this.$root.showError(error);
-        } finally {
-          this.testingDestinationId = null;
         }
       },
       getDestinationScheduleNames(dest) {

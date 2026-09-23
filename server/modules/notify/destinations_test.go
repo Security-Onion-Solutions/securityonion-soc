@@ -312,18 +312,17 @@ func TestNotifierImpl_Unauthorized(t *testing.T) {
 }
 
 func TestNotifierImpl_UnmarshalDestinations_Formats(t *testing.T) {
+	// Map format
+	mapJSON := `{"soc-1":{"id":"soc-1","name":"SOC 1","type":"soc"}}`
+	res, err := unmarshalDestinations(mapJSON)
+	assert.NoError(t, err)
+	assert.Contains(t, res, "soc-1")
+
 	// Array format
 	arrayJSON := `[{"id":"arr-1","name":"Arr 1","type":"soc"}]`
-	res, err := unmarshalDestinations(arrayJSON)
+	res, err = unmarshalDestinations(arrayJSON)
 	assert.NoError(t, err)
 	assert.Contains(t, res, "arr-1")
-
-	// NDJSON format
-	ndjson := "{\"id\":\"nd-1\",\"name\":\"ND 1\",\"type\":\"soc\"}\n{\"id\":\"nd-2\",\"name\":\"ND 2\",\"type\":\"soc\"}\n"
-	res, err = unmarshalDestinations(ndjson)
-	assert.NoError(t, err)
-	assert.Contains(t, res, "nd-1")
-	assert.Contains(t, res, "nd-2")
 
 	// Empty
 	res, err = unmarshalDestinations("")

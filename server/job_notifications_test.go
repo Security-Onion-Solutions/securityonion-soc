@@ -172,6 +172,11 @@ func TestBuildJobCompletionNotification_ReportJob_CustomReportMarkdownParsing(t 
 	reportFile := filepath.Join(tempDir, "generic_report2.md")
 	_ = os.WriteFile(reportFile, []byte("Threat Hunting Summary\n===\nReport Content Here"), 0644)
 
+	// Subdirectory file that should not be reached via traversal
+	subDir := filepath.Join(tempDir, "sub")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "secret.md"), []byte("Secret Title\n===\nSecret Content"), 0644)
+
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Config = &config.ServerConfig{
 		CustomReportsPath: tempDir,
@@ -198,6 +203,18 @@ func TestBuildJobCompletionNotification_ReportJob_CustomReportMarkdownParsing(t 
 	assert.Equal(t, "/#/reports", payload.Links["👁"])
 	assert.Equal(t, "/api/stream/1008?ext=pdf", payload.Links["⬇"])
 	assert.Equal(t, []string{"user-id-1"}, payload.Recipients)
+
+	// Verify path traversal rejection
+	jobTraversal := &model.Job{
+		Id:     1009,
+		Status: model.JobStatusCompleted,
+		Kind:   model.JOB_KIND_EXPORT,
+		Filter: model.NewFilter(),
+	}
+	jobTraversal.Filter.Parameters["type"] = "sub/secret.md"
+	payloadTraversal := BuildJobCompletionNotification(context.Background(), srv, jobTraversal)
+	assert.NotNil(t, payloadTraversal)
+	assert.Equal(t, "sub/secret.md", payloadTraversal.Fields["report"])
 }
 
 func TestSendJobCompletionNotification(t *testing.T) {

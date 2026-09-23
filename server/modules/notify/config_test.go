@@ -21,7 +21,7 @@ func TestParseConfigDefaults(t *testing.T) {
 	parsed, err := ParseConfig(cfg)
 	assert.NoError(t, err)
 	assert.True(t, parsed.Enabled)
-	assert.Equal(t, DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS, parsed.GlobalSilenceWindowSeconds)
+	assert.Equal(t, 0, parsed.GlobalSilenceWindowSeconds)
 	assert.Equal(t, DEFAULT_DISMISSED_PRUNE_DAYS, parsed.DismissedPruneDays)
 
 	// Check default soc-bell destination
@@ -85,13 +85,13 @@ func TestParseConfigCustom(t *testing.T) {
 }
 
 func TestLoadConfigFromStore(t *testing.T) {
-	// Nil store -> defaults
-	cfg := LoadConfigFromStore(nil, nil)
-	assert.True(t, cfg.Enabled)
-	assert.Contains(t, cfg.Destinations, model.DefaultDestinationSOCBell)
+	// Nil store -> false
+	dests, ok := LoadConfigFromStore(nil, nil)
+	assert.False(t, ok)
+	assert.Nil(t, dests)
 
 	// Store with custom settings
-	dests := map[string]model.DestinationConfig{
+	customDests := map[string]model.DestinationConfig{
 		"my-bell": {
 			ID:      "my-bell",
 			Name:    "My Bell",
@@ -99,27 +99,18 @@ func TestLoadConfigFromStore(t *testing.T) {
 			Enabled: true,
 		},
 	}
-	destsJSON, _ := json.Marshal(dests)
+	destsJSON, _ := json.Marshal(customDests)
 
 	store := server.NewMemConfigStore([]*model.Setting{
-		{
-			Id:    ConfigSettingNotificationEnabled,
-			Value: "false",
-		},
-		{
-			Id:    ConfigSettingNotificationDismissedPruneDays,
-			Value: "14",
-		},
 		{
 			Id:    ConfigSettingNotificationDestinations,
 			Value: string(destsJSON),
 		},
 	})
 
-	cfg = LoadConfigFromStore(nil, store)
-	assert.False(t, cfg.Enabled)
-	assert.Equal(t, 14, cfg.DismissedPruneDays)
-	assert.Len(t, cfg.Destinations, 1)
-	assert.Contains(t, cfg.Destinations, "my-bell")
-	assert.Equal(t, "My Bell", cfg.Destinations["my-bell"].Name)
+	dests, ok = LoadConfigFromStore(nil, store)
+	assert.True(t, ok)
+	assert.Len(t, dests, 1)
+	assert.Contains(t, dests, "my-bell")
+	assert.Equal(t, "My Bell", dests["my-bell"].Name)
 }

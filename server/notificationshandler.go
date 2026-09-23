@@ -45,10 +45,8 @@ func RegisterNotificationRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/destinations", h.PostDestination)
 		r.Put("/destinations/{id}", h.PutDestination)
 		r.Delete("/destinations/{id}", h.DeleteDestination)
-		r.Post("/destinations/{id}/test", h.PostSendNotification)
 		r.Post("/destinations/{id}/send", h.PostSendNotification)
 		r.Post("/send", h.PostSendNotification)
-		r.Post("/test", h.PostSendNotification)
 
 		r.Get("/", h.GetNotifications)
 		r.Put("/{id}/read", h.PutRead)
@@ -259,6 +257,12 @@ func (h *NotificationHandler) DeleteDestination(w http.ResponseWriter, r *http.R
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
+// @Description SendNotificationResponse specifies the number of destinations that delivered the notification.
+type SendNotificationResponse struct {
+	// The number of destinations that actually sent the notification.
+	Count int `json:"count" example:"1"`
+}
+
 // @Summary      Send Notification
 // @Description  Dispatches a test or ad-hoc notification payload. When a destination ID is provided in the route, the notification is dispatched specifically to that destination. When omitted, standard notification routing is used across all configured destinations.
 // @Tags         Notifications
@@ -270,7 +274,7 @@ func (h *NotificationHandler) DeleteDestination(w http.ResponseWriter, r *http.R
 // @Param        severity        query  string  false  "Notification severity"
 // @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
-// @Success      200         "The notification was successfully sent"
+// @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
 // @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
@@ -298,28 +302,9 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 	}
 
 	id := chi.URLParam(r, "id")
-	if id != "" {
-		if !model.IsValidDestinationID(id) {
-			web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
-			return
-		}
-
-		destCfg, err := h.server.Notifier.GetDestination(ctx, id)
-		if err != nil {
-			h.respondError(w, r, err)
-			return
-		}
-
-		channel, found := h.server.Notifier.GetChannel(destCfg.Type)
-		if !found {
-			web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("channel driver '%s' not registered", destCfg.Type))
-			return
-		}
-
-		if err := channel.ValidateConfig(destCfg.Params); err != nil {
-			web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel configuration: %w", err))
-			return
-		}
+	if id != "" && !model.IsValidDestinationID(id) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
+		return
 	}
 
 	var req struct {
@@ -400,11 +385,12 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 		BypassSchedules: req.BypassSchedules,
 	}
 
+	var count int
 	var sendErr error
 	if id != "" {
-		sendErr = h.server.Notifier.Send(ctx, payload, id)
+		count, sendErr = h.server.Notifier.Send(ctx, payload, id)
 	} else {
-		sendErr = h.server.Notifier.Send(ctx, payload)
+		count, sendErr = h.server.Notifier.Send(ctx, payload)
 	}
 
 	if sendErr != nil {
@@ -413,11 +399,7 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, nil)
-}
-
-func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http.Request) {
-	h.PostSendNotification(w, r)
+	web.Respond(w, r, http.StatusOK, SendNotificationResponse{Count: count})
 }
 
 // @Summary      Get Notifications

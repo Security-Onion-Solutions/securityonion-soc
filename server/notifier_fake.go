@@ -23,6 +23,7 @@ type FakeNotifier struct {
 	RegisteredChannels []NotificationChannel
 	Err                error
 	Destinations       map[string]model.DestinationConfig
+	SendCount          int
 }
 
 func NewFakeNotifier() *FakeNotifier {
@@ -38,16 +39,29 @@ func (notifier *FakeNotifier) checkAuth(ctx context.Context, op string) error {
 	return nil
 }
 
-func (notifier *FakeNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
+func (notifier *FakeNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) (int, error) {
 	notifier.InputContexts = append(notifier.InputContexts, ctx)
 	notifier.InputPayloads = append(notifier.InputPayloads, payload)
 	notifier.InputDestinations = append(notifier.InputDestinations, destinations)
-	return notifier.Err
+	if notifier.Err != nil {
+		return 0, notifier.Err
+	}
+	if payload == nil {
+		return 0, nil
+	}
+	if notifier.SendCount > 0 {
+		return notifier.SendCount, nil
+	}
+	if len(destinations) > 0 {
+		return len(destinations), nil
+	}
+	return 1, nil
 }
 
 func (notifier *FakeNotifier) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
 	notifier.InputSilences = append(notifier.InputSilences, silence)
-	return notifier.Send(ctx, payload, destinations...)
+	_, err := notifier.Send(ctx, payload, destinations...)
+	return err
 }
 
 func (notifier *FakeNotifier) RegisterChannel(channel NotificationChannel) {

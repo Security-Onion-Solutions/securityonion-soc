@@ -251,7 +251,7 @@ test('submitSendNotification dispatches destination-targeted notification', asyn
   comp.sendForm.recipients = ['u1'];
   comp.sendForm.bypassSchedules = true;
 
-  const postMock = mockPapi('post', { success: true });
+  const postMock = mockPapi('post', { count: 1 });
   await comp.submitSendNotification();
 
   expect(postMock).toHaveBeenCalledWith('notifications/destinations/soc-bell/send', {
@@ -274,7 +274,7 @@ test('submitSendNotification dispatches global notification when destination is 
   comp.sendForm.recipients = [];
   comp.sendForm.bypassSchedules = false;
 
-  const postMock = mockPapi('post', { success: true });
+  const postMock = mockPapi('post', { count: 1 });
   await comp.submitSendNotification();
 
   expect(postMock).toHaveBeenCalledWith('notifications/send', {
@@ -287,6 +287,20 @@ test('submitSendNotification dispatches global notification when destination is 
   expect(comp.sendDialog).toBe(false);
   expect(comp.$root.notification).toBe(true);
   expect(comp.$root.notificationMessage).toBe('Notification sent successfully!');
+});
+
+test('submitSendNotification shows warning when count is 0', async () => {
+  comp.showSendDialog({ id: 'soc-bell', name: 'SOC Bell' });
+  comp.sendForm.title = 'Filtered Out Title';
+
+  mockPapi('post', { count: 0 });
+  const showWarningMock = jest.fn();
+  comp.$root.showWarning = showWarningMock;
+
+  await comp.submitSendNotification();
+
+  expect(comp.sendDialog).toBe(false);
+  expect(showWarningMock).toHaveBeenCalledWith('No notification destinations were eligible.');
 });
 
 test('submitSendNotification ignores submission without title', async () => {
@@ -309,28 +323,6 @@ test('userOptions correctly maps users', () => {
     { title: 'Bob Smith', value: 'u2' },
     { title: 'u3', value: 'u3' },
   ]);
-});
-
-test('testDestination success and error handling', async () => {
-  const postMock = mockPapi('post', { success: true });
-  await comp.testDestination({ id: 'soc-bell', name: 'SOC Bell' }, false);
-  expect(postMock).toHaveBeenCalledWith(
-    'notifications/destinations/soc-bell/test?title=Test%3A+SOC+Bell&summary=This+is+a+test+notification+summary.'
-  );
-  expect(comp.$root.notification).toBe(true);
-  expect(comp.$root.notificationMessage).toBe('Test notification sent successfully!');
-
-  // Targeted test
-  await comp.testDestination({ id: 'soc-bell', name: 'SOC Bell' }, true);
-  expect(postMock).toHaveBeenCalledWith(
-    'notifications/destinations/soc-bell/test?targeted=true&title=Test+%28Targeted%29%3A+SOC+Bell&summary=This+is+a+targeted+test+notification+dispatched+to+verify+recipient+destination+connectivity.'
-  );
-  expect(comp.$root.notificationMessage).toBe('Targeted test notification sent successfully!');
-
-  // Error case
-  mockPapi('post', null, 'Connection failed');
-  await comp.testDestination({ id: 'soc-bell', name: 'SOC Bell' });
-  expect(comp.$root.error).toBe(true);
 });
 
 test('helpers for channel and severity formatting', () => {

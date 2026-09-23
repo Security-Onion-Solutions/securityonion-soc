@@ -24,7 +24,7 @@ func TestSOCChannelType(t *testing.T) {
 	ch := NewSOCChannel(nil, nil)
 	assert.Equal(t, "soc", ch.Type())
 	assert.True(t, ch.SupportsRecipients())
-	assert.True(t, ch.SupportsAttachments())
+	assert.False(t, ch.SupportsAttachments())
 	assert.True(t, ch.SupportsLinks())
 }
 

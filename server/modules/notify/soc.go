@@ -39,7 +39,7 @@ func (c *SOCChannel) SupportsRecipients() bool {
 }
 
 func (c *SOCChannel) SupportsAttachments() bool {
-	return true
+	return false
 }
 
 func (c *SOCChannel) SupportsLinks() bool {

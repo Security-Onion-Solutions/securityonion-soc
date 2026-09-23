@@ -22,7 +22,7 @@ var (
 
 // Notifier defines the interface for sending notifications across channels and managing destinations.
 type Notifier interface {
-	Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error
+	Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) (int, error)
 	SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error
 	RegisterChannel(channel NotificationChannel)
 	GetChannel(channelType string) (NotificationChannel, bool)

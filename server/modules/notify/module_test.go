@@ -54,7 +54,7 @@ func TestNotificationModuleLifecycle_Licensed(t *testing.T) {
 		Summary:  "Lifecycle test summary",
 		Severity: model.NotificationSeverityInfo,
 	}
-	err = srv.Notifier.Send(context.Background(), payload)
+	_, err = srv.Notifier.Send(context.Background(), payload)
 	assert.NoError(t, err)
 
 	// Stop
@@ -146,6 +146,12 @@ func TestNotificationModuleOnConfigSettingUpdated(t *testing.T) {
 		Value: "false",
 	}, false)
 	assert.False(t, mod.notifier.config.Enabled)
+
+	// Enabled removed -> reverts to module config default (true)
+	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{
+		Id: ConfigSettingNotificationEnabled,
+	}, true)
+	assert.True(t, mod.notifier.config.Enabled)
 
 	// Setting removed -> reverts to defaults
 	mod.OnConfigSettingUpdated(context.Background(), &model.Setting{

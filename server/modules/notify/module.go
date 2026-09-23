@@ -8,7 +8,6 @@ package notify
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
@@ -79,8 +78,13 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 		return err
 	}
 
-	defaultConfig := LoadConfigFromStore(ctx, nil)
-	mod.notifier = NewNotifier(mod.server, mod.registry, defaultConfig)
+	parsedConfig, err := ParseConfig(cfg)
+	if err != nil {
+		log.WithError(err).Error("Failed to parse notification module configuration")
+		return err
+	}
+
+	mod.notifier = NewNotifier(mod.server, mod.registry, parsedConfig)
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
 		mod.server.Notificationstore = NewNotificationstore(mod.server, mod.store)
@@ -114,41 +118,32 @@ func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setti
 	mod.mu.Lock()
 	defer mod.mu.Unlock()
 
-	mod.notifier.mu.RLock()
-	cfg := mod.notifier.config
-	mod.notifier.mu.RUnlock()
+	mod.notifier.mu.Lock()
+	defer mod.notifier.mu.Unlock()
 
 	switch setting.Id {
 	case ConfigSettingNotificationDestinations:
 		if removed || setting.Value == "" {
-			cfg.Destinations = model.DefaultDestinationsMap()
+			parsed, _ := ParseConfig(mod.config)
+			mod.notifier.config.Destinations = parsed.Destinations
 		} else {
-			var dests map[string]model.DestinationConfig
-			if err := json.Unmarshal([]byte(setting.Value), &dests); err == nil {
-				for k, v := range dests {
-					if v.ID == "" {
-						v.ID = k
-					}
-					dests[k] = v
-				}
-				cfg.Destinations = dests
+			if dests, err := unmarshalDestinations(setting.Value); err == nil {
+				mod.notifier.config.Destinations = dests
 			}
 		}
 	case ConfigSettingNotificationEnabled:
 		if removed || setting.Value == "" {
-			cfg.Enabled = true
+			mod.notifier.config.Enabled = module.GetBoolDefault(mod.config, "enabled", true)
 		} else {
-			cfg.Enabled = setting.Value == "true"
+			mod.notifier.config.Enabled = setting.Value == "true"
 		}
 	case ConfigSettingNotificationDismissedPruneDays:
 		if removed || setting.Value == "" {
-			cfg.DismissedPruneDays = DEFAULT_DISMISSED_PRUNE_DAYS
+			mod.notifier.config.DismissedPruneDays = module.GetIntDefault(mod.config, "dismissedPruneDays", DEFAULT_DISMISSED_PRUNE_DAYS)
 		} else if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
-			cfg.DismissedPruneDays = days
+			mod.notifier.config.DismissedPruneDays = days
 		}
 	}
-
-	mod.notifier.UpdateConfig(cfg)
 }
 
 func (mod *NotificationModule) Start() error {
@@ -166,9 +161,10 @@ func (mod *NotificationModule) Start() error {
 		configstore = mod.server.Configstore
 	}
 
-	notificationConfig := LoadConfigFromStore(ctx, configstore)
-	if mod.notifier != nil {
-		mod.notifier.UpdateConfig(notificationConfig)
+	if storeDests, ok := LoadConfigFromStore(ctx, configstore); ok && mod.notifier != nil {
+		mod.notifier.mu.Lock()
+		mod.notifier.config.Destinations = storeDests
+		mod.notifier.mu.Unlock()
 	}
 
 	mod.registerConfigCallbacks()
@@ -180,9 +176,18 @@ func (mod *NotificationModule) Start() error {
 
 	go mod.pruneLoop()
 
+	destCount := 0
+	pruneDays := DEFAULT_DISMISSED_PRUNE_DAYS
+	if mod.notifier != nil {
+		mod.notifier.mu.RLock()
+		destCount = len(mod.notifier.config.Destinations)
+		pruneDays = mod.notifier.config.DismissedPruneDays
+		mod.notifier.mu.RUnlock()
+	}
+
 	log.WithFields(log.Fields{
-		"destinationCount": len(notificationConfig.Destinations),
-		"pruneDays":        notificationConfig.DismissedPruneDays,
+		"destinationCount": destCount,
+		"pruneDays":        pruneDays,
 	}).Info("Notification module started")
 	return nil
 }

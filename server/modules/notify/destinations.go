@@ -56,32 +56,6 @@ func unmarshalDestinations(val string) (map[string]model.DestinationConfig, erro
 		}
 	}
 
-	// 3. Try newline-delimited JSON objects
-	lines := strings.Split(val, "\n")
-	dests := make(map[string]model.DestinationConfig)
-	allLinesParsed := true
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var item model.DestinationConfig
-		if err := json.Unmarshal([]byte(line), &item); err == nil {
-			id := item.ID
-			if id == "" {
-				id = uuid.NewString()
-				item.ID = id
-			}
-			dests[id] = item
-		} else {
-			allLinesParsed = false
-			break
-		}
-	}
-	if allLinesParsed && len(dests) > 0 {
-		return dests, nil
-	}
-
 	return nil, errors.New("unable to parse destination configuration")
 }
 
