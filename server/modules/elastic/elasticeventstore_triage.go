@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+
+	"github.com/apex/log"
 )
 
 var _ server.AlertTriageUpdater = (*ElasticEventstore)(nil)
@@ -82,11 +83,11 @@ func (store *ElasticEventstore) AlertTriageUpdate(ctx context.Context, update *m
 	criteria.Asynchronous = update.Count > store.asyncThreshold
 
 	log.FromContext(ctx).WithFields(log.Fields{
-		"runId":     update.RunId,
-		"sessionId": update.SessionId,
-		"failed":    update.Failed,
-		"count":     update.Count,
-		"async":     criteria.Asynchronous,
+		"automationRunId":       update.RunId,
+		"sessionId":             update.SessionId,
+		"failedUpdateCount":     update.Failed,
+		"successfulUpdateCount": update.Count,
+		"isAsync":               criteria.Asynchronous,
 	}).Info("Updating alert triage")
 
 	results, tasks, err := store.runUpdate(ctx, criteria)
