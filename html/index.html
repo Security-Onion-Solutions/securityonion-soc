@@ -69,7 +69,7 @@
           </v-select>
           <v-menu v-if="isLicensed(FEAT_NTF) && notificationsStarted" v-model="notificationMenu" :close-on-content-click="false" location="bottom end" offset="5">
             <template #activator="{ props }">
-              <v-btn icon v-bind="props" data-aid="nav_notification_bell" @click="loadNotifications">
+              <v-btn icon v-bind="props" :title="i18n.notifications" data-aid="nav_notification_bell" @click="loadNotifications">
                 <v-badge dot :model-value="unreadCount > 0" color="error" data-aid="nav_notification_bell_badge">
                   <v-icon class="text-white">{{ unreadCount > 0 ? 'fa-envelope' : 'fa-envelope-open' }}</v-icon>
                 </v-badge>
