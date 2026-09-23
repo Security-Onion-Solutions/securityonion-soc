@@ -1865,3 +1865,49 @@ func TestExplainAllocation(t *testing.T) {
 	body, _ := io.ReadAll(requests[0].Body)
 	assert.JSONEq(t, `{"index":"so-logs","shard":2,"primary":true}`, string(body))
 }
+
+func TestUpdateSync(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":5,"updated":3,"noops":2,"failures":[]}`), nil)
+
+	criteria := model.NewEventUpdateCriteria()
+	criteria.AddUpdateScript("ctx._source.event.acknowledged = true;")
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+
+	results, err := store.Update(context.Background(), criteria)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, results.UpdatedCount)
+	assert.Equal(t, 2, results.UnchangedCount)
+	assert.Empty(t, results.TaskIds)
+	assert.Len(t, transport.GetRequests(), 1)
+}
+
+func TestUpdateUnauthorized(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeUnauthorizedServer())
+
+	criteria := model.NewEventUpdateCriteria()
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+
+	_, err := store.Update(context.Background(), criteria)
+	assert.Error(t, err)
+	assert.Empty(t, transport.GetRequests())
+}
+
+func TestUpdateAsyncWithoutRequestorId(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
+	transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":1,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
+
+	criteria := model.NewEventUpdateCriteria()
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+	criteria.Asynchronous = true
+
+	var results *model.EventUpdateResults
+	var err error
+	// A headless caller has no requestor id; the detached watcher context must tolerate that.
+	assert.NotPanics(t, func() {
+		results, err = store.Update(context.Background(), criteria)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"node-1:1"}, results.TaskIds)
+}

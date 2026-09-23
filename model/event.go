@@ -168,6 +168,7 @@ func NewEventUpdateCriteria() *EventUpdateCriteria {
 	return criteria
 }
 
+// Scripts are joined by newline, so each must end in ; or }.
 func (criteria *EventUpdateCriteria) AddUpdateScript(script string) {
 	criteria.UpdateScripts = append(criteria.UpdateScripts, script)
 }
