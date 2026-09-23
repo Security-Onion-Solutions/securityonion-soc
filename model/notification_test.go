@@ -15,7 +15,7 @@ func TestDefaultDestinationSOCBellConfig(t *testing.T) {
 	cfg := DefaultDestinationSOCBellConfig()
 	assert.Equal(t, DefaultDestinationSOCBell, cfg.ID)
 	assert.Equal(t, "", cfg.Name)
-	assert.Equal(t, ChannelTypeSOC, cfg.Type)
+	assert.Equal(t, "soc", cfg.Type)
 	assert.True(t, cfg.Enabled)
 }
 

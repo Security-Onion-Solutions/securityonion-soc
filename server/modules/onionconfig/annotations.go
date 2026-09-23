@@ -236,6 +236,8 @@ func LoadStaticConfiguration(dir string, parseYaml func(string) (map[string]inte
 						} else {
 							FlattenPillar(mapped, "", defaults)
 						}
+					} else {
+						log.WithField("path", path).WithError(err).Error("failed to parse annotation file")
 					}
 				}
 			}

@@ -54,14 +54,52 @@ func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error)
 	return "", errors.New("unauthorized: missing user in context")
 }
 
-func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter string) ([]*model.NotificationRecord, error) {
+func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string, []string, bool, error) {
+	readAll := false
 	if s.server != nil {
 		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
-			return nil, err
+			return "", nil, false, err
+		}
+		if err := s.server.CheckAuthorized(ctx, "read_all", "notifications"); err == nil {
+			readAll = true
 		}
 	}
 
 	username, err := s.getUsername(ctx)
+	if err != nil {
+		return "", nil, false, err
+	}
+
+	identifiers := make([]string, 0, 2)
+
+	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
+		if reqId, ok := val.(string); ok && reqId != "" {
+			identifiers = append(identifiers, reqId)
+		}
+	}
+
+	if u := s.getUser(ctx); u != nil && u.Id != "" {
+		found := false
+		for _, id := range identifiers {
+			if id == u.Id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			identifiers = append(identifiers, u.Id)
+		}
+	}
+
+	if len(identifiers) == 0 {
+		identifiers = append(identifiers, username)
+	}
+
+	return username, identifiers, readAll, nil
+}
+
+func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter string) ([]*model.NotificationRecord, error) {
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -82,17 +120,11 @@ func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter str
 		s.store = st
 	}
 
-	return s.store.GetNotifications(ctx, username, filter, createdAfter)
+	return s.store.GetNotifications(ctx, username, identifiers, readAll, filter, createdAfter)
 }
 
 func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Time, error) {
-	if s.server != nil {
-		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
-			return nil, err
-		}
-	}
-
-	username, err := s.getUsername(ctx)
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +145,7 @@ func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Ti
 		s.store = st
 	}
 
-	return s.store.GetLastUnreadTime(ctx, username, createdAfter)
+	return s.store.GetLastUnreadTime(ctx, username, identifiers, readAll, createdAfter)
 }
 
 func (s *NotificationstoreImpl) SetRead(ctx context.Context, id string, isRead bool) error {

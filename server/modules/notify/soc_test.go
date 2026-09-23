@@ -22,7 +22,10 @@ import (
 
 func TestSOCChannelType(t *testing.T) {
 	ch := NewSOCChannel(nil, nil)
-	assert.Equal(t, model.ChannelTypeSOC, ch.Type())
+	assert.Equal(t, "soc", ch.Type())
+	assert.True(t, ch.SupportsRecipients())
+	assert.False(t, ch.SupportsAttachments())
+	assert.True(t, ch.SupportsLinks())
 }
 
 func TestSOCChannelValidateConfig(t *testing.T) {
@@ -95,6 +98,7 @@ func TestSOCChannelSendWithMockDB(t *testing.T) {
 		mock.MatchedBy(func(s string) bool { return len(s) > 0 }),
 		"rule_12345_192.168.1.100",
 		fixedTime,
+		"[]",
 	).Return(nil).Once()
 
 	err := ch.Send(ctx, map[string]interface{}{"storeInPostgres": true}, payload)
@@ -117,7 +121,7 @@ func TestSOCChannelSendDBError(t *testing.T) {
 		Severity: model.NotificationSeverityMedium,
 	}
 
-	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(errors.New("connection closed")).Once()
 
 	err := ch.Send(ctx, nil, payload)
@@ -147,7 +151,7 @@ func TestSOCChannelSend_BroadcastWebSocket(t *testing.T) {
 		Timestamp: time.Now().UTC(),
 	}
 
-	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).Once()
 
 	err := ch.Send(ctx, nil, payload)

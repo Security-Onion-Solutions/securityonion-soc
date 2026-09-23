@@ -10,12 +10,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	. "github.com/security-onion-solutions/securityonion-soc/server"
@@ -90,6 +94,7 @@ func TestGetNotifications_NoLicense(t *testing.T) {
 func TestGetNotifications_StoreNil(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Notificationstore = nil
+	srv.Notifier = nil
 
 	r := chi.NewRouter()
 	RegisterNotificationRoutes(srv, r, "/api/notifications")
@@ -349,13 +354,28 @@ func TestGetAudit_NoLicense(t *testing.T) {
 }
 
 type fakeTestChannel struct {
-	channelType string
-	lastPayload *model.NotificationPayload
-	sendErr     error
+	channelType         string
+	supportsRecipients  bool
+	supportsAttachments bool
+	supportsLinks       bool
+	lastPayload         *model.NotificationPayload
+	sendErr             error
 }
 
 func (f *fakeTestChannel) Type() string {
 	return f.channelType
+}
+
+func (f *fakeTestChannel) SupportsRecipients() bool {
+	return f.supportsRecipients
+}
+
+func (f *fakeTestChannel) SupportsAttachments() bool {
+	return f.supportsAttachments
+}
+
+func (f *fakeTestChannel) SupportsLinks() bool {
+	return f.supportsLinks
 }
 
 func (f *fakeTestChannel) ValidateConfig(params map[string]interface{}) error {
@@ -368,12 +388,36 @@ func (f *fakeTestChannel) Send(ctx context.Context, params map[string]interface{
 }
 
 type fakeTestNotifier struct {
-	channels     map[string]NotificationChannel
-	destinations map[string]model.DestinationConfig
+	srv                  *Server
+	channels             map[string]NotificationChannel
+	destinations         map[string]model.DestinationConfig
+	lastSentPayload      *model.NotificationPayload
+	lastSentDestinations []string
+	sendErr              error
 }
 
-func (f *fakeTestNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
-	return nil
+func (f *fakeTestNotifier) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) (int, error) {
+	f.lastSentPayload = payload
+	f.lastSentDestinations = destinations
+	sentCount := 0
+	if len(destinations) > 0 && f.channels != nil {
+		for _, destId := range destinations {
+			if dest, ok := f.destinations[destId]; ok {
+				if ch, ok := f.channels[dest.Type]; ok {
+					if err := ch.Send(ctx, dest.Params, payload); err == nil {
+						sentCount++
+					}
+				}
+			} else if ch, ok := f.channels["soc"]; ok && destId == "soc-bell" {
+				if err := ch.Send(ctx, nil, payload); err == nil {
+					sentCount++
+				}
+			}
+		}
+	} else if payload != nil {
+		sentCount = 1
+	}
+	return sentCount, f.sendErr
 }
 
 func (f *fakeTestNotifier) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
@@ -396,12 +440,191 @@ func (f *fakeTestNotifier) GetDestinations() map[string]model.DestinationConfig 
 	return f.destinations
 }
 
-func (f *fakeTestNotifier) GetDefaultDestinations() []string {
-	return []string{model.DefaultDestinationSOCBell}
+func (f *fakeTestNotifier) loadDestinations(ctx context.Context) (map[string]model.DestinationConfig, error) {
+	if f.srv != nil && f.srv.Configstore != nil {
+		setting, err := f.srv.Configstore.GetSetting(ctx, "soc.config.server.modules.notification.destinations")
+		if err != nil {
+			return nil, err
+		}
+		if setting != nil && strings.TrimSpace(setting.Value) != "" {
+			var dests map[string]model.DestinationConfig
+			if err := json.Unmarshal([]byte(setting.Value), &dests); err == nil {
+				return dests, nil
+			}
+		}
+	}
+	if len(f.destinations) > 0 {
+		return f.destinations, nil
+	}
+	return model.DefaultDestinationsMap(), nil
 }
 
-func (f *fakeTestNotifier) UpdateConfig(cfg model.NotificationConfig) {
-	f.destinations = cfg.Destinations
+func (f *fakeTestNotifier) saveDestinations(ctx context.Context, dests map[string]model.DestinationConfig) error {
+	f.destinations = dests
+	if f.srv != nil && f.srv.Configstore != nil {
+		valBytes, err := json.Marshal(dests)
+		if err != nil {
+			return err
+		}
+		return f.srv.Configstore.UpdateSetting(ctx, &model.Setting{
+			Id:    "soc.config.server.modules.notification.destinations",
+			Value: string(valBytes),
+		}, false)
+	}
+	return nil
+}
+
+func (f *fakeTestNotifier) checkAuth(ctx context.Context, op string) error {
+	if f.srv != nil {
+		return f.srv.CheckAuthorized(ctx, op, "config")
+	}
+	return nil
+}
+
+func (f *fakeTestNotifier) ListDestinations(ctx context.Context) ([]model.DestinationConfig, error) {
+	if err := f.checkAuth(ctx, "read"); err != nil {
+		return nil, err
+	}
+	destsMap, err := f.loadDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.DestinationConfig, 0, len(destsMap))
+	for id, dest := range destsMap {
+		if dest.ID == "" {
+			dest.ID = id
+		}
+		if ch, found := f.GetChannel(dest.Type); found {
+			dest.RecipientsSupported = ch.SupportsRecipients()
+			dest.AttachmentsSupported = ch.SupportsAttachments()
+			dest.LinksSupported = ch.SupportsLinks()
+		}
+		result = append(result, dest)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+	})
+	return result, nil
+}
+
+func (f *fakeTestNotifier) GetDestination(ctx context.Context, id string) (*model.DestinationConfig, error) {
+	if err := f.checkAuth(ctx, "read"); err != nil {
+		return nil, err
+	}
+	if !model.IsValidDestinationID(id) {
+		return nil, ErrInvalidDestinationID
+	}
+	destsMap, err := f.loadDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dest, exists := destsMap[id]
+	if !exists {
+		return nil, ErrDestinationNotFound
+	}
+	if dest.ID == "" {
+		dest.ID = id
+	}
+	if ch, found := f.GetChannel(dest.Type); found {
+		dest.RecipientsSupported = ch.SupportsRecipients()
+		dest.AttachmentsSupported = ch.SupportsAttachments()
+		dest.LinksSupported = ch.SupportsLinks()
+	}
+	return &dest, nil
+}
+
+func (f *fakeTestNotifier) CreateDestination(ctx context.Context, dest *model.DestinationConfig) (*model.DestinationConfig, error) {
+	if err := f.checkAuth(ctx, "write"); err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		return nil, errors.New("destination cannot be nil")
+	}
+	if err := model.ValidateDestinationName(dest.Name); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(dest.Type) == "" {
+		dest.Type = "soc"
+	}
+	if dest.ID == "" {
+		dest.ID = uuid.NewString()
+	} else if !model.IsValidDestinationID(dest.ID) {
+		return nil, ErrInvalidDestinationID
+	}
+	if ch, found := f.GetChannel(dest.Type); found {
+		if err := ch.ValidateConfig(dest.Params); err != nil {
+			return nil, fmt.Errorf("invalid channel parameters: %w", err)
+		}
+	}
+	destsMap, err := f.loadDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, exists := destsMap[dest.ID]; exists {
+		return nil, ErrDuplicateDestinationID
+	}
+	destsMap[dest.ID] = *dest
+	if err := f.saveDestinations(ctx, destsMap); err != nil {
+		return nil, err
+	}
+	return dest, nil
+}
+
+func (f *fakeTestNotifier) UpdateDestination(ctx context.Context, id string, dest *model.DestinationConfig) (*model.DestinationConfig, error) {
+	if err := f.checkAuth(ctx, "write"); err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		return nil, errors.New("destination cannot be nil")
+	}
+	if !model.IsValidDestinationID(id) {
+		return nil, ErrInvalidDestinationID
+	}
+	if err := model.ValidateDestinationName(dest.Name); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(dest.Type) == "" {
+		dest.Type = "soc"
+	}
+	dest.ID = id
+	if ch, found := f.GetChannel(dest.Type); found {
+		if err := ch.ValidateConfig(dest.Params); err != nil {
+			return nil, fmt.Errorf("invalid channel parameters: %w", err)
+		}
+	}
+	destsMap, err := f.loadDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, exists := destsMap[id]; !exists {
+		return nil, ErrDestinationNotFound
+	}
+	destsMap[id] = *dest
+	if err := f.saveDestinations(ctx, destsMap); err != nil {
+		return nil, err
+	}
+	return dest, nil
+}
+
+func (f *fakeTestNotifier) DeleteDestination(ctx context.Context, id string) error {
+	if err := f.checkAuth(ctx, "write"); err != nil {
+		return err
+	}
+	if !model.IsValidDestinationID(id) {
+		return ErrInvalidDestinationID
+	}
+	if id == model.DefaultDestinationSOCBell {
+		return ErrCannotDeleteDefaultDestination
+	}
+	destsMap, err := f.loadDestinations(ctx)
+	if err != nil {
+		return err
+	}
+	if _, exists := destsMap[id]; !exists {
+		return ErrDestinationNotFound
+	}
+	delete(destsMap, id)
+	return f.saveDestinations(ctx, destsMap)
 }
 
 func TestGetDestinations_Success(t *testing.T) {
@@ -437,6 +660,13 @@ func TestGetDestinations_Success(t *testing.T) {
 	schedsJSON, _ := json.Marshal(scheds)
 
 	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc", supportsRecipients: true, supportsAttachments: true, supportsLinks: true},
+		},
+	}
+	srv.Notifier = fakeNotif
 	srv.Configstore = NewMemConfigStore([]*model.Setting{
 		{
 			Id:    "soc.config.server.modules.notification.destinations",
@@ -466,6 +696,7 @@ func TestGetDestinations_Success(t *testing.T) {
 	assert.Equal(t, "SOC Bell", resp[0].Name)
 	assert.Equal(t, []string{"work-hours"}, resp[0].ScheduleIDs)
 	assert.Equal(t, []string{"high", "critical"}, resp[0].Severities)
+	assert.True(t, resp[0].RecipientsSupported)
 }
 
 func TestGetDestinations_DefaultFallback(t *testing.T) {
@@ -499,6 +730,7 @@ func TestPostDestination_Success(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
 	fakeNotif := &fakeTestNotifier{
+		srv: srv,
 		channels: map[string]NotificationChannel{
 			"soc": &fakeTestChannel{channelType: "soc"},
 		},
@@ -537,6 +769,13 @@ func TestPostDestination_DuplicateID(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
 	initialDests := map[string]model.DestinationConfig{
 		"dest-1": {
 			ID:   "dest-1",
@@ -578,6 +817,7 @@ func TestPostDestination_EmptyName(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
 	fakeNotif := &fakeTestNotifier{
+		srv: srv,
 		channels: map[string]NotificationChannel{
 			"soc": &fakeTestChannel{channelType: "soc"},
 		},
@@ -624,6 +864,7 @@ func TestPutDestination_Success(t *testing.T) {
 		},
 	})
 	fakeNotif := &fakeTestNotifier{
+		srv: srv,
 		channels: map[string]NotificationChannel{
 			"soc": &fakeTestChannel{channelType: "soc"},
 		},
@@ -664,6 +905,13 @@ func TestPutDestination_NotFound(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
 	updatedDest := model.DestinationConfig{
@@ -705,6 +953,13 @@ func TestDeleteDestination_Success(t *testing.T) {
 			Value: string(destsJSON),
 		},
 	})
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
 	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/dest-1", nil)
@@ -731,6 +986,13 @@ func TestDeleteDestination_DefaultSOCBell(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
 	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/soc-bell", nil)
@@ -753,6 +1015,13 @@ func TestDeleteDestination_NotFound(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+	}
+	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
 	r := httptest.NewRequest("DELETE", "/api/notifications/destinations/nonexistent", nil)
@@ -769,107 +1038,74 @@ func TestDeleteDestination_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestPostTestDestination_Success(t *testing.T) {
+func TestPostSendNotification_Global(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	srv := NewFakeAuthorizedServer(nil)
-	initialDests := map[string]model.DestinationConfig{
-		"soc-bell": {
-			ID:   "soc-bell",
-			Name: "SOC Notification Bell",
-			Type: "soc",
-		},
-	}
-	destsJSON, _ := json.Marshal(initialDests)
-	srv.Configstore = NewMemConfigStore([]*model.Setting{
-		{
-			Id:    "soc.config.server.modules.notification.destinations",
-			Value: string(destsJSON),
-		},
-	})
-	ch := &fakeTestChannel{channelType: "soc"}
-	fakeNotif := &fakeTestNotifier{
-		channels: map[string]NotificationChannel{
-			"soc": ch,
-		},
-	}
+	fakeNotif := &fakeTestNotifier{}
 	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/test", nil)
+	bodyJSON := `{"title":"System Wide Alert","summary":"Global notification","severity":"critical","recipients":["user-1","user-2"],"bypassSchedules":true}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "soc-bell")
-	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
 	r = r.WithContext(ctx)
 
 	w := httptest.NewRecorder()
-	h.PostTestDestination(w, r)
+	h.PostSendNotification(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.NotNil(t, ch.lastPayload)
-	assert.Contains(t, ch.lastPayload.Title, "Test: SOC Notification Bell")
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Equal(t, "System Wide Alert", fakeNotif.lastSentPayload.Title)
+	assert.Equal(t, "Global notification", fakeNotif.lastSentPayload.Summary)
+	assert.Equal(t, "critical", fakeNotif.lastSentPayload.Severity)
+	assert.Equal(t, []string{"user-1", "user-2"}, fakeNotif.lastSentPayload.Recipients)
+	assert.Equal(t, model.SourceClient, fakeNotif.lastSentPayload.Source)
+	assert.True(t, fakeNotif.lastSentPayload.BypassSchedules)
+	assert.Empty(t, fakeNotif.lastSentDestinations)
 }
 
-func TestPostTestDestination_NotFound(t *testing.T) {
+func TestPostSendNotification_MissingTitle_ReturnsBadRequest(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	srv := NewFakeAuthorizedServer(nil)
-	srv.Configstore = NewMemConfigStore([]*model.Setting{})
-	h := NewNotificationHandler(srv)
-
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/nonexistent/test", nil)
-	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
-	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "nonexistent")
-	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
-	r = r.WithContext(ctx)
-
-	w := httptest.NewRecorder()
-	h.PostTestDestination(w, r)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestPostTestDestination_DriverMissing(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
-	srv := NewFakeAuthorizedServer(nil)
-	initialDests := map[string]model.DestinationConfig{
-		"matrix-dest": {
-			ID:   "matrix-dest",
-			Name: "Matrix Alert",
-			Type: "matrix",
-		},
-	}
-	destsJSON, _ := json.Marshal(initialDests)
-	srv.Configstore = NewMemConfigStore([]*model.Setting{
-		{
-			Id:    "soc.config.server.modules.notification.destinations",
-			Value: string(destsJSON),
-		},
-	})
-	fakeNotif := &fakeTestNotifier{
-		channels: map[string]NotificationChannel{},
-	}
+	fakeNotif := &fakeTestNotifier{}
 	srv.Notifier = fakeNotif
 	h := NewNotificationHandler(srv)
 
-	r := httptest.NewRequest("POST", "/api/notifications/destinations/matrix-dest/test", nil)
+	bodyJSON := `{"title":"   ","summary":"No title"}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "matrix-dest")
-	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
 	r = r.WithContext(ctx)
 
 	w := httptest.NewRecorder()
-	h.PostTestDestination(w, r)
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPostSendNotification_TitleTooLong_ReturnsBadRequest(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	longTitle := string(bytes.Repeat([]byte("a"), 256))
+	bodyJSON, _ := json.Marshal(map[string]string{"title": longTitle})
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewReader(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
@@ -880,6 +1116,8 @@ func TestPostDestination_InvalidID(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
 
 	h := NewNotificationHandler(srv)
 
@@ -908,6 +1146,8 @@ func TestPutDestination_InvalidID(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
 
 	h := NewNotificationHandler(srv)
 
@@ -938,6 +1178,8 @@ func TestPostDestination_NameTooLong(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
 
 	h := NewNotificationHandler(srv)
 
@@ -965,6 +1207,8 @@ func TestPutDestination_NameTooLong(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
 
 	h := NewNotificationHandler(srv)
 
@@ -995,6 +1239,8 @@ func TestDeleteDestination_InvalidID(t *testing.T) {
 
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
 
 	h := NewNotificationHandler(srv)
 
@@ -1011,4 +1257,105 @@ func TestDeleteDestination_InvalidID(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
+}
+
+func TestDestinationEndpoints_Permissions(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeUnauthorizedServer()
+	srv.Configstore = NewMemConfigStore([]*model.Setting{})
+	fakeNotif := &fakeTestNotifier{srv: srv}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "unauthorized_user")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	// GET /destinations requires config/read
+	r := httptest.NewRequest("GET", "/api/notifications/destinations", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.GetDestinations(w, r)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// POST /destinations requires config/write
+	r = httptest.NewRequest("POST", "/api/notifications/destinations", bytes.NewReader([]byte(`{"name":"test"}`))).WithContext(ctx)
+	w = httptest.NewRecorder()
+	h.PostDestination(w, r)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// PUT /destinations/{id} requires config/write
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "dest-1")
+	putCtx := context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = httptest.NewRequest("PUT", "/api/notifications/destinations/dest-1", bytes.NewReader([]byte(`{"name":"test"}`))).WithContext(putCtx)
+	w = httptest.NewRecorder()
+	h.PutDestination(w, r)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// DELETE /destinations/{id} requires config/write
+	r = httptest.NewRequest("DELETE", "/api/notifications/destinations/dest-1", nil).WithContext(putCtx)
+	w = httptest.NewRecorder()
+	h.DeleteDestination(w, r)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestPostSendNotification_NotificationWritePermissionOnly(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	// Server allows notifications/write but forbids config/read
+	srv := &Server{
+		Authorizer: &customOpAuthorizer{
+			allowedOps: map[string]bool{
+				"write:notifications": true,
+				"read:config":         false,
+			},
+		},
+	}
+	fakeNotif := &fakeTestNotifier{
+		srv: srv,
+		channels: map[string]NotificationChannel{
+			"soc": &fakeTestChannel{channelType: "soc"},
+		},
+		destinations: map[string]model.DestinationConfig{
+			"soc-bell": {ID: "soc-bell", Name: "SOC Bell", Type: "soc", Enabled: true},
+		},
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"Notification Admin Test","summary":"Testing permissions"}`
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/soc-bell/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "notification_admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "soc-bell")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotNil(t, fakeNotif.lastSentPayload)
+	assert.Equal(t, "Notification Admin Test", fakeNotif.lastSentPayload.Title)
+}
+
+type customOpAuthorizer struct {
+	allowedOps map[string]bool
+}
+
+func (a *customOpAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
+	if a.allowedOps[operation+":"+target] {
+		return nil
+	}
+	return errors.New("forbidden")
+}
+
+func (a *customOpAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	if a.allowedOps[operation+":"+target] {
+		return nil
+	}
+	return errors.New("forbidden")
 }

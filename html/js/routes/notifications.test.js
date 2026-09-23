@@ -56,3 +56,14 @@ test('delegates add actions based on active tab', () => {
   comp.addSchedule();
   expect(showAddSchedMock).toHaveBeenCalled();
 });
+
+test('delegates sendNotification to destinationsManager.showSendDialog', () => {
+  const showSendDialogMock = jest.fn();
+  comp.$refs = {
+    destinationsManager: {
+      showSendDialog: showSendDialogMock,
+    },
+  };
+  comp.sendNotification();
+  expect(showSendDialogMock).toHaveBeenCalledWith(null);
+});

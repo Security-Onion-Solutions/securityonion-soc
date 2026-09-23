@@ -61,10 +61,11 @@ test('showAddDestination initializes default form', () => {
   expect(comp.form.name).toBe('');
   expect(comp.form.type).toBe('soc');
   expect(comp.form.enabled).toBe(true);
+  expect(comp.form.enableRecipients).toBe(true);
+  expect(comp.form.skipIfRecipients).toBe(false);
   expect(comp.form.scheduleIds).toEqual([]);
   expect(comp.form.severities).toEqual([]);
   expect(comp.form.params).toEqual({});
-  expect(comp.testResult).toBeNull();
 });
 
 test('showEditDestination populates form', () => {
@@ -73,6 +74,9 @@ test('showEditDestination populates form', () => {
     name: 'SOC Alert Bell',
     type: 'soc',
     enabled: false,
+    recipientsSupported: true,
+    enableRecipients: false,
+    skipIfRecipients: true,
     scheduleIds: ['sch-1'],
     severities: ['critical'],
     params: {},
@@ -84,16 +88,37 @@ test('showEditDestination populates form', () => {
   expect(comp.form.name).toBe('SOC Alert Bell');
   expect(comp.form.type).toBe('soc');
   expect(comp.form.enabled).toBe(false);
+  expect(comp.form.recipientsSupported).toBe(true);
+  expect(comp.form.enableRecipients).toBe(false);
+  expect(comp.form.skipIfRecipients).toBe(true);
   expect(comp.form.scheduleIds).toEqual(['sch-1']);
   expect(comp.form.severities).toEqual(['critical']);
   expect(comp.form.params).toEqual({});
-  expect(comp.testResult).toBeNull();
+});
+
+test('showEditDestination auto populates default name when blank', () => {
+  const dest = {
+    id: 'soc-bell',
+    name: '',
+    type: 'soc',
+    enabled: true,
+    recipientsSupported: true,
+    enableRecipients: true,
+    skipIfRecipients: false,
+  };
+  comp.showEditDestination(dest);
+  expect(comp.destinationDialog).toBe(true);
+  expect(comp.form.isEdit).toBe(true);
+  expect(comp.form.id).toBe('soc-bell');
+  expect(comp.form.name).toBe('Built-in SOC Notifications');
 });
 
 test('saveDestination creates new destination', async () => {
   comp.showAddDestination();
   comp.form.name = 'New Slack';
   comp.form.type = 'soc';
+  comp.form.enableRecipients = true;
+  comp.form.skipIfRecipients = false;
   comp.form.scheduleIds = ['sch-1'];
   comp.form.severities = ['high', 'critical'];
 
@@ -106,6 +131,8 @@ test('saveDestination creates new destination', async () => {
     name: 'New Slack',
     type: 'soc',
     enabled: true,
+    enableRecipients: true,
+    skipIfRecipients: false,
     scheduleIds: ['sch-1'],
     severities: ['high', 'critical'],
     params: {},
@@ -119,12 +146,17 @@ test('saveDestination updates existing destination', async () => {
     name: 'SOC Bell',
     type: 'soc',
     enabled: true,
+    recipientsSupported: true,
+    enableRecipients: false,
+    skipIfRecipients: true,
     scheduleIds: ['sch-1'],
     severities: ['critical'],
     params: {},
   });
   comp.form.name = 'Renamed SOC Bell';
   comp.form.enabled = false;
+  comp.form.enableRecipients = false;
+  comp.form.skipIfRecipients = true;
   comp.form.scheduleIds = ['sch-1', 'sch-2'];
 
   const putMock = mockPapi('put', { success: true });
@@ -136,6 +168,8 @@ test('saveDestination updates existing destination', async () => {
     name: 'Renamed SOC Bell',
     type: 'soc',
     enabled: false,
+    enableRecipients: false,
+    skipIfRecipients: true,
     scheduleIds: ['sch-1', 'sch-2'],
     severities: ['critical'],
     params: {},
@@ -184,35 +218,111 @@ test('hideDeleteDestination resets state', () => {
   expect(comp.destinationToDelete).toBeNull();
 });
 
-test('testDestination success and error handling', async () => {
-  const postMock = mockPapi('post', { success: true });
-  await comp.testDestination({ id: 'soc-bell' });
-  expect(postMock).toHaveBeenCalledWith('notifications/destinations/soc-bell/test');
-  expect(comp.$root.notification).toBe(true);
-
-  // Error case
-  mockPapi('post', null, 'Connection failed');
-  await comp.testDestination({ id: 'soc-bell' });
-  expect(comp.$root.error).toBe(true);
+test('showSendDialog with destination initializes form with destination defaults', () => {
+  comp.users = [{ id: 'u1', email: 'alice@soc.local' }, { id: 'u2', email: 'bob@soc.local' }];
+  comp.showSendDialog({ id: 'soc-bell', name: 'SOC Bell', type: 'soc' });
+  expect(comp.sendDialog).toBe(true);
+  expect(comp.sendTargetDestination).toEqual({ id: 'soc-bell', name: 'SOC Bell', type: 'soc' });
+  expect(comp.sendForm.title).toBe('Test: SOC Bell');
+  expect(comp.sendForm.summary).toBe('This is a test notification summary.');
+  expect(comp.sendForm.severity).toBe('info');
+  expect(comp.sendForm.recipients).toEqual([]);
+  expect(comp.sendForm.bypassSchedules).toBe(false);
+  expect(comp.getSendDialogTitle()).toBe('Send Notification to SOC Bell');
 });
 
-test('testCurrentForm in editor dialog', async () => {
-  comp.form.id = 'soc-bell';
-  const postMock = mockPapi('post', { success: true });
-  await comp.testCurrentForm();
-  expect(postMock).toHaveBeenCalledWith('notifications/destinations/soc-bell/test');
-  expect(comp.testResult).toEqual({
-    success: true,
-    message: 'Test notification sent successfully!',
-  });
+test('showSendDialog without destination initializes form with global defaults', () => {
+  comp.showSendDialog(null);
+  expect(comp.sendDialog).toBe(true);
+  expect(comp.sendTargetDestination).toBeNull();
+  expect(comp.sendForm.title).toBe('Test Notification');
+  expect(comp.sendForm.summary).toBe('This is a test notification summary.');
+  expect(comp.sendForm.severity).toBe('info');
+  expect(comp.sendForm.recipients).toEqual([]);
+  expect(comp.sendForm.bypassSchedules).toBe(false);
+  expect(comp.getSendDialogTitle()).toBe('Send Notification');
+});
 
-  // Error case
-  mockPapi('post', null, 'Driver timeout');
-  await comp.testCurrentForm();
-  expect(comp.testResult).toEqual({
-    success: false,
-    message: 'Driver timeout',
+test('submitSendNotification dispatches destination-targeted notification', async () => {
+  comp.showSendDialog({ id: 'soc-bell', name: 'SOC Bell' });
+  comp.sendForm.title = 'Custom Title';
+  comp.sendForm.summary = 'Custom Summary';
+  comp.sendForm.severity = 'high';
+  comp.sendForm.recipients = ['u1'];
+  comp.sendForm.bypassSchedules = true;
+
+  const postMock = mockPapi('post', { count: 1 });
+  await comp.submitSendNotification();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/destinations/soc-bell/send', {
+    title: 'Custom Title',
+    summary: 'Custom Summary',
+    severity: 'high',
+    recipients: ['u1'],
+    bypassSchedules: true,
   });
+  expect(comp.sendDialog).toBe(false);
+  expect(comp.$root.notification).toBe(true);
+  expect(comp.$root.notificationMessage).toBe('Notification sent successfully!');
+});
+
+test('submitSendNotification dispatches global notification when destination is null', async () => {
+  comp.showSendDialog(null);
+  comp.sendForm.title = 'Broadcast Alert';
+  comp.sendForm.summary = 'To everyone';
+  comp.sendForm.severity = 'critical';
+  comp.sendForm.recipients = [];
+  comp.sendForm.bypassSchedules = false;
+
+  const postMock = mockPapi('post', { count: 1 });
+  await comp.submitSendNotification();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/send', {
+    title: 'Broadcast Alert',
+    summary: 'To everyone',
+    severity: 'critical',
+    recipients: [],
+    bypassSchedules: false,
+  });
+  expect(comp.sendDialog).toBe(false);
+  expect(comp.$root.notification).toBe(true);
+  expect(comp.$root.notificationMessage).toBe('Notification sent successfully!');
+});
+
+test('submitSendNotification shows warning when count is 0', async () => {
+  comp.showSendDialog({ id: 'soc-bell', name: 'SOC Bell' });
+  comp.sendForm.title = 'Filtered Out Title';
+
+  mockPapi('post', { count: 0 });
+  const showWarningMock = jest.fn();
+  comp.$root.showWarning = showWarningMock;
+
+  await comp.submitSendNotification();
+
+  expect(comp.sendDialog).toBe(false);
+  expect(showWarningMock).toHaveBeenCalledWith('No notification destinations were eligible.');
+});
+
+test('submitSendNotification ignores submission without title', async () => {
+  comp.showSendDialog(null);
+  comp.sendForm.title = '   ';
+  const postMock = mockPapi('post', { success: true });
+  await comp.submitSendNotification();
+  expect(postMock).not.toHaveBeenCalled();
+});
+
+test('userOptions correctly maps users', () => {
+  comp.users = [
+    { id: 'u1', email: 'alice@soc.local' },
+    { id: 'u2', name: 'Bob Smith' },
+    { id: 'u3' },
+  ];
+  const opts = typeof comp.userOptions === 'function' ? comp.userOptions() : comp.userOptions;
+  expect(opts).toEqual([
+    { title: 'alice@soc.local', value: 'u1' },
+    { title: 'Bob Smith', value: 'u2' },
+    { title: 'u3', value: 'u3' },
+  ]);
 });
 
 test('helpers for channel and severity formatting', () => {

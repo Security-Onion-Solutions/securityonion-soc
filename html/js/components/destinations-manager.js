@@ -21,6 +21,7 @@ components.push({
         i18n: this.$root?.i18n || {},
         destinations: [],
         schedules: [],
+        users: [],
         now: new Date(),
         activeEvaluationInterval: null,
         destinationHeaders: [
@@ -39,8 +40,16 @@ components.push({
         deleteDestinationDialog: false,
         destinationToDelete: null,
         testingDestinationId: null,
-        isTestingForm: false,
-        testResult: null,
+        sendDialog: false,
+        sendTargetDestination: null,
+        isSending: false,
+        sendForm: {
+          title: '',
+          summary: '',
+          severity: 'info',
+          recipients: [],
+          bypassSchedules: false,
+        },
         form: {
           isEdit: false,
           valid: false,
@@ -48,6 +57,9 @@ components.push({
           name: '',
           type: 'soc',
           enabled: true,
+          recipientsSupported: true,
+          enableRecipients: true,
+          skipIfRecipients: false,
           scheduleIds: [],
           severities: [],
           params: {},
@@ -65,6 +77,12 @@ components.push({
       };
     },
     computed: {
+      userOptions() {
+        return (this.users || []).map((u) => ({
+          title: u.email || u.name || u.id,
+          value: u.id,
+        }));
+      },
       scheduleOptions() {
         return (this.schedules || []).map((s) => {
           const statusSuffix = s.enabled !== false
@@ -99,6 +117,19 @@ components.push({
         this.$root?.startLoading?.();
         await Promise.all([this.getDestinations(), this.getSchedules()]);
         this.$root?.stopLoading?.();
+      },
+      async loadUsers() {
+        if (this.users && this.users.length > 0) {
+          return;
+        }
+        try {
+          if (this.$root?.papi && typeof this.$root.papi.get === 'function') {
+            const response = await this.$root.papi.get('users/');
+            this.users = Array.isArray(response) ? response : (Array.isArray(response?.data) ? response.data : []);
+          }
+        } catch (error) {
+          this.users = [];
+        }
       },
       async getDestinations() {
         try {
@@ -208,26 +239,35 @@ components.push({
           name: '',
           type: 'soc',
           enabled: true,
+          recipientsSupported: true,
+          enableRecipients: true,
+          skipIfRecipients: false,
           scheduleIds: [],
           severities: [],
           params: {},
         };
-        this.testResult = null;
         this.destinationDialog = true;
       },
       showEditDestination(dest) {
+        const recipientsSupported = Boolean(dest?.recipientsSupported);
+        const enableRecipients = dest?.enableRecipients !== undefined
+          ? Boolean(dest.enableRecipients)
+          : recipientsSupported;
+
         this.form = {
           isEdit: true,
           valid: true,
-          id: dest.id,
-          name: dest.name,
-          type: dest.type || 'soc',
-          enabled: dest.enabled !== false,
-          scheduleIds: Array.isArray(dest.scheduleIds) ? [...dest.scheduleIds] : [],
-          severities: Array.isArray(dest.severities) ? [...dest.severities] : [],
-          params: dest.params ? JSON.parse(JSON.stringify(dest.params)) : {},
+          id: dest?.id,
+          name: this.getDestinationName(dest),
+          type: dest?.type || 'soc',
+          enabled: dest?.enabled !== false,
+          recipientsSupported: recipientsSupported,
+          enableRecipients: enableRecipients,
+          skipIfRecipients: Boolean(dest?.skipIfRecipients),
+          scheduleIds: Array.isArray(dest?.scheduleIds) ? [...dest.scheduleIds] : [],
+          severities: Array.isArray(dest?.severities) ? [...dest.severities] : [],
+          params: dest?.params ? JSON.parse(JSON.stringify(dest.params)) : {},
         };
-        this.testResult = null;
         this.destinationDialog = true;
       },
       isDefaultDestination(dest) {
@@ -254,6 +294,8 @@ components.push({
           name: this.form.name.trim(),
           type: this.form.type || 'soc',
           enabled: this.form.enabled !== false,
+          enableRecipients: this.form.recipientsSupported ? Boolean(this.form.enableRecipients) : undefined,
+          skipIfRecipients: Boolean(this.form.skipIfRecipients),
           scheduleIds: Array.isArray(this.form.scheduleIds) ? this.form.scheduleIds.filter(Boolean) : [],
           severities: Array.isArray(this.form.severities) ? this.form.severities : [],
           params: this.form.params || {},
@@ -297,42 +339,68 @@ components.push({
           this.$root?.stopLoading?.();
         }
       },
-      async testDestination(dest) {
-        if (!dest || !dest.id) {
+      showSendDialog(dest = null) {
+        this.sendTargetDestination = dest;
+        this.loadUsers();
+        let defaultTitle = '';
+        if (dest) {
+          const destName = this.getDestinationName(dest);
+          defaultTitle = (this.i18n.testNotificationTitle).replace('{name}', destName);
+        } else {
+          defaultTitle = this.i18n.testNotificationDefaultTitle;
+        }
+        this.sendForm = {
+          title: defaultTitle,
+          summary: this.i18n.testNotificationSummary || '',
+          severity: 'info',
+          recipients: [],
+          bypassSchedules: false,
+        };
+        this.sendDialog = true;
+      },
+      getSendDialogTitle() {
+        if (this.sendTargetDestination) {
+          const name = this.getDestinationName(this.sendTargetDestination);
+          return (this.i18n.sendDestinationNotification).replace('{name}', name);
+        }
+        return this.i18n.sendNotification;
+      },
+      async submitSendNotification() {
+        if (!this.sendForm.title || !this.sendForm.title.trim()) {
           return;
         }
-        this.testingDestinationId = dest.id;
+        this.isSending = true;
+        this.$root?.startLoading?.();
         try {
-          await this.$root.papi.post(`notifications/destinations/${encodeURIComponent(dest.id)}/test`);
+          const payload = {
+            title: this.sendForm.title.trim(),
+            summary: this.sendForm.summary ? this.sendForm.summary.trim() : '',
+            severity: this.sendForm.severity || 'info',
+            recipients: Array.isArray(this.sendForm.recipients) ? this.sendForm.recipients : [],
+            bypassSchedules: Boolean(this.sendForm.bypassSchedules),
+          };
+
+          let url = 'notifications/send';
+          if (this.sendTargetDestination && this.sendTargetDestination.id) {
+            url = `notifications/destinations/${encodeURIComponent(this.sendTargetDestination.id)}/send`;
+          }
+
+          const response = await this.$root.papi.post(url, payload);
+          const count = (response && typeof response.count === 'number') ? response.count : (response?.data?.count ?? 0);
+          this.sendDialog = false;
           if (this.$root) {
-            this.$root.notificationMessage = this.i18n.testNotificationSent;
-            this.$root.notification = true;
+            if (count > 0) {
+              this.$root.notificationMessage = this.i18n.notificationSent;
+              this.$root.notification = true;
+            } else {
+              this.$root.showWarning(this.i18n.noEligibleDestinations);
+            }
           }
         } catch (error) {
           this.$root.showError(error);
         } finally {
-          this.testingDestinationId = null;
-        }
-      },
-      async testCurrentForm() {
-        if (!this.form.id) {
-          return;
-        }
-        this.isTestingForm = true;
-        this.testResult = null;
-        try {
-          await this.$root.papi.post(`notifications/destinations/${encodeURIComponent(this.form.id)}/test`);
-          this.testResult = {
-            success: true,
-            message: this.i18n.testNotificationSent,
-          };
-        } catch (error) {
-          this.testResult = {
-            success: false,
-            message: error?.response?.data?.message || error?.message || (typeof error === 'string' ? error : this.i18n.testNotificationFailed),
-          };
-        } finally {
-          this.isTestingForm = false;
+          this.isSending = false;
+          this.$root?.stopLoading?.();
         }
       },
       getDestinationScheduleNames(dest) {

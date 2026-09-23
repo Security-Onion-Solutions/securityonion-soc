@@ -31,7 +31,19 @@ func NewSOCChannel(srv *server.Server, store *database.Store) *SOCChannel {
 }
 
 func (c *SOCChannel) Type() string {
-	return model.ChannelTypeSOC
+	return "soc"
+}
+
+func (c *SOCChannel) SupportsRecipients() bool {
+	return true
+}
+
+func (c *SOCChannel) SupportsAttachments() bool {
+	return false
+}
+
+func (c *SOCChannel) SupportsLinks() bool {
+	return true
 }
 
 func (c *SOCChannel) ValidateConfig(params map[string]interface{}) error {

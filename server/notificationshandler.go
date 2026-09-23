@@ -6,12 +6,10 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -47,7 +45,8 @@ func RegisterNotificationRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/destinations", h.PostDestination)
 		r.Put("/destinations/{id}", h.PutDestination)
 		r.Delete("/destinations/{id}", h.DeleteDestination)
-		r.Post("/destinations/{id}/test", h.PostTestDestination)
+		r.Post("/destinations/{id}/send", h.PostSendNotification)
+		r.Post("/send", h.PostSendNotification)
 
 		r.Get("/", h.GetNotifications)
 		r.Put("/{id}/read", h.PutRead)
@@ -74,125 +73,25 @@ func (h *NotificationHandler) respondError(w http.ResponseWriter, r *http.Reques
 	errStr := err.Error()
 	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "Missing Authorizer") {
 		web.Respond(w, r, http.StatusUnauthorized, err)
-	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "Unauthorized") {
+	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "Unauthorized") || strings.Contains(errStr, "not authorized") {
 		web.Respond(w, r, http.StatusForbidden, err)
+	} else if errors.Is(err, ErrDestinationNotFound) || strings.Contains(errStr, "not found") {
+		web.Respond(w, r, http.StatusNotFound, err)
+	} else if errors.Is(err, ErrInvalidDestinationID) || errors.Is(err, ErrDuplicateDestinationID) ||
+		errors.Is(err, ErrCannotDeleteDefaultDestination) ||
+		strings.Contains(errStr, "invalid") || strings.Contains(errStr, "already exists") ||
+		strings.Contains(errStr, "cannot delete") || strings.Contains(errStr, "exceeds") ||
+		strings.Contains(errStr, "required") {
+		web.Respond(w, r, http.StatusBadRequest, err)
 	} else {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 	}
 }
 
-func unmarshalDestinations(val string) (map[string]model.DestinationConfig, error) {
-	val = strings.TrimSpace(val)
-	if val == "" {
-		return make(map[string]model.DestinationConfig), nil
-	}
-
-	// 1. Try standard JSON map format
-	if strings.HasPrefix(val, "{") {
-		var dests map[string]model.DestinationConfig
-		if err := json.Unmarshal([]byte(val), &dests); err == nil {
-			for k, v := range dests {
-				if v.ID == "" {
-					v.ID = k
-				}
-				dests[k] = v
-			}
-			return dests, nil
-		}
-	}
-
-	// 2. Try JSON array format
-	if strings.HasPrefix(val, "[") {
-		var slice []model.DestinationConfig
-		if err := json.Unmarshal([]byte(val), &slice); err == nil {
-			dests := make(map[string]model.DestinationConfig, len(slice))
-			for _, item := range slice {
-				id := item.ID
-				if id == "" {
-					id = uuid.NewString()
-					item.ID = id
-				}
-				dests[id] = item
-			}
-			return dests, nil
-		}
-	}
-
-	// 3. Try newline-delimited JSON objects
-	lines := strings.Split(val, "\n")
-	dests := make(map[string]model.DestinationConfig)
-	allLinesParsed := true
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var item model.DestinationConfig
-		if err := json.Unmarshal([]byte(line), &item); err == nil {
-			id := item.ID
-			if id == "" {
-				id = uuid.NewString()
-				item.ID = id
-			}
-			dests[id] = item
-		} else {
-			allLinesParsed = false
-			break
-		}
-	}
-	if allLinesParsed && len(dests) > 0 {
-		return dests, nil
-	}
-
-	return nil, errors.New("unable to parse destination configuration")
-}
-
-func (h *NotificationHandler) loadDestinations(ctx context.Context) (map[string]model.DestinationConfig, error) {
-	if h.server == nil || h.server.Configstore == nil {
-		if h.server != nil && h.server.Notifier != nil {
-			return h.server.Notifier.GetDestinations(), nil
-		}
-		return model.DefaultDestinationsMap(), nil
-	}
-
-	setting, err := h.server.Configstore.GetSetting(ctx, ConfigSettingNotificationDestinations)
-	if err != nil {
-		return nil, err
-	}
-	if setting == nil || strings.TrimSpace(setting.Value) == "" {
-		if h.server.Notifier != nil {
-			dests := h.server.Notifier.GetDestinations()
-			if len(dests) > 0 {
-				return dests, nil
-			}
-		}
-		return model.DefaultDestinationsMap(), nil
-	}
-
-	return unmarshalDestinations(setting.Value)
-}
-
-func (h *NotificationHandler) saveDestinations(ctx context.Context, dests map[string]model.DestinationConfig) error {
-	valBytes, err := json.Marshal(dests)
-	if err != nil {
-		return err
-	}
-	if h.server != nil && h.server.Configstore != nil {
-		setting := &model.Setting{
-			Id:    ConfigSettingNotificationDestinations,
-			Value: string(valBytes),
-		}
-		if err := h.server.Configstore.UpdateSetting(ctx, setting, false); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // @Summary      Get Notification Destinations
 // @Description  Retrieves all configured notification destination channels.
 // @Tags         Notifications
-// @Security     bearer[notifications/read]
+// @Security     bearer[config/read]
 // @Produce      json
 // @Success      200  {array}  model.DestinationConfig  "The list of configured destinations"
 // @Failure      400         "License is invalid"
@@ -210,37 +109,25 @@ func (h *NotificationHandler) GetDestinations(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
+	if h.server == nil || h.server.Notifier == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("notification subsystem is not running"))
+		return
+	}
+
+	destinations, err := h.server.Notifier.ListDestinations(ctx)
+	if err != nil {
+		logger.WithError(err).Error("failed to load notification destinations")
 		h.respondError(w, r, err)
 		return
 	}
 
-	destsMap, err := h.loadDestinations(ctx)
-	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	result := make([]model.DestinationConfig, 0, len(destsMap))
-	for id, dest := range destsMap {
-		if dest.ID == "" {
-			dest.ID = id
-		}
-		result = append(result, dest)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
-	})
-
-	web.Respond(w, r, http.StatusOK, result)
+	web.Respond(w, r, http.StatusOK, destinations)
 }
 
 // @Summary      Create Notification Destination
 // @Description  Creates a new notification destination channel in Pillar configuration.
 // @Tags         Notifications
-// @Security     bearer[notifications/write]
+// @Security     bearer[config/write]
 // @Param        request  body  model.DestinationConfig  true  "The destination data to create"
 // @Accept       json
 // @Produce      json
@@ -260,8 +147,8 @@ func (h *NotificationHandler) PostDestination(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Notifier == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("notification subsystem is not running"))
 		return
 	}
 
@@ -272,57 +159,20 @@ func (h *NotificationHandler) PostDestination(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := model.ValidateDestinationName(req.Name); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	if strings.TrimSpace(req.Type) == "" {
-		req.Type = model.ChannelTypeSOC
-	}
-
-	if req.ID == "" {
-		req.ID = uuid.NewString()
-	} else if !model.IsValidDestinationID(req.ID) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
-		return
-	}
-
-	if h.server != nil && h.server.Notifier != nil {
-		if ch, found := h.server.Notifier.GetChannel(req.Type); found {
-			if err := ch.ValidateConfig(req.Params); err != nil {
-				web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel parameters: %w", err))
-				return
-			}
-		}
-	}
-
-	destsMap, err := h.loadDestinations(ctx)
+	created, err := h.server.Notifier.CreateDestination(ctx, &req)
 	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("failed to create notification destination")
+		h.respondError(w, r, err)
 		return
 	}
 
-	if _, exists := destsMap[req.ID]; exists {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("destination with this ID already exists"))
-		return
-	}
-
-	destsMap[req.ID] = req
-	if err := h.saveDestinations(ctx, destsMap); err != nil {
-		logger.WithError(err).Error("failed to save notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	web.Respond(w, r, http.StatusOK, req)
+	web.Respond(w, r, http.StatusOK, created)
 }
 
 // @Summary      Update Notification Destination
 // @Description  Updates an existing notification destination channel in Pillar configuration.
 // @Tags         Notifications
-// @Security     bearer[notifications/write]
+// @Security     bearer[config/write]
 // @Param        id       path  string                   true  "Destination ID"
 // @Param        request  body  model.DestinationConfig  true  "The destination data to update"
 // @Accept       json
@@ -345,13 +195,9 @@ func (h *NotificationHandler) PutDestination(w http.ResponseWriter, r *http.Requ
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if !model.IsValidDestinationID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
-		return
-	}
 
-	if err := h.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Notifier == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("notification subsystem is not running"))
 		return
 	}
 
@@ -362,52 +208,20 @@ func (h *NotificationHandler) PutDestination(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := model.ValidateDestinationName(req.Name); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	if strings.TrimSpace(req.Type) == "" {
-		req.Type = model.ChannelTypeSOC
-	}
-
-	req.ID = id
-
-	if h.server != nil && h.server.Notifier != nil {
-		if ch, found := h.server.Notifier.GetChannel(req.Type); found {
-			if err := ch.ValidateConfig(req.Params); err != nil {
-				web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel parameters: %w", err))
-				return
-			}
-		}
-	}
-
-	destsMap, err := h.loadDestinations(ctx)
+	updated, err := h.server.Notifier.UpdateDestination(ctx, id, &req)
 	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("failed to update notification destination")
+		h.respondError(w, r, err)
 		return
 	}
 
-	if _, exists := destsMap[id]; !exists {
-		web.Respond(w, r, http.StatusNotFound, errors.New("destination not found"))
-		return
-	}
-
-	destsMap[id] = req
-	if err := h.saveDestinations(ctx, destsMap); err != nil {
-		logger.WithError(err).Error("failed to save notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	web.Respond(w, r, http.StatusOK, req)
+	web.Respond(w, r, http.StatusOK, updated)
 }
 
 // @Summary      Delete Notification Destination
 // @Description  Removes a notification destination channel from Pillar configuration.
 // @Tags         Notifications
-// @Security     bearer[notifications/write]
+// @Security     bearer[config/write]
 // @Param        id  path  string  true  "Destination ID"
 // @Produce      json
 // @Success      200         "The destination was successfully deleted"
@@ -428,58 +242,47 @@ func (h *NotificationHandler) DeleteDestination(w http.ResponseWriter, r *http.R
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if !model.IsValidDestinationID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
+
+	if h.server == nil || h.server.Notifier == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("notification subsystem is not running"))
 		return
 	}
 
-	if id == model.DefaultDestinationSOCBell {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("cannot delete default notification destination"))
-		return
-	}
-
-	if err := h.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
+	if err := h.server.Notifier.DeleteDestination(ctx, id); err != nil {
+		logger.WithError(err).Error("failed to delete notification destination")
 		h.respondError(w, r, err)
-		return
-	}
-
-	destsMap, err := h.loadDestinations(ctx)
-	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	if _, exists := destsMap[id]; !exists {
-		web.Respond(w, r, http.StatusNotFound, errors.New("destination not found"))
-		return
-	}
-
-	delete(destsMap, id)
-	if err := h.saveDestinations(ctx, destsMap); err != nil {
-		logger.WithError(err).Error("failed to save notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	web.Respond(w, r, http.StatusOK, nil)
 }
 
-// @Summary      Test Notification Destination
-// @Description  Dispatches a test notification payload directly to the specified destination to verify connectivity and driver configuration.
+// @Description SendNotificationResponse specifies the number of destinations that delivered the notification.
+type SendNotificationResponse struct {
+	// The number of destinations that actually sent the notification.
+	Count int `json:"count" example:"1"`
+}
+
+// @Summary      Send Notification
+// @Description  Dispatches a test or ad-hoc notification payload. When a destination ID is provided in the route, the notification is dispatched specifically to that destination. When omitted, standard notification routing is used across all configured destinations.
 // @Tags         Notifications
 // @Security     bearer[notifications/write]
-// @Param        id  path  string  true  "Destination ID"
+// @Param        id              path   string  false  "Destination ID"
+// @Param        targeted        query  bool    false  "Whether to send a targeted notification to the current user"
+// @Param        title           query  string  false  "Notification title"
+// @Param        summary         query  string  false  "Notification summary"
+// @Param        severity        query  string  false  "Notification severity"
+// @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
-// @Success      200         "The test notification was successfully sent"
-// @Failure      400         "Channel driver not available or invalid configuration"
+// @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
+// @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Notification module has not been enabled on the server"
-// @Failure      500         "Failed to send test notification via channel driver"
-// @Router       /connect/notifications/destinations/{id}/test [post]
-func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http.Request) {
+// @Failure      500         "Failed to send notification via channel driver"
+// @Router       /connect/notifications/send [post]
+func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
@@ -488,27 +291,8 @@ func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	id := chi.URLParam(r, "id")
-	if !model.IsValidDestinationID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
-		return
-	}
-
 	if err := h.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
 		h.respondError(w, r, err)
-		return
-	}
-
-	destsMap, err := h.loadDestinations(ctx)
-	if err != nil {
-		logger.WithError(err).Error("failed to load notification destinations")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	destCfg, exists := destsMap[id]
-	if !exists {
-		web.Respond(w, r, http.StatusNotFound, errors.New("destination not found"))
 		return
 	}
 
@@ -517,38 +301,105 @@ func (h *NotificationHandler) PostTestDestination(w http.ResponseWriter, r *http
 		return
 	}
 
-	channel, found := h.server.Notifier.GetChannel(destCfg.Type)
-	if !found {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("channel driver '%s' not registered", destCfg.Type))
+	id := chi.URLParam(r, "id")
+	if id != "" && !model.IsValidDestinationID(id) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid destination ID"))
 		return
 	}
 
-	if err := channel.ValidateConfig(destCfg.Params); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid channel configuration: %w", err))
+	var req struct {
+		Title           string   `json:"title"`
+		Summary         string   `json:"summary"`
+		Severity        string   `json:"severity"`
+		Recipients      []string `json:"recipients"`
+		BypassSchedules bool     `json:"bypassSchedules"`
+	}
+
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logger.WithError(err).Error("failed to decode request body")
+			web.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	if req.Title == "" {
+		req.Title = r.URL.Query().Get("title")
+	}
+	if req.Summary == "" {
+		req.Summary = r.URL.Query().Get("summary")
+	}
+	if req.Severity == "" {
+		req.Severity = r.URL.Query().Get("severity")
+	}
+	if !req.BypassSchedules && r.URL.Query().Get("bypassSchedules") == "true" {
+		req.BypassSchedules = true
+	}
+	if len(req.Recipients) == 0 {
+		if r.URL.Query().Get("targeted") == "true" || r.URL.Query().Get("withRecipients") == "true" {
+			if reqId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok && reqId != "" {
+				req.Recipients = []string{reqId}
+			} else if u, ok := ctx.Value(web.ContextKeyRunAsUsername).(string); ok && u != "" {
+				req.Recipients = []string{u}
+			}
+		} else if rawRecipients := r.URL.Query()["recipients"]; len(rawRecipients) > 0 {
+			req.Recipients = rawRecipients
+		}
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("title is required"))
+		return
+	}
+	if len(title) > 255 {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("title exceeds maximum allowed length"))
 		return
 	}
 
-	destName := destCfg.Name
-	if destName == "" {
-		destName = destCfg.ID
-	}
-
-	testPayload := &model.NotificationPayload{
-		ID:        uuid.NewString(),
-		Source:    model.SourceMetric,
-		Title:     "Test: " + destName,
-		Summary:   "This is a test notification dispatched to verify destination connectivity.",
-		Severity:  model.NotificationSeverityInfo,
-		Timestamp: time.Now().UTC(),
-	}
-
-	if err := channel.Send(ctx, destCfg.Params, testPayload); err != nil {
-		logger.WithError(err).WithField("destinationId", id).Error("failed to dispatch test notification")
-		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("test notification delivery failed: %w", err))
+	summary := strings.TrimSpace(req.Summary)
+	if len(summary) > 4000 {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("summary exceeds maximum allowed length"))
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, nil)
+	severity := strings.ToLower(strings.TrimSpace(req.Severity))
+	if severity == "" {
+		severity = model.NotificationSeverityInfo
+	}
+	switch severity {
+	case model.NotificationSeverityInfo, model.NotificationSeverityLow, model.NotificationSeverityMedium, model.NotificationSeverityHigh, model.NotificationSeverityCritical:
+	default:
+		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid severity"))
+		return
+	}
+
+	payload := &model.NotificationPayload{
+		ID:              uuid.NewString(),
+		Source:          model.SourceClient,
+		Title:           title,
+		Summary:         summary,
+		Severity:        severity,
+		Timestamp:       time.Now().UTC(),
+		Recipients:      req.Recipients,
+		BypassSchedules: req.BypassSchedules,
+	}
+
+	var count int
+	var sendErr error
+	if id != "" {
+		count, sendErr = h.server.Notifier.Send(ctx, payload, id)
+	} else {
+		count, sendErr = h.server.Notifier.Send(ctx, payload)
+	}
+
+	if sendErr != nil {
+		logger.WithError(sendErr).WithField("destinationId", id).Error("failed to dispatch notification")
+		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("notification delivery failed: %w", sendErr))
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, SendNotificationResponse{Count: count})
 }
 
 // @Summary      Get Notifications

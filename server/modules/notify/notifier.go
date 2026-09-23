@@ -46,20 +46,18 @@ func NewNotifier(srv *server.Server, registry *ChannelRegistry, cfg model.Notifi
 	}
 }
 
-func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) error {
+func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayload, destinations ...string) (int, error) {
 	if payload == nil {
-		return errors.New("notification payload cannot be nil")
+		return 0, errors.New("notification payload cannot be nil")
 	}
 
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
 		log.WithField("notificationId", payload.ID).Debug("No active license with notifications enabled; skipping dispatch")
-		return nil
+		return 0, nil
 	}
 
 	n.mu.RLock()
 	enabled := n.config.Enabled
-	defaultDests := make([]string, len(n.config.DefaultDestinations))
-	copy(defaultDests, n.config.DefaultDestinations)
 	destinationsMap := make(map[string]model.DestinationConfig, len(n.config.Destinations))
 	for k, v := range n.config.Destinations {
 		destinationsMap[k] = v
@@ -68,17 +66,18 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 
 	if !enabled {
 		log.WithField("notificationId", payload.ID).Debug("Notification system is disabled; skipping dispatch")
-		return nil
+		return 0, nil
 	}
 
 	targetDests := destinations
 	if len(targetDests) == 0 {
-		targetDests = defaultDests
-	}
-	if len(targetDests) == 0 {
-		targetDests = []string{model.DefaultDestinationSOCBell}
+		targetDests = make([]string, 0, len(destinationsMap))
+		for destKey := range destinationsMap {
+			targetDests = append(targetDests, destKey)
+		}
 	}
 
+	var sentCount int
 	var errs []error
 	for _, destName := range targetDests {
 		destCfg, found := destinationsMap[destName]
@@ -111,31 +110,33 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 			}
 		}
 
-		if len(destCfg.ScheduleIDs) > 0 {
-			if n.server != nil && n.server.Configstore != nil {
-				now := time.Now().UTC()
-				anyActive := false
-				for _, schedID := range destCfg.ScheduleIDs {
-					if schedID == "" {
-						anyActive = true
-						break
+		if !payload.BypassSchedules {
+			if len(destCfg.ScheduleIDs) > 0 {
+				if n.server != nil && n.server.Configstore != nil {
+					now := time.Now().UTC()
+					anyActive := false
+					for _, schedID := range destCfg.ScheduleIDs {
+						if schedID == "" {
+							anyActive = true
+							break
+						}
+						active, err := server.IsScheduleActiveInConfig(ctx, n.server.Configstore, schedID, now)
+						if err != nil {
+							log.WithError(err).WithField("scheduleId", schedID).Warn("Failed to evaluate destination schedule; failing open and treating as active")
+							active = true
+						}
+						if active {
+							anyActive = true
+							break
+						}
 					}
-					active, err := server.IsScheduleActiveInConfig(ctx, n.server.Configstore, schedID, now)
-					if err != nil {
-						log.WithError(err).WithField("scheduleId", schedID).Warn("Failed to evaluate destination schedule; failing open and treating as active")
-						active = true
+					if !anyActive {
+						log.WithFields(log.Fields{
+							"destination": destName,
+							"scheduleIds": destCfg.ScheduleIDs,
+						}).Debug("None of the destination schedules are currently active; skipping")
+						continue
 					}
-					if active {
-						anyActive = true
-						break
-					}
-				}
-				if !anyActive {
-					log.WithFields(log.Fields{
-						"destination": destName,
-						"scheduleIds": destCfg.ScheduleIDs,
-					}).Debug("None of the destination schedules are currently active; skipping")
-					continue
 				}
 			}
 		}
@@ -148,19 +149,58 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 			continue
 		}
 
-		if err := channel.Send(ctx, destCfg.Params, payload); err != nil {
+		destPayload := payload
+
+		if len(payload.Recipients) > 0 {
+			recipientsEnabled := channel.SupportsRecipients()
+			if destCfg.EnableRecipients != nil {
+				recipientsEnabled = *destCfg.EnableRecipients && channel.SupportsRecipients()
+			}
+			if !recipientsEnabled {
+				if destCfg.SkipIfRecipients {
+					log.WithFields(log.Fields{
+						"destination": destName,
+						"recipients":  payload.Recipients,
+					}).Debug("Destination does not have recipient support enabled and skipIfRecipients is active; skipping")
+					continue
+				}
+				clone := *destPayload
+				clone.Recipients = nil
+				destPayload = &clone
+			}
+		}
+
+		if len(payload.Attachments) > 0 && !channel.SupportsAttachments() {
+			if destPayload == payload {
+				clone := *payload
+				destPayload = &clone
+			}
+			destPayload.Attachments = nil
+		}
+
+		if len(payload.Links) > 0 && !channel.SupportsLinks() {
+			if destPayload == payload {
+				clone := *payload
+				destPayload = &clone
+			}
+			destPayload.Links = nil
+		}
+
+		if err := channel.Send(ctx, destCfg.Params, destPayload); err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"destination": destName,
 				"channelType": destCfg.Type,
 			}).Error("Channel driver failed to send notification")
 			errs = append(errs, fmt.Errorf("destination '%s' send failed: %w", destName, err))
+		} else {
+			sentCount++
 		}
 	}
 
 	if len(errs) > 0 {
-		return errors.Join(errs...)
+		return sentCount, errors.Join(errs...)
 	}
-	return nil
+	return sentCount, nil
 }
 
 func (n *NotifierImpl) SendWithSilence(ctx context.Context, payload *model.NotificationPayload, silence *model.SilenceParams, destinations ...string) error {
@@ -182,7 +222,8 @@ func (n *NotifierImpl) SendWithSilence(ctx context.Context, payload *model.Notif
 			return nil
 		}
 	}
-	return n.Send(ctx, payload, destinations...)
+	_, err := n.Send(ctx, payload, destinations...)
+	return err
 }
 
 func (n *NotifierImpl) checkSilence(source string, silence *model.SilenceParams) (bool, error) {
@@ -210,9 +251,11 @@ func (n *NotifierImpl) checkSilence(source string, silence *model.SilenceParams)
 		n.mu.RUnlock()
 		if gsw > 0 {
 			duration = time.Duration(gsw) * time.Second
-		} else {
-			duration = 300 * time.Second
 		}
+	}
+
+	if duration <= 0 {
+		return false, nil
 	}
 
 	if now.Sub(entry.windowStart) >= duration {
@@ -259,14 +302,6 @@ func (n *NotifierImpl) GetDestinations() map[string]model.DestinationConfig {
 	for k, v := range n.config.Destinations {
 		dests[k] = v
 	}
-	return dests
-}
-
-func (n *NotifierImpl) GetDefaultDestinations() []string {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	dests := make([]string, len(n.config.DefaultDestinations))
-	copy(dests, n.config.DefaultDestinations)
 	return dests
 }
 

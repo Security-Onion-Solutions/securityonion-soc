@@ -98,6 +98,20 @@ type FakeDatastore struct {
 	LastCount         int
 	LastUnwrap        bool
 	LastExcludeErrors bool
+	JobStreamReader   io.ReadCloser
+	JobStreamFilename string
+	JobStreamLength   int64
+	JobStreamMimeType string
+	JobStreamErr      error
+	JobMap            map[int]*model.Job
+	GetJobResult      *model.Job
+	CreateJobResult   *model.Job
+	AddJobErr         error
+	UpdateJobErr      error
+	DeleteJobErr      error
+	LastUpdatedJob    *model.Job
+	LastAddedJob      *model.Job
+	LastDeletedJobId  int
 }
 
 func NewFakeDatastore() *FakeDatastore {
@@ -144,10 +158,19 @@ func (impl *FakeDatastore) GetNextJob(ctx context.Context, nodeId string) *model
 }
 
 func (impl *FakeDatastore) CreateJob(ctx context.Context) *model.Job {
-	return nil
+	if impl.CreateJobResult != nil {
+		return impl.CreateJobResult
+	}
+	return model.NewJob()
 }
 
 func (impl *FakeDatastore) GetJob(ctx context.Context, jobId int) *model.Job {
+	if impl.JobMap != nil {
+		return impl.JobMap[jobId]
+	}
+	if impl.GetJobResult != nil {
+		return impl.GetJobResult
+	}
 	return nil
 }
 
@@ -156,7 +179,8 @@ func (impl *FakeDatastore) GetJobs(ctx context.Context, kind string, parameters 
 }
 
 func (impl *FakeDatastore) AddJob(ctx context.Context, job *model.Job) error {
-	return nil
+	impl.LastAddedJob = job
+	return impl.AddJobErr
 }
 
 func (impl *FakeDatastore) AddPivotJob(ctx context.Context, job *model.Job) error {
@@ -164,11 +188,19 @@ func (impl *FakeDatastore) AddPivotJob(ctx context.Context, job *model.Job) erro
 }
 
 func (impl *FakeDatastore) UpdateJob(ctx context.Context, job *model.Job) error {
-	return nil
+	impl.LastUpdatedJob = job
+	return impl.UpdateJobErr
 }
 
 func (impl *FakeDatastore) DeleteJob(ctx context.Context, jobId int) (*model.Job, error) {
-	return nil, nil
+	impl.LastDeletedJobId = jobId
+	if impl.DeleteJobErr != nil {
+		return nil, impl.DeleteJobErr
+	}
+	if impl.JobMap != nil {
+		return impl.JobMap[jobId], nil
+	}
+	return &model.Job{Id: jobId}, nil
 }
 
 func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int, count int, unwrap bool, excludeErrors bool) ([]*model.Packet, bool, error) {
@@ -185,6 +217,9 @@ func (impl *FakeDatastore) SaveJobStream(ctx context.Context, jobId int, reader 
 }
 
 func (impl *FakeDatastore) GetJobStream(ctx context.Context, jobId int, unwrap bool) (io.ReadCloser, string, int64, string, error) {
+	if impl.JobStreamErr != nil || impl.JobStreamReader != nil {
+		return impl.JobStreamReader, impl.JobStreamFilename, impl.JobStreamLength, impl.JobStreamMimeType, impl.JobStreamErr
+	}
 	return nil, "", 0, "", nil
 }
 
@@ -233,6 +268,7 @@ func NewFakeServer(authorized bool, roleMap map[string][]string) *Server {
 
 	srv.Datastore = NewFakeDatastore()
 	srv.Metrics = NewFakeMetrics()
+	srv.Notifier = NewFakeNotifier()
 
 	return srv
 }

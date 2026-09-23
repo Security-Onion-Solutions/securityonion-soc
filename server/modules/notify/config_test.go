@@ -7,10 +7,12 @@
 package notify
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,22 +21,22 @@ func TestParseConfigDefaults(t *testing.T) {
 	parsed, err := ParseConfig(cfg)
 	assert.NoError(t, err)
 	assert.True(t, parsed.Enabled)
-	assert.Equal(t, []string{model.DefaultDestinationSOCBell}, parsed.DefaultDestinations)
-	assert.Equal(t, DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS, parsed.GlobalSilenceWindowSeconds)
+	assert.Equal(t, 0, parsed.GlobalSilenceWindowSeconds)
+	assert.Equal(t, DEFAULT_DISMISSED_PRUNE_DAYS, parsed.DismissedPruneDays)
 
 	// Check default soc-bell destination
 	dest, exists := parsed.Destinations[model.DefaultDestinationSOCBell]
 	assert.True(t, exists)
 	assert.Equal(t, "", dest.Name)
-	assert.Equal(t, model.ChannelTypeSOC, dest.Type)
+	assert.Equal(t, "soc", dest.Type)
 	assert.True(t, dest.Enabled)
 }
 
 func TestParseConfigCustom(t *testing.T) {
 	cfg := module.ModuleConfig{
 		"enabled":                    false,
-		"defaultDestinations":        []interface{}{"email-alerts", "slack-alerts"},
 		"globalSilenceWindowSeconds": float64(600),
+		"dismissedPruneDays":         float64(45),
 		"destinations": map[string]interface{}{
 			"email-alerts": map[string]interface{}{
 				"name":       "SOC Email",
@@ -61,8 +63,8 @@ func TestParseConfigCustom(t *testing.T) {
 	parsed, err := ParseConfig(cfg)
 	assert.NoError(t, err)
 	assert.False(t, parsed.Enabled)
-	assert.Equal(t, []string{"email-alerts", "slack-alerts"}, parsed.DefaultDestinations)
 	assert.Equal(t, 600, parsed.GlobalSilenceWindowSeconds)
+	assert.Equal(t, 45, parsed.DismissedPruneDays)
 	assert.Len(t, parsed.Destinations, 2)
 
 	emailDest, ok := parsed.Destinations["email-alerts"]
@@ -80,4 +82,35 @@ func TestParseConfigCustom(t *testing.T) {
 	assert.Equal(t, "Slack Alerts", slackDest.Name)
 	assert.Equal(t, "slack", slackDest.Type)
 	assert.False(t, slackDest.Enabled)
+}
+
+func TestLoadConfigFromStore(t *testing.T) {
+	// Nil store -> false
+	dests, ok := LoadConfigFromStore(nil, nil)
+	assert.False(t, ok)
+	assert.Nil(t, dests)
+
+	// Store with custom settings
+	customDests := map[string]model.DestinationConfig{
+		"my-bell": {
+			ID:      "my-bell",
+			Name:    "My Bell",
+			Type:    "soc",
+			Enabled: true,
+		},
+	}
+	destsJSON, _ := json.Marshal(customDests)
+
+	store := server.NewMemConfigStore([]*model.Setting{
+		{
+			Id:    ConfigSettingNotificationDestinations,
+			Value: string(destsJSON),
+		},
+	})
+
+	dests, ok = LoadConfigFromStore(nil, store)
+	assert.True(t, ok)
+	assert.Len(t, dests, 1)
+	assert.Contains(t, dests, "my-bell")
+	assert.Equal(t, "My Bell", dests["my-bell"].Name)
 }
