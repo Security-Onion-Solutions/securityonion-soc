@@ -41,6 +41,7 @@ type AssistantManager interface {
 	ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error)
 	ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error)
 	RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error)
+	ValidateAgentSessionRequest(req *model.AgentSessionRequest) error
 	ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error)
 	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)

@@ -18,7 +18,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/tidwall/gjson"
@@ -293,11 +292,9 @@ func (a *GeminiAdapter) SendMessageStream(ctx context.Context, req *model.ChatRe
 		finishReason := "end_turn"
 		var finalResp *genai.GenerateContentResponse
 
-		// don't allow a user closing their request connection to cause us to lose the message stream
-		noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
-		noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
-
-		for resp, err := range session.SendMessageStream(noTimeoutContext, *latest.Parts[0]) {
+		// The coordinator detaches a user's turn from their request before this call;
+		// an automation's turn stays attached so it can be cancelled.
+		for resp, err := range session.SendMessageStream(ctx, *latest.Parts[0]) {
 			if err != nil {
 				replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model)
 				if shouldReturn {

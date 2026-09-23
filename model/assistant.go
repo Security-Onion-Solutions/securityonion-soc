@@ -606,16 +606,15 @@ type AgentSessionRequest struct {
 	// Seeds the session's first user message, the way a delegation seeds a child
 	// session. Not a system prompt: the agent brings its own.
 	Objective string
-	// Agent name, whose configured mapping resolves the model. Empty runs the
-	// orchestrator.
+	// Agent name, whose configured mapping resolves the model.
 	Agent string
 	// Owner of the created session; tool calls are authorized as this identity.
 	OwnerId string
-	// Tags stamped on the created session in addition to any the caller's context
-	// already requires.
+	// Tags stamped on the created session in addition to AutomationSessionTags.
 	Tags []string
-	// Ceiling on model turns, so an agent that loops cannot bill indefinitely. 0
-	// means the configured default, not unlimited.
+	// Ceiling on model turns across the session and every sub-agent it delegates
+	// to, so an agent that loops cannot bill indefinitely. 0 means the configured
+	// default, not unlimited.
 	MaxTurns int
 }
 
@@ -631,6 +630,33 @@ type AgentSessionResult struct {
 	// True when the run stopped on MaxTurns rather than the agent ending its turn,
 	// so a caller can decline to act on a half-finished analysis.
 	Truncated bool
+}
+
+// AgentStreamEvent is broadcast on every flush of a headless session's streaming
+// turn. Message is the partial as stored so far, so a viewer replaces rather than
+// appends; Done marks the turn's final flush.
+type AgentStreamEvent struct {
+	SessionId string   `json:"sessionId"`
+	MessageId string   `json:"messageId"`
+	Seq       int      `json:"seq"`
+	Message   *Message `json:"message"`
+	Done      bool     `json:"done,omitempty"`
+}
+
+const (
+	AgentPhaseWaitingLLM         = "waiting_llm"
+	AgentPhaseInvokingToolPrefix = "invoking_tool:"
+)
+
+// AgentSessionPhase is what a running headless session is doing right now.
+// RootSessionId is the session a work item records, so a delegated child's phase
+// can be joined back to its item.
+type AgentSessionPhase struct {
+	SessionId     string    `json:"sessionId"`
+	RootSessionId string    `json:"rootSessionId"`
+	Agent         string    `json:"agent"`
+	Phase         string    `json:"phase"`
+	Since         time.Time `json:"since"`
 }
 
 // StoredAgent is one agent as persisted in the "assistant.agents" setting (one

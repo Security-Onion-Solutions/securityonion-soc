@@ -82,6 +82,31 @@ type AutomationRun struct {
 	OpenItems []*model.AutomationWorkItem
 }
 
+// RunAgentSession runs one headless session for a work item and records the session on
+// the item, failed runs included, so the item always leads to the transcript.
+func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+	if req == nil {
+		return nil, ErrAgentSessionRequestRequired
+	}
+
+	if req.OwnerId == "" && run.Task != nil {
+		req.OwnerId = run.Task.UserId
+	}
+
+	if err := run.Srv.AssistantManager.ValidateAgentSessionRequest(req); err != nil {
+		return nil, err
+	}
+
+	result, runErr := run.Srv.AssistantManager.RunAgentSession(ctx, req)
+	if result != nil && result.SessionId != "" {
+		if err := run.Store.EnsureAutomationWorkItemSession(ctx, itemId, result.SessionId); err != nil {
+			return result, errors.Join(runErr, err)
+		}
+	}
+
+	return result, runErr
+}
+
 func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKind, error) {
 	kind, ok := ac.AutomationKindLibrary[name]
 	if !ok {
