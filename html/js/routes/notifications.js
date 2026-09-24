@@ -36,9 +36,6 @@ routes.push({
         if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
           this.$refs.destinationsManager.loadData();
         }
-        if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.loadData === 'function') {
-          this.$refs.schedulesManager.loadData();
-        }
       },
     },
   },

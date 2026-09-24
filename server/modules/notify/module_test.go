@@ -74,8 +74,30 @@ func TestNotificationModuleLifecycle_Unlicensed(t *testing.T) {
 	err := mod.Init(module.ModuleConfig{})
 	assert.NoError(t, err)
 	assert.Nil(t, srv.Notifier)
+	assert.Nil(t, srv.Notificationstore)
 
 	// Start without NTF license should skip start
+	err = mod.Start()
+	assert.NoError(t, err)
+	assert.False(t, mod.IsRunning())
+}
+
+func TestNotificationModuleLifecycle_DisabledInConfig(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := &server.Server{}
+	mod := NewNotificationModule(srv)
+
+	// Init with enabled=false in config should skip initialization
+	err := mod.Init(module.ModuleConfig{
+		"enabled": false,
+	})
+	assert.NoError(t, err)
+	assert.Nil(t, srv.Notifier)
+	assert.Nil(t, srv.Notificationstore)
+
+	// Start when disabled should skip start
 	err = mod.Start()
 	assert.NoError(t, err)
 	assert.False(t, mod.IsRunning())
