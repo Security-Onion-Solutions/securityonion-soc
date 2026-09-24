@@ -47,6 +47,7 @@ func TestElasticInit(tester *testing.T) {
 
 	// Ensure casestore has been setup
 	assert.NotNil(tester, srv.Casestore)
+	assert.Implements(tester, (*server.AlertTriageUpdater)(nil), srv.Assistantstore)
 }
 
 func TestElasticInitFailure(tester *testing.T) {

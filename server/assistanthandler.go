@@ -334,7 +334,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Detachment is owned by the assistant module (ToolStreamInSession and the
-	// resolution it drives run on a no-timeout context; each finalize persists on it),
+	// resolution it drives run on a detached, turn-bounded context; each finalize persists on it),
 	// so the handler keeps the request context — it must not re-detach here (it can't,
 	// without an import cycle). streamBody keeps draining the upstream to persist the
 	// turn after the client disconnects.

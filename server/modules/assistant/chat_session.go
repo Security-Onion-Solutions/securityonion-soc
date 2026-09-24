@@ -9,7 +9,6 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -28,7 +27,7 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 
 	// Detach up front: a browser refresh cancels the request context, which
 	// would otherwise abort a billed in-flight turn before it can be saved.
-	ctx, cancel := buildDetachedCtx(ctx, CHAT_TURN_TIMEOUT)
+	ctx, cancel := web.DetachContext(ctx, CHAT_TURN_TIMEOUT)
 	defer cancel()
 
 	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
@@ -78,13 +77,18 @@ func (ac *AssistantCoordinator) ChatInSession(ctx context.Context, incMsg *model
 // and returns the upstream response stream alongside a finalize callback the
 // handler invokes after streaming completes to parse the buffered response and
 // persist the assistant message.
-func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error) {
+func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (_ *http.Response, _ *model.AuxMessageData, _ func(rawResponse []byte) error, err error) {
 	logger := log.FromContext(ctx)
 
-	// Detach up front
-	noTimeOutCtx := web.DetachContext(ctx)
+	// Detach up front; released after the handler finalizes, otherwise on error.
+	ctx, cancel := web.DetachContext(ctx, TOOL_TURN_TIMEOUT)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
 
-	messages, isNewSession, err := ac.loadHistory(noTimeOutCtx, incMsg.SessionId)
+	messages, isNewSession, err := ac.loadHistory(ctx, incMsg.SessionId)
 	if err != nil {
 		logger.WithField("sessionId", incMsg.SessionId).WithError(err).Error("unable to load history")
 		return nil, nil, nil, err
@@ -93,7 +97,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	newMsg := newUserMessage(incMsg.Msg)
 	messages = append(messages, newMsg)
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
+	response, aux, err := ac.SendStream(ctx, incMsg.Model, messages, model.WithMemories(incMsg.SessionId))
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"sessionId": incMsg.SessionId,
@@ -108,16 +112,16 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	// bookkeeping failures below must not abandon the stream before finalize can
 	// save the turn and its usage.
 	if isNewSession {
-		if err := ac.createSessionIfNeeded(noTimeOutCtx, incMsg, entityType, entityId); err != nil {
+		if err := ac.createSessionIfNeeded(ctx, incMsg, entityType, entityId); err != nil {
 			logger.WithError(err).Error("unable to create session for streaming chat")
 		}
 	}
 
-	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
+	if err := ac.srv.Assistantstore.SaveChat(ctx, newMsg.PrepareForStorage(incMsg.SessionId, incMsg.Tags, incMsg.Model)); err != nil {
 		logger.WithError(err).Error("unable to save user message before streaming response")
 	}
 
-	finalize := ac.streamFinalizer(noTimeOutCtx, aux, incMsg.SessionId, nil, incMsg.Model)
+	finalize := finalizeThen(ac.streamFinalizer(ctx, aux, incMsg.SessionId, nil, incMsg.Model), cancel)
 
 	return response, aux, finalize, nil
 }
@@ -200,11 +204,4 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 	}
 
 	return ac.srv.Assistantstore.CreateSession(ctx, session)
-}
-
-// buildDetachedCtx returns a context detached from the request's cancellation —
-// so a browser refresh cannot abort a billed in-flight turn before it is saved —
-// but bounded by its own timeout, carrying the requestor identity and logger.
-func buildDetachedCtx(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(web.DetachContext(ctx), timeout)
 }

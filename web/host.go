@@ -37,8 +37,9 @@ const (
 )
 
 // DetachContext returns a context free of the request's cancellation and
-// deadline, carrying over the requestor identity, request id, and logger.
-func DetachContext(ctx context.Context) context.Context {
+// deadline but bounded by its own timeout, carrying over the requestor
+// identity, request id, and logger.
+func DetachContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	detached := context.Background()
 	if username, ok := ctx.Value(ContextKeyRunAsUsername).(string); ok {
 		detached = context.WithValue(detached, ContextKeyRunAsUsername, username)
@@ -50,7 +51,7 @@ func DetachContext(ctx context.Context) context.Context {
 	if requestId, ok := ctx.Value(ContextKeyRequestId).(string); ok {
 		detached = context.WithValue(detached, ContextKeyRequestId, requestId)
 	}
-	return log.NewContext(detached, log.FromContext(ctx))
+	return context.WithTimeout(log.NewContext(detached, log.FromContext(ctx)), timeout)
 }
 
 type HostHandler interface {

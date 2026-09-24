@@ -40,6 +40,13 @@ func newTriageTestStore(t *testing.T, srv *server.Server) (*ElasticEventstore, *
 	return store, transport
 }
 
+func newTriageTestAssistantstore(t *testing.T, srv *server.Server) (*ElasticAssistantstore, *modmock.MockTransport) {
+	es, transport := newTriageTestStore(t, srv)
+	store := NewElasticAssistantstore(srv, es.esClient, math.MaxInt, es)
+	store.Init("chat-index", "session-index", "so_")
+	return store, transport
+}
+
 func esResponse(body string) *http.Response {
 	return &http.Response{
 		StatusCode: 200,
@@ -66,13 +73,14 @@ func requestBody(t *testing.T, req *http.Request) string {
 }
 
 func TestAddAlertTriageScript(t *testing.T) {
-	store := &ElasticEventstore{}
+	store := &ElasticAssistantstore{schemaPrefix: "so_"}
 	timeNow := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 
 	criteria := model.NewEventUpdateCriteria()
 	store.addAlertTriageScript(criteria, timeNow, triageUpdate())
 	require.Len(t, criteria.UpdateScripts, 1)
 	script := criteria.UpdateScripts[0]
+	assert.Contains(t, script, "def triage_rec = ctx._source.event[params.triageObject];")
 	assert.Contains(t, script, "if (triage_rec.session_id == null) {")
 	assert.Contains(t, script, "triage_rec.session_id = params.triageSessionId;")
 	assert.Contains(t, script, "triage_rec.automation_run_ids.add(params.triageRunId);")
@@ -81,7 +89,12 @@ func TestAddAlertTriageScript(t *testing.T) {
 	assert.Equal(t, int64(1257894000000), criteria.Params["triageNowMillis"])
 	assert.Equal(t, "run-1", criteria.Params["triageRunId"])
 	assert.Equal(t, "session-1", criteria.Params["triageSessionId"])
-	assert.Len(t, criteria.Params, 3)
+	assert.Equal(t, "so_alerttriage", criteria.Params["triageObject"])
+
+	other := model.NewEventUpdateCriteria()
+	(&ElasticAssistantstore{schemaPrefix: "x_"}).addAlertTriageScript(other, timeNow, triageUpdate())
+	assert.Equal(t, "x_alerttriage", other.Params["triageObject"])
+	assert.Len(t, criteria.Params, 4)
 
 	// Locals must not collide with the other update scripts.
 	for _, local := range []string{"now_instant", "now_date", "track_timing"} {
@@ -101,7 +114,7 @@ func TestAddAlertTriageScript(t *testing.T) {
 }
 
 func TestAddAlertTriageScript_InjectionAttack(t *testing.T) {
-	store := &ElasticEventstore{}
+	store := &ElasticAssistantstore{}
 	criteria := model.NewEventUpdateCriteria()
 
 	update := triageUpdate()
@@ -115,7 +128,7 @@ func TestAddAlertTriageScript_InjectionAttack(t *testing.T) {
 }
 
 func TestAlertTriageUpdateSuccess(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":3,"updated":3,"noops":0,"failures":[]}`), nil)
 
 	results, err := store.AlertTriageUpdate(context.Background(), triageUpdate())
@@ -130,7 +143,7 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 	assert.Equal(t, "true", reqs[0].URL.Query().Get("wait_for_completion"))
 
 	body := requestBody(t, reqs[0])
-	assert.Equal(t, `(NOT _exists_:event.triage.session_id) AND (rule.name:"Foo")`, gjson.Get(body, "query.bool.must.0.query_string.query").String())
+	assert.Equal(t, `(NOT _exists_:event.so_alerttriage.session_id) AND (rule.name:"Foo")`, gjson.Get(body, "query.bool.must.0.query_string.query").String())
 	assert.Equal(t, "2026-09-01T00:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.gte`).String())
 	assert.Equal(t, "2026-09-22T12:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.lte`).String())
 
@@ -139,10 +152,11 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 	assert.NotContains(t, source, "acknowledged")
 	assert.False(t, gjson.Get(body, "script.params.userId").Exists())
 	assert.Equal(t, "session-1", gjson.Get(body, "script.params.triageSessionId").String())
+	assert.Equal(t, "so_alerttriage", gjson.Get(body, "script.params.triageObject").String())
 }
 
 func TestAlertTriageUpdateFailure(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":1,"updated":1,"noops":0,"failures":[]}`), nil)
 
 	update := triageUpdate()
@@ -158,7 +172,7 @@ func TestAlertTriageUpdateFailure(t *testing.T) {
 }
 
 func TestAlertTriageUpdateZeroFloor(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":0,"updated":0,"noops":0,"failures":[]}`), nil)
 
 	update := triageUpdate()
@@ -172,10 +186,10 @@ func TestAlertTriageUpdateZeroFloor(t *testing.T) {
 }
 
 func TestAlertTriageUpdateSyncHostFailure(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	second, secondTransport := modmock.NewMockClient(t)
-	store.esAllClients = append(store.esAllClients, second)
-	store.hostUrls = append(store.hostUrls, "http://localhost:9201")
+	store.eventstore.esAllClients = append(store.eventstore.esAllClients, second)
+	store.eventstore.hostUrls = append(store.eventstore.hostUrls, "http://localhost:9201")
 	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":3,"updated":3,"noops":0,"failures":[]}`), nil)
 	secondTransport.AddResponse(&http.Response{
 		StatusCode: 500,
@@ -192,7 +206,7 @@ func TestAlertTriageUpdateSyncHostFailure(t *testing.T) {
 }
 
 func TestAlertTriageUpdateAsync(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	// Any broadcast would dereference a nil host; the triage path must never broadcast.
 	store.server.Host = nil
 	transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
@@ -218,7 +232,7 @@ func TestAlertTriageUpdateAsync(t *testing.T) {
 }
 
 func TestAlertTriageUpdateAsyncFailure(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 	store.server.Host = nil
 	transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
 	transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":2,"version_conflicts":0,"timed_out":false,"failures":[{"cause":{"type":"mapper_parsing_exception","reason":"boom"}}]}}`), nil)
@@ -232,7 +246,7 @@ func TestAlertTriageUpdateAsyncFailure(t *testing.T) {
 }
 
 func TestAlertTriageUpdateUnauthorized(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeUnauthorizedServer())
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeUnauthorizedServer())
 
 	_, err := store.AlertTriageUpdate(context.Background(), triageUpdate())
 	assert.Error(t, err)
@@ -240,7 +254,7 @@ func TestAlertTriageUpdateUnauthorized(t *testing.T) {
 }
 
 func TestAlertTriageUpdateInvalid(t *testing.T) {
-	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
 
 	update := triageUpdate()
 	update.SessionId = ""

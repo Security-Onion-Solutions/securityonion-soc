@@ -129,7 +129,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 				assistChatIndex := module.GetStringDefault(cfg, "assistantChatIndex", DEFAULT_ASSISTANT_CHAT_INDEX)
 				assistSessionIndex := module.GetStringDefault(cfg, "assistantSessionIndex", DEFAULT_ASSISTANT_SESSION_INDEX)
 				schemaPrefix := module.GetStringDefault(cfg, "schemaPrefix", DEFAULT_ASSISTANT_SCHEMA_PREFIX)
-				assiststore := NewElasticAssistantstore(elastic.server, elastic.store.esClient, maxLogLength)
+				assiststore := NewElasticAssistantstore(elastic.server, elastic.store.esClient, maxLogLength, elastic.store)
 
 				err = assiststore.Init(assistChatIndex, assistSessionIndex, schemaPrefix)
 				if err != nil {

@@ -989,14 +989,18 @@ func TestToolStreamInSession_ValidationAwaitsLateToolUseTurn(t *testing.T) {
 // --- user turns survive their request ------------------------------------
 
 // newDetachGuardCoordinator streams through a MakeRequest stub that fails the test
-// if the upstream request carries a cancelled context.
-func newDetachGuardCoordinator(t *testing.T, ctrl *gomock.Controller, store server.Assistantstore) *AssistantCoordinator {
+// if the upstream request carries a cancelled context. upstream, when non-nil,
+// receives the context the turn sent upstream.
+func newDetachGuardCoordinator(t *testing.T, ctrl *gomock.Controller, store server.Assistantstore, upstream *context.Context) *AssistantCoordinator {
 	t.Helper()
 
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(
 		func(req *http.Request, _ bool) (*http.Response, error) {
 			assert.NoError(t, req.Context().Err(), "a user's turn must not carry their request's cancellation upstream")
+			if upstream != nil {
+				*upstream = req.Context()
+			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: [DONE]\n\n"))}, nil
 		}).Times(1)
 
@@ -1032,7 +1036,7 @@ func newDetachGuardCoordinator(t *testing.T, ctrl *gomock.Controller, store serv
 func TestChatStreamInSession_DetachesFromCancelledRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	ac := newDetachGuardCoordinator(t, ctrl, newFakeAssistantstore())
+	ac := newDetachGuardCoordinator(t, ctrl, newFakeAssistantstore(), nil)
 
 	ctx, cancel := context.WithCancel(userCtx())
 	cancel()
@@ -1050,7 +1054,7 @@ func TestToolStreamInSession_DetachesFromCancelledRequest(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	ac := newDetachGuardCoordinator(t, ctrl, store)
+	ac := newDetachGuardCoordinator(t, ctrl, store, nil)
 
 	ctx, cancel := context.WithCancel(userCtx())
 	cancel()
@@ -1060,4 +1064,48 @@ func TestToolStreamInSession_DetachesFromCancelledRequest(t *testing.T) {
 	require.NotNil(t, turn.Response)
 	turn.Response.Body.Close()
 	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
+}
+
+// The detached turn context is bounded and released once finalize has persisted
+// the turn, not when the entry point returns.
+func TestChatStreamInSession_FinalizeReleasesDetachedCtx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var upstream context.Context
+	ac := newDetachGuardCoordinator(t, ctrl, newFakeAssistantstore(), &upstream)
+
+	response, _, finalize, err := ac.ChatStreamInSession(userCtx(), &model.IncomingMessage{SessionId: "user-chat", Msg: "hi", Model: "test-model@MyAdapter"}, "", "")
+	require.NoError(t, err)
+	response.Body.Close()
+
+	_, bounded := upstream.Deadline()
+	assert.True(t, bounded)
+	assert.NoError(t, upstream.Err(), "the turn context must outlive the entry point for finalize")
+
+	require.NoError(t, finalize([]byte("data: [DONE]\n\n")))
+	assert.ErrorIs(t, upstream.Err(), context.Canceled)
+}
+
+func TestToolStreamInSession_FinalizeReleasesDetachedCtx(t *testing.T) {
+	const sessionId = "user-tool"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	var upstream context.Context
+	ac := newDetachGuardCoordinator(t, ctrl, store, &upstream)
+
+	turn, err := ac.ToolStreamInSession(userCtx(), &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}, "query_events")
+	require.NoError(t, err)
+	require.NotNil(t, turn.Response)
+	turn.Response.Body.Close()
+
+	_, bounded := upstream.Deadline()
+	assert.True(t, bounded)
+	assert.NoError(t, upstream.Err(), "the turn context must outlive the entry point for finalize")
+
+	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
+	assert.ErrorIs(t, upstream.Err(), context.Canceled)
 }

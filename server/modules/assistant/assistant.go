@@ -126,6 +126,11 @@ const (
 	// Ceiling on a detached non-streaming chat turn; bounds the orphaned work
 	// after a browser refresh without racing the model on big prompts.
 	CHAT_TURN_TIMEOUT = 3 * time.Minute
+	// A tool turn may chain several model calls (delegation start, sub-agent
+	// turns, parent resume) before it returns.
+	TOOL_TURN_TIMEOUT = 15 * time.Minute
+	// Bounds a detached store write that must outlive its cancelled request.
+	DETACHED_WRITE_TIMEOUT = 30 * time.Second
 )
 
 var (
@@ -1424,7 +1429,8 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	logger := log.FromContext(ctx)
 
 	// Detach for the whole turn
-	ctx = web.DetachContext(ctx)
+	ctx, cancel := web.DetachContext(ctx, TOOL_TURN_TIMEOUT)
+	defer cancel()
 
 	// Gate the turn behind the session lock and validate the request under it (see
 	// beginClientToolTurn). The lock is held across execution and the direct
@@ -1791,19 +1797,15 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 	}
 	defer release()
 
-	// A full delegation chains several sequential model calls in one request, so
-	// run free of the per-request timeout like the streaming path does.
-	noTimeOutCtx := web.DetachContext(ctx)
-
 	// Enforce the per-sub-session output-token budget (see continueWithToolResult).
 	isSub, remaining := ac.subSessionOutputBudget(sess)
 	if isSub && remaining <= 0 {
-		return ac.haltSubSessionSync(noTimeOutCtx, sessionId, aiModel, toolMsg)
+		return ac.haltSubSessionSync(ctx, sessionId, aiModel, toolMsg)
 	}
 
 	messages := preloaded
 	if messages == nil {
-		messages, err = ac.loadSessionHistory(noTimeOutCtx, sess)
+		messages, err = ac.loadSessionHistory(ctx, sess)
 		if err != nil {
 			logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
 			return nil, err
@@ -1814,10 +1816,10 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 	// continueWithToolResult) before deciding, so we never send an orphaned result.
 	turnPresent := true
 	if tr := firstToolResult(toolMsg); tr != nil {
-		messages, turnPresent = ac.awaitToolUseTurn(noTimeOutCtx, sess, tr.ToolUseId, messages)
+		messages, turnPresent = ac.awaitToolUseTurn(ctx, sess, tr.ToolUseId, messages)
 	}
 
-	messages, saveResult := ac.prepareToolResultPersist(noTimeOutCtx, messages, toolMsg, sessionId, aiModel)
+	messages, saveResult := ac.prepareToolResultPersist(ctx, messages, toolMsg, sessionId, aiModel)
 
 	// If this isn't the last necessary ToolResult, only save the ToolResult and
 	// don't attempt to get a turn out of the LLM
@@ -1833,7 +1835,7 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 		sendOpts = append(sendOpts, model.WithMaxTokens(remaining))
 	}
 
-	response, err := ac.Send(noTimeOutCtx, aiModel, messages, sendOpts...)
+	response, err := ac.Send(ctx, aiModel, messages, sendOpts...)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
@@ -1854,7 +1856,7 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 
 	for _, msg := range response {
 		stored := msg.PrepareForStorage(sessionId, nil, aiModel)
-		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, stored); err != nil {
+		if err := ac.srv.Assistantstore.SaveChat(ctx, stored); err != nil {
 			logger.WithError(err).Error("unable to save tool result response message (non-streaming)")
 			return nil, err
 		}
@@ -1868,11 +1870,19 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 // delegation kickoff it instead starts the sub-agent's session and streams its
 // first turn (leaving the parent's delegate tool_use parked); otherwise it folds
 // the tool result into the session and streams the assistant's continuation.
-func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error) {
+func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (turn *model.StreamedTurn, err error) {
 	logger := log.FromContext(ctx)
 
-	// Detach for the whole turn
-	ctx = web.DetachContext(ctx)
+	// Detach for the whole turn. A dispatched turn is finalized by the handler
+	// after streaming, so its context is released there; otherwise on return.
+	ctx, cancel := web.DetachContext(ctx, TOOL_TURN_TIMEOUT)
+	defer func() {
+		if err == nil && turn != nil && turn.Response != nil {
+			turn.Finalize = finalizeThen(turn.Finalize, cancel)
+		} else {
+			cancel()
+		}
+	}()
 
 	// Gate the whole tool turn (approval or rejection) behind the session lock and
 	// validate the request under it (see beginClientToolTurn). The lock is held
@@ -1897,7 +1907,7 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	// the deferred release to free the lock on return.
 	handOff := func(turn *model.StreamedTurn, err error) (*model.StreamedTurn, error) {
 		if err == nil && turn != nil && turn.Response != nil {
-			turn.Finalize = withLockRelease(turn.Finalize, releaseLock)
+			turn.Finalize = finalizeThen(turn.Finalize, releaseLock)
 			lockTransferred = true
 		}
 
@@ -1950,7 +1960,7 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	// right agent/prompt continues the turn.
 	aiModel := modelForSession(sess, toolReq.Model)
 
-	turn, err := ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, history, lockHeld)
+	turn, err = ac.continueWithToolResult(ctx, sess, toolReq.SessionId, aiModel, toolMsg, history, lockHeld)
 	if err == nil && turn != nil && len(toolMsg.ContentBlocks) > 0 {
 		// Surface the tool result so the handler can stream it to the UI inline,
 		// sparing the client a session re-fetch to recover the result. Only the
@@ -1996,14 +2006,14 @@ func (ac *AssistantCoordinator) acquireTurnLock(sessionId string, mode lockMode)
 	return func() { once.Do(func() { ac.sessionLocks.unlock(sessionId) }) }, nil
 }
 
-// withLockRelease wraps a turn's finalize callback so the session lock is released
+// finalizeThen wraps a turn's finalize callback so after runs once it completes
 // once the assistant turn has been persisted. The handler runs finalize after
 // streaming completes, so deferring release to it keeps the lock held across the
 // whole check-dispatch-persist window -- closing the retry-during-stream
 // double-dispatch race. A nil finalize is tolerated.
-func withLockRelease(finalize func(rawResponse []byte) error, release func()) func(rawResponse []byte) error {
+func finalizeThen(finalize func(rawResponse []byte) error, after func()) func(rawResponse []byte) error {
 	return func(rawResponse []byte) error {
-		defer release()
+		defer after()
 		if finalize != nil {
 			return finalize(rawResponse)
 		}
@@ -2090,26 +2100,23 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 	// the assistant turn is persisted
 	defer func() {
 		if err == nil && turn != nil && turn.Response != nil {
-			turn.Finalize = withLockRelease(turn.Finalize, release)
+			turn.Finalize = finalizeThen(turn.Finalize, release)
 		} else {
 			release()
 		}
 	}()
-
-	// Detach up front
-	noTimeOutCtx := web.DetachContext(ctx)
 
 	// Enforce the per-sub-session output-token budget. When a sub-agent has spent
 	// its budget, halt it instead of running another model turn; otherwise cap this
 	// turn's output at the remaining budget.
 	isSub, remaining := ac.subSessionOutputBudget(sess)
 	if isSub && remaining <= 0 {
-		return ac.haltSubSessionStream(noTimeOutCtx, sess, aiModel, toolMsg)
+		return ac.haltSubSessionStream(ctx, sess, aiModel, toolMsg)
 	}
 
 	messages := preloaded
 	if messages == nil {
-		messages, err = ac.loadSessionHistory(noTimeOutCtx, sess)
+		messages, err = ac.loadSessionHistory(ctx, sess)
 		if err != nil {
 			logger.WithError(err).WithField("sessionId", sess.Id).Error("unable to load history")
 			return nil, err
@@ -2122,10 +2129,10 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 	// preloaded history already contains the tool_use, so this is a no-op check.)
 	turnPresent := true
 	if tr := firstToolResult(toolMsg); tr != nil {
-		messages, turnPresent = ac.awaitToolUseTurn(noTimeOutCtx, sess, tr.ToolUseId, messages)
+		messages, turnPresent = ac.awaitToolUseTurn(ctx, sess, tr.ToolUseId, messages)
 	}
 
-	messages, saveResult := ac.prepareToolResultPersist(noTimeOutCtx, messages, toolMsg, sessionId, aiModel)
+	messages, saveResult := ac.prepareToolResultPersist(ctx, messages, toolMsg, sessionId, aiModel)
 	persistOnly := func() (*model.StreamedTurn, error) {
 		if err := saveResult(); err != nil {
 			logger.WithError(err).WithFields(log.Fields{
@@ -2159,7 +2166,7 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		sendOpts = append(sendOpts, model.WithMaxTokens(remaining))
 	}
 
-	response, aux, err := ac.SendStream(noTimeOutCtx, aiModel, messages, sendOpts...)
+	response, aux, err := ac.SendStream(ctx, aiModel, messages, sendOpts...)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"model":     aiModel,
@@ -2179,7 +2186,7 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 		}).Error("unable to save tool result message")
 	}
 
-	finalize := ac.streamFinalizer(noTimeOutCtx, aux, sessionId, nil, aiModel)
+	finalize := ac.streamFinalizer(ctx, aux, sessionId, nil, aiModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2296,7 +2303,6 @@ func subSessionBudgetNotice(limit int) string {
 // false for a session that couldn't be loaded.
 func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *model.AssistantSession, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := web.DetachContext(ctx)
 	sessionId := sess.SessionId
 
 	logger.WithFields(log.Fields{
@@ -2306,7 +2312,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 
 	if toolMsg != nil {
 		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
-		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+		if err := ac.srv.Assistantstore.SaveChat(ctx, toolStored); err != nil {
 			logger.WithError(err).Error("unable to save tool result before halting sub-session")
 			return nil, err
 		}
@@ -2329,7 +2335,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 	}()
 	wg.Wait()
 
-	finalize := ac.streamFinalizer(noTimeOutCtx, aux, sessionId, []string{"subsession_halted"}, aiModel)
+	finalize := ac.streamFinalizer(ctx, aux, sessionId, []string{"subsession_halted"}, aiModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2346,7 +2352,6 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 // turn, returning the notice so the chaining loop resolves it into the parent.
 func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := web.DetachContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
@@ -2355,7 +2360,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 
 	if toolMsg != nil {
 		toolStored := toolMsg.PrepareForStorage(sessionId, []string{"tool_result"}, aiModel)
-		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, toolStored); err != nil {
+		if err := ac.srv.Assistantstore.SaveChat(ctx, toolStored); err != nil {
 			logger.WithError(err).Error("unable to save tool result before halting sub-session")
 			return nil, err
 		}
@@ -2371,7 +2376,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 		StopReason: &stopReason,
 	}
 
-	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, notice.PrepareForStorage(sessionId, []string{"subsession_halted"}, aiModel)); err != nil {
+	if err := ac.srv.Assistantstore.SaveChat(ctx, notice.PrepareForStorage(sessionId, []string{"subsession_halted"}, aiModel)); err != nil {
 		logger.WithError(err).Error("unable to save halt notice for sub-session")
 		return nil, err
 	}
@@ -2386,23 +2391,22 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 // delegate tool_use is intentionally left unresolved here.
 func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := web.DetachContext(ctx)
 
-	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
-	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
+	session := ac.newDelegationSession(ctx, toolReq, kickoff)
+	if err := ac.srv.Assistantstore.CreateSession(ctx, session); err != nil {
 		logger.WithError(err).Error("unable to create delegated child session")
 		return nil, err
 	}
 
 	userMsg := newUserMessage(kickoff.Objective)
-	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
+	if err := ac.srv.Assistantstore.SaveChat(ctx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
 		logger.WithError(err).Error("unable to save delegated objective message")
 		return nil, err
 	}
 
 	// The child's first turn has spent none of its budget; cap it at the full
 	// per-sub-session limit (a no-op when the budget is disabled).
-	response, aux, err := ac.SendStream(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
+	response, aux, err := ac.SendStream(ctx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
 		// The sub-agent's first turn failed to start (e.g. its mapped model is
 		// unavailable). The child session already exists but will never produce a
@@ -2410,10 +2414,10 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 		// leaving it parked on a sub-agent that can't run -- otherwise the delegate
 		// card spins "executing" forever after a reload.
 		logger.WithError(err).Error("delegated sub-agent failed to start; resolving parent delegate with error")
-		return ac.resolveFailedDelegation(noTimeOutCtx, toolReq, err)
+		return ac.resolveFailedDelegation(ctx, toolReq, err)
 	}
 
-	finalize := ac.streamFinalizer(noTimeOutCtx, aux, kickoff.ChildSessionId, nil, kickoff.ChildModel)
+	finalize := ac.streamFinalizer(ctx, aux, kickoff.ChildSessionId, nil, kickoff.ChildModel)
 
 	return &model.StreamedTurn{
 		Response:  response,
@@ -2458,9 +2462,17 @@ func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, too
 // tool_result for the parent's delegate tool_use, resumes the parent session, and
 // returns the parent's streamed turn carrying a delegation_resolved marker so the
 // UI un-nests and renders the parent's continuation.
-func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
-	// Detach before loading the parent
-	ctx = web.DetachContext(ctx)
+func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (turn *model.StreamedTurn, err error) {
+	// Detach before loading the parent; released after the handler finalizes
+	// the dispatched turn, otherwise on return.
+	ctx, cancel := web.DetachContext(ctx, TOOL_TURN_TIMEOUT)
+	defer func() {
+		if err == nil && turn != nil && turn.Response != nil {
+			turn.Finalize = finalizeThen(turn.Finalize, cancel)
+		} else {
+			cancel()
+		}
+	}()
 	logger := log.FromContext(ctx)
 
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
@@ -2472,7 +2484,7 @@ func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, chi
 	parentModel := modelForSession(parentSess, childSession.ParentModel)
 
 	// Wait for the lock: an internal resolution must fold the child's result in.
-	turn, err := ac.continueWithToolResult(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, nil, waitForLock)
+	turn, err = ac.continueWithToolResult(ctx, parentSess, childSession.ParentSessionId, parentModel, toolMsg, nil, waitForLock)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"childSessionId":  childSession.Id,
@@ -2585,23 +2597,22 @@ func newDelegationSessionFor(parent *model.AssistantSession, toolReq *model.Tool
 // tool_use is left unresolved here.
 func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) ([]*model.Message, *model.AssistantSession, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := web.DetachContext(ctx)
 
-	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
-	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
+	session := ac.newDelegationSession(ctx, toolReq, kickoff)
+	if err := ac.srv.Assistantstore.CreateSession(ctx, session); err != nil {
 		logger.WithError(err).Error("unable to create delegated child session")
 		return nil, nil, err
 	}
 
 	userMsg := newUserMessage(kickoff.Objective)
-	if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
+	if err := ac.srv.Assistantstore.SaveChat(ctx, userMsg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)); err != nil {
 		logger.WithError(err).Error("unable to save delegated objective message")
 		return nil, nil, err
 	}
 
 	// The child's first turn has spent none of its budget; cap it at the full
 	// per-sub-session limit (a no-op when the budget is disabled).
-	response, err := ac.Send(noTimeOutCtx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
+	response, err := ac.Send(ctx, kickoff.ChildModel, []*model.Message{userMsg}, ac.subSessionStartOpts()...)
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"sessionId": toolReq.SessionId,
@@ -2613,7 +2624,7 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 
 	for _, msg := range response {
 		stored := msg.PrepareForStorage(kickoff.ChildSessionId, nil, kickoff.ChildModel)
-		if err := ac.srv.Assistantstore.SaveChat(noTimeOutCtx, stored); err != nil {
+		if err := ac.srv.Assistantstore.SaveChat(ctx, stored); err != nil {
 			logger.WithError(err).Error("unable to save delegated sub-agent response (non-streaming)")
 			return nil, nil, err
 		}
@@ -2628,9 +2639,6 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 // parent's response messages together with the parent session record so the
 // caller can keep chaining without re-fetching it.
 func (ac *AssistantCoordinator) resolveDelegationSync(ctx context.Context, childSession *model.AssistantSession, childFinalText string) ([]*model.Message, *model.AssistantSession, error) {
-	// Detach before loading the parent
-	ctx = web.DetachContext(ctx)
-
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
 
 	// Load the parent session once for the whole turn. Prefer its live stored

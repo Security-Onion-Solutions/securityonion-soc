@@ -32,13 +32,15 @@ type ElasticAssistantstore struct {
 	sessionIndex string
 	schemaPrefix string
 	maxLogLength int
+	eventstore   *ElasticEventstore
 }
 
-func NewElasticAssistantstore(srv *server.Server, client *elasticsearch.Client, maxLogLength int) *ElasticAssistantstore {
+func NewElasticAssistantstore(srv *server.Server, client *elasticsearch.Client, maxLogLength int, eventstore *ElasticEventstore) *ElasticAssistantstore {
 	return &ElasticAssistantstore{
 		server:       srv,
 		esClient:     client,
 		maxLogLength: maxLogLength,
+		eventstore:   eventstore,
 	}
 }
 
@@ -2092,7 +2094,8 @@ func (store *ElasticAssistantstore) bulkCreate(ctx context.Context, index string
 
 // Rollback runs on a detached context so a cancelled request still cleans up.
 func (store *ElasticAssistantstore) abandonClone(ctx context.Context, cloneIds []string, cause error) error {
-	ctx = web.DetachContext(ctx)
+	ctx, cancel := web.DetachContext(ctx, DEFAULT_TIMEOUT_MS*time.Millisecond)
+	defer cancel()
 
 	for _, id := range cloneIds {
 		if err := store.DeleteSession(ctx, id); err != nil {

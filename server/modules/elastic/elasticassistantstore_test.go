@@ -23,7 +23,7 @@ import (
 )
 
 func TestAssistantStoreInit(t *testing.T) {
-	store := NewElasticAssistantstore(nil, nil, 1000)
+	store := NewElasticAssistantstore(nil, nil, 1000, nil)
 	err := store.Init("chat-index", "session-index", "so_")
 	assert.NoError(t, err)
 	assert.Equal(t, "chat-index", store.chatIndex)
@@ -32,7 +32,7 @@ func TestAssistantStoreInit(t *testing.T) {
 }
 
 func TestValidateId(t *testing.T) {
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	tests := []struct {
@@ -64,7 +64,7 @@ func TestValidateId(t *testing.T) {
 }
 
 func TestValidateChat(t *testing.T) {
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	tests := []struct {
@@ -164,7 +164,7 @@ func TestValidateChat(t *testing.T) {
 }
 
 func TestValidateSession(t *testing.T) {
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), nil, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	tests := []struct {
@@ -211,7 +211,7 @@ func TestValidateSession(t *testing.T) {
 }
 
 func TestPopulateSessionUsage_Empty(t *testing.T) {
-	store := NewElasticAssistantstore(nil, nil, 1000)
+	store := NewElasticAssistantstore(nil, nil, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.Background()
 
@@ -234,7 +234,7 @@ func TestPopulateSessionUsage_Empty(t *testing.T) {
 func TestPopulateSessionUsage_Success(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -419,7 +419,7 @@ func TestPopulateSessionUsage_Success(t *testing.T) {
 func TestPopulateSessionUsage_WithErrors(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -495,7 +495,7 @@ func TestPopulateSessionUsage_WithErrors(t *testing.T) {
 func TestPopulateSessionUsage_ZeroValues(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -558,7 +558,7 @@ func TestPopulateSessionUsage_ZeroValues(t *testing.T) {
 func TestGetSessions_WithUsage(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -697,7 +697,7 @@ func TestGetSessions_WithUsage(t *testing.T) {
 func TestGetSessions_WithoutUsage(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -762,7 +762,7 @@ func TestGetSessions_WithoutUsage(t *testing.T) {
 }
 
 func TestPrepareForSave(t *testing.T) {
-	store := NewElasticAssistantstore(nil, nil, 1000)
+	store := NewElasticAssistantstore(nil, nil, 1000, nil)
 	obj := &model.Auditable{
 		Id: "test-id",
 	}
@@ -779,7 +779,7 @@ func TestPrepareForSave(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	store := NewElasticAssistantstore(nil, nil, 10)
+	store := NewElasticAssistantstore(nil, nil, 10, nil)
 
 	tests := []struct {
 		name     string
@@ -800,7 +800,7 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestDisableCrossClusterIndex(t *testing.T) {
-	store := NewElasticAssistantstore(nil, nil, 1000)
+	store := NewElasticAssistantstore(nil, nil, 1000, nil)
 
 	tests := []struct {
 		name     string
@@ -822,7 +822,7 @@ func TestDisableCrossClusterIndex(t *testing.T) {
 func TestSaveChat(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -891,7 +891,7 @@ func TestSaveChat(t *testing.T) {
 func TestIncrementSessionMessageCount_ElasticsearchErrorResponse(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	addJsonResponse(transport, 500, `{"error":{"type":"script_exception","reason":"runtime error"},"status":500}`)
@@ -903,7 +903,7 @@ func TestIncrementSessionMessageCount_ElasticsearchErrorResponse(t *testing.T) {
 func TestSaveChat_IncrementFailureNonFatal(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -943,7 +943,7 @@ func newStreamingChat(text string) *model.StoredMessage {
 func TestSavePartialChat_StreamingTurnWritesOneDocument(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1018,7 +1018,7 @@ func TestSavePartialChat_StreamingTurnWritesOneDocument(t *testing.T) {
 func TestSavePartialChat_TagIsNotDuplicatedAcrossFlushes(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1042,7 +1042,7 @@ func TestSavePartialChat_TagIsNotDuplicatedAcrossFlushes(t *testing.T) {
 func TestFinishPartialChat_AppendsWhenNoPartialLanded(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1065,7 +1065,7 @@ func TestFinishPartialChat_AppendsWhenNoPartialLanded(t *testing.T) {
 func TestSavePartialChat_VersionConflictDoesNotAppend(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1080,7 +1080,7 @@ func TestSavePartialChat_VersionConflictDoesNotAppend(t *testing.T) {
 func TestSavePartialChat_RejectsMissingMessageId(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1098,7 +1098,7 @@ func TestSavePartialChat_RejectsMissingMessageId(t *testing.T) {
 func TestSaveChat_IgnoresMessageIdAndAppends(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1118,7 +1118,7 @@ func TestSaveChat_IgnoresMessageIdAndAppends(t *testing.T) {
 func TestSavePartialChat_DistinctIdsAppendSeparately(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1145,7 +1145,7 @@ func TestSavePartialChat_DistinctIdsAppendSeparately(t *testing.T) {
 func TestSavePartialChat_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1157,7 +1157,7 @@ func TestSavePartialChat_Unauthorized(t *testing.T) {
 func TestCreateSession(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1206,7 +1206,7 @@ func TestCreateSession(t *testing.T) {
 func TestDeleteSession(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1256,7 +1256,7 @@ func TestToggleSessionsTag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockEsClient, transport := modmock.NewMockClient(t)
-			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 			store.Init("chat-index", "session-index", "so_")
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "owner")
 
@@ -1286,7 +1286,7 @@ func TestToggleSessionsTag(t *testing.T) {
 
 func TestToggleSessionsTag_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	err := store.ToggleSessionsTag(context.Background(), []string{"root"}, "shared", true)
@@ -1307,7 +1307,7 @@ func addJsonResponse(transport *modmock.MockTransport, statusCode int, body stri
 func TestFindSessionsPendingMemoryScan(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1455,7 +1455,7 @@ func TestFindSessionsPendingMemoryScan(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_EmptyHistorySkipped(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1490,7 +1490,7 @@ func TestFindSessionsPendingMemoryScan_EmptyHistorySkipped(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_HistoryErrorSkipsSession(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1547,7 +1547,7 @@ func TestFindSessionsPendingMemoryScan_HistoryErrorSkipsSession(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_NoResults(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1563,7 +1563,7 @@ func TestFindSessionsPendingMemoryScan_NoResults(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_DontScanBefore(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1602,7 +1602,7 @@ func TestFindSessionsPendingMemoryScan_DontScanBefore(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1617,7 +1617,7 @@ func TestFindSessionsPendingMemoryScan_ElasticsearchError(t *testing.T) {
 func TestFindSessionsPendingMemoryScan_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1631,7 +1631,7 @@ func TestFindSessionsPendingMemoryScan_Unauthorized(t *testing.T) {
 func TestUpdateSessionMemoryScanIndex(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1662,7 +1662,7 @@ func TestUpdateSessionMemoryScanIndex(t *testing.T) {
 func TestIncrementSessionMemoryErrors(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1689,7 +1689,7 @@ func TestIncrementSessionMemoryErrors(t *testing.T) {
 func TestIncrementSessionMemoryErrors_ElasticsearchError(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1703,7 +1703,7 @@ func TestIncrementSessionMemoryErrors_ElasticsearchError(t *testing.T) {
 func TestIncrementSessionMemoryErrors_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1716,7 +1716,7 @@ func TestIncrementSessionMemoryErrors_Unauthorized(t *testing.T) {
 func TestUpdateSessionMemoryScanIndex_ElasticsearchError(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1730,7 +1730,7 @@ func TestUpdateSessionMemoryScanIndex_ElasticsearchError(t *testing.T) {
 func TestUpdateSessionMemoryScanIndex_ElasticsearchErrorResponse(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1744,7 +1744,7 @@ func TestUpdateSessionMemoryScanIndex_ElasticsearchErrorResponse(t *testing.T) {
 func TestIncrementSessionMemoryErrors_ElasticsearchErrorResponse(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1758,7 +1758,7 @@ func TestIncrementSessionMemoryErrors_ElasticsearchErrorResponse(t *testing.T) {
 func TestUpdateSessionMemoryScanIndex_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -1771,7 +1771,7 @@ func TestUpdateSessionMemoryScanIndex_Unauthorized(t *testing.T) {
 func TestGetUsage(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.Background()
@@ -1951,7 +1951,7 @@ func TestGetUsage(t *testing.T) {
 func TestGetChatHistory(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2027,7 +2027,7 @@ func TestGetChatHistory(t *testing.T) {
 func TestGetChatHistoryNilSession(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	messages, err := store.GetChatHistory(context.Background(), nil)
@@ -2039,7 +2039,7 @@ func TestGetChatHistoryNilSession(t *testing.T) {
 func TestGetSessions_WithFilters(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2148,7 +2148,7 @@ func TestGetSessions_Authorization(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockEsClient, transport := modmock.NewMockClient(t)
-			store := NewElasticAssistantstore(tt.server, mockEsClient, 1000)
+			store := NewElasticAssistantstore(tt.server, mockEsClient, 1000, nil)
 			store.Init("chat-index", "session-index", "so_")
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2187,7 +2187,7 @@ func TestGetSessions_Authorization(t *testing.T) {
 func TestGetSessions_EmptyResults(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2217,7 +2217,7 @@ func TestGetSessions_EmptyResults(t *testing.T) {
 func TestGetSessions_ElasticsearchError(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2239,7 +2239,7 @@ func TestGetSessions_ElasticsearchError(t *testing.T) {
 func TestGetSessions_MalformedResponse(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2261,7 +2261,7 @@ func TestGetSessions_MalformedResponse(t *testing.T) {
 func TestGetSessions_UserIdFilter(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2353,7 +2353,7 @@ func TestGetSessions_UserIdFilter(t *testing.T) {
 func TestGetSessions_IncludeDeleted(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2440,7 +2440,7 @@ func TestGetSessions_IncludeDeleted(t *testing.T) {
 func TestGetSessions_ExcludesMemorySessionsByDefault(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2491,7 +2491,7 @@ func TestGetSessions_ExcludesMemorySessionsByDefault(t *testing.T) {
 func TestGetSessions_ExcludesAutomationSessionsIndependently(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2536,7 +2536,7 @@ func TestGetSessions_ExcludesAutomationSessionsIndependently(t *testing.T) {
 func TestGetSessions_IncludeMemorySessions(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2578,7 +2578,7 @@ func TestGetSessions_IncludeMemorySessions(t *testing.T) {
 func TestGetSessions_TimeRangeFilter(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2673,7 +2673,7 @@ func TestGetSessions_TimeRangeFilter(t *testing.T) {
 func TestGetSessions_UsagePopulationError(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2724,7 +2724,7 @@ func TestGetSessions_UsagePopulationError(t *testing.T) {
 func TestGetSessions_PartiallyMalformedHits(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -2817,7 +2817,7 @@ func TestGetSessions_PartiallyMalformedHits(t *testing.T) {
 func TestGetSessions_SessionIdFilter(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3015,7 +3015,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockEsClient, transport := modmock.NewMockClient(t)
 
-			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 			store.Init("chat-index", "session-index", "so_")
 
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3063,7 +3063,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 func TestGetSessions_WithDescendants(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3116,7 +3116,7 @@ func TestGetSessions_WithDescendants(t *testing.T) {
 func TestGetSessions_WithDescendants_NoChildren(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3142,7 +3142,7 @@ func TestGetSessions_WithDescendants_NoChildren(t *testing.T) {
 func TestGetSessions_MultipleSessionsWithUsage(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3352,7 +3352,7 @@ func TestGetSessions_MultipleSessionsWithUsage(t *testing.T) {
 func TestGetSessions_CombinedFilters(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3511,7 +3511,7 @@ func TestGetSessions_CombinedFilters(t *testing.T) {
 func TestGetSessions_AuthoredWithUserId(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
@@ -3585,7 +3585,7 @@ func cloneSessionHit(fields string) string {
 
 func TestPopulateSessionUsage_ExcludesClonedMessagesFromSums(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
@@ -3603,7 +3603,7 @@ func TestPopulateSessionUsage_ExcludesClonedMessagesFromSums(t *testing.T) {
 
 func TestGetUsage_ExcludesClonedMessagesFromSums(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
 
@@ -3652,7 +3652,7 @@ func bulkDocs(t *testing.T, req *http.Request) []string {
 
 func TestCloneSession_CopiesRootAndMessages(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3731,7 +3731,7 @@ func TestCloneSession_CopiesRootAndMessages(t *testing.T) {
 
 func TestCloneSession_DeepClonesDescendants(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3791,7 +3791,7 @@ func TestCloneSession_DeepClonesDescendants(t *testing.T) {
 
 func TestCloneSession_SubSessionNotRoot(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3809,7 +3809,7 @@ func TestCloneSession_DescendantsIgnoreSharedTag(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 	srv := server.NewFakeAuthorizedServer(nil)
 	srv.Authorizer = denyOpAuthorizer{denied: "read_all"}
-	store := NewElasticAssistantstore(srv, mockEsClient, 1000)
+	store := NewElasticAssistantstore(srv, mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3837,7 +3837,7 @@ func TestCloneSession_UnreadableRootNotFound(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 	srv := server.NewFakeAuthorizedServer(nil)
 	srv.Authorizer = denyOpAuthorizer{denied: "read_all"}
-	store := NewElasticAssistantstore(srv, mockEsClient, 1000)
+	store := NewElasticAssistantstore(srv, mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3853,7 +3853,7 @@ func TestCloneSession_UnreadableRootNotFound(t *testing.T) {
 // excludes deleteTime, so neither returns a hit.
 func TestCloneSession_MissingOrDeletedNotFound(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3870,7 +3870,7 @@ func TestCloneSession_MissingOrDeletedNotFound(t *testing.T) {
 
 func TestCloneSession_Unauthorized(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3886,7 +3886,7 @@ func TestCloneSession_RequiresDeleteAuthored(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 	srv := server.NewFakeAuthorizedServer(nil)
 	srv.Authorizer = denyOpAuthorizer{denied: "delete_authored"}
-	store := NewElasticAssistantstore(srv, mockEsClient, 1000)
+	store := NewElasticAssistantstore(srv, mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3898,7 +3898,7 @@ func TestCloneSession_RequiresDeleteAuthored(t *testing.T) {
 
 func TestCloneSession_HistoryErrorStopsBeforeAnyWrite(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
-	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
@@ -3930,7 +3930,7 @@ func TestCloneSession_WriteFailureDeletesEveryCreatedClone(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mockEsClient, transport := modmock.NewMockClient(t)
-			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000)
+			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
 			store.Init("chat-index", "session-index", "so_")
 			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner"))
 			cancel()
@@ -3958,7 +3958,8 @@ func TestCloneSession_WriteFailureDeletesEveryCreatedClone(t *testing.T) {
 			for i := range created {
 				del := reqs[4+tc.writes+i]
 				assert.Contains(t, del.URL.Path, "_update_by_query")
-				assert.NoError(t, del.Context().Err())
+				_, bounded := del.Context().Deadline()
+				assert.True(t, bounded, "rollback runs on its own bounded context")
 				body := requestBody(t, del)
 				assert.Contains(t, body, "deleteTime")
 				id := body[strings.Index(body, `"so_session.sessionId":"`)+len(`"so_session.sessionId":"`):]

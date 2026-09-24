@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -128,23 +127,6 @@ func TestLoadHistory(t *testing.T) {
 			assert.Len(t, messages, tc.wantLen)
 		})
 	}
-}
-
-func TestBuildDetachedCtx(t *testing.T) {
-	parent, cancel := context.WithCancel(context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1"))
-
-	out, outCancel := buildDetachedCtx(parent, time.Minute)
-	defer outCancel()
-
-	assert.Equal(t, "user-1", out.Value(web.ContextKeyRequestorId))
-
-	_, hasDeadline := out.Deadline()
-	assert.True(t, hasDeadline, "detached context must carry its own timeout")
-
-	// Cancelling the request context (browser refresh) must not cancel the
-	// detached context.
-	cancel()
-	assert.NoError(t, out.Err())
 }
 
 // A browser refresh cancels the request context mid-turn; the billed turn must

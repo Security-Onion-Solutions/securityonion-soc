@@ -33,3 +33,10 @@ type Assistantstore interface {
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore
+
+//go:generate mockgen -destination mock/mock_alerttriageupdater.go -package mock . AlertTriageUpdater
+type AlertTriageUpdater interface {
+	// AlertTriageUpdate records the outcome on every alert the update selects and returns only
+	// once the update has landed, even when it ran as a background task.
+	AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error)
+}

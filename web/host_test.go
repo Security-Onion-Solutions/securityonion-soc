@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -246,7 +247,6 @@ func TestDetachContext(t *testing.T) {
 		wantRequestorId any
 		wantRunAs       any
 		wantRequestId   any
-		checkNoDeadline bool
 	}{
 		{
 			name: "preserves request id when present",
@@ -259,13 +259,12 @@ func TestDetachContext(t *testing.T) {
 			wantRequestId:   "req-1",
 		},
 		{
-			name: "preserves requestor id and drops any deadline",
+			name: "preserves requestor id",
 			ctxBuilder: func() context.Context {
 				return context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
 			},
 			wantRequestorId: "user-1",
 			wantRunAs:       nil,
-			checkNoDeadline: true,
 		},
 		{
 			name: "preserves run-as username when present",
@@ -286,16 +285,40 @@ func TestDetachContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := DetachContext(tc.ctxBuilder())
+			out, cancel := DetachContext(tc.ctxBuilder(), time.Minute)
+			defer cancel()
 
 			assert.Equal(t, tc.wantRequestorId, out.Value(ContextKeyRequestorId))
 			assert.Equal(t, tc.wantRunAs, out.Value(ContextKeyRunAsUsername))
 			assert.Equal(t, tc.wantRequestId, out.Value(ContextKeyRequestId))
-
-			if tc.checkNoDeadline {
-				_, hasDeadline := out.Deadline()
-				assert.False(t, hasDeadline)
-			}
 		})
 	}
+
+	t.Run("survives parent cancellation and deadline", func(t *testing.T) {
+		parent, cancelParent := context.WithTimeout(context.Background(), time.Second)
+		out, cancel := DetachContext(parent, time.Minute)
+		defer cancel()
+
+		deadline, ok := out.Deadline()
+		assert.True(t, ok)
+		assert.WithinDuration(t, time.Now().Add(time.Minute), deadline, 5*time.Second)
+
+		cancelParent()
+		assert.NoError(t, out.Err())
+	})
+
+	t.Run("expires after its own timeout", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			out, cancel := DetachContext(context.Background(), time.Minute)
+			defer cancel()
+
+			time.Sleep(time.Minute - time.Second)
+			synctest.Wait()
+			assert.NoError(t, out.Err())
+
+			time.Sleep(time.Second)
+			synctest.Wait()
+			assert.ErrorIs(t, out.Err(), context.DeadlineExceeded)
+		})
+	})
 }
