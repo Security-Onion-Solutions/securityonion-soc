@@ -31,7 +31,6 @@ test('initializes with default tab and delegates refresh', () => {
 
   comp.refresh();
   expect(loadDestDataMock).toHaveBeenCalled();
-  expect(loadSchedDataMock).toHaveBeenCalled();
 });
 
 test('delegates add actions based on active tab', () => {

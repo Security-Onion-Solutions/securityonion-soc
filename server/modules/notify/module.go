@@ -57,6 +57,17 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 
 	mod.config = cfg
 
+	parsedConfig, err := ParseConfig(cfg)
+	if err != nil {
+		log.WithError(err).Error("Failed to parse notification module configuration")
+		return err
+	}
+
+	if !parsedConfig.Enabled {
+		log.Info("Notification module is disabled in configuration; skipping initialization")
+		return nil
+	}
+
 	ctx := context.Background()
 	if mod.server != nil && mod.server.Context != nil {
 		ctx = mod.server.Context
@@ -75,12 +86,6 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 	socChannel := NewSOCChannel(mod.server, mod.store)
 	if err := mod.registry.Register(socChannel); err != nil {
 		log.WithError(err).Error("Failed to register SOC notification channel")
-		return err
-	}
-
-	parsedConfig, err := ParseConfig(cfg)
-	if err != nil {
-		log.WithError(err).Error("Failed to parse notification module configuration")
 		return err
 	}
 
@@ -149,6 +154,11 @@ func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setti
 func (mod *NotificationModule) Start() error {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
 		log.Debug("No active license with notifications enabled; skipping startup")
+		return nil
+	}
+
+	if mod.notifier == nil || !mod.notifier.config.Enabled {
+		log.Debug("Notification module is disabled or not initialized; skipping startup")
 		return nil
 	}
 
