@@ -158,6 +158,10 @@ type EventUpdateCriteria struct {
 	Params map[string]any `json:"params" example:"{\"userId\": \"admin\"}"`
 	// Whether the update was performed asynchronously or not
 	Asynchronous bool `json:"async" example:"false"`
+	// Websocket message kind broadcast when an asynchronous update finishes; empty broadcasts nothing
+	BroadcastKind string `json:"broadcastKind,omitempty" example:"events:ack"`
+	// Permission group a client must be able to read to receive the broadcast
+	RequiredPermissionGroup string `json:"requiredPermissionGroup,omitempty" example:"events"`
 }
 
 func NewEventUpdateCriteria() *EventUpdateCriteria {

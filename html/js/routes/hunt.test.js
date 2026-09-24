@@ -1524,6 +1524,38 @@ test('ackTaskReport - multi-host clears every tracked id with one banner', () =>
   expect(comp.runningAckTasks).toEqual(['other']);
 });
 
+test('unackTaskReport - success shows revert wording and removes task', () => {
+  comp.runningAckTasks = ['task-a', 'task-b'];
+
+  comp.unackTaskReport({ taskIds: ['task-a'], success: true, updated: 1234, errors: [] });
+
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Reverted acknowledgment on 1,234 alerts.');
+  expect(comp.runningAckTasks).toEqual(['task-b']);
+});
+
+test('unackTaskReport - failure shows revert error and removes task', () => {
+  comp.runningAckTasks = ['task-a'];
+
+  comp.unackTaskReport({ taskIds: ['task-a'], success: false, updated: 0, errors: ['boom', 'kaboom'] });
+
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe('Error reverting acknowledgment on alerts: boom; kaboom');
+  expect(comp.runningAckTasks).toEqual([]);
+});
+
+test('unackTaskReport - ignores untracked task', () => {
+  comp.runningAckTasks = ['task-a'];
+  comp.$root.tip = false;
+  comp.$root.error = false;
+
+  comp.unackTaskReport({ taskIds: ['task-b'], success: true, updated: 5, errors: [] });
+
+  expect(comp.$root.tip).toBe(false);
+  expect(comp.$root.error).toBe(false);
+  expect(comp.runningAckTasks).toEqual(['task-a']);
+});
+
 test('bulkUpdateReport - error', () => {
   let stats = {
     error: 1,

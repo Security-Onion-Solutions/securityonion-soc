@@ -198,6 +198,8 @@ const i18n = {
       ackTaskSuccess: 'Successfully acknowledged {count} alerts.',
       ackUndoMultipleTip: 'Reverting acknowledgment on groups of alerts may take a while and will continue in the background.',
       ackUndoSingleTip: 'Reverted acknowledgement and removed from view.',
+      ackUndoTaskError: 'Error reverting acknowledgment on alerts: {errors}',
+      ackUndoTaskSuccess: 'Reverted acknowledgment on {count} alerts.',
       actions: 'Actions',
       actionAdd: 'Add New Action',
       actionAddHelp: 'Add new action to this list of actions',
