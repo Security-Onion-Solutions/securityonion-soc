@@ -49,6 +49,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+		r.Post("/sessions/{sessionId}/clone", h.CloneSession)
 
 		r.Put("/agents/{name}", h.SaveAgent)
 		r.Delete("/agents/{name}", h.DeleteAgent)
@@ -783,7 +784,14 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true))
+	if !strings.EqualFold(updateReq.Action, "add") && !strings.EqualFold(updateReq.Action, "remove") {
+		web.Respond(w, r, http.StatusBadRequest, "invalid action")
+
+		return
+	}
+
+	// Descendants come back after the root so sharing can cascade to them below.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithDescendants(updateReq.Tag == model.SessionTagShared), model.GetSessionsWithMessageMeta(false))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -791,7 +799,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if len(sessions) == 0 {
+	if len(sessions) == 0 || sessions[0].SessionId != sessionId {
 		logger.Error("session not found")
 		web.Respond(w, r, http.StatusNotFound, "session not found")
 
@@ -808,17 +816,8 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	switch updateReq.Action {
-	case "add":
-		if !slices.Contains(session.Tags, updateReq.Tag) {
-			session.Tags = append(session.Tags, updateReq.Tag)
-		} else {
-			logger.Warn("tag already exists on session")
-			web.Respond(w, r, http.StatusConflict, "tag already exists on session")
-
-			return
-		}
-	case "remove":
+	add := strings.EqualFold(updateReq.Action, "add")
+	if !add {
 		err = h.canRemoveTag(ctx, session, updateReq.Tag)
 		if err != nil {
 			logger.WithFields(log.Fields{
@@ -829,10 +828,28 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 
 			return
 		}
-		session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
 	}
 
-	err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, session.Tags)
+	// Re-adding shared is allowed so descendants that missed the cascade catch up.
+	tags, changed := toggleTag(session.Tags, updateReq.Tag, add)
+	if !changed && updateReq.Tag != model.SessionTagShared {
+		logger.Warn("tag already exists on session")
+		web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+
+		return
+	}
+
+	// A shared session is readable through its sub-sessions too, so the tag
+	// follows every descendant in one write. Other tags stay on the one session.
+	if updateReq.Tag == model.SessionTagShared {
+		ids := make([]string, len(sessions))
+		for i, s := range sessions {
+			ids[i] = s.SessionId
+		}
+		err = h.server.Assistantstore.ToggleSessionsTag(ctx, ids, updateReq.Tag, add)
+	} else {
+		err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, tags)
+	}
 	if err != nil {
 		logger.WithError(err).Error("unable to update session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -841,6 +858,16 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
+}
+
+func toggleTag(tags []string, tag string, present bool) ([]string, bool) {
+	if slices.Contains(tags, tag) == present {
+		return tags, false
+	}
+	if present {
+		return append(slices.Clone(tags), tag), true
+	}
+	return slices.DeleteFunc(slices.Clone(tags), func(t string) bool { return t == tag }), true
 }
 
 func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.AssistantSession, tag string) error {
@@ -858,6 +885,63 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 	}
 
 	return nil
+}
+
+// @Summary      Clone an Assistant Session
+// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored, assistant/delete_authored]
+// @Param        sessionId  path  string  true  "Session ID to clone"
+// @Produce      json
+// @Success      201  {object}  model.AssistantSession  "The new session"
+// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Session not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/sessions/{sessionId}/clone [post]
+func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	// A failed clone is rolled back through DeleteSession.
+	err = h.server.CheckAuthorized(ctx, "delete_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	clone, err := h.server.Assistantstore.CloneSession(ctx, sessionId)
+	if errors.Is(err, ErrSessionNotFound) {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+	if errors.Is(err, ErrSessionNotRoot) {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if err != nil {
+		logger.WithError(err).WithField("sessionId", sessionId).Error("unable to clone session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusCreated, clone)
 }
 
 // @Summary      Delete Your Assistant Session

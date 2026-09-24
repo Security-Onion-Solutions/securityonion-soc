@@ -1424,7 +1424,7 @@ func (ac *AssistantCoordinator) ToolInSession(ctx context.Context, toolReq *mode
 	logger := log.FromContext(ctx)
 
 	// Detach for the whole turn
-	ctx = buildNoTimeoutCtx(ctx)
+	ctx = web.DetachContext(ctx)
 
 	// Gate the turn behind the session lock and validate the request under it (see
 	// beginClientToolTurn). The lock is held across execution and the direct
@@ -1793,7 +1793,7 @@ func (ac *AssistantCoordinator) continueWithToolResultSync(ctx context.Context, 
 
 	// A full delegation chains several sequential model calls in one request, so
 	// run free of the per-request timeout like the streaming path does.
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	// Enforce the per-sub-session output-token budget (see continueWithToolResult).
 	isSub, remaining := ac.subSessionOutputBudget(sess)
@@ -1872,7 +1872,7 @@ func (ac *AssistantCoordinator) ToolStreamInSession(ctx context.Context, toolReq
 	logger := log.FromContext(ctx)
 
 	// Detach for the whole turn
-	ctx = buildNoTimeoutCtx(ctx)
+	ctx = web.DetachContext(ctx)
 
 	// Gate the whole tool turn (approval or rejection) behind the session lock and
 	// validate the request under it (see beginClientToolTurn). The lock is held
@@ -2097,7 +2097,7 @@ func (ac *AssistantCoordinator) continueWithToolResult(ctx context.Context, sess
 	}()
 
 	// Detach up front
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	// Enforce the per-sub-session output-token budget. When a sub-agent has spent
 	// its budget, halt it instead of running another model turn; otherwise cap this
@@ -2296,7 +2296,7 @@ func subSessionBudgetNotice(limit int) string {
 // false for a session that couldn't be loaded.
 func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *model.AssistantSession, aiModel string, toolMsg *model.Message) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 	sessionId := sess.SessionId
 
 	logger.WithFields(log.Fields{
@@ -2346,7 +2346,7 @@ func (ac *AssistantCoordinator) haltSubSessionStream(ctx context.Context, sess *
 // turn, returning the notice so the chaining loop resolves it into the parent.
 func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionId, aiModel string, toolMsg *model.Message) ([]*model.Message, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	logger.WithFields(log.Fields{
 		"sessionId": sessionId,
@@ -2386,7 +2386,7 @@ func (ac *AssistantCoordinator) haltSubSessionSync(ctx context.Context, sessionI
 // delegate tool_use is intentionally left unresolved here.
 func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) (*model.StreamedTurn, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
 	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
@@ -2460,7 +2460,7 @@ func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, too
 // UI un-nests and renders the parent's continuation.
 func (ac *AssistantCoordinator) ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error) {
 	// Detach before loading the parent
-	ctx = buildNoTimeoutCtx(ctx)
+	ctx = web.DetachContext(ctx)
 	logger := log.FromContext(ctx)
 
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
@@ -2552,12 +2552,19 @@ func newDelegationSessionFor(parent *model.AssistantSession, toolReq *model.Tool
 		parentDepth = parent.Depth
 	}
 
+	// A shared parent's sub-sessions are readable alongside it.
+	var tags []string
+	if parent != nil && slices.Contains(parent.Tags, model.SessionTagShared) {
+		tags = []string{model.SessionTagShared}
+	}
+
 	return &model.AssistantSession{
 		SessionId:       kickoff.ChildSessionId,
 		Title:           kickoff.Objective,
 		Type:            "delegation",
 		Model:           kickoff.ChildModel,
 		DelegateAgent:   kickoff.AgentName,
+		Tags:            tags,
 		ParentSessionId: toolReq.SessionId,
 		ParentToolUseId: toolReq.ToolUseId,
 		// One level deeper than the delegating session (top-level = 0); drives the
@@ -2578,7 +2585,7 @@ func newDelegationSessionFor(parent *model.AssistantSession, toolReq *model.Tool
 // tool_use is left unresolved here.
 func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) ([]*model.Message, *model.AssistantSession, error) {
 	logger := log.FromContext(ctx)
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	session := ac.newDelegationSession(noTimeOutCtx, toolReq, kickoff)
 	if err := ac.srv.Assistantstore.CreateSession(noTimeOutCtx, session); err != nil {
@@ -2622,7 +2629,7 @@ func (ac *AssistantCoordinator) startDelegationSync(ctx context.Context, toolReq
 // caller can keep chaining without re-fetching it.
 func (ac *AssistantCoordinator) resolveDelegationSync(ctx context.Context, childSession *model.AssistantSession, childFinalText string) ([]*model.Message, *model.AssistantSession, error) {
 	// Detach before loading the parent
-	ctx = buildNoTimeoutCtx(ctx)
+	ctx = web.DetachContext(ctx)
 
 	toolMsg := buildDelegationResultMessage(childSession.ParentToolUseId, childFinalText)
 

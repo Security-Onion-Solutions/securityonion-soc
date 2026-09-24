@@ -238,3 +238,64 @@ func TestBroadcast_RecipientFilterable_NonMatchingRecipient_Denied(tester *testi
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(tester, "", webSocketReadString)
 }
+
+func TestDetachContext(t *testing.T) {
+	testCases := []struct {
+		name            string
+		ctxBuilder      func() context.Context
+		wantRequestorId any
+		wantRunAs       any
+		wantRequestId   any
+		checkNoDeadline bool
+	}{
+		{
+			name: "preserves request id when present",
+			ctxBuilder: func() context.Context {
+				ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+				return context.WithValue(ctx, ContextKeyRequestId, "req-1")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       nil,
+			wantRequestId:   "req-1",
+		},
+		{
+			name: "preserves requestor id and drops any deadline",
+			ctxBuilder: func() context.Context {
+				return context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       nil,
+			checkNoDeadline: true,
+		},
+		{
+			name: "preserves run-as username when present",
+			ctxBuilder: func() context.Context {
+				ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+				return context.WithValue(ctx, ContextKeyRunAsUsername, "admin")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       "admin",
+		},
+		{
+			name:            "missing requestor id does not panic",
+			ctxBuilder:      context.Background,
+			wantRequestorId: nil,
+			wantRunAs:       nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := DetachContext(tc.ctxBuilder())
+
+			assert.Equal(t, tc.wantRequestorId, out.Value(ContextKeyRequestorId))
+			assert.Equal(t, tc.wantRunAs, out.Value(ContextKeyRunAsUsername))
+			assert.Equal(t, tc.wantRequestId, out.Value(ContextKeyRequestId))
+
+			if tc.checkNoDeadline {
+				_, hasDeadline := out.Deadline()
+				assert.False(t, hasDeadline)
+			}
+		})
+	}
+}

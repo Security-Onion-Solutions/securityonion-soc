@@ -11,6 +11,8 @@
 // globalThis (this file loads first).
 globalThis.MSGTAG_CONTEXTCOMPRESSION = "context_compression";
 globalThis.MSGTAG_PARTIAL = "partial";
+// A message copied from another session: its usage is shown but never billed again.
+globalThis.MSGTAG_CLONE = "clone";
 
 globalThis.AssistantSessions = (function() {
   return {
@@ -136,6 +138,7 @@ globalThis.AssistantSessions = (function() {
       this.creditsByAgent = {};
       const addHistory = (history, fallbackAgent) => {
         for (const sm of (history || [])) {
+          if (sm && sm.tags && sm.tags.includes(MSGTAG_CLONE)) continue;
           const usage = sm && sm.message && sm.message.usage;
           if (!usage || !usage.credits) continue;
           this.accrueCredits(usage, sm.model || fallbackAgent);
@@ -742,6 +745,7 @@ globalThis.AssistantSessions = (function() {
         childMsg.content = contentText;
         // Usage drives the delegate card's per-invocation credit chip.
         if (m.usage) childMsg.usage = m.usage;
+        if (sm.tags && sm.tags.includes(MSGTAG_CLONE)) childMsg.cloned = true;
         childMessages.push(childMsg);
       }
 

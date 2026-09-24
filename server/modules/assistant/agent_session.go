@@ -420,7 +420,7 @@ func (ac *AssistantCoordinator) runAgentTool(ctx context.Context, sess *model.As
 
 	// The tool has already run, so its result is recorded even if the run was
 	// cancelled meanwhile.
-	if err := ac.srv.Assistantstore.SaveChat(buildNoTimeoutCtx(ctx), result.PrepareForStorage(sess.SessionId, []string{"tool_result"}, sess.Model)); err != nil {
+	if err := ac.srv.Assistantstore.SaveChat(web.DetachContext(ctx), result.PrepareForStorage(sess.SessionId, []string{"tool_result"}, sess.Model)); err != nil {
 		log.FromContext(ctx).WithError(err).Error("unable to save headless tool result")
 		return nil, err
 	}

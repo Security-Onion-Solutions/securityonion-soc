@@ -20,6 +20,9 @@ const (
 	// MessageTagPartial marks a message still being streamed. A stored message
 	// that kept the tag is one whose turn never finished.
 	MessageTagPartial = "partial"
+	// MessageTagClone marks a message copied from another session. Its usage is
+	// kept for display but excluded from every credit and token sum.
+	MessageTagClone = "clone"
 
 	SessionTagMemory     = "memory"
 	SessionTagEmbed      = "embed"

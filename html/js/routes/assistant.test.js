@@ -6706,6 +6706,59 @@ test('delegateOwnOutputTokens returns 0 when there is no child session', () => {
   expect(comp.delegateOwnOutputTokens({ childSession: {} })).toBe(0);
 });
 
+test('recomputeCreditsFromHistory ignores messages cloned from another session', () => {
+  const data = {
+    session: { sessionId: 'root', model: 'Orchestrator' },
+    history: [
+      { model: 'Orchestrator', tags: ['clone'], message: { role: 'assistant', usage: { credits: 300 } } },
+      { model: 'Orchestrator', message: { role: 'assistant', usage: { credits: 25 } } },
+    ],
+    subSessions: [
+      { session: { sessionId: 'c1', delegateAgent: 'Investigator' }, history: [
+        { model: 'Investigator', tags: ['tool_result', 'clone'], message: { role: 'assistant', usage: { credits: 150 } } },
+        { model: 'Investigator', message: { role: 'assistant', usage: { credits: 5 } } },
+      ] },
+    ],
+  };
+
+  comp.recomputeCreditsFromHistory(data);
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 25, Investigator: 5 });
+  expect(comp.creditsUsed).toBe(30);
+});
+
+test('reconstructChildSession flags cloned turns so delegate cards do not bill them', () => {
+  const delegate = { id: 'tu-1', name: 'delegate_to_helper', childSession: null };
+  const sub = {
+    session: { sessionId: 'c1', delegateAgent: 'Helper' },
+    history: [
+      { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied' }], usage: { credits: 40, output_tokens: 400 } } },
+      { createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'fresh' }], usage: { credits: 2, output_tokens: 20 } } },
+    ],
+  };
+
+  comp.reconstructChildSession(delegate, sub, { byParentToolUseId: new Map() }, 'root');
+
+  const msgs = delegate.childSession.messages;
+  expect(msgs.map(m => !!m.cloned)).toEqual([true, false]);
+  expect(msgs.map(m => m.usage.credits)).toEqual([40, 2]);
+  expect(comp.delegateOwnCredits(delegate)).toBe(2);
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(20);
+});
+
+test('convertBackendMessagesToFrontend counts cloned messages toward context', () => {
+  comp.resetContextLength = jest.fn();
+
+  const result = comp.convertBackendMessagesToFrontend([
+    { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'copied question' }] } },
+    { tags: ['clone'], createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied answer' }], usage: { input_tokens: 700, output_tokens: 300, credits: 9 } } },
+  ]);
+
+  expect(result).toHaveLength(2);
+  expect(result[1].tags).toEqual(['clone']);
+  expect(comp.contextLength).toBe(1000);
+});
+
 // Floating tool tests
 test('sendMessage marks floating tool as skipped when sending new message', async () => {
   const floatingTool = {

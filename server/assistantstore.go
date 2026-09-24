@@ -21,7 +21,9 @@ type Assistantstore interface {
 	GetSessions(context.Context, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
 	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, err error)
 	CreateSession(context.Context, *model.AssistantSession) error
+	CloneSession(ctx context.Context, sessionId string) (*model.AssistantSession, error)
 	UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error
+	ToggleSessionsTag(ctx context.Context, sessionIds []string, tag string, present bool) error
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)

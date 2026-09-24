@@ -82,7 +82,7 @@ func (ac *AssistantCoordinator) ChatStreamInSession(ctx context.Context, incMsg 
 	logger := log.FromContext(ctx)
 
 	// Detach up front
-	noTimeOutCtx := buildNoTimeoutCtx(ctx)
+	noTimeOutCtx := web.DetachContext(ctx)
 
 	messages, isNewSession, err := ac.loadHistory(noTimeOutCtx, incMsg.SessionId)
 	if err != nil {
@@ -202,30 +202,9 @@ func (ac *AssistantCoordinator) createSessionIfNeeded(ctx context.Context, incMs
 	return ac.srv.Assistantstore.CreateSession(ctx, session)
 }
 
-// buildNoTimeoutCtx returns a context detached from the request's cancellation and
-// timeout, carrying over the requestor identity, request id, and request-scoped logger.
-func buildNoTimeoutCtx(ctx context.Context) context.Context {
-	noTimeOutCtx := context.Background()
-	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
-		if username, ok := val.(string); ok {
-			noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
-		}
-	}
-	if requestorId, ok := ctx.Value(web.ContextKeyRequestorId).(string); ok {
-		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, requestorId)
-	}
-	// Carried so downstream stores that key work off the request id (e.g. the salt
-	// relay's queue filename) still find it on a detached turn.
-	if requestId, ok := ctx.Value(web.ContextKeyRequestId).(string); ok {
-		noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestId, requestId)
-	}
-	noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
-	return noTimeOutCtx
-}
-
 // buildDetachedCtx returns a context detached from the request's cancellation —
 // so a browser refresh cannot abort a billed in-flight turn before it is saved —
 // but bounded by its own timeout, carrying the requestor identity and logger.
 func buildDetachedCtx(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(buildNoTimeoutCtx(ctx), timeout)
+	return context.WithTimeout(web.DetachContext(ctx), timeout)
 }
