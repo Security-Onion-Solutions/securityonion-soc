@@ -410,3 +410,17 @@ func (mr *MockAssistantManagerMockRecorder) ToolStreamInSession(ctx, toolReq, to
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ToolStreamInSession), ctx, toolReq, toolName)
 }
+
+// ValidateAgentSessionRequest mocks base method.
+func (m *MockAssistantManager) ValidateAgentSessionRequest(req *model.AgentSessionRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateAgentSessionRequest", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateAgentSessionRequest indicates an expected call of ValidateAgentSessionRequest.
+func (mr *MockAssistantManagerMockRecorder) ValidateAgentSessionRequest(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAgentSessionRequest", reflect.TypeOf((*MockAssistantManager)(nil).ValidateAgentSessionRequest), req)
+}

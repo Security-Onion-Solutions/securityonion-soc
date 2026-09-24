@@ -114,10 +114,17 @@ type mockChatCompletionStream struct {
 	chunks       []openai.ChatCompletionChunk
 	currentIndex int
 	err          error
+	// After failAfter chunks the stream ends with failErr, as a cancelled context ends a real one.
+	failAfter int
+	failErr   error
 }
 
 func (m *mockChatCompletionStream) Next() bool {
 	if m.err != nil {
+		return false
+	}
+	if m.failErr != nil && m.currentIndex >= m.failAfter {
+		m.err = m.failErr
 		return false
 	}
 	if m.currentIndex >= len(m.chunks) {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -162,12 +163,16 @@ func TestTurnAlreadyContinued(t *testing.T) {
 // store's WithRefresh("true")). Only the methods the continuation path touches do
 // real work.
 type fakeAssistantstore struct {
-	mu   sync.Mutex
-	msgs map[string][]*model.StoredMessage
+	mu       sync.Mutex
+	msgs     map[string][]*model.StoredMessage
+	sessions map[string]*model.AssistantSession
 }
 
 func newFakeAssistantstore() *fakeAssistantstore {
-	return &fakeAssistantstore{msgs: map[string][]*model.StoredMessage{}}
+	return &fakeAssistantstore{
+		msgs:     map[string][]*model.StoredMessage{},
+		sessions: map[string]*model.AssistantSession{},
+	}
 }
 
 func (f *fakeAssistantstore) seed(sessionId string, msg *model.Message) {
@@ -183,11 +188,17 @@ func (f *fakeAssistantstore) SaveChat(_ context.Context, m *model.StoredMessage)
 	return nil
 }
 
+// The partial tag follows the elastic store: added by a partial save, removed by the
+// finishing one.
 func (f *fakeAssistantstore) SavePartialChat(_ context.Context, m *model.StoredMessage) error {
+	if !slices.Contains(m.Tags, model.MessageTagPartial) {
+		m.Tags = append(m.Tags, model.MessageTagPartial)
+	}
 	return f.saveStreaming(m)
 }
 
 func (f *fakeAssistantstore) FinishPartialChat(_ context.Context, m *model.StoredMessage) error {
+	m.Tags = slices.DeleteFunc(m.Tags, func(tag string) bool { return tag == model.MessageTagPartial })
 	return f.saveStreaming(m)
 }
 
@@ -205,16 +216,33 @@ func (f *fakeAssistantstore) saveStreaming(m *model.StoredMessage) error {
 // upsert mirrors the elastic store: a streaming message replaces the one already
 // carrying its Message.Id instead of appending a second copy of the same turn.
 func (f *fakeAssistantstore) upsert(m *model.StoredMessage) {
+	// A caller reuses one record across a turn's flushes; keep the snapshot it
+	// held at this flush rather than a pointer it will mutate again.
+	saved := *m
 	if m.Message != nil && m.Message.Id != "" {
 		for i, existing := range f.msgs[m.SessionId] {
 			if existing.Message != nil && existing.Message.Id == m.Message.Id {
-				f.msgs[m.SessionId][i] = m
+				f.msgs[m.SessionId][i] = &saved
 				return
 			}
 		}
 	}
 
-	f.msgs[m.SessionId] = append(f.msgs[m.SessionId], m)
+	f.msgs[m.SessionId] = append(f.msgs[m.SessionId], &saved)
+}
+
+func (f *fakeAssistantstore) messages(sessionId string) []*model.StoredMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]*model.StoredMessage, len(f.msgs[sessionId]))
+	copy(out, f.msgs[sessionId])
+	return out
+}
+
+func (f *fakeAssistantstore) session(sessionId string) *model.AssistantSession {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.sessions[sessionId]
 }
 
 func (f *fakeAssistantstore) GetChatHistory(_ context.Context, s *model.AssistantSession) ([]*model.StoredMessage, error) {
@@ -253,6 +281,9 @@ func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSes
 	// Honor a session-id filter so loadTurnSession returns the session the caller
 	// asked for (and loadSessionHistory then reads the right history).
 	if id := o.SessionId(); id != "" {
+		if sess, ok := f.sessions[id]; ok {
+			return []*model.AssistantSession{sess}, nil
+		}
 		if _, ok := f.msgs[id]; ok {
 			return []*model.AssistantSession{{SessionId: id}}, nil
 		}
@@ -266,7 +297,11 @@ func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId 
 	_, exists := f.msgs[sessionId]
 	return exists, exists, false, nil
 }
-func (f *fakeAssistantstore) CreateSession(_ context.Context, _ *model.AssistantSession) error {
+func (f *fakeAssistantstore) CreateSession(_ context.Context, sess *model.AssistantSession) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	saved := *sess
+	f.sessions[sess.SessionId] = &saved
 	return nil
 }
 func (f *fakeAssistantstore) UpdateSessionTags(_ context.Context, _ string, _ []string) error {
@@ -942,5 +977,81 @@ func TestToolStreamInSession_ValidationAwaitsLateToolUseTurn(t *testing.T) {
 	require.NotNil(t, turn.Response, "the turn must dispatch once the tool_use lands")
 	turn.Response.Body.Close()
 
+	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
+}
+
+// --- user turns survive their request ------------------------------------
+
+// newDetachGuardCoordinator streams through a MakeRequest stub that fails the test
+// if the upstream request carries a cancelled context.
+func newDetachGuardCoordinator(t *testing.T, ctrl *gomock.Controller, store server.Assistantstore) *AssistantCoordinator {
+	t.Helper()
+
+	mockIO := detectionsmock.NewMockIOManager(ctrl)
+	mockIO.EXPECT().MakeRequest(gomock.Any(), true).DoAndReturn(
+		func(req *http.Request, _ bool) (*http.Response, error) {
+			assert.NoError(t, req.Context().Err(), "a user's turn must not carry their request's cancellation upstream")
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: [DONE]\n\n"))}, nil
+		}).Times(1)
+
+	srv := &server.Server{
+		Assistantstore: store,
+		Host:           &web.Host{Version: "1.0.0"},
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{{ID: "test-model", Adapter: "MyAdapter"}},
+				},
+			},
+		},
+	}
+
+	return &AssistantCoordinator{
+		srv:       srv,
+		IOManager: mockIO,
+		adapters: map[string]server.AssistantAdapter{
+			"MyAdapter": &SOAiCloudAdapter{apiUrl: "https://api.example.com", srv: srv, IOManager: mockIO},
+		},
+		toolConfig: []byte(`{"tools": [], "tool_choice": {"auto": {}}}`),
+		FunctionLibrary: map[string]Tool{
+			"query_events": &mockTool{name: "query_events"},
+		},
+		toolUseTurnAttempts: DEFAULT_TOOL_USE_TURN_ATTEMPTS,
+	}
+}
+
+// Adapters now hand the caller's context to the upstream call so automation turns can
+// be cancelled. A user's turn must therefore be detached before it gets there: a
+// browser refresh cancels the request, and that must never abort a billed turn.
+func TestChatStreamInSession_DetachesFromCancelledRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ac := newDetachGuardCoordinator(t, ctrl, newFakeAssistantstore())
+
+	ctx, cancel := context.WithCancel(userCtx())
+	cancel()
+
+	response, _, _, err := ac.ChatStreamInSession(ctx, &model.IncomingMessage{SessionId: "user-chat", Msg: "hi", Model: "test-model@MyAdapter"}, "", "")
+	require.NoError(t, err)
+	response.Body.Close()
+}
+
+func TestToolStreamInSession_DetachesFromCancelledRequest(t *testing.T) {
+	const sessionId = "user-tool"
+
+	store := newFakeAssistantstore()
+	store.seed(sessionId, storedToolUseTurn("tu1").Message)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ac := newDetachGuardCoordinator(t, ctrl, store)
+
+	ctx, cancel := context.WithCancel(userCtx())
+	cancel()
+
+	turn, err := ac.ToolStreamInSession(ctx, &model.ToolRequest{SessionId: sessionId, ToolUseId: "tu1", Model: "test-model@MyAdapter"}, "query_events")
+	require.NoError(t, err)
+	require.NotNil(t, turn.Response)
+	turn.Response.Body.Close()
 	require.NoError(t, turn.Finalize([]byte("data: [DONE]\n\n")))
 }

@@ -50,8 +50,17 @@ var (
 	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
 	ErrMemoryNotFound     = database.ErrMemoryNotFound
 	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
-	// ErrAgentSessionUnsupported is returned until the headless turn driver lands.
-	ErrAgentSessionUnsupported = errors.New("ERROR_AGENT_SESSION_UNSUPPORTED")
+	// Another driver already holds the session a headless run was asked to create.
+	ErrAgentSessionBusy = errors.New("ERROR_AGENT_SESSION_BUSY")
+	// The model stopped sending for longer than agentStreamIdleTimeout.
+	ErrAgentTurnStalled = errors.New("ERROR_AGENT_TURN_STALLED")
+	// The stream ended without a message.
+	ErrAgentTurnEmpty = errors.New("ERROR_AGENT_TURN_EMPTY")
+
+	// A headless run was asked for with no request, no objective, or no owner.
+	ErrAgentSessionRequestRequired   = errors.New("ERROR_AGENT_SESSION_REQUEST_REQUIRED")
+	ErrAgentSessionObjectiveRequired = errors.New("ERROR_AGENT_SESSION_OBJECTIVE_REQUIRED")
+	ErrAgentSessionOwnerRequired     = errors.New("ERROR_AGENT_SESSION_OWNER_REQUIRED")
 )
 
 const (
@@ -73,6 +82,15 @@ const (
 	// unless an operator configures "toolUseTurnAttempts" / "toolUseTurnDelayMs".
 	DEFAULT_TOOL_USE_TURN_ATTEMPTS = 12
 	DEFAULT_TOOL_USE_TURN_DELAY_MS = 175
+
+	// Model turns a headless agent session may run, across every sub-agent it
+	// delegates to, unless the request or "agentSessionMaxTurns" says otherwise.
+	DEFAULT_AGENT_SESSION_MAX_TURNS = 20
+	// How often a streaming headless turn is written to the store and broadcast. Each
+	// flush is an update-by-query with refresh, so this is paced for Elasticsearch.
+	DEFAULT_AGENT_STREAM_FLUSH_INTERVAL_MS = 1000
+	// A headless turn with no bytes for this long is abandoned; 0 disables it.
+	DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS = 300
 
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
@@ -202,6 +220,14 @@ type AssistantCoordinator struct {
 	// request continues the LLM's turn when several parallel tool results land.
 	sessionLocks sessionLocks
 
+	agentSessionMaxTurns     int
+	agentStreamFlushInterval time.Duration
+	agentStreamIdleTimeout   time.Duration
+
+	// What each running headless session is doing, keyed by session id.
+	agentPhaseMu sync.Mutex
+	agentPhases  map[string]model.AgentSessionPhase
+
 	store *database.Store
 
 	// Runtime-changeable memory tunables, guarded so a reload cannot race a read.
@@ -285,6 +311,8 @@ const (
 	// AgenticUpdateKind is the websocket message kind carrying agentic parameter
 	// changes to connected browsers.
 	AgenticUpdateKind = "assistant:agentic"
+	// AgentStreamKind carries a headless session's turn as it streams.
+	AgentStreamKind = "assistant:stream"
 	// Skill definitions, in the same structured form as the agents setting.
 	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
 	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
@@ -373,6 +401,9 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.maxDelegationDepth.Store(int64(module.GetIntDefault(config, "maxDelegationDepth", DEFAULT_MAX_DELEGATION_DEPTH)))
 	ac.toolUseTurnAttempts = max(module.GetIntDefault(config, "toolUseTurnAttempts", DEFAULT_TOOL_USE_TURN_ATTEMPTS), 1)
 	ac.toolUseTurnDelay = time.Duration(module.GetIntDefault(config, "toolUseTurnDelayMs", DEFAULT_TOOL_USE_TURN_DELAY_MS)) * time.Millisecond
+	ac.agentSessionMaxTurns = max(module.GetIntDefault(config, "agentSessionMaxTurns", DEFAULT_AGENT_SESSION_MAX_TURNS), 1)
+	ac.agentStreamFlushInterval = time.Duration(module.GetIntDefault(config, "agentStreamFlushIntervalMs", DEFAULT_AGENT_STREAM_FLUSH_INTERVAL_MS)) * time.Millisecond
+	ac.agentStreamIdleTimeout = time.Duration(module.GetIntDefault(config, "agentStreamIdleTimeoutSeconds", DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS)) * time.Second
 	ac.loadAdapters(config)
 
 	ac.validateModelSelectors()
@@ -1310,13 +1341,6 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	logger.Info("tool executed successfully")
 
 	return result, nil
-}
-
-// RunAgentSession is declared here so the automation contract is complete, but the
-// headless turn driver that implements it lands separately. Nothing calls it yet:
-// no automation kind is registered.
-func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
-	return nil, ErrAgentSessionUnsupported
 }
 
 func (ac *AssistantCoordinator) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
@@ -2482,8 +2506,18 @@ func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, tool
 		return nil
 	}
 
+	return ac.delegationDepthRefusalFor(ctx, ac.loadSession(ctx, toolReq.SessionId), toolReq)
+}
+
+// delegationDepthRefusalFor is delegationDepthRefusal for an already-loaded parent
+// session (nil when it could not be loaded).
+func (ac *AssistantCoordinator) delegationDepthRefusalFor(ctx context.Context, parent *model.AssistantSession, toolReq *model.ToolRequest) *model.Message {
+	if ac.getMaxDelegationDepth() <= 0 {
+		return nil
+	}
+
 	parentDepth := 0
-	if parent := ac.loadSession(ctx, toolReq.SessionId); parent != nil {
+	if parent != nil {
 		parentDepth = parent.Depth
 	}
 
@@ -2507,8 +2541,12 @@ func (ac *AssistantCoordinator) delegationDepthRefusal(ctx context.Context, tool
 // newDelegationSession builds the linked child session record for a delegation,
 // shared by the streaming and non-streaming kickoff paths.
 func (ac *AssistantCoordinator) newDelegationSession(ctx context.Context, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) *model.AssistantSession {
-	parent := ac.loadSession(ctx, toolReq.SessionId)
+	return newDelegationSessionFor(ac.loadSession(ctx, toolReq.SessionId), toolReq, kickoff)
+}
 
+// newDelegationSessionFor is newDelegationSession for an already-loaded parent
+// session (nil when it could not be loaded).
+func newDelegationSessionFor(parent *model.AssistantSession, toolReq *model.ToolRequest, kickoff model.DelegationKickoff) *model.AssistantSession {
 	parentDepth := 0
 	if parent != nil {
 		parentDepth = parent.Depth
