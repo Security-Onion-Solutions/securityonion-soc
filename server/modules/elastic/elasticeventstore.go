@@ -40,6 +40,10 @@ const (
 	ASYNC_UPDATE_PAUSE        = time.Second
 	// ASYNC_UPDATE_MAX_ERRORS caps how many individual errors are broadcast to the client
 	ASYNC_UPDATE_MAX_ERRORS = 5
+
+	ACK_BROADCAST_KIND       = "events:ack"
+	UNACK_BROADCAST_KIND     = "events:unack"
+	ACK_BROADCAST_PERMISSION = "events"
 )
 
 type FieldDefinition struct {
@@ -456,7 +460,7 @@ func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.Even
 		// The returned task ids are the correlation tokens the client tracks (one per
 		// host); the watcher polls every node's task and broadcasts a single aggregated
 		// result carrying all of them.
-		go store.watchAsyncUpdate(context.WithoutCancel(ctx), asyncTasks, results.TaskIds)
+		go store.watchAsyncUpdate(context.WithoutCancel(ctx), asyncTasks, results.TaskIds, criteria.BroadcastKind, criteria.RequiredPermissionGroup)
 	}
 
 	results.Complete()
@@ -747,8 +751,9 @@ type asyncTaskRef struct {
 }
 
 // watchAsyncUpdate watches all of the supplied asynchronous update tasks to completion, then
-// broadcasts a single aggregated result so the initiating client can report success or failure.
-func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string) {
+// broadcasts a single aggregated result on kind to clients that can read permissionGroup so the
+// initiating client can report success or failure. Nothing is broadcast when either is empty.
+func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string, kind string, permissionGroup string) {
 	logger := log.FromContext(ctx).WithField("taskIds", taskIds)
 
 	status := store.aggregateAsyncUpdate(ctx, tasks, taskIds)
@@ -757,9 +762,13 @@ func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []as
 		"success": status.Success,
 		"updated": status.Updated,
 		"errors":  status.Errors,
-	}).Info("Asynchronous event update task finished; broadcasting result")
+	}).Info("Asynchronous event update task finished")
 
-	store.server.Host.Broadcast("events:ack", "events", status)
+	if kind == "" || permissionGroup == "" {
+		return
+	}
+
+	store.server.Host.Broadcast(kind, permissionGroup, status)
 }
 
 // aggregateAsyncUpdate watches every supplied task to completion and combines their results into a
@@ -1477,6 +1486,11 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}
 
 			updateCriteria.Asynchronous = false
+			updateCriteria.RequiredPermissionGroup = ACK_BROADCAST_PERMISSION
+			updateCriteria.BroadcastKind = UNACK_BROADCAST_KIND
+			if ackCriteria.Acknowledge {
+				updateCriteria.BroadcastKind = ACK_BROADCAST_KIND
+			}
 			for key, value := range ackCriteria.EventFilter {
 				if strings.ToLower(key) != "count" {
 					valueStr := fmt.Sprintf("%v", value)

@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
@@ -1746,20 +1747,67 @@ func TestAggregateAsyncUpdateCapsErrors(t *testing.T) {
 }
 
 func TestWatchAsyncUpdate(t *testing.T) {
-	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+	tests := []struct {
+		kind       string
+		permission string
+	}{
+		{ACK_BROADCAST_KIND, ACK_BROADCAST_PERMISSION},
+		{UNACK_BROADCAST_KIND, ACK_BROADCAST_PERMISSION},
+		{"", ACK_BROADCAST_PERMISSION},
+		{ACK_BROADCAST_KIND, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind+"/"+tt.permission, func(t *testing.T) {
+			store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
 
-	client, transport := modmock.NewMockClient(t)
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
-		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":4,"version_conflicts":0,"timed_out":false,"failures":[]}}`)),
-	}, nil)
+			client, transport := modmock.NewMockClient(t)
+			transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":4,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
 
-	// With no active websocket connections the broadcast is a no-op; this verifies the full
-	// watch-and-broadcast path runs to completion without panicking.
-	assert.NotPanics(t, func() {
-		store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"})
-	})
+			// With no active websocket connections the broadcast is a no-op; this verifies the full
+			// watch-and-broadcast path runs to completion without panicking.
+			assert.NotPanics(t, func() {
+				store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"}, tt.kind, tt.permission)
+			})
+			assert.Len(t, transport.GetRequests(), 1)
+		})
+	}
+}
+
+func TestAcknowledgeSetsBroadcastKind(t *testing.T) {
+	tests := []struct {
+		name        string
+		acknowledge bool
+		escalate    bool
+		kind        string
+	}{
+		{"ack", true, false, ACK_BROADCAST_KIND},
+		{"escalate", true, true, ACK_BROADCAST_KIND},
+		{"unack", false, false, UNACK_BROADCAST_KIND},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+			transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
+			transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":11,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+			ackCriteria := model.NewEventAckCriteria()
+			ackCriteria.Acknowledge = tt.acknowledge
+			ackCriteria.Escalate = tt.escalate
+			ackCriteria.SearchFilter = "tags:alert"
+			ackCriteria.EventFilter = map[string]any{"rule.name": "Foo", "count": float64(store.asyncThreshold + 1)}
+			ackCriteria.DateRange = "2026/09/01 12:00:00 AM - 2026/09/22 12:00:00 PM"
+			ackCriteria.DateRangeFormat = "2006/01/02 3:04:05 PM"
+			ackCriteria.Timezone = "UTC"
+
+			results, err := store.Acknowledge(ctx, ackCriteria)
+			assert.NoError(t, err)
+			assert.True(t, results.Criteria.Asynchronous)
+			assert.Equal(t, tt.kind, results.Criteria.BroadcastKind)
+			assert.Equal(t, ACK_BROADCAST_PERMISSION, results.Criteria.RequiredPermissionGroup)
+			assert.Equal(t, []string{"node-1:1"}, results.TaskIds)
+		})
+	}
 }
 
 func healthResponse(statusCode int, body string) *http.Response {
