@@ -184,12 +184,14 @@ func (s *Store) CompleteAutomationWorkItem(ctx context.Context, itemId string) e
 		RETURNING id`, itemId)
 }
 
-// RequeueAutomationWorkItem returns a claimed item to the queue after a failure it may
-// recover from. attempts is deliberately left alone: the claim already counted this try.
+// RequeueAutomationWorkItem returns a running item to the queue after a failure it may
+// recover from. An applying item keeps its state and result, so only its update replays.
+// attempts is deliberately left alone: the claim already counted this try.
 func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
-		SET state = 'pending', result = NULL,
+		SET state = CASE WHEN state = 'applying' THEN state ELSE 'pending' END,
+		    result = CASE WHEN state = 'applying' THEN result ELSE NULL END,
 		    error = NULLIF($2, ''), updated_at = now()
 		WHERE id = $1 AND state IN `+claimedWorkItemStates+`
 		RETURNING id`, itemId, cause)
@@ -239,11 +241,21 @@ func (s *Store) FailPendingAutomationWorkItems(ctx context.Context, automationId
 // run left to resume its apply step. An empty liveIds means no automation is defined at all,
 // so everything open is orphaned.
 func (s *Store) FailOrphanedAutomationWorkItems(ctx context.Context, liveIds []string, cause string) (int, error) {
+	return s.failOrphanedWorkItems(ctx, liveIds, cause, openWorkItemStates)
+}
+
+// FailOrphanedPendingAutomationWorkItems terminalizes only the unclaimed work of automations
+// no longer defined, so a run still under way for one of them is allowed to finish.
+func (s *Store) FailOrphanedPendingAutomationWorkItems(ctx context.Context, liveIds []string, cause string) (int, error) {
+	return s.failOrphanedWorkItems(ctx, liveIds, cause, pendingWorkItemStates)
+}
+
+func (s *Store) failOrphanedWorkItems(ctx context.Context, liveIds []string, cause, states string) (int, error) {
 	// pgx sends []string as text[]; automation_id is uuid.
 	return countAffected(ctx, s.db, `
 		UPDATE automation_work_items
 		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
-		WHERE state IN `+openWorkItemStates+`
+		WHERE state IN `+states+`
 		  AND NOT (automation_id = ANY($1::uuid[]))
 		RETURNING id`, liveIds, cause)
 }

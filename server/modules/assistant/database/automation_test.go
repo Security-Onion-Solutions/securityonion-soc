@@ -174,8 +174,8 @@ func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 	s := &Store{db: mDB}
 
 	requeue := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "state = 'pending'") &&
-			strings.Contains(sql, "result = NULL")
+		return strings.Contains(sql, "ELSE 'pending' END") &&
+			strings.Contains(sql, "ELSE NULL END")
 	})
 
 	mRows := &mockdb.MockRows{}
@@ -192,6 +192,27 @@ func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 		return strings.Contains(sql, "attempts") || strings.Contains(sql, "session_ids")
 	})
 	mDB.AssertNotCalled(t, "Query", mock.Anything, resets, mock.Anything, mock.Anything)
+}
+
+// An applying item's result is its checkpoint; requeueing it would forfeit the session it
+// already paid for. It stays applying so the next run replays only the update.
+func TestRequeueAutomationWorkItemLeavesApplyingInPlace(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	keepsApplying := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "state = CASE WHEN state = 'applying' THEN state") &&
+			strings.Contains(sql, "result = CASE WHEN state = 'applying' THEN result")
+	})
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(true).Once()
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, keepsApplying, "item-1", "update failed").Return(mRows, nil)
+
+	require.NoError(t, s.RequeueAutomationWorkItem(context.Background(), "item-1", "update failed"))
+	mDB.AssertExpectations(t)
 }
 
 func TestRequeueAutomationWorkItemOnVanishedItem(t *testing.T) {
@@ -680,6 +701,30 @@ func TestFailOrphanedAutomationWorkItemsIncludesApplying(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+// The per-tick sweep only reaches unclaimed work, so a run still under way for a removed
+// automation keeps what it holds.
+func TestFailOrphanedPendingAutomationWorkItemsLeavesClaimedWork(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	orphaned := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "state IN "+pendingWorkItemStates) &&
+			strings.Contains(sql, "NOT (automation_id = ANY($1::uuid[]))")
+	})
+
+	live := []string{testAutomationId}
+
+	mDB.On("Query", mock.Anything, orphaned, live, "ERROR_AUTOMATION_DELETED").
+		Return(rowsYielding(1), nil)
+
+	failed, err := s.FailOrphanedPendingAutomationWorkItems(context.Background(), live,
+		"ERROR_AUTOMATION_DELETED")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, failed)
+	mDB.AssertExpectations(t)
+}
+
 // No automation is defined, so every open item is orphaned. The empty list has to reach the
 // statement as an empty array rather than being treated as "no filter".
 func TestFailOrphanedAutomationWorkItemsSweepsAllWhenNothingIsLive(t *testing.T) {
@@ -696,5 +741,32 @@ func TestFailOrphanedAutomationWorkItemsSweepsAllWhenNothingIsLive(t *testing.T)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, failed)
+	mDB.AssertExpectations(t)
+}
+
+func TestFailAbandonedAutomationRunRequiresAnAutomationId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.FailAbandonedAutomationRun(context.Background(), "", "abandoned")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+// Only an open row of that automation is touched; the cause is what the run history shows.
+func TestFailAbandonedAutomationRunCounts(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_runs") &&
+			strings.Contains(sql, "WHERE automation_id = $1 AND ended_at IS NULL")
+	}), testAutomationId, "abandoned").Return(rowsYielding(1), nil)
+
+	failed, err := s.FailAbandonedAutomationRun(context.Background(), testAutomationId, "abandoned")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, failed)
 	mDB.AssertExpectations(t)
 }

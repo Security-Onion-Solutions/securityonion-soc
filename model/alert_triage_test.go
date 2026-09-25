@@ -6,6 +6,7 @@
 package model
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,9 +28,18 @@ func TestAlertTriageUnprocessedQuery(t *testing.T) {
 	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:event.so_alerttriage.session_id"
 	capped := base + " AND NOT event.so_alerttriage.failed_count:>=3"
 
+	// A zero cap falls back to the default rather than retrying forever.
 	query, err := BuildAlertTriageUnprocessedQuery("so_", "", 0)
 	require.NoError(t, err)
-	assert.Equal(t, base, query)
+	assert.Equal(t, base+" AND NOT event.so_alerttriage.failed_count:>="+strconv.Itoa(DefaultAlertTriageMaxFailures), query)
+
+	query, err = BuildAlertTriageUnprocessedQuery("so_", "", -1)
+	require.NoError(t, err)
+	assert.Contains(t, query, "failed_count:>="+strconv.Itoa(DefaultAlertTriageMaxFailures))
+
+	query, err = BuildAlertTriageUnprocessedQuery("so_", "", 5)
+	require.NoError(t, err)
+	assert.Equal(t, base+" AND NOT event.so_alerttriage.failed_count:>=5", query)
 
 	query, err = BuildAlertTriageUnprocessedQuery("so_", "   ", 3)
 	require.NoError(t, err)

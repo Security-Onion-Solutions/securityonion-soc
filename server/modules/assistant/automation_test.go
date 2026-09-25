@@ -794,6 +794,19 @@ func storedAutomationWithParams(t *testing.T, id, params string) *model.Setting 
 	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
 }
 
+// sqlLike matches a statement carrying every fragment.
+func sqlLike(subs ...string) any {
+	return mock.MatchedBy(func(sql string) bool {
+		for _, sub := range subs {
+			if !strings.Contains(sql, sub) {
+				return false
+			}
+		}
+
+		return true
+	})
+}
+
 // rowsYielding returns a Rows that reports n changed rows, which is how the sweeps count
 // what they failed.
 func rowsYielding(n int) *mockdb.MockRows {
@@ -815,10 +828,8 @@ func rowsYielding(n int) *mockdb.MockRows {
 func expectSweep(mDB *mockdb.MockDB, cause error, failed int) *mock.Call {
 	mRows := rowsYielding(failed)
 
-	return mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "UPDATE automation_work_items") &&
-			strings.Contains(sql, "state = 'failed'")
-	}), automationTestId, cause.Error()).Return(mRows, nil)
+	return mDB.On("Query", mock.Anything, sqlLike("UPDATE automation_work_items", "state = 'failed'"),
+		automationTestId, cause.Error()).Return(mRows, nil)
 }
 
 // paramsChangeCoordinator seeds one stored automation and a store whose sweep is scripted.
@@ -991,9 +1002,7 @@ func TestDeleteAutomationRejectsAnUnknownId(t *testing.T) {
 func expectOrphanSweep(mDB *mockdb.MockDB, failed int) *[]string {
 	live := &[]string{}
 
-	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "NOT (automation_id = ANY($1::uuid[]))")
-	}), mock.Anything, ErrAutomationDeleted.Error()).
+	mDB.On("Query", mock.Anything, sqlLike("NOT (automation_id = ANY($1::uuid[]))"), mock.Anything, ErrAutomationDeleted.Error()).
 		Run(func(args mock.Arguments) {
 			ids, _ := args.Get(2).([]string)
 			*live = ids

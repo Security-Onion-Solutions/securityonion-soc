@@ -12,7 +12,12 @@ import (
 	"time"
 )
 
-const alertTriageEpoch = "1970-01-01T00:00:00Z"
+const (
+	alertTriageEpoch = "1970-01-01T00:00:00Z"
+	// Failed sessions a group may accumulate before the scan stops returning it, applied when a
+	// param omits or zeroes the cap so no group is ever retried without bound.
+	DefaultAlertTriageMaxFailures = 3
+)
 
 // AlertTriageObject is the event sub-object holding triage state, e.g. so_alerttriage.
 func AlertTriageObject(schemaPrefix string) string { return schemaPrefix + "alerttriage" }
@@ -80,13 +85,14 @@ func validateAlertTriageSearch(str string) error {
 }
 
 // BuildAlertTriageUnprocessedQuery scopes filter to alerts with no successful session that have not
-// failed maxFailures times yet; a non-positive max never gives up. Filter and result are search
-// segments only; append any groupby afterwards.
+// failed maxFailures times yet. Filter and result are search segments only; append any groupby
+// afterwards.
 func BuildAlertTriageUnprocessedQuery(schemaPrefix, filter string, maxFailures int) (string, error) {
-	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:" + AlertTriageFieldSessionId(schemaPrefix)
-	if maxFailures > 0 {
-		base += " AND NOT " + AlertTriageFieldFailedCount(schemaPrefix) + ":>=" + strconv.Itoa(maxFailures)
+	if maxFailures <= 0 {
+		maxFailures = DefaultAlertTriageMaxFailures
 	}
+	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:" + AlertTriageFieldSessionId(schemaPrefix) +
+		" AND NOT " + AlertTriageFieldFailedCount(schemaPrefix) + ":>=" + strconv.Itoa(maxFailures)
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
 		return base, nil

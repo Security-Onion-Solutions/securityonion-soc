@@ -108,6 +108,21 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 	return nil
 }
 
+// FailAbandonedAutomationRun fails the open run of an automation, if there is one. Only the
+// caller knows nothing owns it; the scheduler calls this when the in-flight index refuses an
+// open for an automation it has no run registered for.
+func (s *Store) FailAbandonedAutomationRun(ctx context.Context, automationId, cause string) (int, error) {
+	if automationId == "" {
+		return 0, fmt.Errorf("cannot fail a run without an automation id")
+	}
+
+	return countAffected(ctx, s.db, `
+		UPDATE automation_runs
+		SET state = 'failed', ended_at = now(), error = NULLIF($2, '')
+		WHERE automation_id = $1 AND ended_at IS NULL
+		RETURNING id`, automationId, cause)
+}
+
 func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.AutomationRunRecord, error) {
 	if runId == "" {
 		return nil, fmt.Errorf("cannot get a run without an id")
@@ -184,14 +199,37 @@ func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery
 	return runs, rows.Err()
 }
 
-// LatestAutomationRunTime reports when an automation last finished, derived from its run
-// history rather than stored, so config carries only what a human set.
-func (s *Store) LatestAutomationRunTime(ctx context.Context, automationId string) (*time.Time, error) {
-	var endedAt *time.Time
+// LatestAutomationRunStartTimes reports when each listed automation last started a run, keyed
+// by id; each is one probe of idx_automation_runs_automation_id_started_at, whatever the history.
+func (s *Store) LatestAutomationRunStartTimes(ctx context.Context, automationIds []string) (map[string]time.Time, error) {
+	// pgx sends []string as text[]; automation_id is uuid.
+	rows, err := s.db.Query(ctx, `
+		SELECT a.id, r.started_at
+		FROM unnest($1::uuid[]) AS a(id)
+		CROSS JOIN LATERAL (
+			SELECT started_at FROM automation_runs
+			WHERE automation_id = a.id
+			ORDER BY started_at DESC
+			LIMIT 1
+		) r`, automationIds)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.db.QueryRow(ctx,
-		`SELECT MAX(ended_at) FROM automation_runs WHERE automation_id = $1`, automationId).
-		Scan(&endedAt)
+	defer rows.Close()
 
-	return endedAt, err
+	latest := map[string]time.Time{}
+
+	for rows.Next() {
+		var id string
+		var started time.Time
+
+		if err := rows.Scan(&id, &started); err != nil {
+			return nil, err
+		}
+
+		latest[id] = started
+	}
+
+	return latest, rows.Err()
 }
