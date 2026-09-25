@@ -17,13 +17,14 @@ import (
 	"github.com/apex/log"
 )
 
-var _ server.AlertTriageUpdater = (*ElasticEventstore)(nil)
+var _ server.AlertTriageUpdater = (*ElasticAssistantstore)(nil)
 
 // Locals and params carry a triage prefix so the script composes with the other update scripts.
-func (store *ElasticEventstore) addAlertTriageScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, update *model.AlertTriageUpdate) {
+func (store *ElasticAssistantstore) addAlertTriageScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, update *model.AlertTriageUpdate) {
 	updateCriteria.Params["triageNowMillis"] = timeNow.UnixMilli()
 	updateCriteria.Params["triageRunId"] = update.RunId
 	updateCriteria.Params["triageSessionId"] = update.SessionId
+	updateCriteria.Params["triageObject"] = model.AlertTriageObject(store.schemaPrefix)
 
 	script := `
 			Instant triage_instant = Instant.ofEpochMilli(params.triageNowMillis);
@@ -31,10 +32,10 @@ func (store *ElasticEventstore) addAlertTriageScript(updateCriteria *model.Event
 			if (ctx._source.event == null) {
 				ctx._source.event = [:];
 			}
-			if (ctx._source.event.triage == null) {
-				ctx._source.event.triage = [:];
+			if (ctx._source.event[params.triageObject] == null) {
+				ctx._source.event[params.triageObject] = [:];
 			}
-			def triage_rec = ctx._source.event.triage;`
+			def triage_rec = ctx._source.event[params.triageObject];`
 
 	if update.Failed {
 		script += `
@@ -64,7 +65,7 @@ func (store *ElasticEventstore) addAlertTriageScript(updateCriteria *model.Event
 	updateCriteria.AddUpdateScript(script)
 }
 
-func (store *ElasticEventstore) AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
+func (store *ElasticAssistantstore) AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
 	if err := update.Validate(); err != nil {
 		return nil, err
 	}
@@ -73,14 +74,14 @@ func (store *ElasticEventstore) AlertTriageUpdate(ctx context.Context, update *m
 	criteria := model.NewEventUpdateCriteria()
 	query := update.Query
 	if !update.Failed {
-		query = "(NOT _exists_:" + model.AlertTriageFieldSessionId + ") AND (" + query + ")"
+		query = "(NOT _exists_:" + model.AlertTriageFieldSessionId(store.schemaPrefix) + ") AND (" + query + ")"
 	}
 	if err := criteria.Populate(query, model.AlertTriageDateRange(update.Floor, update.Ceiling), time.RFC3339, "", "0", "0"); err != nil {
 		return nil, err
 	}
 
 	store.addAlertTriageScript(criteria, now, update)
-	criteria.Asynchronous = update.Count > store.asyncThreshold
+	criteria.Asynchronous = update.Count > store.eventstore.asyncThreshold
 
 	log.FromContext(ctx).WithFields(log.Fields{
 		"automationRunId":       update.RunId,
@@ -90,9 +91,9 @@ func (store *ElasticEventstore) AlertTriageUpdate(ctx context.Context, update *m
 		"isAsync":               criteria.Asynchronous,
 	}).Info("Updating alert triage")
 
-	results, tasks, err := store.runUpdate(ctx, criteria)
+	results, tasks, err := store.eventstore.runUpdate(ctx, criteria)
 	if err == nil && len(tasks) > 0 {
-		status := store.aggregateAsyncUpdate(ctx, tasks, results.TaskIds)
+		status := store.eventstore.aggregateAsyncUpdate(ctx, tasks, results.TaskIds)
 		results.UpdatedCount += status.Updated
 		results.Errors = append(results.Errors, status.Errors...)
 	}

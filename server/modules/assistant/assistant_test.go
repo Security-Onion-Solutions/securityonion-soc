@@ -4964,3 +4964,18 @@ func TestFilterEvents(t *testing.T) {
 		})
 	}
 }
+
+// A child delegated from a shared parent is born shared; nothing else carries over.
+func TestNewDelegationSessionFor_InheritsShared(t *testing.T) {
+	toolReq := &model.ToolRequest{SessionId: "parent", ToolUseId: "tu", Model: "m@A"}
+	kickoff := model.DelegationKickoff{ChildSessionId: "child", ChildModel: "c@A", AgentName: "Hunter", Objective: "obj"}
+
+	shared := newDelegationSessionFor(&model.AssistantSession{SessionId: "parent", Tags: []string{"incognito", model.SessionTagShared}}, toolReq, kickoff)
+	assert.Equal(t, []string{model.SessionTagShared}, shared.Tags)
+
+	private := newDelegationSessionFor(&model.AssistantSession{SessionId: "parent", Tags: []string{"incognito"}}, toolReq, kickoff)
+	assert.Nil(t, private.Tags)
+
+	orphan := newDelegationSessionFor(nil, toolReq, kickoff)
+	assert.Nil(t, orphan.Tags)
+}

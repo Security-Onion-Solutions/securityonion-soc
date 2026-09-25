@@ -1112,6 +1112,19 @@ func TestAddUpdateScript(t *testing.T) {
 		}
 	`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Nil(t, criteria.Params["sessionId"])
+
+	// Test investigation delete case scoped to one session
+	criteria = model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true, "test-session-123")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = `
+		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {

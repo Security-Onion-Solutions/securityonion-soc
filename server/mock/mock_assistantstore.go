@@ -42,6 +42,21 @@ func (m *MockAssistantstore) EXPECT() *MockAssistantstoreMockRecorder {
 	return m.recorder
 }
 
+// CloneSession mocks base method.
+func (m *MockAssistantstore) CloneSession(ctx context.Context, sessionId string) (*model.AssistantSession, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloneSession", ctx, sessionId)
+	ret0, _ := ret[0].(*model.AssistantSession)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CloneSession indicates an expected call of CloneSession.
+func (mr *MockAssistantstoreMockRecorder) CloneSession(ctx, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneSession", reflect.TypeOf((*MockAssistantstore)(nil).CloneSession), ctx, sessionId)
+}
+
 // CreateSession mocks base method.
 func (m *MockAssistantstore) CreateSession(arg0 context.Context, arg1 *model.AssistantSession) error {
 	m.ctrl.T.Helper()
@@ -206,6 +221,20 @@ func (m *MockAssistantstore) SavePartialChat(arg0 context.Context, arg1 *model.S
 func (mr *MockAssistantstoreMockRecorder) SavePartialChat(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SavePartialChat", reflect.TypeOf((*MockAssistantstore)(nil).SavePartialChat), arg0, arg1)
+}
+
+// ToggleSessionsTag mocks base method.
+func (m *MockAssistantstore) ToggleSessionsTag(ctx context.Context, sessionIds []string, tag string, present bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ToggleSessionsTag", ctx, sessionIds, tag, present)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ToggleSessionsTag indicates an expected call of ToggleSessionsTag.
+func (mr *MockAssistantstoreMockRecorder) ToggleSessionsTag(ctx, sessionIds, tag, present any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToggleSessionsTag", reflect.TypeOf((*MockAssistantstore)(nil).ToggleSessionsTag), ctx, sessionIds, tag, present)
 }
 
 // UpdateSessionMemoryScanIndex mocks base method.

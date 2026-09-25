@@ -1429,7 +1429,18 @@ func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.Eve
 	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
 }
 
-func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria) {
+// With a session id, only that session's link is removed so deleting a clone
+// leaves an alert still pointing at its source session untouched.
+func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria, sessionId ...string) {
+	if len(sessionId) > 0 && sessionId[0] != "" {
+		updateCriteria.Params["sessionId"] = sessionId[0]
+		updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+		return
+	}
 	updateCriteria.AddUpdateScript(`
 		if (ctx._source.event.containsKey('investigation_session_id')) {
 			ctx._source.event.remove('investigation_session_id');
@@ -1447,7 +1458,7 @@ func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *mode
 
 func (store *ElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
 	if isDelete {
-		store.addInvestigateDeleteScript(updateCriteria)
+		store.addInvestigateDeleteScript(updateCriteria, sessionId...)
 	} else {
 		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	}

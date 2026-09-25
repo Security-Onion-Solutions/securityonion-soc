@@ -4502,17 +4502,18 @@ var (
 	errAutomationParamsStub       = fmt.Errorf("%w: displayName is required", errors.New("ERROR_AUTOMATION_PARAMS_INVALID"))
 )
 
-// recordingAuthorizer answers every check the same way but records what was asked, which is
-// how the automation routes' permissions are pinned; FakeAuthorizer is all-or-nothing.
+// recordingAuthorizer answers every check the same way, except one denied operation, and
+// records what was asked, which is how route permissions are pinned; FakeAuthorizer is all-or-nothing.
 type recordingAuthorizer struct {
 	authorized bool
+	denied     string
 	asked      []string
 }
 
 func (a *recordingAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation, target string) error {
 	a.asked = append(a.asked, target+"/"+operation)
 
-	if a.authorized {
+	if a.authorized && operation != a.denied {
 		return nil
 	}
 
@@ -4735,4 +4736,234 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 			assert.Equal(t, c.asked, auth.asked)
 		})
 	}
+}
+
+func cloneSessionRequest(sessionId string) *http.Request {
+	req := httptest.NewRequest("POST", "/assistant/sessions/"+sessionId+"/clone", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	return withAssistantContext(req)
+}
+
+func TestCloneSession_Created(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(&model.AssistantSession{SessionId: "clone-1", Title: "Triage"}, nil)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("src-1"))
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var got model.AssistantSession
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "clone-1", got.SessionId)
+	assert.Equal(t, "Triage", got.Title)
+}
+
+func TestCloneSession_NotFound(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "missing").Return(nil, ErrSessionNotFound)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("missing"))
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestCloneSession_NotRoot(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "child").Return(nil, ErrSessionNotRoot)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("child"))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCloneSession_Forbidden(t *testing.T) {
+	srv, _, _ := newAssistantTestServer(t, false)
+	handler := NewAssistantHandler(srv)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("src-1"))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestCloneSession_StoreUnauthorized(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(nil, model.NewUnauthorized("test-user", "read_all", "assistant"))
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("src-1"))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// Rollback goes through DeleteSession, so a caller who cannot delete cannot clone.
+func TestCloneSession_RequiresDeleteAuthored(t *testing.T) {
+	srv, _, _ := newAssistantTestServer(t, true)
+	srv.Authorizer = &recordingAuthorizer{authorized: true, denied: "delete_authored"}
+	handler := NewAssistantHandler(srv)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("src-1"))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestCloneSession_StoreError(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(nil, errors.New("es down"))
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest("src-1"))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestCloneSession_Route(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	r := chi.NewRouter()
+	RegisterAssistantRoutes(srv, r, "/assistant")
+
+	mockStore.EXPECT().CloneSession(gomock.Any(), "abc").Return(&model.AssistantSession{SessionId: "new"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, withAssistantContext(httptest.NewRequest("POST", "/assistant/sessions/abc/clone", nil)))
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Contains(t, w.Body.String(), `"sessionId":"new"`)
+}
+
+func updateSessionRequest(sessionId string, body model.UpdateSessionRequest) *http.Request {
+	jsonBody, _ := json.Marshal(body)
+	req := httptest.NewRequest("PUT", "/assistant/sessions/"+sessionId, bytes.NewBuffer(jsonBody))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	return withAssistantContext(req)
+}
+
+// Sharing follows every descendant; one already in the target state is left alone.
+// The shared tag reaches the root and every descendant in one store write.
+func TestUpdateSession_ShareCascadesToDescendants(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		root   []string
+		child  []string
+	}{
+		{name: "add", action: "add", root: []string{"case-1"}, child: nil},
+		{name: "remove", action: "remove", root: []string{"shared", "case-1"}, child: []string{"incognito", "shared"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, _, mockStore := newAssistantTestServer(t, true)
+			ctrl := gomock.NewController(t)
+			mockCaseStore := mock.NewMockCasestore(ctrl)
+			srv.Casestore = mockCaseStore
+			handler := NewAssistantHandler(srv)
+
+			owner := model.Auditable{UserId: "test-user"}
+			mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+				applied := &model.GetSessionsOpts{}
+				for _, opt := range opts {
+					opt(applied)
+				}
+				assert.True(t, applied.Descendants())
+				assert.False(t, applied.MessageMeta())
+				return []*model.AssistantSession{
+					{Auditable: owner, SessionId: "root", Tags: tc.root},
+					{Auditable: owner, SessionId: "child", ParentSessionId: "root", Tags: tc.child},
+					{Auditable: owner, SessionId: "grand", ParentSessionId: "child", Tags: []string{"shared"}},
+				}, nil
+			})
+			mockCaseStore.EXPECT().GetCaseIdsWithArtifact(gomock.Any(), "assistant_chat", "root").Return([]string{}, nil).AnyTimes()
+
+			mockStore.EXPECT().ToggleSessionsTag(gomock.Any(), []string{"root", "child", "grand"}, "shared", tc.action == "add").Return(nil)
+
+			w := httptest.NewRecorder()
+			handler.UpdateSession(w, updateSessionRequest("root", model.UpdateSessionRequest{Action: tc.action, Tag: "shared"}))
+
+			assert.Equal(t, http.StatusNoContent, w.Code)
+		})
+	}
+}
+
+func TestUpdateSession_OtherTagsDoNotCascade(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	owner := model.Auditable{UserId: "test-user"}
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+		applied := &model.GetSessionsOpts{}
+		for _, opt := range opts {
+			opt(applied)
+		}
+		assert.False(t, applied.Descendants())
+		return []*model.AssistantSession{{Auditable: owner, SessionId: "root"}}, nil
+	})
+	mockStore.EXPECT().UpdateSessionTags(gomock.Any(), "root", []string{"case-1"}).Return(nil)
+
+	w := httptest.NewRecorder()
+	handler.UpdateSession(w, updateSessionRequest("root", model.UpdateSessionRequest{Action: "add", Tag: "case-1"}))
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestUpdateSession_DescendantWriteFailure(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	owner := model.Auditable{UserId: "test-user"}
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
+		{Auditable: owner, SessionId: "root"},
+		{Auditable: owner, SessionId: "child", ParentSessionId: "root"},
+	}, nil)
+	mockStore.EXPECT().ToggleSessionsTag(gomock.Any(), []string{"root", "child"}, "shared", true).Return(errors.New("es down"))
+
+	w := httptest.NewRecorder()
+	handler.UpdateSession(w, updateSessionRequest("root", model.UpdateSessionRequest{Action: "add", Tag: "shared"}))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestUpdateSession_InvalidAction(t *testing.T) {
+	srv, _, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	w := httptest.NewRecorder()
+	handler.UpdateSession(w, updateSessionRequest("root", model.UpdateSessionRequest{Action: "toggle", Tag: "shared"}))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// A root that is already shared still pushes the tag to descendants that missed it.
+func TestUpdateSession_ReshareReachesDescendants(t *testing.T) {
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	owner := model.Auditable{UserId: "test-user"}
+	mockStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
+		{Auditable: owner, SessionId: "root", Tags: []string{"shared"}},
+		{Auditable: owner, SessionId: "child", ParentSessionId: "root"},
+	}, nil)
+	mockStore.EXPECT().ToggleSessionsTag(gomock.Any(), []string{"root", "child"}, "shared", true).Return(nil)
+
+	w := httptest.NewRecorder()
+	handler.UpdateSession(w, updateSessionRequest("root", model.UpdateSessionRequest{Action: "add", Tag: "shared"}))
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }

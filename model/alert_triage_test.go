@@ -24,40 +24,41 @@ func validAlertTriageUpdate() *AlertTriageUpdate {
 }
 
 func TestAlertTriageUnprocessedQuery(t *testing.T) {
-	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:event.triage.session_id"
-	capped := base + " AND NOT event.triage.failed_count:>=3"
+	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:event.so_alerttriage.session_id"
+	capped := base + " AND NOT event.so_alerttriage.failed_count:>=3"
 
-	query, err := BuildAlertTriageUnprocessedQuery("", 0)
+	query, err := BuildAlertTriageUnprocessedQuery("so_", "", 0)
 	require.NoError(t, err)
 	assert.Equal(t, base, query)
 
-	query, err = BuildAlertTriageUnprocessedQuery("   ", 3)
+	query, err = BuildAlertTriageUnprocessedQuery("so_", "   ", 3)
 	require.NoError(t, err)
 	assert.Equal(t, capped, query)
 
-	query, err = BuildAlertTriageUnprocessedQuery(`message:"a|b"`, 3)
+	query, err = BuildAlertTriageUnprocessedQuery("so_", `message:"a|b"`, 3)
 	require.NoError(t, err)
 	assert.Equal(t, "("+capped+`) AND (message:"a|b")`, query)
 
-	query, err = BuildAlertTriageUnprocessedQuery("event.module:suricata | groupby rule.name", 3)
+	query, err = BuildAlertTriageUnprocessedQuery("so_", "event.module:suricata | groupby rule.name", 3)
 	assert.EqualError(t, err, "alert triage query must be search-only")
 	assert.Empty(t, query)
 
-	query, err = BuildAlertTriageUnprocessedQuery(`event.module:suricata OR rule.name:"Foo"`, 3)
+	query, err = BuildAlertTriageUnprocessedQuery("so_", `event.module:suricata OR rule.name:"Foo"`, 3)
 	require.NoError(t, err)
 	assert.Equal(t, "("+capped+`) AND (event.module:suricata OR rule.name:"Foo")`, query)
 
 	parsed := NewQuery()
 	require.NoError(t, parsed.Parse(query+" | groupby rule.name"))
 	search := parsed.NamedSegment(SegmentKind_Search).(*SearchSegment)
-	assert.Contains(t, search.String(), "NOT event.triage.failed_count:>=3")
+	assert.Contains(t, search.String(), "NOT event.so_alerttriage.failed_count:>=3")
 	assert.Len(t, search.Terms(), 3)
 	assert.NotNil(t, parsed.NamedSegment(SegmentKind_GroupBy))
 }
 
 func TestAlertTriageRunQuery(t *testing.T) {
-	assert.Equal(t, `event.triage.automation_run_ids:"run-1"`, BuildAlertTriageQuery("run-1"))
-	assert.Equal(t, `event.triage.automation_run_ids:"x\" OR *"`, BuildAlertTriageQuery(`x" OR *`))
+	assert.Equal(t, `event.so_alerttriage.automation_run_ids:"run-1"`, BuildAlertTriageQuery("so_", "run-1"))
+	assert.Equal(t, `event.so_alerttriage.automation_run_ids:"x\" OR *"`, BuildAlertTriageQuery("so_", `x" OR *`))
+	assert.Equal(t, `event.x_alerttriage.automation_run_ids:"run-1"`, BuildAlertTriageQuery("x_", "run-1"))
 }
 
 func TestAlertTriageDateRange(t *testing.T) {

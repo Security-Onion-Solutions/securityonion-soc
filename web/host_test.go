@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -237,4 +238,87 @@ func TestBroadcast_RecipientFilterable_NonMatchingRecipient_Denied(tester *testi
 
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(tester, "", webSocketReadString)
+}
+
+func TestDetachContext(t *testing.T) {
+	testCases := []struct {
+		name            string
+		ctxBuilder      func() context.Context
+		wantRequestorId any
+		wantRunAs       any
+		wantRequestId   any
+	}{
+		{
+			name: "preserves request id when present",
+			ctxBuilder: func() context.Context {
+				ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+				return context.WithValue(ctx, ContextKeyRequestId, "req-1")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       nil,
+			wantRequestId:   "req-1",
+		},
+		{
+			name: "preserves requestor id",
+			ctxBuilder: func() context.Context {
+				return context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       nil,
+		},
+		{
+			name: "preserves run-as username when present",
+			ctxBuilder: func() context.Context {
+				ctx := context.WithValue(context.Background(), ContextKeyRequestorId, "user-1")
+				return context.WithValue(ctx, ContextKeyRunAsUsername, "admin")
+			},
+			wantRequestorId: "user-1",
+			wantRunAs:       "admin",
+		},
+		{
+			name:            "missing requestor id does not panic",
+			ctxBuilder:      context.Background,
+			wantRequestorId: nil,
+			wantRunAs:       nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, cancel := DetachContext(tc.ctxBuilder(), time.Minute)
+			defer cancel()
+
+			assert.Equal(t, tc.wantRequestorId, out.Value(ContextKeyRequestorId))
+			assert.Equal(t, tc.wantRunAs, out.Value(ContextKeyRunAsUsername))
+			assert.Equal(t, tc.wantRequestId, out.Value(ContextKeyRequestId))
+		})
+	}
+
+	t.Run("survives parent cancellation and deadline", func(t *testing.T) {
+		parent, cancelParent := context.WithTimeout(context.Background(), time.Second)
+		out, cancel := DetachContext(parent, time.Minute)
+		defer cancel()
+
+		deadline, ok := out.Deadline()
+		assert.True(t, ok)
+		assert.WithinDuration(t, time.Now().Add(time.Minute), deadline, 5*time.Second)
+
+		cancelParent()
+		assert.NoError(t, out.Err())
+	})
+
+	t.Run("expires after its own timeout", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			out, cancel := DetachContext(context.Background(), time.Minute)
+			defer cancel()
+
+			time.Sleep(time.Minute - time.Second)
+			synctest.Wait()
+			assert.NoError(t, out.Err())
+
+			time.Sleep(time.Second)
+			synctest.Wait()
+			assert.ErrorIs(t, out.Err(), context.DeadlineExceeded)
+		})
+	})
 }

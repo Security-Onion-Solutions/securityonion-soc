@@ -23,6 +23,14 @@ var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
 // found). The handler maps it to 404 Not Found.
 var ErrToolUseNotFound = errors.New("ERROR_TOOL_USE_NOT_FOUND")
 
+// ErrSessionNotFound is returned when a session lookup by id finds nothing the
+// caller may read. The handler maps it to 404 Not Found.
+var ErrSessionNotFound = errors.New("ERROR_SESSION_NOT_FOUND")
+
+// ErrSessionNotRoot is returned when an operation that only applies to a root
+// session targets a delegation sub-session. The handler maps it to 400.
+var ErrSessionNotRoot = errors.New("ERROR_SESSION_NOT_ROOT")
+
 // ErrToolAlreadyResolved is returned when the targeted tool_use already has a
 // tool_result in the session's history, so approving or rejecting it again must
 // not re-execute the tool or duplicate the result. The handler maps it to 400.

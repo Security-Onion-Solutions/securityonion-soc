@@ -36,6 +36,24 @@ const (
 	ContextKeySubgridResponses  ContextKey = "ContextKeySubgridResponses"  // []*http.Response
 )
 
+// DetachContext returns a context free of the request's cancellation and
+// deadline but bounded by its own timeout, carrying over the requestor
+// identity, request id, and logger.
+func DetachContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	detached := context.Background()
+	if username, ok := ctx.Value(ContextKeyRunAsUsername).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRunAsUsername, username)
+	}
+	if requestorId, ok := ctx.Value(ContextKeyRequestorId).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRequestorId, requestorId)
+	}
+	// Downstream stores key work off the request id (e.g. the salt relay's queue filename).
+	if requestId, ok := ctx.Value(ContextKeyRequestId).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRequestId, requestId)
+	}
+	return context.WithTimeout(log.NewContext(detached, log.FromContext(ctx)), timeout)
+}
+
 type HostHandler interface {
 	Handle(responseWriter http.ResponseWriter, request *http.Request)
 }

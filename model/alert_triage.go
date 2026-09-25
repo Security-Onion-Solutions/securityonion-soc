@@ -12,13 +12,26 @@ import (
 	"time"
 )
 
-const (
-	AlertTriageFieldSessionId   = "event.triage.session_id"
-	AlertTriageFieldFailedCount = "event.triage.failed_count"
-	AlertTriageFieldRunIds      = "event.triage.automation_run_ids"
+const alertTriageEpoch = "1970-01-01T00:00:00Z"
 
-	alertTriageEpoch = "1970-01-01T00:00:00Z"
-)
+// AlertTriageObject is the event sub-object holding triage state, e.g. so_alerttriage.
+func AlertTriageObject(schemaPrefix string) string { return schemaPrefix + "alerttriage" }
+
+func AlertTriageFieldSessionId(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "session_id")
+}
+
+func AlertTriageFieldFailedCount(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "failed_count")
+}
+
+func AlertTriageFieldRunIds(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "automation_run_ids")
+}
+
+func alertTriageField(schemaPrefix, name string) string {
+	return "event." + AlertTriageObject(schemaPrefix) + "." + name
+}
 
 // AlertTriageUpdate attaches an automation's investigation session to the alerts matched by
 // Query, either as the one successful session or as another failed attempt.
@@ -69,10 +82,10 @@ func validateAlertTriageSearch(str string) error {
 // BuildAlertTriageUnprocessedQuery scopes filter to alerts with no successful session that have not
 // failed maxFailures times yet; a non-positive max never gives up. Filter and result are search
 // segments only; append any groupby afterwards.
-func BuildAlertTriageUnprocessedQuery(filter string, maxFailures int) (string, error) {
-	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:" + AlertTriageFieldSessionId
+func BuildAlertTriageUnprocessedQuery(schemaPrefix, filter string, maxFailures int) (string, error) {
+	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:" + AlertTriageFieldSessionId(schemaPrefix)
 	if maxFailures > 0 {
-		base += " AND NOT " + AlertTriageFieldFailedCount + ":>=" + strconv.Itoa(maxFailures)
+		base += " AND NOT " + AlertTriageFieldFailedCount(schemaPrefix) + ":>=" + strconv.Itoa(maxFailures)
 	}
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
@@ -85,9 +98,9 @@ func BuildAlertTriageUnprocessedQuery(filter string, maxFailures int) (string, e
 }
 
 // BuildAlertTriageQuery selects every alert the given run touched, failed attempts included.
-func BuildAlertTriageQuery(runId string) string {
+func BuildAlertTriageQuery(schemaPrefix, runId string) string {
 	segment := NewSearchSegmentEmpty()
-	segment.AddFilter(AlertTriageFieldRunIds, runId, false, true, false)
+	segment.AddFilter(AlertTriageFieldRunIds(schemaPrefix), runId, false, true, false)
 	return segment.String()
 }
 
