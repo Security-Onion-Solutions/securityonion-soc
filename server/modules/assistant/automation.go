@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -77,6 +78,9 @@ type AutomationRun struct {
 	// Never nil: a run is not opened at all without Postgres, so kinds do not check.
 	Store AutomationStore
 
+	// Where a kind submits its work items. The run itself never goes through it.
+	Pool *execpool.Pool
+
 	// Every unfinished item for this task, oldest first. A kind drains this rather than
 	// rescanning, so resumption arrives as data rather than a second method.
 	OpenItems []*model.AutomationWorkItem
@@ -98,13 +102,81 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 	}
 
 	result, runErr := run.Srv.AssistantManager.RunAgentSession(ctx, req)
-	if result != nil && result.SessionId != "" {
+	if result != nil && result.SessionId != "" && !shuttingDown(ctx) {
 		if err := run.Store.EnsureAutomationWorkItemSession(ctx, itemId, result.SessionId); err != nil {
 			return result, errors.Join(runErr, err)
 		}
 	}
 
 	return result, runErr
+}
+
+// WorkItemFunc is the body of one pool job. Its context carries the run's cancellation and a
+// logger naming the item.
+type WorkItemFunc func(ctx context.Context, item *model.AutomationWorkItem) error
+
+// Submit queues work for an item the caller already holds, keyed by the agent running it and
+// deduped by the item's id. A refused submission requeues the item so it is not left claimed
+// with nothing running it, except a duplicate: the job that holds the item is still running it.
+// At shutdown nothing is written; reconcile at the next start requeues what was claimed.
+func (run *AutomationRun) Submit(ctx context.Context, agent string, item *model.AutomationWorkItem, work WorkItemFunc) (*execpool.Handle, error) {
+	jobCtx := log.NewContext(ctx, log.FromContext(ctx).WithFields(log.Fields{
+		"workItemId": item.Id,
+		"groupKey":   item.GroupKey,
+	}))
+
+	handle, err := run.Pool.Submit(execpool.Job{
+		Key:       agent,
+		DedupeKey: item.Id,
+		// The run's context, not the pool's: a params change cancels the run alone.
+		Run: func(context.Context) error { return work(jobCtx, item) },
+	})
+	if errors.Is(err, execpool.ErrDuplicate) {
+		return nil, err
+	}
+
+	if err != nil {
+		if shuttingDown(ctx) {
+			return nil, err
+		}
+
+		if requeueErr := run.Store.RequeueAutomationWorkItem(ctx, item.Id, err.Error()); requeueErr != nil {
+			err = errors.Join(err, requeueErr)
+		}
+
+		return nil, err
+	}
+
+	return handle, nil
+}
+
+// ClaimAndSubmit claims the oldest pending item and submits it. Nil item means nothing was
+// pending.
+func (run *AutomationRun) ClaimAndSubmit(ctx context.Context, agent string, work WorkItemFunc) (*model.AutomationWorkItem, *execpool.Handle, error) {
+	item, err := run.Store.ClaimNextAutomationWorkItem(ctx, run.Task.Id, run.RunId)
+	if err != nil || item == nil {
+		return nil, nil, err
+	}
+
+	handle, err := run.Submit(ctx, agent, item, work)
+
+	return item, handle, err
+}
+
+// Await returns once every job has finished, with their errors joined. Jobs see the run's
+// cancellation, so a cancelled run drains rather than being abandoned mid-transition.
+func (run *AutomationRun) Await(handles []*execpool.Handle) error {
+	var errs []error
+
+	for _, handle := range handles {
+		<-handle.Done()
+
+		if err := handle.Err(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKind, error) {
@@ -303,6 +375,8 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		}
 	}
 
+	ac.invalidateAutomations()
+
 	return nil
 }
 
@@ -475,6 +549,8 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 		}
 	}
 
+	ac.invalidateAutomations()
+
 	return nil
 }
 
@@ -517,18 +593,18 @@ func (ac *AssistantCoordinator) watchStoredAutomations(ctx context.Context) {
 		ac.watchAutomationSetting(automation.Id)
 	}
 
-	ac.failOrphanedWorkItems(ctx, automations, unreadable)
+	if ac.store != nil {
+		// After reconcileAutomationRuns: reconcile resets running items to pending, so
+		// sweeping first would let it resurrect them.
+		_ = ac.failOrphanedWorkItems(ctx, ac.store.FailOrphanedAutomationWorkItems, automations, unreadable)
+	}
 }
 
-// failOrphanedWorkItems drops open work whose automation is no longer defined: a delete
-// leaves an in-flight run's items behind, and a restart would otherwise return them to a
-// queue nothing claims. Called once from Start, after reconcileAutomationRuns -- reconcile
-// resets running items to pending, so sweeping first would let it resurrect them.
-func (ac *AssistantCoordinator) failOrphanedWorkItems(ctx context.Context, live []*model.Automation, unreadable int) {
-	if ac.store == nil {
-		return
-	}
+type orphanSweep func(ctx context.Context, liveIds []string, cause string) (int, error)
 
+// failOrphanedWorkItems drops work whose automation is no longer defined: a delete leaves an
+// in-flight run's items behind, and a pillar edit never passes through DeleteAutomation.
+func (ac *AssistantCoordinator) failOrphanedWorkItems(ctx context.Context, sweep orphanSweep, live []*model.Automation, unreadable int) error {
 	logger := log.FromContext(ctx)
 
 	// An unreadable automation is indistinguishable from a deleted one here.
@@ -536,7 +612,7 @@ func (ac *AssistantCoordinator) failOrphanedWorkItems(ctx context.Context, live 
 		logger.WithField("unreadable", unreadable).
 			Warn("assistant: skipping orphaned automation work sweep; some automations are unreadable")
 
-		return
+		return nil
 	}
 
 	liveIds := make([]string, 0, len(live))
@@ -544,17 +620,19 @@ func (ac *AssistantCoordinator) failOrphanedWorkItems(ctx context.Context, live 
 		liveIds = append(liveIds, automation.Id)
 	}
 
-	failed, err := ac.store.FailOrphanedAutomationWorkItems(ctx, liveIds, ErrAutomationDeleted.Error())
+	failed, err := sweep(ctx, liveIds, ErrAutomationDeleted.Error())
 	if err != nil {
 		logger.WithError(err).Error("assistant: unable to drop orphaned automation work")
 
-		return
+		return err
 	}
 
 	if failed > 0 {
 		logger.WithField("failedItems", failed).
 			Info("assistant: dropped automation work left by automations that no longer exist")
 	}
+
+	return nil
 }
 
 // reconcileAutomationRuns closes out runs a previous process left open and requeues the work

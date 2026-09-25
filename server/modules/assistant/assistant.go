@@ -92,6 +92,14 @@ const (
 	// A headless turn with no bytes for this long is abandoned; 0 disables it.
 	DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS = 300
 
+	// How often the scheduler looks for due automations, unless
+	// "automationTickIntervalSeconds" says otherwise.
+	DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS = 60
+	// Work items running at once across every automation; 0 is unlimited.
+	DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS = 4
+	// Work items waiting to start; 0 is unlimited.
+	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS = 0
+
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
 	DEFAULT_DONT_SCAN_BEFORE             = ""
@@ -131,6 +139,8 @@ const (
 	TOOL_TURN_TIMEOUT = 15 * time.Minute
 	// Bounds a detached store write that must outlive its cancelled request.
 	DETACHED_WRITE_TIMEOUT = 30 * time.Second
+	// Bounds Stop's wait for automation runs to close their rows and the pool to drain.
+	AUTOMATION_STOP_TIMEOUT = 5 * time.Second
 )
 
 var (
@@ -185,6 +195,24 @@ type AssistantCoordinator struct {
 	// automationRunMu guards the AutomationRun cancels. An entry exists only while a run is executing.
 	automationRunMu sync.Mutex
 	automationRuns  map[string]context.CancelCauseFunc
+
+	// Hot-reloadable; nanoseconds, like the other atomic scalars. The Init value is what a
+	// removed setting falls back to.
+	automationTickInterval        atomic.Int64
+	automationDefaultTickInterval time.Duration
+	// The pool is built with these when the scheduler starts, so they are read only at Init.
+	automationMaxConcurrentItems int
+	automationMaxQueuedItems     int
+
+	// automationWorkerMu guards the scheduler, nil when stopped. The pool's KeyLimitFunc takes
+	// agentMu under the pool lock, so nothing may call a pool method while holding agentMu.
+	automationWorkerMu  sync.Mutex
+	automationScheduler *automationScheduler
+	// Only the worker goroutine adds and waits.
+	automationRunsWg sync.WaitGroup
+	// Set by a write to the stored automations. A tick that finds it set after its read opens
+	// nothing; the wake the write sent re-ticks on the new definitions.
+	automationsDirty atomic.Bool
 
 	// agentMu guards the agentic configuration that can be hot-reloaded from a
 	// config setting change: agents, agentMapping, and DelegationLibrary. Readers
@@ -324,6 +352,8 @@ const (
 	// limits that can be hot-reloaded.
 	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
 	ConfigSettingMaxSubSessionTokens = "soc.config.server.modules.assistant.maxSubSessionTokens"
+	// The scheduler's tick interval, hot-reloadable.
+	ConfigSettingAutomationTickInterval = "soc.config.server.modules.assistant.automationTickIntervalSeconds"
 
 	ConfigSettingUseMemory                    = "soc.config.server.modules.assistant.useMemory"
 	ConfigSettingUseMemoryScanner             = "soc.config.server.modules.assistant.useMemoryScanner"
@@ -409,6 +439,17 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.agentSessionMaxTurns = max(module.GetIntDefault(config, "agentSessionMaxTurns", DEFAULT_AGENT_SESSION_MAX_TURNS), 1)
 	ac.agentStreamFlushInterval = time.Duration(module.GetIntDefault(config, "agentStreamFlushIntervalMs", DEFAULT_AGENT_STREAM_FLUSH_INTERVAL_MS)) * time.Millisecond
 	ac.agentStreamIdleTimeout = time.Duration(module.GetIntDefault(config, "agentStreamIdleTimeoutSeconds", DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS)) * time.Second
+
+	tickSeconds := module.GetIntDefault(config, "automationTickIntervalSeconds", DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS)
+	if tickSeconds <= 0 && err == nil && ac.isAgentic {
+		err = fmt.Errorf("automationTickIntervalSeconds must be > 0")
+	}
+
+	ac.automationDefaultTickInterval = time.Duration(tickSeconds) * time.Second
+	ac.automationTickInterval.Store(int64(ac.automationDefaultTickInterval))
+	ac.automationMaxConcurrentItems = max(module.GetIntDefault(config, "automationMaxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
+	ac.automationMaxQueuedItems = max(module.GetIntDefault(config, "automationMaxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+
 	ac.loadAdapters(config)
 
 	ac.validateModelSelectors()
@@ -770,6 +811,9 @@ func (ac *AssistantCoordinator) Start() error {
 
 	ac.reloadMemoryConfiguration(ac.srv.Context)
 
+	ac.reloadAutomationTickInterval(ac.srv.Context)
+	ac.startAutomationScheduler()
+
 	return nil
 }
 
@@ -829,6 +873,7 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 		ConfigSettingSkills,
 		ConfigSettingMaxDelegationDepth,
 		ConfigSettingMaxSubSessionTokens,
+		ConfigSettingAutomationTickInterval,
 	}
 	ids = append(ids, memoryConfigSettings...)
 
@@ -853,11 +898,19 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 		return
 	}
 
+	if setting.Id == ConfigSettingAutomationTickInterval {
+		ac.reloadAutomationTickInterval(ctx)
+
+		return
+	}
+
 	if automationId := automationIdFromSetting(setting.Id); automationId != "" {
 		log.FromContext(ctx).WithFields(log.Fields{
 			"automationId": automationId,
 			"removed":      removed,
 		}).Info("automation configuration changed")
+
+		ac.invalidateAutomations()
 
 		return
 	}
@@ -883,6 +936,8 @@ func (ac *AssistantCoordinator) Stop() error {
 		ac.terminateReembed(errors.New("assistant stopped"))
 	}
 	ac.memoryWorkerMu.Unlock()
+
+	ac.stopAutomationScheduler()
 
 	return nil
 }

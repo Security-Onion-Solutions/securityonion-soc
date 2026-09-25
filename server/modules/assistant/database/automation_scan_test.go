@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -359,42 +360,6 @@ func TestListAutomationRunsReturnsEveryRow(t *testing.T) {
 	assert.Equal(t, model.AutomationRunSucceeded, runs[1].State)
 }
 
-// MAX over no rows is NULL, which is how an automation that has never finished a run
-// reports itself.
-func TestLatestAutomationRunTimeHandlesNoHistory(t *testing.T) {
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, sqlContains("MAX(ended_at)"), testAutomationId).Return(mRow)
-
-	latest, err := s.LatestAutomationRunTime(context.Background(), testAutomationId)
-
-	require.NoError(t, err)
-	assert.Nil(t, latest)
-}
-
-func TestLatestAutomationRunTimeReturnsTheLastEnd(t *testing.T) {
-	ended := time.Date(2026, 9, 15, 16, 3, 2, 0, time.UTC)
-
-	mDB := &mockdb.MockDB{}
-	s := &Store{db: mDB}
-
-	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
-		*(args.Get(0).(**time.Time)) = &ended
-	}).Return(nil)
-
-	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId).Return(mRow)
-
-	latest, err := s.LatestAutomationRunTime(context.Background(), testAutomationId)
-
-	require.NoError(t, err)
-	assert.Equal(t, &ended, latest)
-}
-
 func TestListOpenAutomationWorkItemsReadsTheOpenSetOldestFirst(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -465,4 +430,78 @@ func TestEnsureAutomationWorkItemsReturnsOnlyWhatItInserted(t *testing.T) {
 	require.Len(t, inserted, 1)
 	assert.Equal(t, "group-b", inserted[0].GroupKey)
 	mDB.AssertExpectations(t)
+}
+
+type latestRunStartRow struct {
+	automationId string
+	started      time.Time
+}
+
+func latestRunStartRows(rows ...latestRunStartRow) *mockdb.MockRows {
+	mRows := &mockdb.MockRows{}
+
+	for _, row := range rows {
+		mRows.On("Next").Return(true).Once()
+		mRows.On("Scan", anyArgs(2)...).Run(func(args mock.Arguments) {
+			*(args.Get(0).(*string)) = row.automationId
+			*(args.Get(1).(*time.Time)) = row.started
+		}).Return(nil).Once()
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	return mRows
+}
+
+// The cadence is measured from when a run started, so in-flight runs count and run length
+// never stretches the interval.
+func TestLatestAutomationRunStartTimesProbesEachListedAutomation(t *testing.T) {
+	started := time.Date(2026, 9, 15, 16, 0, 2, 0, time.UTC)
+	later := started.Add(time.Hour)
+	ids := []string{testAutomationId, "other", "never-ran"}
+
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, sqlContainsAll("unnest($1::uuid[])", "ORDER BY started_at DESC", "LIMIT 1"), ids).
+		Return(latestRunStartRows(
+			latestRunStartRow{automationId: testAutomationId, started: started},
+			latestRunStartRow{automationId: "other", started: later},
+		), nil)
+
+	latest, err := s.LatestAutomationRunStartTimes(context.Background(), ids)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]time.Time{testAutomationId: started, "other": later}, latest)
+}
+
+func TestLatestAutomationRunStartTimesHandlesNoHistory(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(latestRunStartRows(), nil)
+
+	latest, err := s.LatestAutomationRunStartTimes(context.Background(), []string{testAutomationId})
+
+	require.NoError(t, err)
+	assert.NotNil(t, latest)
+	assert.Empty(t, latest)
+}
+
+func TestLatestAutomationRunStartTimesReportsScanErrors(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(true).Once()
+	mRows.On("Scan", anyArgs(2)...).Return(errors.New("bad row"))
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
+
+	_, err := s.LatestAutomationRunStartTimes(context.Background(), []string{testAutomationId})
+
+	assert.EqualError(t, err, "bad row")
 }
