@@ -140,7 +140,7 @@ const (
 	// Bounds a detached store write that must outlive its cancelled request.
 	DETACHED_WRITE_TIMEOUT = 30 * time.Second
 	// Bounds Stop's wait for automation runs to close their rows and the pool to drain.
-	AUTOMATION_STOP_TIMEOUT = 30 * time.Second
+	AUTOMATION_STOP_TIMEOUT = 5 * time.Second
 )
 
 var (

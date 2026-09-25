@@ -656,14 +656,96 @@ func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
 		require.NoError(t, f.ac.Stop())
 
 		_, _, closes := f.snapshot()
-		require.Len(t, closes, 1)
-		assert.Equal(t, string(model.AutomationRunFailed), closes[0].state)
-		assert.Equal(t, ErrAutomationSchedulerStopped.Error(), closes[0].cause)
+		assert.Empty(t, closes, "a stopped run leaves its row for the next start's reconcile")
 		assert.False(t, f.ac.isAutomationRunning(automationTestId))
 
 		_, err := pool.Submit(execpool.Job{Run: func(context.Context) error { return nil }})
 		assert.ErrorIs(t, err, execpool.ErrShutdown)
 		assert.Nil(t, f.ac.automationScheduler)
+	})
+}
+
+// A kind that ignores its context holds Stop for the budget and no longer.
+func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+
+		release := make(chan struct{})
+		f.kind.executeFunc = func(context.Context, *AutomationRun) error {
+			<-release
+
+			return nil
+		}
+
+		f.startAndWake()
+		require.True(t, f.ac.isAutomationRunning(automationTestId))
+
+		start := time.Now()
+		require.NoError(t, f.ac.Stop())
+		assert.Equal(t, AUTOMATION_STOP_TIMEOUT, time.Since(start))
+		assert.Nil(t, f.ac.automationScheduler)
+
+		close(release)
+		synctest.Wait()
+
+		_, _, closes := f.snapshot()
+		assert.Empty(t, closes, "a run that finishes after the stop still writes nothing")
+		assert.False(t, f.ac.isAutomationRunning(automationTestId))
+	})
+}
+
+// Queued pool work fails on the spot at stop, and nothing is requeued.
+func TestStopFailsQueuedWorkWithoutWriting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f.ac.automationMaxConcurrentItems = 1
+
+		store := &claimingStore{}
+		var second *execpool.Handle
+		var secondRan atomic.Bool
+		var thirdErr atomic.Pointer[error]
+
+		f.kind.executeFunc = func(ctx context.Context, run *AutomationRun) error {
+			store.AutomationStore = run.Store
+			run.Store = store
+
+			first, err := run.Submit(ctx, "Hunter", &model.AutomationWorkItem{Id: "item-1"}, func(ctx context.Context, _ *model.AutomationWorkItem) error {
+				<-ctx.Done()
+
+				return context.Cause(ctx)
+			})
+			assert.NoError(t, err)
+
+			second, err = run.Submit(ctx, "Hunter", &model.AutomationWorkItem{Id: "item-2"}, func(context.Context, *model.AutomationWorkItem) error {
+				secondRan.Store(true)
+
+				return nil
+			})
+			assert.NoError(t, err)
+
+			awaitErr := run.Await([]*execpool.Handle{first, second})
+
+			_, err = run.Submit(ctx, "Hunter", &model.AutomationWorkItem{Id: "item-3"}, func(context.Context, *model.AutomationWorkItem) error { return nil })
+			thirdErr.Store(&err)
+
+			return awaitErr
+		}
+
+		f.startAndWake()
+		require.True(t, f.ac.isAutomationRunning(automationTestId))
+		assert.Equal(t, execpool.KeyStats{Running: 1, Queued: 1}, f.ac.automationScheduler.pool.Stats().Keys["Hunter"])
+
+		require.NoError(t, f.ac.Stop())
+
+		require.NotNil(t, second)
+		assert.ErrorIs(t, second.Err(), execpool.ErrShutdown)
+		assert.False(t, secondRan.Load(), "queued work is failed, not run to observe the cancellation")
+		require.NotNil(t, thirdErr.Load())
+		assert.ErrorIs(t, *thirdErr.Load(), execpool.ErrShutdown)
+		assert.Empty(t, store.requeued, "a refused submission at shutdown is not requeued")
+
+		_, _, closes := f.snapshot()
+		assert.Empty(t, closes)
 	})
 }
 

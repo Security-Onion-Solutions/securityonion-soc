@@ -419,7 +419,11 @@ func (ac *AssistantCoordinator) runAgentTool(ctx context.Context, sess *model.As
 	}
 
 	// The tool has already run, so its result is recorded even if the run was
-	// cancelled meanwhile.
+	// cancelled meanwhile, unless the whole engine is stopping.
+	if shuttingDown(ctx) {
+		return nil, context.Cause(ctx)
+	}
+
 	saveCtx, cancel := web.DetachContext(ctx, DETACHED_WRITE_TIMEOUT)
 	defer cancel()
 	if err := ac.srv.Assistantstore.SaveChat(saveCtx, result.PrepareForStorage(sess.SessionId, []string{"tool_result"}, sess.Model)); err != nil {

@@ -116,6 +116,12 @@ func (ac *AssistantCoordinator) stopAutomationScheduler() {
 	}
 }
 
+// shuttingDown reports whether ctx was cancelled by the scheduler stopping, as opposed to a
+// params change; the cause reaches every context derived from the scheduler's.
+func shuttingDown(ctx context.Context) bool {
+	return errors.Is(context.Cause(ctx), ErrAutomationSchedulerStopped)
+}
+
 // agentConcurrencyLimit is the pool's KeyLimitFunc; it runs under the pool lock, so it only reads the agent map.
 func (ac *AssistantCoordinator) agentConcurrencyLimit(name string) int {
 	ac.agentMu.RLock()
@@ -307,6 +313,10 @@ func (ac *AssistantCoordinator) startDueAutomationRuns(tickCtx context.Context, 
 	now := time.Now()
 
 	for _, automation := range automations {
+		if s.ctx.Err() != nil {
+			return nil
+		}
+
 		if automationDue(automation, lastStarted, now) {
 			ac.startAutomationRun(tickCtx, s, automation)
 		}
@@ -438,7 +448,14 @@ func runAutomationKind(ctx context.Context, logger *log.Entry, kind AutomationKi
 }
 
 // A cancelled run failed whatever the kind returned; the write is detached from that cancellation.
+// A shutdown skips the write: the row stays open and the next start's reconcile fails it.
 func (ac *AssistantCoordinator) closeAutomationRun(ctx context.Context, logger *log.Entry, runId string, err error) {
+	if shuttingDown(ctx) {
+		logger.Info("automation run left open at shutdown; the next start reconciles it")
+
+		return
+	}
+
 	state, cause := model.AutomationRunSucceeded, ""
 
 	switch {

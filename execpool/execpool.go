@@ -123,7 +123,8 @@ type admission struct {
 // logger, which bites hardest exactly when the pool is busiest.
 type logBatch struct {
 	admitted  []admission
-	changed   bool // the saturation edge flipped
+	abandoned []*entry // queued entries failed because the pool's context ended
+	changed   bool     // the saturation edge flipped
 	saturated bool
 	running   int
 	queued    int
@@ -177,7 +178,7 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 
 	p.mu.Lock()
 
-	if p.shutdown {
+	if p.shutdown || p.ctx.Err() != nil {
 		p.mu.Unlock()
 
 		return nil, ErrShutdown
@@ -284,9 +285,16 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 	p.shutdown = true
 	queued, running := len(p.queue), p.total
 
+	var abandoned []*entry
+	if p.ctx.Err() != nil {
+		abandoned = p.abandonQueuedLocked()
+	}
+
 	p.closeDrainedLocked()
 
 	p.mu.Unlock()
+
+	failAbandoned(abandoned)
 
 	if !already {
 		p.logger().WithFields(log.Fields{
@@ -295,27 +303,45 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 		}).Info("draining execution pool")
 	}
 
-	select {
-	case <-p.drained:
-		p.logger().Info("execution pool drained")
-
-		return nil
-	case <-ctx.Done():
+	if !p.isDrained() {
+		select {
+		case <-p.drained:
+		case <-ctx.Done():
+			return p.abandonRemaining(ctx)
+		}
 	}
 
-	// Out of time. Cancel whatever is running and fail everything still queued so no
-	// caller is left waiting on a handle that will never close. Jobs that ignore their
-	// context are not waited on; the pool cannot force a goroutine to stop.
+	p.logger().Info("execution pool drained")
+
+	return nil
+}
+
+func (p *Pool) isDrained() bool {
+	select {
+	case <-p.drained:
+		return true
+	default:
+		return false
+	}
+}
+
+// abandonRemaining is the timed-out half of Shutdown: cancel whatever is running and
+// fail everything still queued so no caller is left waiting on a handle that will never
+// close. Jobs that ignore their context are not waited on; the pool cannot force a
+// goroutine to stop.
+func (p *Pool) abandonRemaining(ctx context.Context) error {
 	p.cancel(ErrShutdown)
 
-	abandoned := p.abandonQueued()
-
 	p.mu.Lock()
+	abandoned := p.abandonQueuedLocked()
 	stillRunning := p.total
+	p.closeDrainedLocked()
 	p.mu.Unlock()
 
+	failAbandoned(abandoned)
+
 	p.logger().WithFields(log.Fields{
-		"abandoned":    abandoned,
+		"abandoned":    len(abandoned),
 		"stillRunning": stillRunning,
 	}).Warn("execution pool shutdown timed out")
 
@@ -330,6 +356,15 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 // The caller must hold mu, and must emit the returned batch only after releasing it.
 func (p *Pool) dispatch() logBatch {
 	var batch logBatch
+
+	// A cancelled pool starts nothing more; what is still queued fails now rather than
+	// running only to observe the cancellation.
+	if p.ctx.Err() != nil {
+		batch.abandoned = p.abandonQueuedLocked()
+		p.noteSaturationLocked(&batch)
+
+		return batch
+	}
 
 	kept := p.queue[:0]
 
@@ -480,10 +515,9 @@ func (p *Pool) closeDrainedLocked() {
 	}
 }
 
-// abandonQueued fails every still-queued job, reporting how many there were.
-func (p *Pool) abandonQueued() int {
-	p.mu.Lock()
-
+// abandonQueuedLocked detaches every still-queued entry for failAbandoned to fail once
+// the lock is released. The caller must hold mu.
+func (p *Pool) abandonQueuedLocked() []*entry {
 	queued := p.queue
 	p.queue = nil
 	p.queued = make(map[string]int)
@@ -492,19 +526,19 @@ func (p *Pool) abandonQueued() int {
 		p.releaseDedupeLocked(e.job)
 	}
 
-	p.closeDrainedLocked()
+	return queued
+}
 
-	p.mu.Unlock()
-
-	for _, e := range queued {
+func failAbandoned(abandoned []*entry) {
+	for _, e := range abandoned {
 		e.handle.err = ErrShutdown
 		close(e.handle.done)
 	}
-
-	return len(queued)
 }
 
 func (p *Pool) emit(b logBatch) {
+	failAbandoned(b.abandoned)
+
 	logger := p.logger()
 
 	for _, a := range b.admitted {

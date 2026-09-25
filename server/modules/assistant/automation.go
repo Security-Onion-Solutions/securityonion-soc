@@ -102,7 +102,7 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 	}
 
 	result, runErr := run.Srv.AssistantManager.RunAgentSession(ctx, req)
-	if result != nil && result.SessionId != "" {
+	if result != nil && result.SessionId != "" && !shuttingDown(ctx) {
 		if err := run.Store.EnsureAutomationWorkItemSession(ctx, itemId, result.SessionId); err != nil {
 			return result, errors.Join(runErr, err)
 		}
@@ -118,6 +118,7 @@ type WorkItemFunc func(ctx context.Context, item *model.AutomationWorkItem) erro
 // Submit queues work for an item the caller already holds, keyed by the agent running it and
 // deduped by the item's id. A refused submission requeues the item so it is not left claimed
 // with nothing running it, except a duplicate: the job that holds the item is still running it.
+// At shutdown nothing is written; reconcile at the next start requeues what was claimed.
 func (run *AutomationRun) Submit(ctx context.Context, agent string, item *model.AutomationWorkItem, work WorkItemFunc) (*execpool.Handle, error) {
 	jobCtx := log.NewContext(ctx, log.FromContext(ctx).WithFields(log.Fields{
 		"workItemId": item.Id,
@@ -135,6 +136,10 @@ func (run *AutomationRun) Submit(ctx context.Context, agent string, item *model.
 	}
 
 	if err != nil {
+		if shuttingDown(ctx) {
+			return nil, err
+		}
+
 		if requeueErr := run.Store.RequeueAutomationWorkItem(ctx, item.Id, err.Error()); requeueErr != nil {
 			err = errors.Join(err, requeueErr)
 		}

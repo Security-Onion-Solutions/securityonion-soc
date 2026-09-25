@@ -837,6 +837,29 @@ func TestRunAgentSession_CancelledInsideToolReportsCause(t *testing.T) {
 	assertUnlocked(t, f.ac, res.SessionId)
 }
 
+// Unless the cancellation is the engine stopping: then nothing more is written.
+func TestRunAgentSession_CancelledByShutdownWritesNothing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := &cancelCheckingStore{fakeAssistantstore: newFakeAssistantstore()}
+	f := newHeadlessFixtureWithStore(t, ctrl, store, sseToolUses(sseToolCall{"t1", "query_events", `{}`}), sseText("never"))
+
+	ctx, cancel := context.WithCancelCause(userCtx())
+	defer cancel(nil)
+	f.tool.executeFunc = func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+		cancel(ErrAutomationSchedulerStopped)
+		return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+	}
+
+	res, err := f.ac.RunAgentSession(ctx, baseRequest())
+	assert.ErrorIs(t, err, ErrAutomationSchedulerStopped)
+	require.NotNil(t, res)
+	assert.Equal(t, 1, f.script.count())
+	assert.Empty(t, toolResults(store.messages(res.SessionId)), "the tool result is not saved at shutdown")
+	assertUnlocked(t, f.ac, res.SessionId)
+}
+
 // A tool that never returns is abandoned on the idle timeout, like a stalled stream.
 // The idle tests run on synctest's clock, so the windows are life-sized yet instant.
 func TestRunAgentSession_HungToolIsAbandoned(t *testing.T) {
@@ -1235,6 +1258,30 @@ func TestAutomationRunRunAgentSession_FailedRunStillRecordsSession(t *testing.T)
 	assert.ErrorIs(t, err, ErrAgentSessionBusy)
 	assert.Equal(t, "session-9", got.SessionId)
 	assert.Equal(t, "session-9", store.sessionId)
+}
+
+func TestAutomationRunRunAgentSession_ShutdownRecordsNothing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := &fakeAutomationStore{}
+	manager := servermock.NewMockAssistantManager(ctrl)
+	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
+	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).Return(&model.AgentSessionResult{SessionId: "session-9"}, ErrAutomationSchedulerStopped)
+
+	run := &AutomationRun{
+		Srv:   &server.Server{AssistantManager: manager},
+		Task:  &model.Automation{},
+		Store: store,
+	}
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(ErrAutomationSchedulerStopped)
+
+	got, err := run.RunAgentSession(ctx, "item-1", &model.AgentSessionRequest{OwnerId: "user-1"})
+	assert.ErrorIs(t, err, ErrAutomationSchedulerStopped)
+	assert.Equal(t, "session-9", got.SessionId)
+	assert.Empty(t, store.sessionId, "the session is not linked to the item at shutdown")
 }
 
 func TestAutomationRunRunAgentSession_StoreErrorIsReported(t *testing.T) {

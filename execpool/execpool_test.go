@@ -451,7 +451,13 @@ func TestPool_ShutdownTimeoutCancelsAndFailsQueued(t *testing.T) {
 		}
 
 		running := submit(t, p, Job{Key: "a", Run: blocking})
-		queued := submit(t, p, Job{Key: "a", Run: blocking})
+
+		var started atomic.Bool
+		queued := submit(t, p, Job{Key: "a", Run: func(context.Context) error {
+			started.Store(true)
+
+			return nil
+		}})
 
 		synctest.Wait()
 		assert.Equal(t, 1, p.Stats().Queued)
@@ -464,6 +470,47 @@ func TestPool_ShutdownTimeoutCancelsAndFailsQueued(t *testing.T) {
 		// Nobody is left holding a handle that never closes.
 		assert.ErrorIs(t, queued.Wait(context.Background()), ErrShutdown)
 		assert.ErrorIs(t, running.Wait(context.Background()), context.Canceled)
+
+		synctest.Wait()
+		assert.False(t, started.Load(), "the running job's exit must not start the queued one after cancel")
+	})
+}
+
+func TestPool_ParentCancelFailsQueuedWithoutRunningThem(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		p := New(ctx, Config{Name: "test", MaxConcurrent: 1})
+		g := newGate()
+
+		running := submit(t, p, Job{Key: "a", Run: g.job("a")})
+		queued := submit(t, p, Job{Key: "b", Run: g.job("b")})
+
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
+
+		assert.ErrorIs(t, running.Wait(context.Background()), context.Canceled)
+		assert.ErrorIs(t, queued.Wait(context.Background()), ErrShutdown)
+		assert.Equal(t, []string{"a"}, g.startedKeys())
+		assert.Equal(t, Stats{PeakQueued: 1, PeakRunning: 1, Keys: map[string]KeyStats{}}, p.Stats())
+
+		// Nothing is left, so Shutdown has nothing to wait for.
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+}
+
+func TestPool_ParentCancelRefusesNewSubmissions(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		p := New(ctx, Config{Name: "test"})
+
+		cancel()
+
+		h, err := p.Submit(Job{Key: "a", Run: func(context.Context) error { return nil }})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrShutdown)
+
+		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 }
 
