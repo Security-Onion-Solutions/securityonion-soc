@@ -31,7 +31,7 @@ const staleWorkItemStates = `('pending', 'running')`
 // a run already under way is allowed to finish.
 const pendingWorkItemStates = `('pending')`
 
-const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, result, error, created_at, updated_at`
+const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, failed_run_ids, result, error, created_at, updated_at`
 
 func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
 	item := &model.AutomationWorkItem{}
@@ -41,7 +41,7 @@ func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
 	var payload, result []byte
 
 	err := row.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
-		&item.Attempts, &item.SessionIds, &result, &failure, &item.CreateTime, &item.UpdateTime)
+		&item.Attempts, &item.SessionIds, &item.FailedRunIds, &result, &failure, &item.CreateTime, &item.UpdateTime)
 	if err != nil {
 		return nil, err
 	}
@@ -109,13 +109,13 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 }
 
 // ClaimNextAutomationWorkItem takes the oldest pending item for one automation and counts
-// the attempt, returning nil when there is nothing to claim. It deliberately does not
-// filter on attempts: an item the store refused to hand out would sit unclaimable in the
-// open set forever, blocking its group. The caller checks Attempts and gives up instead.
+// the attempt, returning nil when there is nothing to claim. It skips items this run already
+// failed, so retries wait for the next run, and items with maxFailures failed runs, which the
+// kind gives up once their alerts carry those failures.
 //
 // run_id moves to the claiming run, so an item a later run resumes is credited to that
 // run rather than to the dead one that enqueued it.
-func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error) {
+func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string, maxFailures int) (*model.AutomationWorkItem, error) {
 	if runId == "" {
 		return nil, fmt.Errorf("cannot claim a work item without a run id")
 	}
@@ -127,12 +127,14 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, r
 		WHERE id = (
 			SELECT id FROM automation_work_items
 			WHERE automation_id = $1 AND state = 'pending'
+			  AND NOT ($2::text = ANY(failed_run_ids))
+			  AND cardinality(failed_run_ids) < $3
 			ORDER BY created_at
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING `+automationWorkItemColumns,
-		automationId, runId)
+		automationId, runId, maxFailures)
 	if err != nil {
 		return nil, err
 	}
@@ -197,9 +199,42 @@ func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause str
 		RETURNING id`, itemId, cause)
 }
 
+// FailAutomationWorkItemRun records that the claiming run failed a running item and returns
+// it to the queue with that run added to failed_run_ids. It never ends the item: the kind
+// does that once the item's alerts carry every failure.
+func (s *Store) FailAutomationWorkItemRun(ctx context.Context, itemId, cause string) (*model.AutomationWorkItem, error) {
+	if itemId == "" {
+		return nil, fmt.Errorf("cannot update a work item without an id")
+	}
+
+	rows, err := s.db.Query(ctx, `
+		UPDATE automation_work_items
+		SET failed_run_ids = CASE WHEN run_id IS NULL OR run_id::text = ANY(failed_run_ids)
+		                          THEN failed_run_ids
+		                          ELSE array_append(failed_run_ids, run_id::text) END,
+		    state = 'pending', result = NULL, error = NULLIF($2, ''), updated_at = now()
+		WHERE id = $1 AND state = 'running'
+		RETURNING `+automationWorkItemColumns, itemId, cause)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		return nil, ErrAutomationWorkItemNotFound
+	}
+
+	return scanAutomationWorkItemRow(rows)
+}
+
 // FailAutomationWorkItem ends an item for good; a retryable failure goes through
-// RequeueAutomationWorkItem instead. The caller must have stamped this item's alerts
-// first, or the next scan re-enqueues them as a fresh item with attempts back at zero.
+// FailAutomationWorkItemRun instead. The caller must have recorded the failures on this
+// item's alerts first, or the next scan re-enqueues them as a fresh item with no failed runs.
 func (s *Store) FailAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
@@ -223,9 +258,8 @@ func (s *Store) failWorkItems(ctx context.Context, automationId, cause, states s
 }
 
 // FailStaleAutomationWorkItems terminalizes work whose payload was derived from params that
-// have since changed. Their alerts were never stamped, so the next scan re-derives them under
-// the new params with attempts back at zero -- the old budget belonged to a definition that
-// no longer exists.
+// have since changed. The next scan re-derives their alerts under the new params as fresh items
+// with no failed runs -- the old budget belonged to a definition that no longer exists.
 func (s *Store) FailStaleAutomationWorkItems(ctx context.Context, automationId, cause string) (int, error) {
 	return s.failWorkItems(ctx, automationId, cause, staleWorkItemStates)
 }

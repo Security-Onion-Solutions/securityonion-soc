@@ -39,4 +39,6 @@ type AlertTriageUpdater interface {
 	// AlertTriageUpdate records the outcome on every alert the update selects and returns only
 	// once the update has landed, even when it ran as a background task.
 	AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error)
+	// AlertTriageSchemaPrefix names the event sub-object the ledger lives under, for building the scan.
+	AlertTriageSchemaPrefix() string
 }

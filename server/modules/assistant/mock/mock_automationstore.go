@@ -43,18 +43,18 @@ func (m *MockAutomationStore) EXPECT() *MockAutomationStoreMockRecorder {
 }
 
 // ClaimNextAutomationWorkItem mocks base method.
-func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error) {
+func (m *MockAutomationStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string, maxFailures int) (*model.AutomationWorkItem, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationId, runId)
+	ret := m.ctrl.Call(m, "ClaimNextAutomationWorkItem", ctx, automationId, runId, maxFailures)
 	ret0, _ := ret[0].(*model.AutomationWorkItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ClaimNextAutomationWorkItem indicates an expected call of ClaimNextAutomationWorkItem.
-func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationId, runId any) *gomock.Call {
+func (mr *MockAutomationStoreMockRecorder) ClaimNextAutomationWorkItem(ctx, automationId, runId, maxFailures any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationId, runId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).ClaimNextAutomationWorkItem), ctx, automationId, runId, maxFailures)
 }
 
 // CompleteAutomationWorkItem mocks base method.
@@ -112,6 +112,21 @@ func (m *MockAutomationStore) FailAutomationWorkItem(ctx context.Context, itemId
 func (mr *MockAutomationStoreMockRecorder) FailAutomationWorkItem(ctx, itemId, cause any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).FailAutomationWorkItem), ctx, itemId, cause)
+}
+
+// FailAutomationWorkItemRun mocks base method.
+func (m *MockAutomationStore) FailAutomationWorkItemRun(ctx context.Context, itemId, cause string) (*model.AutomationWorkItem, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FailAutomationWorkItemRun", ctx, itemId, cause)
+	ret0, _ := ret[0].(*model.AutomationWorkItem)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FailAutomationWorkItemRun indicates an expected call of FailAutomationWorkItemRun.
+func (mr *MockAutomationStoreMockRecorder) FailAutomationWorkItemRun(ctx, itemId, cause any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailAutomationWorkItemRun", reflect.TypeOf((*MockAutomationStore)(nil).FailAutomationWorkItemRun), ctx, itemId, cause)
 }
 
 // ListOpenAutomationWorkItems mocks base method.
