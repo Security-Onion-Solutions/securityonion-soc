@@ -41,6 +41,20 @@ func (m *MockAlertTriageUpdater) EXPECT() *MockAlertTriageUpdaterMockRecorder {
 	return m.recorder
 }
 
+// AlertTriageSchemaPrefix mocks base method.
+func (m *MockAlertTriageUpdater) AlertTriageSchemaPrefix() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AlertTriageSchemaPrefix")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// AlertTriageSchemaPrefix indicates an expected call of AlertTriageSchemaPrefix.
+func (mr *MockAlertTriageUpdaterMockRecorder) AlertTriageSchemaPrefix() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AlertTriageSchemaPrefix", reflect.TypeOf((*MockAlertTriageUpdater)(nil).AlertTriageSchemaPrefix))
+}
+
 // AlertTriageUpdate mocks base method.
 func (m *MockAlertTriageUpdater) AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
 	m.ctrl.T.Helper()

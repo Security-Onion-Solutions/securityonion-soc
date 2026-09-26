@@ -19,6 +19,8 @@ import (
 
 var _ server.AlertTriageUpdater = (*ElasticAssistantstore)(nil)
 
+func (store *ElasticAssistantstore) AlertTriageSchemaPrefix() string { return store.schemaPrefix }
+
 // Locals and params carry a triage prefix so the script composes with the other update scripts.
 func (store *ElasticAssistantstore) addAlertTriageScript(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, update *model.AlertTriageUpdate) {
 	updateCriteria.Params["triageNowMillis"] = timeNow.UnixMilli()
@@ -38,13 +40,30 @@ func (store *ElasticAssistantstore) addAlertTriageScript(updateCriteria *model.E
 			def triage_rec = ctx._source.event[params.triageObject];`
 
 	if update.Failed {
+		updateCriteria.Params["triageFailedRunIds"] = update.FailedRunIds
+
 		script += `
-			if (triage_rec.failed_session_ids == null) {
-				triage_rec.failed_session_ids = [];
+			if (triage_rec.failed_run_ids == null) {
+				triage_rec.failed_run_ids = [];
 			}
-			if (!triage_rec.failed_session_ids.contains(params.triageSessionId)) {
-				triage_rec.failed_session_ids.add(params.triageSessionId);
-				triage_rec.failed_count = triage_rec.failed_session_ids.size();`
+			boolean triage_changed = false;
+			for (def triage_failed_run_id : params.triageFailedRunIds) {
+				if (!triage_rec.failed_run_ids.contains(triage_failed_run_id)) {
+					triage_rec.failed_run_ids.add(triage_failed_run_id);
+					triage_changed = true;
+				}
+			}
+			if (params.triageSessionId != '') {
+				if (triage_rec.failed_session_ids == null) {
+					triage_rec.failed_session_ids = [];
+				}
+				if (!triage_rec.failed_session_ids.contains(params.triageSessionId)) {
+					triage_rec.failed_session_ids.add(params.triageSessionId);
+					triage_changed = true;
+				}
+			}
+			if (triage_changed) {
+				triage_rec.failed_count = triage_rec.failed_run_ids.size();`
 	} else {
 		script += `
 			if (triage_rec.session_id == null) {

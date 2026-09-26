@@ -30,6 +30,8 @@ type Automation struct {
 	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
 	// The kind that runs this automation.
 	AutomationKind string `json:"automationKind" example:"alert_triage"`
+	// The agent whose sessions do this automation's work.
+	Agent string `json:"agent" example:"Investigator"`
 	// Indicates whether the scheduler runs this automation.
 	Enabled bool `json:"enabled" example:"true"`
 	// How often this automation comes due, in seconds.
@@ -106,11 +108,14 @@ type AutomationWorkItem struct {
 	// The current state of this item.
 	State AutomationWorkItemState `json:"state" example:"pending"`
 	// How many times this item has been claimed, including attempts that died with the
-	// process. Bounds retries so a payload that cannot succeed stops being retried.
+	// process.
 	Attempts int `json:"attempts" example:"1"`
 	// One root session per attempt, in attempt order. Each root reaches its own delegated
 	// children.
 	SessionIds []string `json:"sessionIds,omitempty"`
+	// Every run that failed this item, in failure order. A run never claims an item it
+	// failed, and the kind gives the item up once this reaches its budget.
+	FailedRunIds []string `json:"failedRunIds,omitempty"`
 	// The kind's conclusion, stored in the same statement that moves the item to applying,
 	// so a process that dies after that point resumes at the apply step.
 	Result json.RawMessage `json:"result,omitempty" swaggertype:"object"`

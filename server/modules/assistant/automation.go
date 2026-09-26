@@ -81,6 +81,9 @@ type AutomationRun struct {
 	// Where a kind submits its work items. The run itself never goes through it.
 	Pool *execpool.Pool
 
+	// Alert triage never reaches back before this.
+	AlertTriageEpoch time.Time
+
 	// Every unfinished item for this task, oldest first. A kind drains this rather than
 	// rescanning, so resumption arrives as data rather than a second method.
 	OpenItems []*model.AutomationWorkItem
@@ -150,10 +153,10 @@ func (run *AutomationRun) Submit(ctx context.Context, agent string, item *model.
 	return handle, nil
 }
 
-// ClaimAndSubmit claims the oldest pending item and submits it. Nil item means nothing was
-// pending.
-func (run *AutomationRun) ClaimAndSubmit(ctx context.Context, agent string, work WorkItemFunc) (*model.AutomationWorkItem, *execpool.Handle, error) {
-	item, err := run.Store.ClaimNextAutomationWorkItem(ctx, run.Task.Id, run.RunId)
+// ClaimAndSubmit claims the oldest pending item this run has not failed and that has fewer
+// than maxFailures failed runs, and submits it. Nil item means nothing was claimable.
+func (run *AutomationRun) ClaimAndSubmit(ctx context.Context, agent string, maxFailures int, work WorkItemFunc) (*model.AutomationWorkItem, *execpool.Handle, error) {
+	item, err := run.Store.ClaimNextAutomationWorkItem(ctx, run.Task.Id, run.RunId, maxFailures)
 	if err != nil || item == nil {
 		return nil, nil, err
 	}
@@ -325,6 +328,10 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
+	if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
+		return fmt.Errorf("%w: agent %q is not available", ErrInvalidAutomationParams, automation.Agent)
+	}
+
 	kind, err := ac.lookupAutomationKind(automation.AutomationKind)
 	if err != nil {
 		return err
@@ -397,6 +404,10 @@ func validateAutomation(automation *model.Automation) error {
 
 	if automation.IntervalSeconds <= 0 {
 		return fmt.Errorf("%w: intervalSeconds must be positive", ErrInvalidAutomationParams)
+	}
+
+	if strings.TrimSpace(automation.Agent) == "" {
+		return fmt.Errorf("%w: agent is required", ErrInvalidAutomationParams)
 	}
 
 	return nil

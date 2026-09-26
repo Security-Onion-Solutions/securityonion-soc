@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -106,9 +107,10 @@ func automationCoordinator(cfg *automationConfigstore) *AssistantCoordinator {
 }
 
 func automationCoordinatorAs(cfg *automationConfigstore, authorized bool) *AssistantCoordinator {
-	return &AssistantCoordinator{
+	ac := &AssistantCoordinator{
 		srv: &server.Server{
 			Context:     context.Background(),
+			Config:      &config.ServerConfig{},
 			Configstore: cfg,
 			Authorizer:  rbac.FakeAuthorizer{Authorized: authorized},
 		},
@@ -116,12 +118,26 @@ func automationCoordinatorAs(cfg *automationConfigstore, authorized bool) *Assis
 			"alert_triage": &fakeAutomationKind{name: "alert_triage"},
 		},
 	}
+	seedAutomationAgent(ac)
+
+	return ac
+}
+
+// seedAutomationAgent makes automationTestAgent resolvable: defined, enabled, mapped to an
+// enabled model.
+func seedAutomationAgent(ac *AssistantCoordinator) {
+	ac.srv.Config.ClientParams.AssistantParams.AvailableModels = []model.ModelParameters{
+		{ID: "test-model", Adapter: "MyAdapter", Enabled: true},
+	}
+	ac.agents = map[string]model.Agent{automationTestAgent: {Name: automationTestAgent, Enabled: true}}
+	ac.agentMapping = map[string]string{automationTestAgent: "test-model@MyAdapter"}
 }
 
 // Identity is a UUID, so a save that is meant to succeed has to use one.
 const (
 	automationTestId      = "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"
 	otherAutomationTestId = "1d7e3a44-88b6-4c0f-9a21-70f5e9c3b812"
+	automationTestAgent   = "Investigator"
 )
 
 func automationSaveCtx() context.Context {
@@ -134,6 +150,7 @@ func validAutomation() *model.Automation {
 	return &model.Automation{
 		DisplayName:     "Nightly",
 		AutomationKind:  "alert_triage",
+		Agent:           automationTestAgent,
 		IntervalSeconds: 300,
 	}
 }
@@ -145,6 +162,7 @@ func storedAutomation(t *testing.T, id, displayName string) *model.Setting {
 		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
 		DisplayName:     displayName,
 		AutomationKind:  "alert_triage",
+		Agent:           automationTestAgent,
 		IntervalSeconds: 300,
 	})
 	require.NoError(t, err)
@@ -351,15 +369,19 @@ func TestListAutomationsFiltersByPrefix(t *testing.T) {
 		storedAutomation(t, automationTestId, "Nightly"),
 		// The template is an annotation anchor, not an automation.
 		{Id: ConfigSettingAutomationTemplate, Value: ""},
+		// Engine settings live in a sibling object whose name starts the same way.
+		{Id: ConfigSettingAutomationTickInterval, Value: "60"},
+		{Id: ConfigSettingAlertTriageEpoch, Value: "2026-09-24T00:00:00Z"},
 		// A neighbouring setting that merely shares the module prefix.
 		{Id: ConfigSettingAgents, Value: `{"name":"Hunter"}`},
 	}
 
 	ac := automationCoordinator(cfg)
 
-	automations, err := ac.ListAutomations(context.Background())
+	automations, unreadable, err := ac.scanAutomations(context.Background())
 	require.NoError(t, err)
 	require.Len(t, automations, 1)
+	assert.Zero(t, unreadable, "no neighbouring setting counts as an unreadable automation")
 	assert.Equal(t, automationTestId, automations[0].Id)
 	assert.Equal(t, "Nightly", automations[0].DisplayName)
 }
@@ -512,6 +534,41 @@ func TestSaveAutomationRejectsANonPositiveInterval(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
 	assert.Empty(t, cfg.updates)
+}
+
+func TestSaveAutomationRequiresAnAvailableAgent(t *testing.T) {
+	tests := []struct {
+		name  string
+		agent string
+		setup func(ac *AssistantCoordinator)
+	}{
+		{"blank", " ", nil},
+		{"unknown", "Nobody", nil},
+		{"disabled", automationTestAgent, func(ac *AssistantCoordinator) {
+			ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
+		}},
+		{"unmapped", automationTestAgent, func(ac *AssistantCoordinator) {
+			delete(ac.agentMapping, automationTestAgent)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			ac := automationCoordinator(cfg)
+
+			if tt.setup != nil {
+				tt.setup(ac)
+			}
+
+			automation := validAutomation()
+			automation.Agent = tt.agent
+
+			err := ac.SaveAutomation(automationSaveCtx(), automation)
+
+			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+			assert.Empty(t, cfg.updates)
+		})
+	}
 }
 
 func TestSaveAutomationRejectsAKindChange(t *testing.T) {
@@ -786,6 +843,7 @@ func storedAutomationWithParams(t *testing.T, id, params string) *model.Setting 
 		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
 		DisplayName:     "Nightly",
 		AutomationKind:  "alert_triage",
+		Agent:           automationTestAgent,
 		IntervalSeconds: 300,
 		Params:          json.RawMessage(params),
 	})

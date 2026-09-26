@@ -134,41 +134,89 @@ func TestClaimNextAutomationWorkItemUsesSkipLocked(t *testing.T) {
 	s := &Store{db: mDB}
 
 	// SKIP LOCKED is what keeps two pool goroutines inside one run from claiming the
-	// same item; the attempt counter is what lets the caller bound retries.
+	// same item.
 	claim := mock.MatchedBy(func(sql string) bool {
 		return strings.Contains(sql, "FOR UPDATE SKIP LOCKED") &&
 			strings.Contains(sql, "attempts = attempts + 1") &&
 			strings.Contains(sql, "ORDER BY created_at")
 	})
 
-	mDB.On("Query", mock.Anything, claim, testAutomationId, testRunId).Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, claim, testAutomationId, testRunId, 3).Return(emptyRows(), nil)
 
-	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 3)
 
 	assert.Nil(t, item)
 	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
 }
 
-// An attempts filter would wedge the item: unclaimable, yet still blocking its group.
-// Retry policy lives in the kind.
-func TestClaimNextAutomationWorkItemDoesNotFilterOnAttempts(t *testing.T) {
+// A run never retries what it failed, and nothing retries an item out of failed runs.
+func TestClaimNextAutomationWorkItemSkipsFailedRuns(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId).Return(emptyRows(), nil)
-
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
-	require.NoError(t, err)
-
-	capped := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "attempts <")
+	claim := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "AND NOT ($2::text = ANY(failed_run_ids))") &&
+			strings.Contains(sql, "AND cardinality(failed_run_ids) < $3")
 	})
-	mDB.AssertNotCalled(t, "Query", mock.Anything, capped, mock.Anything)
+
+	mDB.On("Query", mock.Anything, claim, testAutomationId, testRunId, 5).Return(emptyRows(), nil)
+
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 5)
+	require.NoError(t, err)
+	mDB.AssertExpectations(t)
 }
 
-// Requeueing must preserve attempts. Resetting it is the bug: a count that restarts every
-// pass can never reach a cap, which is how a failing group retried forever.
+func TestFailAutomationWorkItemRunRecordsTheRun(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	// Appending only when absent keeps a replayed write from spending a second retry.
+	fail := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "WHEN run_id IS NULL OR run_id::text = ANY(failed_run_ids)") &&
+			strings.Contains(sql, "ELSE array_append(failed_run_ids, run_id::text) END") &&
+			strings.Contains(sql, "state = 'pending', result = NULL") &&
+			strings.Contains(sql, "WHERE id = $1 AND state = 'running'") &&
+			!strings.Contains(sql, "attempts =")
+	})
+
+	mRows := automationWorkItemRows(automationWorkItemRow{
+		id:           "item-1",
+		payload:      []byte(`{}`),
+		state:        string(model.AutomationWorkItemPending),
+		failedRunIds: []string{testRunId},
+	})
+
+	mDB.On("Query", mock.Anything, fail, "item-1", "boom").Return(mRows, nil)
+
+	item, err := s.FailAutomationWorkItemRun(context.Background(), "item-1", "boom")
+	require.NoError(t, err)
+	assert.Equal(t, model.AutomationWorkItemPending, item.State)
+	assert.Equal(t, []string{testRunId}, item.FailedRunIds)
+	mDB.AssertExpectations(t)
+}
+
+func TestFailAutomationWorkItemRunOnVanishedItem(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "item-1", "boom").Return(emptyRows(), nil)
+
+	_, err := s.FailAutomationWorkItemRun(context.Background(), "item-1", "boom")
+	assert.ErrorIs(t, err, ErrAutomationWorkItemNotFound)
+}
+
+func TestFailAutomationWorkItemRunRequiresAnId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.FailAutomationWorkItemRun(context.Background(), "", "boom")
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
+// Requeueing must preserve attempts and failures: a requeue is not a failure, and must not
+// forgive one either.
 func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -186,10 +234,10 @@ func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
 
 	require.NoError(t, s.RequeueAutomationWorkItem(context.Background(), "item-1", "truncated"))
 
-	// Neither attempts nor the session history may be reset: attempts is what reaches the
-	// cap, and session_ids is what keeps a failed try's transcript reachable.
+	// session_ids is what keeps a failed try's transcript reachable.
 	resets := mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "attempts") || strings.Contains(sql, "session_ids")
+		return strings.Contains(sql, "attempts") || strings.Contains(sql, "session_ids") ||
+			strings.Contains(sql, "failed_run_ids")
 	})
 	mDB.AssertNotCalled(t, "Query", mock.Anything, resets, mock.Anything, mock.Anything)
 }
@@ -465,6 +513,28 @@ func TestReconcileAutomationRunsDoesNotRecountAttempts(t *testing.T) {
 	mTx.AssertNotCalled(t, "Query", mock.Anything, recounts)
 }
 
+// The run that died failed its item; without that a payload that kills the process would be
+// retried on every start.
+func TestReconcileAutomationRunsCountsTheDeadRunAsFailed(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	mTx := &mockdb.MockTx{}
+	s := &Store{db: mDB}
+
+	mDB.On("Begin", mock.Anything).Return(mTx, nil)
+	mTx.On("Rollback", mock.Anything).Return(nil)
+	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, mock.Anything).Return(emptyRows(), nil)
+
+	_, err := s.ReconcileAutomationRuns(context.Background())
+	require.NoError(t, err)
+
+	records := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "WHERE state = 'running'") &&
+			strings.Contains(sql, "ELSE array_append(failed_run_ids, run_id::text) END")
+	})
+	mTx.AssertCalled(t, "Query", mock.Anything, records)
+}
+
 // A partial reconcile is worse than none: it would leave items owned by a process that
 // is gone while a new run starts alongside them.
 func TestReconcileAutomationRunsRollsBackOnFailure(t *testing.T) {
@@ -526,9 +596,9 @@ func TestClaimNextAutomationWorkItemKeepsSessionHistory(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId).Return(emptyRows(), nil)
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId, 3).Return(emptyRows(), nil)
 
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 3)
 	require.NoError(t, err)
 
 	clearsSessions := mock.MatchedBy(func(sql string) bool {
@@ -544,10 +614,10 @@ func TestClaimNextAutomationWorkItemTakesOverTheRun(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, sqlContains("run_id = $2"), testAutomationId, testRunId).
+	mDB.On("Query", mock.Anything, sqlContains("run_id = $2"), testAutomationId, testRunId, 3).
 		Return(emptyRows(), nil)
 
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 3)
 
 	require.NoError(t, err)
 	mDB.AssertExpectations(t)
@@ -557,7 +627,7 @@ func TestClaimNextAutomationWorkItemRequiresARunId(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, "")
+	_, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, "", 3)
 
 	assert.Error(t, err)
 	assertNoStatements(t, mDB)

@@ -219,6 +219,44 @@ func (ac *AssistantCoordinator) reloadAutomationTickInterval(ctx context.Context
 	}
 }
 
+func (ac *AssistantCoordinator) getAlertTriageEpoch() time.Time {
+	return time.Unix(0, ac.alertTriageEpoch.Load()).UTC()
+}
+
+func parseAlertTriageEpoch(value string) (time.Time, error) {
+	return time.Parse(time.RFC3339, strings.TrimSpace(value))
+}
+
+// reloadAlertTriageEpoch overlays the stored epoch; an absent value restores the Init one and an
+// unusable value keeps the current one. Runs already under way keep the epoch they started with.
+func (ac *AssistantCoordinator) reloadAlertTriageEpoch(ctx context.Context) {
+	if ac.srv.Configstore == nil {
+		return
+	}
+
+	logger := log.FromContext(ctx).WithField("setting", ConfigSettingAlertTriageEpoch)
+
+	setting, err := ac.srv.Configstore.GetSetting(ctx, ConfigSettingAlertTriageEpoch)
+	if err != nil {
+		logger.WithError(err).Warn("unable to read alert triage epoch; keeping previous value")
+
+		return
+	}
+
+	next := ac.alertTriageDefaultEpoch
+
+	if setting != nil && strings.TrimSpace(setting.Value) != "" {
+		next, err = parseAlertTriageEpoch(setting.Value)
+		if err != nil {
+			logger.WithError(err).WithField("value", setting.Value).Warn("alert triage epoch must be an RFC3339 time; keeping previous value")
+
+			return
+		}
+	}
+
+	ac.alertTriageEpoch.Store(next.UnixNano())
+}
+
 // automationWorker ticks on the interval and on every wake.
 func (ac *AssistantCoordinator) automationWorker(s *automationScheduler) {
 	defer close(s.done)
@@ -356,6 +394,12 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 		return
 	}
 
+	if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
+		logger.WithField("agent", automation.Agent).Warn("automation names an agent that is not available; skipping")
+
+		return
+	}
+
 	if ac.isAutomationRunning(automation.Id) {
 		logger.Debug("automation already running; skipping")
 
@@ -384,6 +428,8 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 		RunId: record.Id,
 		Store: ac.store,
 		Pool:  s.pool,
+
+		AlertTriageEpoch: ac.getAlertTriageEpoch(),
 	}
 
 	ac.automationRunsWg.Add(1)

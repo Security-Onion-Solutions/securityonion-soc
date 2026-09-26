@@ -45,11 +45,15 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 	}
 
 	// A half-finished session cannot be continued, so the item is redone from the start.
-	// attempts is not incremented -- the claim that died already counted itself -- and
-	// session_ids is left alone as the only way back to that attempt's transcript.
+	// The run that died failed it. attempts is not incremented -- the claim that died already
+	// counted itself -- and session_ids is left alone as the only way back to that attempt's
+	// transcript.
 	resetItems, err := countAffected(ctx, tx, `
 		UPDATE automation_work_items
 		SET state = 'pending', result = NULL,
+		    failed_run_ids = CASE WHEN run_id IS NULL OR run_id::text = ANY(failed_run_ids)
+		                          THEN failed_run_ids
+		                          ELSE array_append(failed_run_ids, run_id::text) END,
 		    error = 'ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED', updated_at = now()
 		WHERE state = 'running'
 		RETURNING id`)

@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS automation_work_items (
     -- One root session per attempt, in attempt order. Sessions live in Elasticsearch, so
     -- there is nothing to reference.
     session_ids        text[]      NOT NULL DEFAULT '{}',
+    -- Every run that failed this item, crashed runs included; the kind's retry budget.
+    failed_run_ids     text[]      NOT NULL DEFAULT '{}',
     result             jsonb,                 -- the kind's conclusion, opaque outside the kind
     error              text,
     created_at         timestamptz NOT NULL DEFAULT now(),

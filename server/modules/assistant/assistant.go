@@ -93,12 +93,14 @@ const (
 	DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS = 300
 
 	// How often the scheduler looks for due automations, unless
-	// "automationTickIntervalSeconds" says otherwise.
+	// "automationSettings.tickIntervalSeconds" says otherwise.
 	DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS = 60
 	// Work items running at once across every automation; 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS = 4
 	// Work items waiting to start; 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS = 0
+	// Alerts before this are never triaged, so a first run on a long-lived grid does not dig up history.
+	DEFAULT_ALERT_TRIAGE_EPOCH = "2026-09-24T00:00:00Z"
 
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
@@ -200,6 +202,9 @@ type AssistantCoordinator struct {
 	// removed setting falls back to.
 	automationTickInterval        atomic.Int64
 	automationDefaultTickInterval time.Duration
+	// Hot-reloadable like the tick interval; UnixNano.
+	alertTriageEpoch        atomic.Int64
+	alertTriageDefaultEpoch time.Time
 	// The pool is built with these when the scheduler starts, so they are read only at Init.
 	automationMaxConcurrentItems int
 	automationMaxQueuedItems     int
@@ -352,8 +357,12 @@ const (
 	// limits that can be hot-reloaded.
 	ConfigSettingMaxDelegationDepth  = "soc.config.server.modules.assistant.maxDelegationDepth"
 	ConfigSettingMaxSubSessionTokens = "soc.config.server.modules.assistant.maxSubSessionTokens"
+	// Engine-wide automation settings, kept apart from the automation definitions.
+	ConfigSettingAutomationSettingsPrefix = "soc.config.server.modules.assistant.automationSettings."
 	// The scheduler's tick interval, hot-reloadable.
-	ConfigSettingAutomationTickInterval = "soc.config.server.modules.assistant.automationTickIntervalSeconds"
+	ConfigSettingAutomationTickInterval = ConfigSettingAutomationSettingsPrefix + "tickIntervalSeconds"
+	// The earliest alert triage may reach, hot-reloadable.
+	ConfigSettingAlertTriageEpoch = ConfigSettingAutomationSettingsPrefix + "alertTriageEpoch"
 
 	ConfigSettingUseMemory                    = "soc.config.server.modules.assistant.useMemory"
 	ConfigSettingUseMemoryScanner             = "soc.config.server.modules.assistant.useMemoryScanner"
@@ -440,15 +449,29 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.agentStreamFlushInterval = time.Duration(module.GetIntDefault(config, "agentStreamFlushIntervalMs", DEFAULT_AGENT_STREAM_FLUSH_INTERVAL_MS)) * time.Millisecond
 	ac.agentStreamIdleTimeout = time.Duration(module.GetIntDefault(config, "agentStreamIdleTimeoutSeconds", DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS)) * time.Second
 
-	tickSeconds := module.GetIntDefault(config, "automationTickIntervalSeconds", DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS)
+	automationSettings, _ := config["automationSettings"].(map[string]any)
+
+	tickSeconds := module.GetIntDefault(automationSettings, "tickIntervalSeconds", DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS)
 	if tickSeconds <= 0 && err == nil && ac.isAgentic {
-		err = fmt.Errorf("automationTickIntervalSeconds must be > 0")
+		err = fmt.Errorf("automationSettings.tickIntervalSeconds must be > 0")
 	}
 
 	ac.automationDefaultTickInterval = time.Duration(tickSeconds) * time.Second
 	ac.automationTickInterval.Store(int64(ac.automationDefaultTickInterval))
-	ac.automationMaxConcurrentItems = max(module.GetIntDefault(config, "automationMaxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
-	ac.automationMaxQueuedItems = max(module.GetIntDefault(config, "automationMaxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+	ac.automationMaxConcurrentItems = max(module.GetIntDefault(automationSettings, "maxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
+	ac.automationMaxQueuedItems = max(module.GetIntDefault(automationSettings, "maxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+
+	epoch, epochErr := parseAlertTriageEpoch(module.GetStringDefault(automationSettings, "alertTriageEpoch", DEFAULT_ALERT_TRIAGE_EPOCH))
+	if epochErr != nil {
+		if err == nil && ac.isAgentic {
+			err = fmt.Errorf("automationSettings.alertTriageEpoch must be an RFC3339 time: %w", epochErr)
+		}
+
+		epoch, _ = parseAlertTriageEpoch(DEFAULT_ALERT_TRIAGE_EPOCH)
+	}
+
+	ac.alertTriageDefaultEpoch = epoch
+	ac.alertTriageEpoch.Store(epoch.UnixNano())
 
 	ac.loadAdapters(config)
 
@@ -874,6 +897,7 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 		ConfigSettingMaxDelegationDepth,
 		ConfigSettingMaxSubSessionTokens,
 		ConfigSettingAutomationTickInterval,
+		ConfigSettingAlertTriageEpoch,
 	}
 	ids = append(ids, memoryConfigSettings...)
 
@@ -900,6 +924,12 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 
 	if setting.Id == ConfigSettingAutomationTickInterval {
 		ac.reloadAutomationTickInterval(ctx)
+
+		return
+	}
+
+	if setting.Id == ConfigSettingAlertTriageEpoch {
+		ac.reloadAlertTriageEpoch(ctx)
 
 		return
 	}
