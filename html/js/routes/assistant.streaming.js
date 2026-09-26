@@ -300,6 +300,16 @@ globalThis.AssistantStreaming = (function() {
       return { assistantMessage: null, messageUsage: null };
     },
     
+    restoreUnsentMessage(text) {
+      const last = this.messages[this.messages.length - 1];
+      if (last && last.role === 'user' && last.content === text) {
+        this.messages.pop();
+      }
+      if (!this.newMessage) {
+        this.newMessage = text;
+      }
+    },
+
     async callAIAPI(userMessage, tags = null) {
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
@@ -464,23 +474,28 @@ globalThis.AssistantStreaming = (function() {
         if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
           this.isTyping = false;
           this.isStreaming = false;
-          
-          const errorMessage = {
-            role: 'assistant',
-            content: this.i18n.assistantErrorMessage,
-            timestamp: new Date().toISOString()
-          };
-          this.messages.push(errorMessage);
-          this.scrollIfPinned();
+
+          // 409: the agent is at its limit or the session is mid-turn, so nothing was sent.
+          const busy = error && error.response && error.response.status === 409;
 
           if (error && error.response && error.response.data) {
-            const stream = error.response.data;
-            const errorReader = stream.pipeThrough(new TextDecoderStream()).getReader();
-            const { done, value } = await errorReader.read();
-            error = value;
+            error = await this.readErrorBody(error);
           }
 
-          this.$root.showError(error);
+          if (busy) {
+            this.restoreUnsentMessage(userMessage);
+            this.$root.showWarning(error);
+          } else {
+            const errorMessage = {
+              role: 'assistant',
+              content: this.i18n.assistantErrorMessage,
+              timestamp: new Date().toISOString()
+            };
+            this.messages.push(errorMessage);
+            this.scrollIfPinned();
+
+            this.$root.showError(error);
+          }
         }
         
         if (this.activeStreamingSessionId === streamingSessionId) {

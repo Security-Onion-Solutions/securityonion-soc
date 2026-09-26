@@ -21,6 +21,7 @@ var (
 	ErrDuplicate = errors.New("a job with this dedupe key is already queued or running")
 	ErrShutdown  = errors.New("execution pool is shutting down")
 	ErrNoRun     = errors.New("job has no Run function")
+	ErrBusy      = errors.New("no capacity to start this job immediately")
 )
 
 // Job is one unit of work submitted to a Pool.
@@ -35,6 +36,10 @@ type Job struct {
 	// another (a single automation task)
 	DedupeKey string
 
+	// Immediate starts the job now, ahead of the queue and past MaxConcurrent, or
+	// refuses it with ErrBusy when its Key is at its limit. It never waits.
+	Immediate bool
+
 	// Run must respect its context. Shutdown cancels it but cannot force a goroutine
 	// to stop, so a Run that ignores cancellation outlives the pool.
 	Run func(ctx context.Context) error
@@ -48,7 +53,8 @@ type Config struct {
 	// unlimited.
 	MaxQueueDepth int
 
-	// MaxConcurrent caps running jobs across all keys. 0 means unlimited.
+	// MaxConcurrent caps running jobs across all keys when admitting from the queue;
+	// Immediate jobs count toward it but are not held back by it. 0 means unlimited.
 	MaxConcurrent int
 
 	// KeyLimitFunc reports the maximum number of concurrent jobs for a key; any
@@ -78,6 +84,7 @@ type Stats struct {
 	PeakRunning int
 	Rejected    uint64
 	Deduped     uint64
+	Busy        uint64
 
 	Keys map[string]KeyStats
 }
@@ -149,6 +156,7 @@ type Pool struct {
 	peakRunning int
 	rejected    uint64
 	deduped     uint64
+	busy        uint64
 }
 
 // New derives the pool's job context from parent. The caller must eventually call
@@ -169,7 +177,7 @@ func New(parent context.Context, cfg Config) *Pool {
 }
 
 // Submit queues a job, starting it immediately if the limits allow. It reports
-// ErrShutdown, ErrDuplicate or ErrQueueFull when the job is refused; on success the
+// ErrShutdown, ErrDuplicate, ErrQueueFull or ErrBusy when the job is refused; on success the
 // returned Handle closes when the job finishes.
 func (p *Pool) Submit(job Job) (*Handle, error) {
 	if job.Run == nil {
@@ -195,6 +203,10 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 		}).Debug("refused duplicate job")
 
 		return nil, ErrDuplicate
+	}
+
+	if job.Immediate {
+		return p.submitImmediateLocked(job)
 	}
 
 	if p.cfg.MaxQueueDepth > 0 && len(p.queue) >= p.cfg.MaxQueueDepth {
@@ -238,6 +250,36 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 	return e.handle, nil
 }
 
+// submitImmediateLocked starts job without queueing it. The caller must hold mu; it is
+// released before returning.
+func (p *Pool) submitImmediateLocked(job Job) (*Handle, error) {
+	if !p.keyAdmissible(job.Key) {
+		p.busy++
+
+		p.mu.Unlock()
+
+		p.logger().WithField("key", job.Key).Debug("refused immediate job, key is at its limit")
+
+		return nil, ErrBusy
+	}
+
+	e := &entry{
+		job:      job,
+		handle:   &Handle{done: make(chan struct{})},
+		enqueued: time.Now(),
+	}
+
+	if job.DedupeKey != "" {
+		p.dedupe[job.DedupeKey]++
+	}
+
+	p.startLocked(e)
+
+	p.mu.Unlock()
+
+	return e.handle, nil
+}
+
 // Stats reports a point-in-time snapshot. Keys holds only the keys with work
 // outstanding right now.
 func (p *Pool) Stats() Stats {
@@ -251,6 +293,7 @@ func (p *Pool) Stats() Stats {
 		PeakRunning: p.peakRunning,
 		Rejected:    p.rejected,
 		Deduped:     p.deduped,
+		Busy:        p.busy,
 		Keys:        make(map[string]KeyStats, len(p.running)+len(p.queued)),
 	}
 
@@ -381,13 +424,6 @@ func (p *Pool) dispatch() logBatch {
 			delete(p.queued, e.job.Key)
 		}
 
-		p.running[e.job.Key]++
-		p.total++
-
-		if p.total > p.peakRunning {
-			p.peakRunning = p.total
-		}
-
 		if e.blocked {
 			batch.admitted = append(batch.admitted, admission{
 				key:    e.job.Key,
@@ -395,7 +431,7 @@ func (p *Pool) dispatch() logBatch {
 			})
 		}
 
-		go p.run(e)
+		p.startLocked(e)
 	}
 
 	// Release the tail so started entries are collectable, and drop the backing array
@@ -415,11 +451,27 @@ func (p *Pool) dispatch() logBatch {
 	return batch
 }
 
+// startLocked counts e as running and starts it. The caller must hold mu.
+func (p *Pool) startLocked(e *entry) {
+	p.running[e.job.Key]++
+	p.total++
+
+	if p.total > p.peakRunning {
+		p.peakRunning = p.total
+	}
+
+	go p.run(e)
+}
+
 func (p *Pool) admissible(key string) bool {
 	if p.cfg.MaxConcurrent > 0 && p.total >= p.cfg.MaxConcurrent {
 		return false
 	}
 
+	return p.keyAdmissible(key)
+}
+
+func (p *Pool) keyAdmissible(key string) bool {
 	if p.cfg.KeyLimitFunc != nil {
 		if limit := p.cfg.KeyLimitFunc(key); limit > 0 && p.running[key] >= limit {
 			return false

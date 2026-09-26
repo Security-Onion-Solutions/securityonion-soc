@@ -125,6 +125,19 @@ globalThis.AssistantUtils = (function() {
       this.isPinnedToBottom = atBottom;
     },
 
+    // Reads a failed request's body; a streamed body is consumed by the read.
+    async readErrorBody(error) {
+      let body = error && error.response ? error.response.data : undefined;
+      if (body && typeof body.pipeThrough === 'function') {
+        try {
+          const { value } = await body.pipeThrough(new TextDecoderStream()).getReader().read();
+          body = value;
+        } catch {
+          body = undefined;
+        }
+      }
+      return body;
+    },
     scrollIfPinned() {
       if (!this.isPinnedToBottom) return;
       this.scrollToBottom();

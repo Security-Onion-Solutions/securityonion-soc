@@ -278,6 +278,144 @@ func TestPool_QueueDepthZeroUnlimited(t *testing.T) {
 	})
 }
 
+func limitA(n int) func(string) int {
+	return func(key string) int {
+		if key == "a" {
+			return n
+		}
+
+		return 0
+	}
+}
+
+func TestPool_ImmediateStartsUnderKeyLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", Immediate: true, Run: g.job("a")})
+		synctest.Wait()
+
+		assert.Equal(t, KeyStats{Running: 1}, p.Stats().Keys["a"])
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediateBusyAtKeyLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "one", Run: g.job("a")})
+		synctest.Wait()
+
+		h, err := p.Submit(Job{Key: "a", DedupeKey: "two", Immediate: true, Run: g.job("a")})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrBusy)
+
+		stats := p.Stats()
+		assert.Equal(t, KeyStats{Running: 1}, stats.Keys["a"])
+		assert.Equal(t, uint64(1), stats.Busy)
+
+		// The refused job left no dedupe hold behind.
+		submit(t, p, Job{Key: "b", DedupeKey: "two", Run: g.job("b")})
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediatePassesGlobalLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1})
+		running := newGate()
+		immediate := newGate()
+
+		submit(t, p, Job{Key: "a", Run: running.job("a")})
+		submit(t, p, Job{Key: "q", Run: running.job("q")})
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "b", Immediate: true, Run: immediate.job("b")})
+		synctest.Wait()
+
+		assert.Equal(t, []string{"b"}, immediate.startedKeys())
+		assert.Equal(t, []string{"a"}, running.startedKeys(), "the queued job stays behind the cap")
+
+		stats := p.Stats()
+		assert.Equal(t, 2, stats.Running)
+		assert.Equal(t, 1, stats.Queued)
+
+		running.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a"}, running.startedKeys(), "the immediate job still holds the only slot")
+		assert.Equal(t, 1, p.Stats().Queued)
+
+		immediate.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a", "q"}, running.startedKeys())
+	})
+}
+
+func TestPool_ImmediateIgnoresQueueDepth(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1, MaxQueueDepth: 1})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", Run: g.job("a")})
+		submit(t, p, Job{Key: "a", Run: g.job("a")})
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "b", Immediate: true, Run: g.job("b")})
+		synctest.Wait()
+
+		assert.Contains(t, g.startedKeys(), "b")
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediateDuplicateRefused(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test"})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+		synctest.Wait()
+
+		h, err := p.Submit(Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrDuplicate)
+
+		g.open()
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+	})
+}
+
+func TestPool_ImmediateCompletionAdmitsQueued(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		immediate := newGate()
+		queued := newGate()
+
+		submit(t, p, Job{Key: "a", Immediate: true, Run: immediate.job("a")})
+		submit(t, p, Job{Key: "a", Run: queued.job("a")})
+		synctest.Wait()
+
+		assert.Equal(t, KeyStats{Running: 1, Queued: 1}, p.Stats().Keys["a"])
+
+		immediate.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a"}, queued.startedKeys())
+
+		queued.open()
+	})
+}
+
 func TestPool_DuplicateDedupeKeyRefusedWhileRunning(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		p := newPool(t, Config{Name: "test"})

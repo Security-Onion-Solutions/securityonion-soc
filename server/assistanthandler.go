@@ -153,7 +153,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, isAutomation, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
+	ownedByUser, sessionExists, isAutomation, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -177,6 +177,13 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	release, err := h.server.AssistantManager.AcquireTurnSlot(ctx, incMsg.SessionId, incMsg.Model)
+	if err != nil {
+		h.respondChatError(w, r, logger, err, "unable to start chat turn")
+		return
+	}
+	defer release()
 
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
@@ -288,7 +295,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, isAutomation, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
+	ownedByUser, sessionExists, isAutomation, sessionModel, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -315,6 +322,19 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	// A tool turn runs on the session's stored model; legacy sessions have none.
+	selector := toolReq.Model
+	if sessionModel != "" {
+		selector = sessionModel
+	}
+
+	release, err := h.server.AssistantManager.AcquireTurnSlot(ctx, toolReq.SessionId, selector)
+	if err != nil {
+		h.respondToolTurnError(w, r, logger, err, "unable to start tool turn")
+		return
+	}
+	defer release()
 
 	if _, ok := w.(http.Flusher); streaming && !ok {
 		logger.WithField("acceptHeader", accept).Warn("incoming request accepts streaming but is not flushable, issuing non-streaming response")
@@ -1370,6 +1390,13 @@ func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.R
 // path for the error log. Shared by PostChat's non-streaming and streaming
 // branches.
 func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
+	if errors.Is(err, ErrAgentBusy) || errors.Is(err, ErrToolTurnBusy) {
+		logger.WithError(err).Warn(logMsg)
+		web.Respond(w, r, http.StatusConflict, err.Error())
+
+		return
+	}
+
 	logger.WithError(err).Error(logMsg)
 
 	if isClientError(err) {
