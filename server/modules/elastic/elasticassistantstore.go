@@ -810,7 +810,7 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 // and whether it is an automation run's transcript. Only the owner id and tags are
 // fetched from the index — the session document is never transferred or
 // deserialized. A session that doesn't exist returns (false, false, false, nil).
-func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, err error) {
+func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, userId, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, sessionModel string, err error) {
 	logger := log.FromContext(ctx)
 
 	query := map[string]any{
@@ -833,6 +833,7 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 		"_source": []string{
 			store.schemaPrefix + "session.userId",
 			store.schemaPrefix + "session.tags",
+			store.schemaPrefix + "session.model",
 		},
 		"size": 1,
 	}
@@ -840,7 +841,7 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 	queryJSON, err := json.Marshal(query)
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal Elasticsearch query")
-		return false, false, false, err
+		return false, false, false, "", err
 	}
 
 	res, err := store.esClient.Search(
@@ -850,32 +851,33 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 	)
 	if err != nil {
 		logger.WithError(err).Error("Failed to execute Elasticsearch search")
-		return false, false, false, err
+		return false, false, false, "", err
 	}
 	defer res.Body.Close()
 
 	responseJSON, err := readJsonFromResponse(res)
 	if err != nil {
 		logger.WithError(err).Error("Failed to read Elasticsearch response")
-		return false, false, false, err
+		return false, false, false, "", err
 	}
 
 	var response map[string]any
 	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
 		logger.WithError(err).Error("Failed to unmarshal Elasticsearch response")
-		return false, false, false, err
+		return false, false, false, "", err
 	}
 
 	hits, _ := response["hits"].(map[string]any)
 	hitsArray, _ := hits["hits"].([]any)
 	if len(hitsArray) == 0 {
-		return false, false, false, nil
+		return false, false, false, "", nil
 	}
 
 	hit, _ := hitsArray[0].(map[string]any)
 	source, _ := hit["_source"].(map[string]any)
 	sess, _ := source[store.schemaPrefix+"session"].(map[string]any)
 	owner, _ := sess["userId"].(string)
+	sessionModel, _ = sess["model"].(string)
 
 	// Sessions predating the tags field, and those saved with none, decode to a nil
 	// slice here rather than an error.
@@ -887,7 +889,7 @@ func (store *ElasticAssistantstore) DoesUserOwnSession(ctx context.Context, user
 		}
 	}
 
-	return owner == userId, true, isAutomation, nil
+	return owner == userId, true, isAutomation, sessionModel, nil
 }
 
 // searchSessions executes a session-index query and deserializes the hits into

@@ -114,8 +114,9 @@ func newBareEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture
 	f.ac.store = automationTestStore(f.mDB)
 	f.ac.automationDefaultTickInterval = time.Hour
 	f.ac.automationTickInterval.Store(int64(time.Hour))
+	f.ac.execPool = f.ac.newExecPool()
 
-	t.Cleanup(f.ac.stopAutomationScheduler)
+	t.Cleanup(func() { require.NoError(t, f.ac.Stop()) })
 
 	return f
 }
@@ -652,7 +653,7 @@ func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
 		f.startAndWake()
 		require.True(t, f.ac.isAutomationRunning(automationTestId))
 
-		pool := f.ac.automationScheduler.pool
+		pool := f.ac.execPool
 		require.NoError(t, f.ac.Stop())
 
 		_, _, closes := f.snapshot()
@@ -694,16 +695,17 @@ func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
 	})
 }
 
-// Queued pool work fails on the spot at stop, and nothing is requeued.
+// Pool work queued or submitted at stop fails without starting, and nothing is requeued.
 func TestStopFailsQueuedWorkWithoutWriting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
 		f.ac.automationMaxConcurrentItems = 1
+		f.ac.execPool = f.ac.newExecPool()
 
 		store := &claimingStore{}
 		var second *execpool.Handle
-		var secondRan atomic.Bool
-		var thirdErr atomic.Pointer[error]
+		var secondRan, thirdRan atomic.Bool
+		var third atomic.Pointer[execpool.Handle]
 
 		f.kind.executeFunc = func(ctx context.Context, run *AutomationRun) error {
 			store.AutomationStore = run.Store
@@ -725,24 +727,31 @@ func TestStopFailsQueuedWorkWithoutWriting(t *testing.T) {
 
 			awaitErr := run.Await([]*execpool.Handle{first, second})
 
-			_, err = run.Submit(ctx, "Hunter", &model.AutomationWorkItem{Id: "item-3"}, func(context.Context, *model.AutomationWorkItem) error { return nil })
-			thirdErr.Store(&err)
+			handle, err := run.Submit(ctx, "Hunter", &model.AutomationWorkItem{Id: "item-3"}, func(context.Context, *model.AutomationWorkItem) error {
+				thirdRan.Store(true)
+
+				return nil
+			})
+			assert.NoError(t, err)
+			third.Store(handle)
 
 			return awaitErr
 		}
 
 		f.startAndWake()
 		require.True(t, f.ac.isAutomationRunning(automationTestId))
-		assert.Equal(t, execpool.KeyStats{Running: 1, Queued: 1}, f.ac.automationScheduler.pool.Stats().Keys["Hunter"])
+		assert.Equal(t, execpool.KeyStats{Running: 1, Queued: 1}, f.ac.execPool.Stats().Keys["Hunter"])
 
 		require.NoError(t, f.ac.Stop())
 
 		require.NotNil(t, second)
-		assert.ErrorIs(t, second.Err(), execpool.ErrShutdown)
+		assert.ErrorIs(t, second.Err(), ErrAutomationSchedulerStopped)
 		assert.False(t, secondRan.Load(), "queued work is failed, not run to observe the cancellation")
-		require.NotNil(t, thirdErr.Load())
-		assert.ErrorIs(t, *thirdErr.Load(), execpool.ErrShutdown)
-		assert.Empty(t, store.requeued, "a refused submission at shutdown is not requeued")
+		require.NotNil(t, third.Load())
+		<-third.Load().Done()
+		assert.ErrorIs(t, third.Load().Err(), ErrAutomationSchedulerStopped)
+		assert.False(t, thirdRan.Load())
+		assert.Empty(t, store.requeued, "work failed at shutdown is not requeued")
 
 		_, _, closes := f.snapshot()
 		assert.Empty(t, closes)
@@ -761,9 +770,9 @@ func TestAutomationSchedulerLifecycle(t *testing.T) {
 			f.ac.startAutomationScheduler()
 			assert.Same(t, running, f.ac.automationScheduler)
 
-			f.ac.stopAutomationScheduler()
+			f.ac.stopAutomationScheduler(t.Context())
 			assert.Nil(t, f.ac.automationScheduler)
-			assert.NotPanics(t, f.ac.stopAutomationScheduler)
+			assert.NotPanics(t, func() { f.ac.stopAutomationScheduler(t.Context()) })
 		})
 	})
 
@@ -791,7 +800,7 @@ func TestAutomationSchedulerLifecycle(t *testing.T) {
 	})
 
 	t.Run("zero value coordinator", func(t *testing.T) {
-		assert.NotPanics(t, (&AssistantCoordinator{}).stopAutomationScheduler)
+		assert.NotPanics(t, func() { (&AssistantCoordinator{}).stopAutomationScheduler(t.Context()) })
 	})
 }
 

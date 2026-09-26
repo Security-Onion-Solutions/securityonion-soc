@@ -1618,6 +1618,24 @@ test('executeTool still surfaces a 400 that is not already-resolved', async () =
   expect(comp.messages).toHaveLength(1);
 });
 
+test('executeTool warns when the tool turn stays busy past the retries', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.toolBusyRetryDelayMs = 0;
+  comp.toolBusyMaxRetries = 1;
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('ERROR_AGENT_BUSY');
+  expect(toolUse.status).toBe('error');
+});
+
 test('executeTool processes streaming response with message_start', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
@@ -2099,6 +2117,47 @@ test('callAIAPI handles fetch error', async () => {
   expect(comp.messages[0].role).toBe('assistant');
   expect(comp.messages[0].content).toContain('having trouble connecting to the AI service');
   expect(comp.scrollToBottom).toHaveBeenCalled();
+});
+
+test('callAIAPI warns and restores the message when the agent is busy', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = '';
+  comp.$root.showWarning = jest.fn();
+  comp.$root.showError = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = {
+    status: 409,
+    data: {
+      pipeThrough: () => ({ getReader: () => ({ read: jest.fn().mockResolvedValue({ done: false, value: '"ERROR_AGENT_BUSY"' }) }) }),
+    },
+  };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('"ERROR_AGENT_BUSY"');
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('Test message');
+  expect(comp.isTyping).toBe(false);
+});
+
+test('callAIAPI keeps a newer draft when restoring a busy message', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = 'typed since';
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('typed since');
 });
 
 test('callAIAPI processes message_start event', async () => {

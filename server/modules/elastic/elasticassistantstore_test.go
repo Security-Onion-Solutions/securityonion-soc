@@ -2958,6 +2958,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 		wantOwned      bool
 		wantExists     bool
 		wantAutomation bool
+		wantModel      string
 		wantErr        bool
 	}{
 		{
@@ -3004,6 +3005,14 @@ func TestDoesUserOwnSession(t *testing.T) {
 			wantExists: true,
 		},
 		{
+			name:       "session model is returned",
+			statusCode: 200,
+			response:   `{"hits": {"hits": [{"_id": "session123", "_source": {"so_session": {"userId": "test-user", "model": "Hunter"}}}]}}`,
+			wantOwned:  true,
+			wantExists: true,
+			wantModel:  "Hunter",
+		},
+		{
 			name:       "elasticsearch error propagates",
 			statusCode: 500,
 			response:   `{"error": "internal server error"}`,
@@ -3022,7 +3031,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 
 			addJsonResponse(transport, tc.statusCode, tc.response)
 
-			ownedByUser, sessionExists, isAutomation, err := store.DoesUserOwnSession(ctx, "test-user", "session123")
+			ownedByUser, sessionExists, isAutomation, sessionModel, err := store.DoesUserOwnSession(ctx, "test-user", "session123")
 			if tc.wantErr {
 				assert.Error(t, err)
 				return
@@ -3032,8 +3041,9 @@ func TestDoesUserOwnSession(t *testing.T) {
 			assert.Equal(t, tc.wantOwned, ownedByUser)
 			assert.Equal(t, tc.wantExists, sessionExists)
 			assert.Equal(t, tc.wantAutomation, isAutomation)
+			assert.Equal(t, tc.wantModel, sessionModel)
 
-			// Verify the query fetches only the owner id and tags: source-filtered to
+			// Verify the query fetches only the owner id, tags and model: source-filtered to
 			// those session fields, capped to a single hit, filtered by kind and
 			// sessionId.
 			reqs := transport.GetRequests()
@@ -3041,7 +3051,7 @@ func TestDoesUserOwnSession(t *testing.T) {
 
 			var query map[string]any
 			assert.NoError(t, json.NewDecoder(reqs[0].Body).Decode(&query))
-			assert.Equal(t, []any{"so_session.userId", "so_session.tags"}, query["_source"])
+			assert.Equal(t, []any{"so_session.userId", "so_session.tags", "so_session.model"}, query["_source"])
 			assert.Equal(t, float64(1), query["size"])
 
 			mustQuery := query["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any)
