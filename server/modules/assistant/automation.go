@@ -129,7 +129,14 @@ func (run *AutomationRun) Submit(ctx context.Context, agent string, item *model.
 		Key:       agent,
 		DedupeKey: item.Id,
 		// The run's context, not the pool's: a params change cancels the run alone.
-		Run: func(context.Context) error { return work(jobCtx, item) },
+		Run: func(context.Context) error {
+			// The pool outlives the scheduler, so work still queued at shutdown must not start.
+			if shuttingDown(jobCtx) {
+				return context.Cause(jobCtx)
+			}
+
+			return work(jobCtx, item)
+		},
 	})
 	if errors.Is(err, execpool.ErrDuplicate) {
 		return nil, err

@@ -291,11 +291,11 @@ func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSes
 	}
 	return []*model.AssistantSession{{SessionId: "default-session"}}, nil
 }
-func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId string) (bool, bool, bool, error) {
+func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId string) (bool, bool, bool, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	_, exists := f.msgs[sessionId]
-	return exists, exists, false, nil
+	return exists, exists, false, "", nil
 }
 func (f *fakeAssistantstore) CloneSession(_ context.Context, _ string) (*model.AssistantSession, error) {
 	return nil, errors.New("not implemented")

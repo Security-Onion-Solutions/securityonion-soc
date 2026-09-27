@@ -36,7 +36,6 @@ type automationScheduler struct {
 	cancel context.CancelCauseFunc
 	wake   chan struct{}
 	done   chan struct{}
-	pool   *execpool.Pool
 }
 
 // startAutomationScheduler starts the worker where a run could succeed: agentic, online, with Postgres.
@@ -74,12 +73,6 @@ func (ac *AssistantCoordinator) startAutomationScheduler() {
 		cancel: cancel,
 		wake:   make(chan struct{}, 1),
 		done:   make(chan struct{}),
-		pool: execpool.New(ctx, execpool.Config{
-			Name:          "automation",
-			MaxQueueDepth: ac.automationMaxQueuedItems,
-			MaxConcurrent: ac.automationMaxConcurrentItems,
-			KeyLimitFunc:  ac.agentConcurrencyLimit,
-		}),
 	}
 
 	ac.automationScheduler = s
@@ -87,8 +80,8 @@ func (ac *AssistantCoordinator) startAutomationScheduler() {
 	go ac.automationWorker(s)
 }
 
-// stopAutomationScheduler cancels the worker and every run, then waits, bounded, for their rows to close.
-func (ac *AssistantCoordinator) stopAutomationScheduler() {
+// stopAutomationScheduler cancels the worker and every run, then waits until ctx ends for their rows to close.
+func (ac *AssistantCoordinator) stopAutomationScheduler(ctx context.Context) {
 	ac.automationWorkerMu.Lock()
 	s := ac.automationScheduler
 	ac.automationScheduler = nil
@@ -100,19 +93,10 @@ func (ac *AssistantCoordinator) stopAutomationScheduler() {
 
 	s.cancel(ErrAutomationSchedulerStopped)
 
-	logger := log.FromContext(ac.srv.Context)
-
-	ctx, cancel := context.WithTimeout(ac.srv.Context, AUTOMATION_STOP_TIMEOUT)
-	defer cancel()
-
 	select {
 	case <-s.done:
 	case <-ctx.Done():
-		logger.Warn("automation runs still in flight at stop; reconciliation closes their rows at the next start")
-	}
-
-	if err := s.pool.Shutdown(ctx); err != nil {
-		logger.WithError(err).Warn("automation pool did not drain")
+		log.FromContext(ac.srv.Context).Warn("automation runs still in flight at stop; reconciliation closes their rows at the next start")
 	}
 }
 
@@ -120,14 +104,6 @@ func (ac *AssistantCoordinator) stopAutomationScheduler() {
 // params change; the cause reaches every context derived from the scheduler's.
 func shuttingDown(ctx context.Context) bool {
 	return errors.Is(context.Cause(ctx), ErrAutomationSchedulerStopped)
-}
-
-// agentConcurrencyLimit is the pool's KeyLimitFunc; it runs under the pool lock, so it only reads the agent map.
-func (ac *AssistantCoordinator) agentConcurrencyLimit(name string) int {
-	ac.agentMu.RLock()
-	defer ac.agentMu.RUnlock()
-
-	return ac.agents[name].MaxConcurrentInstances
 }
 
 // automationEngineStatus is what the scheduler can say about itself without Postgres.
@@ -144,8 +120,8 @@ func (ac *AssistantCoordinator) getAutomationEngineStatus() automationEngineStat
 	ac.automationWorkerMu.Unlock()
 
 	status := automationEngineStatus{Running: s != nil, ActiveAutomationIds: []string{}}
-	if s != nil {
-		status.Pool = s.pool.Stats()
+	if ac.execPool != nil {
+		status.Pool = ac.execPool.Stats()
 	}
 
 	ac.automationRunMu.Lock()
@@ -383,7 +359,7 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 		Task:  automation,
 		RunId: record.Id,
 		Store: ac.store,
-		Pool:  s.pool,
+		Pool:  ac.execPool,
 	}
 
 	ac.automationRunsWg.Add(1)

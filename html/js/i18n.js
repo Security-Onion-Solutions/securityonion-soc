@@ -1883,6 +1883,7 @@ const i18n = {
 
       WARN_STATUS_EFFECTED_BY_FILTER: 'Saved successfully but the status of this detection is controlled by the current regex filter settings and was reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_update_configure_filters">Click here to configure those filters.</a>',
 
+      ERROR_AGENT_BUSY: 'This agent is at its limit of concurrent sessions. Please try again in a moment.',
       ERROR_ASSISTANT_REQUEST_TOO_LARGE: 'The request is too large for the current session and model. Please shorten your message, compress the context, or start a new chat.',
       ERROR_CASE_EVENT_ALREADY_ATTACHED: 'The event is already attached to the selected case.',
       ERROR_CASE_MODULE_NOT_ENABLED: 'A case module has not been configured for this installation. Unable to proceed with request.',
@@ -1914,6 +1915,7 @@ const i18n = {
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
       ERROR_SERVICE_NOT_AVAILABLE: 'The configuration of this grid does not support the requested operation. Contact your administrator for assistance with enabling additional features.',
+      ERROR_TOOL_TURN_BUSY: 'This session is already processing a request. Please try again in a moment.',
       ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a class="text-white" target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
 
       // correct casing

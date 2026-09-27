@@ -25,6 +25,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -95,7 +96,8 @@ const (
 	// How often the scheduler looks for due automations, unless
 	// "automationTickIntervalSeconds" says otherwise.
 	DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS = 60
-	// Work items running at once across every automation; 0 is unlimited.
+	// Jobs running at once before queued work items wait; user chats count toward it but
+	// are never held back by it. 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS = 4
 	// Work items waiting to start; 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS = 0
@@ -200,9 +202,11 @@ type AssistantCoordinator struct {
 	// removed setting falls back to.
 	automationTickInterval        atomic.Int64
 	automationDefaultTickInterval time.Duration
-	// The pool is built with these when the scheduler starts, so they are read only at Init.
+	// The pool is built with these at Init, so they are read only then.
 	automationMaxConcurrentItems int
 	automationMaxQueuedItems     int
+	// Shared by automation work items and user chat turns, keyed by agent.
+	execPool *execpool.Pool
 
 	// automationWorkerMu guards the scheduler, nil when stopped. The pool's KeyLimitFunc takes
 	// agentMu under the pool lock, so nothing may call a pool method while holding agentMu.
@@ -449,6 +453,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.automationTickInterval.Store(int64(ac.automationDefaultTickInterval))
 	ac.automationMaxConcurrentItems = max(module.GetIntDefault(config, "automationMaxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
 	ac.automationMaxQueuedItems = max(module.GetIntDefault(config, "automationMaxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+	ac.execPool = ac.newExecPool()
 
 	ac.loadAdapters(config)
 
@@ -937,7 +942,16 @@ func (ac *AssistantCoordinator) Stop() error {
 	}
 	ac.memoryWorkerMu.Unlock()
 
-	ac.stopAutomationScheduler()
+	// A zero-value coordinator (used by some tests) has nothing to stop.
+	if ac.srv == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ac.srv.Context, AUTOMATION_STOP_TIMEOUT)
+	defer cancel()
+
+	ac.stopAutomationScheduler(ctx)
+	ac.stopExecPool(ctx)
 
 	return nil
 }

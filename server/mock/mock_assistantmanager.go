@@ -42,6 +42,21 @@ func (m *MockAssistantManager) EXPECT() *MockAssistantManagerMockRecorder {
 	return m.recorder
 }
 
+// AcquireTurnSlot mocks base method.
+func (m *MockAssistantManager) AcquireTurnSlot(ctx context.Context, sessionId, selector string) (func(), error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AcquireTurnSlot", ctx, sessionId, selector)
+	ret0, _ := ret[0].(func())
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AcquireTurnSlot indicates an expected call of AcquireTurnSlot.
+func (mr *MockAssistantManagerMockRecorder) AcquireTurnSlot(ctx, sessionId, selector any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireTurnSlot", reflect.TypeOf((*MockAssistantManager)(nil).AcquireTurnSlot), ctx, sessionId, selector)
+}
+
 // Balance mocks base method.
 func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()

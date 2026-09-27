@@ -18,6 +18,10 @@ import (
 // maps it to 409 Conflict so the client can retry, rather than blocking the request.
 var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
 
+// ErrAgentBusy is returned when a chat turn's agent is at its maxConcurrentInstances.
+// The handler maps it to 409 Conflict so the client can try again later.
+var ErrAgentBusy = errors.New("ERROR_AGENT_BUSY")
+
 // ErrToolUseNotFound is returned when a tool request names a toolUseId with no
 // matching assistant tool_use in the session (or the session itself can't be
 // found). The handler maps it to 404 Not Found.
@@ -44,6 +48,7 @@ var ErrToolRequestMismatch = errors.New("ERROR_TOOL_REQUEST_MISMATCH")
 type AssistantManager interface {
 	Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)
 	SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error)
+	AcquireTurnSlot(ctx context.Context, sessionId string, selector string) (release func(), err error)
 	ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error)
 	ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error)
 	ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error)
