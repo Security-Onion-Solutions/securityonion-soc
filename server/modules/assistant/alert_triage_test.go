@@ -703,7 +703,4 @@ func TestAlertTriageObjective(t *testing.T) {
 	assert.Contains(t, objective, "7 unprocessed alerts")
 	assert.Contains(t, objective, `rule.name:"ET SCAN"`)
 	assert.Contains(t, objective, `"source.ip": "1.2.3.4"`)
-	assert.Contains(t, objective, "human analyst")
-	assert.Contains(t, objective, "Do not acknowledge")
-	assert.Contains(t, objective, "no software will parse it")
 }

@@ -100,10 +100,7 @@ const (
 	// are never held back by it. 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS = 4
 	// Work items waiting to start; 0 is unlimited.
-	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS = 0
-	// Alerts before this are never triaged, so a first run on a long-lived grid does not dig up history.
-	DEFAULT_ALERT_TRIAGE_EPOCH = "2026-09-24T00:00:00Z"
-
+	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS  = 0
 	DEFAULT_USE_MEMORY_SCANNER           = false
 	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
 	DEFAULT_DONT_SCAN_BEFORE             = ""
@@ -147,7 +144,7 @@ const (
 	AUTOMATION_STOP_TIMEOUT = 5 * time.Second
 )
 
-var (
+var ( // treat as constant
 	DEFAULT_FILTER_EVENT_FIELDS = []string{
 		"@timestamp",
 		"client.name",
@@ -174,6 +171,9 @@ var (
 		"weird.name",
 		"tags",
 	}
+
+	// Alerts before this are never triaged, so a first run on a long-lived grid does not dig up history.
+	DEFAULT_ALERT_TRIAGE_EPOCH = time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 )
 
 //go:embed SOSystemPrompt.bin
@@ -466,13 +466,16 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.automationMaxQueuedItems = max(module.GetIntDefault(automationSettings, "maxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
 	ac.execPool = ac.newExecPool()
 
-	epoch, epochErr := parseAlertTriageEpoch(module.GetStringDefault(automationSettings, "alertTriageEpoch", DEFAULT_ALERT_TRIAGE_EPOCH))
-	if epochErr != nil {
-		if err == nil && ac.isAgentic {
+	epoch := DEFAULT_ALERT_TRIAGE_EPOCH
+	if value := strings.TrimSpace(module.GetStringDefault(automationSettings, "alertTriageEpoch", "")); value != "" {
+		parsed, epochErr := parseAlertTriageEpoch(value)
+
+		switch {
+		case epochErr == nil:
+			epoch = parsed
+		case err == nil && ac.isAgentic:
 			err = fmt.Errorf("automationSettings.alertTriageEpoch must be an RFC3339 time: %w", epochErr)
 		}
-
-		epoch, _ = parseAlertTriageEpoch(DEFAULT_ALERT_TRIAGE_EPOCH)
 	}
 
 	ac.alertTriageDefaultEpoch = epoch

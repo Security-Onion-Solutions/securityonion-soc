@@ -898,7 +898,7 @@ func TestAssistantCoordinator_Init_AutomationEngineConfig(t *testing.T) {
 	assert.Equal(t, DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS*time.Second, ac.getAutomationTickInterval())
 	assert.Equal(t, DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS, ac.automationMaxConcurrentItems)
 	assert.Equal(t, DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS, ac.automationMaxQueuedItems)
-	assert.Equal(t, DEFAULT_ALERT_TRIAGE_EPOCH, ac.getAlertTriageEpoch().Format(time.RFC3339))
+	assert.True(t, ac.getAlertTriageEpoch().Equal(DEFAULT_ALERT_TRIAGE_EPOCH))
 
 	ac = newAC()
 	require.NoError(t, ac.Init(module.ModuleConfig{
@@ -922,7 +922,7 @@ func TestAssistantCoordinator_Init_AutomationEngineConfig(t *testing.T) {
 
 	ac = newAC()
 	require.NoError(t, ac.Init(module.ModuleConfig{"automationSettings": map[string]any{"alertTriageEpoch": "yesterday"}}))
-	assert.Equal(t, DEFAULT_ALERT_TRIAGE_EPOCH, ac.getAlertTriageEpoch().Format(time.RFC3339), "an unusable epoch falls back to the default")
+	assert.True(t, ac.getAlertTriageEpoch().Equal(DEFAULT_ALERT_TRIAGE_EPOCH), "an unusable epoch falls back to the default")
 
 	stubEmbeddedSystemPrompt(t)
 	ac, _ = newAgenticTestCoordinator()

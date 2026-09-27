@@ -81,8 +81,7 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"groupBy": {
 					Type:        "array",
-					Description: "Fields whose values define a group; one investigation per group",
-					Items:       map[string]model.ToolSchemaProperty{"field": {Type: "string", Description: "An alert field name, e.g. rule.name"}},
+					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. Append * to a field to group alerts missing it together",
 				},
 				"maxGroupsPerScan": {
 					Type:        "integer",
@@ -242,14 +241,15 @@ func (k *AlertTriageKind) Execute(ctx context.Context, run *AutomationRun) error
 		updater: updater,
 		base:    base,
 		floor:   alertTriageFloor(params, run.Task, run.AlertTriageEpoch),
+		// Second precision, so the bounds stored on the items are exactly the bounds queried.
+		ceiling: time.Now().UTC().Truncate(time.Second),
 		open:    map[string]struct{}{},
 	}
-
-	r.reclaim(ctx)
 
 	var errs []error
 
 	if ctx.Err() == nil {
+		r.reclaim(ctx)
 		errs = append(errs, r.scan(ctx))
 	}
 
@@ -322,9 +322,6 @@ func (r *alertTriageRun) claim(ctx context.Context) error {
 // scan finds the unprocessed groups, the latest alert of each, and enqueues one item per group.
 // Dispatch is left to claim.
 func (r *alertTriageRun) scan(ctx context.Context) error {
-	// Second precision, so the bounds stored on the items are exactly the bounds queried.
-	r.ceiling = time.Now().UTC().Truncate(time.Second)
-
 	groups, err := r.groups(ctx)
 	if err != nil || len(groups) == 0 {
 		return err

@@ -122,7 +122,7 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, r
 
 	rows, err := s.db.Query(ctx, `
 		UPDATE automation_work_items
-		SET state = 'running', run_id = $2, attempts = attempts + 1,
+		SET state = 'running', run_id = $2::uuid, attempts = attempts + 1,
 		    result = NULL, error = NULL, updated_at = now()
 		WHERE id = (
 			SELECT id FROM automation_work_items
