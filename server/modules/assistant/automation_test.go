@@ -561,6 +561,7 @@ func TestSaveAutomationRequiresAnAvailableAgent(t *testing.T) {
 			}
 
 			automation := validAutomation()
+			automation.Enabled = true
 			automation.Agent = tt.agent
 
 			err := ac.SaveAutomation(automationSaveCtx(), automation)
@@ -569,6 +570,47 @@ func TestSaveAutomationRequiresAnAvailableAgent(t *testing.T) {
 			assert.Empty(t, cfg.updates)
 		})
 	}
+}
+
+func TestSaveAutomationDisabledKeepsALostAgent(t *testing.T) {
+	t.Run("create disabled with an unknown agent", func(t *testing.T) {
+		cfg := &automationConfigstore{}
+		ac := automationCoordinator(cfg)
+
+		automation := validAutomation()
+		automation.Agent = "Nobody"
+
+		require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+		assert.Len(t, cfg.updates, 1)
+	})
+
+	t.Run("edit and disable after the agent went away", func(t *testing.T) {
+		cfg := &automationConfigstore{}
+		cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+		ac := automationCoordinator(cfg)
+		ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
+
+		automation := validAutomation()
+		automation.Id = automationTestId
+		automation.Params = json.RawMessage(`{"limit":5}`)
+
+		require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+		assert.Len(t, cfg.updates, 1)
+	})
+
+	t.Run("enabling still needs the agent", func(t *testing.T) {
+		cfg := &automationConfigstore{}
+		cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+		ac := automationCoordinator(cfg)
+		ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
+
+		automation := validAutomation()
+		automation.Id = automationTestId
+		automation.Enabled = true
+
+		assert.ErrorIs(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams)
+		assert.Empty(t, cfg.updates)
+	})
 }
 
 func TestSaveAutomationRejectsAKindChange(t *testing.T) {

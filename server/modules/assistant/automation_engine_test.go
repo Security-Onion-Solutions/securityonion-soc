@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
@@ -1056,6 +1058,30 @@ type claimingStore struct {
 	items    []*model.AutomationWorkItem
 	claimErr error
 	requeued []string
+
+	failRunErr error
+	failedRuns []string
+}
+
+// FailAutomationWorkItemRun returns a pending copy with the holding run recorded as failed.
+func (s *claimingStore) FailAutomationWorkItemRun(_ context.Context, itemId, cause string) (*model.AutomationWorkItem, error) {
+	s.failedRuns = append(s.failedRuns, itemId+": "+cause)
+
+	if s.failRunErr != nil {
+		return nil, s.failRunErr
+	}
+
+	for _, item := range s.items {
+		if item.Id == itemId {
+			reset := *item
+			reset.State = model.AutomationWorkItemPending
+			reset.FailedRunIds = append(slices.Clone(item.FailedRunIds), item.RunId)
+
+			return &reset, nil
+		}
+	}
+
+	return nil, database.ErrAutomationWorkItemNotFound
 }
 
 func (s *claimingStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string, _ int) (*model.AutomationWorkItem, error) {
@@ -1328,4 +1354,73 @@ func TestAutomationEngineStatus(t *testing.T) {
 
 		assert.Empty(t, f.ac.getAutomationEngineStatus().ActiveAutomationIds)
 	})
+}
+
+func runningItem(id, runId string) *model.AutomationWorkItem {
+	return &model.AutomationWorkItem{Id: id, RunId: runId, State: model.AutomationWorkItemRunning, FailedRunIds: []string{"run-0"}}
+}
+
+// A running item no job here holds was left by a job that died before its transition. It goes
+// back to the queue with the dead run counted against it, so its group is not skipped until a
+// restart.
+func TestRecoverOrphanedWorkItemsResetsWhatNoJobHolds(t *testing.T) {
+	orphan := runningItem("item-orphan", "run-dead")
+	pending := &model.AutomationWorkItem{Id: "item-pending", State: model.AutomationWorkItemPending}
+	applying := &model.AutomationWorkItem{Id: "item-applying", State: model.AutomationWorkItemApplying}
+
+	store := &claimingStore{items: []*model.AutomationWorkItem{orphan}}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{pending, orphan, applying})
+
+	require.Len(t, recovered, 3)
+	assert.Same(t, pending, recovered[0])
+	assert.Same(t, applying, recovered[2])
+	assert.Equal(t, "item-orphan", recovered[1].Id)
+	assert.Equal(t, model.AutomationWorkItemPending, recovered[1].State)
+	assert.Equal(t, []string{"run-0", "run-dead"}, recovered[1].FailedRunIds)
+	assert.Equal(t, []string{"item-orphan: " + ErrAutomationWorkItemInterrupted.Error()}, store.failedRuns)
+}
+
+func TestRecoverOrphanedWorkItemsLeavesHeldItemsAlone(t *testing.T) {
+	held := runningItem("item-held", "run-1")
+
+	store := &claimingStore{items: []*model.AutomationWorkItem{held}}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	release := make(chan struct{})
+	_, err := run.Pool.Submit(execpool.Job{Key: "Hunter", DedupeKey: held.Id, Run: func(context.Context) error {
+		<-release
+
+		return nil
+	}})
+	require.NoError(t, err)
+	defer close(release)
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{held})
+
+	require.Len(t, recovered, 1)
+	assert.Same(t, held, recovered[0])
+	assert.Empty(t, store.failedRuns)
+}
+
+func TestRecoverOrphanedWorkItemsDropsWhatASweepEnded(t *testing.T) {
+	store := &claimingStore{}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{runningItem("item-gone", "run-dead")})
+
+	assert.Empty(t, recovered)
+}
+
+func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
+	orphan := runningItem("item-orphan", "run-dead")
+	store := &claimingStore{items: []*model.AutomationWorkItem{orphan}, failRunErr: errors.New("postgres is down")}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{orphan})
+
+	require.Len(t, recovered, 1)
+	assert.Same(t, orphan, recovered[0])
+	assert.Equal(t, model.AutomationWorkItemRunning, recovered[0].State)
 }

@@ -445,7 +445,7 @@ func (ac *AssistantCoordinator) executeAutomationRun(ctx context.Context, kind A
 
 	items, err := run.Store.ListOpenAutomationWorkItems(ctx, run.Task.Id)
 	if err == nil {
-		run.OpenItems = items
+		run.OpenItems = run.recoverOrphanedWorkItems(ctx, items)
 		err = runAutomationKind(ctx, logger, kind, run)
 	} else {
 		logger.WithError(err).Error("unable to list open automation work items")

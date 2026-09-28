@@ -18,6 +18,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
@@ -51,6 +52,10 @@ var (
 
 	// The reason recorded on work that outlived the automation it was queued for.
 	ErrAutomationDeleted = errors.New("ERROR_AUTOMATION_DELETED")
+
+	// The reason recorded on work whose run stopped without settling it; also what reconcile
+	// writes at startup.
+	ErrAutomationWorkItemInterrupted = errors.New("ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED")
 )
 
 type AutomationKind interface {
@@ -187,6 +192,45 @@ func (run *AutomationRun) Await(handles []*execpool.Handle) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// recoverOrphanedWorkItems returns running items no job in this process holds to the queue,
+// recording the run that held them as having failed them, the same as reconcile does at
+// startup. Without it a job that died before its transition leaves its group skipped until a
+// restart. Items a sweep already ended are dropped; ones the store could not reset stay as
+// listed for the next run.
+func (run *AutomationRun) recoverOrphanedWorkItems(ctx context.Context, items []*model.AutomationWorkItem) []*model.AutomationWorkItem {
+	recovered := make([]*model.AutomationWorkItem, 0, len(items))
+
+	for _, item := range items {
+		if item.State != model.AutomationWorkItemRunning || run.Pool.Holds(item.Id) {
+			recovered = append(recovered, item)
+
+			continue
+		}
+
+		logger := log.FromContext(ctx).WithFields(log.Fields{
+			"workItemId": item.Id,
+			"heldByRun":  item.RunId,
+		})
+
+		reset, err := run.Store.FailAutomationWorkItemRun(ctx, item.Id, ErrAutomationWorkItemInterrupted.Error())
+		if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
+			continue
+		}
+
+		if err != nil {
+			logger.WithError(err).Warn("unable to return an orphaned work item to the queue; leaving it for the next run")
+			recovered = append(recovered, item)
+
+			continue
+		}
+
+		logger.Info("returned a work item left running with no job to the queue")
+		recovered = append(recovered, reset)
+	}
+
+	return recovered
 }
 
 func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKind, error) {
@@ -335,8 +379,12 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
-	if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
-		return fmt.Errorf("%w: agent %q is not available", ErrInvalidAutomationParams, automation.Agent)
+	// A disabled automation may keep an agent that no longer resolves; enabling it is what needs
+	// one that does.
+	if automation.Enabled {
+		if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
+			return fmt.Errorf("%w: agent %q is not available", ErrInvalidAutomationParams, automation.Agent)
+		}
 	}
 
 	kind, err := ac.lookupAutomationKind(automation.AutomationKind)

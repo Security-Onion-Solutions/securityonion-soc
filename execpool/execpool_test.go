@@ -467,6 +467,28 @@ func TestPool_DedupeKeyFreedAfterCompletion(t *testing.T) {
 	})
 }
 
+func TestPool_HoldsTracksADedupeKeyWhileQueuedOrRunning(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1})
+		g := newGate()
+
+		assert.False(t, p.Holds("task"))
+
+		submit(t, p, Job{Key: "a", DedupeKey: "other", Run: g.job("other")})
+		h := submit(t, p, Job{Key: "a", DedupeKey: "task", Run: g.job("task")})
+		synctest.Wait()
+
+		assert.True(t, p.Holds("task"), "queued behind the running job")
+
+		g.open()
+		<-h.Done()
+		synctest.Wait()
+
+		assert.False(t, p.Holds("task"))
+		assert.False(t, p.Holds("other"))
+	})
+}
+
 func TestPool_EmptyDedupeKeyNeverRefuses(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// The fan-out case: several jobs on one agent, deduped on nothing. A single

@@ -268,6 +268,7 @@ func (k *AlertTriageKind) Execute(ctx context.Context, run *AutomationRun) error
 
 // reclaim settles the work a previous run left open before anything new is looked for, giving
 // up on items out of retries and marking the rest open so the scan does not enqueue them again.
+// A running item is one a job still holds or the engine could not return to the queue.
 func (r *alertTriageRun) reclaim(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
@@ -280,7 +281,7 @@ func (r *alertTriageRun) reclaim(ctx context.Context) {
 		case model.AutomationWorkItemApplying:
 			r.apply(ctx, item)
 		case model.AutomationWorkItemRunning:
-			logger.WithField("workItemId", item.Id).Warn("alert triage item is running with no job; leaving it for reconciliation")
+			logger.WithField("workItemId", item.Id).Warn("alert triage item is still running; leaving its group open")
 		}
 
 		r.open[item.GroupKey] = struct{}{}
