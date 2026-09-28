@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
@@ -111,6 +113,7 @@ func newBareEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture
 		isAgentic:             true,
 		AutomationKindLibrary: map[string]AutomationKind{"alert_triage": f.kind},
 	}
+	seedAutomationAgent(f.ac)
 	f.ac.store = automationTestStore(f.mDB)
 	f.ac.automationDefaultTickInterval = time.Hour
 	f.ac.automationTickInterval.Store(int64(time.Hour))
@@ -243,6 +246,7 @@ func storedEnabledAutomation(t *testing.T, id, params string) *model.Setting {
 		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
 		DisplayName:     "Nightly",
 		AutomationKind:  "alert_triage",
+		Agent:           automationTestAgent,
 		Enabled:         true,
 		IntervalSeconds: 300,
 		Params:          json.RawMessage(params),
@@ -256,6 +260,7 @@ func enabledAutomation(id, kind string) *model.Automation {
 	return &model.Automation{
 		Auditable:       model.Auditable{Id: id},
 		AutomationKind:  kind,
+		Agent:           automationTestAgent,
 		Enabled:         true,
 		IntervalSeconds: 300,
 	}
@@ -399,11 +404,23 @@ func TestStartDueAutomationRunsSkipsQuietly(t *testing.T) {
 
 		f.mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
 	})
+
+	t.Run("disabled agent", func(t *testing.T) {
+		f := newBareEngineFixture(t)
+		f.scriptTicks()
+		f.ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
+
+		require.NoError(t, f.ac.startDueAutomationRuns(context.Background(), &automationScheduler{ctx: context.Background()}, due))
+
+		f.mDB.AssertNotCalled(t, "QueryRow", mock.Anything, mock.Anything, mock.Anything)
+	})
 }
 
 func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		epoch := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+		f.ac.alertTriageEpoch.Store(epoch.UnixNano())
 
 		var got atomic.Pointer[AutomationRun]
 
@@ -423,6 +440,7 @@ func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
 		assert.Equal(t, f.ac.store, run.Store)
 		assert.NotNil(t, run.Pool)
 		assert.Empty(t, run.OpenItems)
+		assert.True(t, run.AlertTriageEpoch.Equal(epoch))
 
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -594,6 +612,30 @@ func TestAnAbandonedRunIsFailedSoTheNextTickCanOpen(t *testing.T) {
 		assert.Equal(t, 1, opens, "the row is gone, so the next open succeeds")
 		assert.EqualValues(t, 1, failed.Load())
 	})
+}
+
+func TestAlertTriageEpochHotReload(t *testing.T) {
+	f := newBareEngineFixture(t)
+	initial := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	f.ac.alertTriageDefaultEpoch = initial
+	f.ac.alertTriageEpoch.Store(initial.UnixNano())
+
+	f.ac.reloadAlertTriageEpoch(context.Background())
+	assert.True(t, f.ac.getAlertTriageEpoch().Equal(initial), "an absent setting is the Init value")
+
+	epoch := &model.Setting{Id: ConfigSettingAlertTriageEpoch, Value: " 2026-10-01T06:00:00-06:00 "}
+	f.cfg.settings = append(f.cfg.settings, epoch)
+
+	f.ac.OnConfigSettingUpdated(context.Background(), epoch, false)
+	assert.True(t, f.ac.getAlertTriageEpoch().Equal(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)))
+
+	epoch.Value = "yesterday"
+	f.ac.OnConfigSettingUpdated(context.Background(), epoch, false)
+	assert.True(t, f.ac.getAlertTriageEpoch().Equal(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)), "a rejected value keeps the current one")
+
+	f.cfg.settings = f.cfg.settings[:len(f.cfg.settings)-1]
+	f.ac.OnConfigSettingUpdated(context.Background(), epoch, true)
+	assert.True(t, f.ac.getAlertTriageEpoch().Equal(initial), "a removed setting restores the Init value")
 }
 
 func TestAutomationTickIntervalHotReload(t *testing.T) {
@@ -858,26 +900,39 @@ func TestAssistantCoordinator_Init_AutomationEngineConfig(t *testing.T) {
 	assert.Equal(t, DEFAULT_AUTOMATION_TICK_INTERVAL_SECONDS*time.Second, ac.getAutomationTickInterval())
 	assert.Equal(t, DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS, ac.automationMaxConcurrentItems)
 	assert.Equal(t, DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS, ac.automationMaxQueuedItems)
+	assert.True(t, ac.getAlertTriageEpoch().Equal(DEFAULT_ALERT_TRIAGE_EPOCH))
 
 	ac = newAC()
 	require.NoError(t, ac.Init(module.ModuleConfig{
-		"automationTickIntervalSeconds": float64(15),
-		"automationMaxConcurrentItems":  float64(2),
-		"automationMaxQueuedItems":      float64(-5),
+		"automationSettings": map[string]any{
+			"tickIntervalSeconds": float64(15),
+			"maxConcurrentItems":  float64(2),
+			"maxQueuedItems":      float64(-5),
+			"alertTriageEpoch":    "2026-08-01T00:00:00Z",
+		},
 	}))
 	assert.Equal(t, 15*time.Second, ac.getAutomationTickInterval())
 	assert.Equal(t, 15*time.Second, ac.automationDefaultTickInterval)
 	assert.Equal(t, 2, ac.automationMaxConcurrentItems)
 	assert.Zero(t, ac.automationMaxQueuedItems, "negative clamps to unlimited")
+	assert.True(t, ac.getAlertTriageEpoch().Equal(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)))
+	assert.True(t, ac.alertTriageDefaultEpoch.Equal(ac.getAlertTriageEpoch()))
 
 	// A non-positive tick only matters where the scheduler would run.
 	ac = newAC()
-	require.NoError(t, ac.Init(module.ModuleConfig{"automationTickIntervalSeconds": float64(0)}))
+	require.NoError(t, ac.Init(module.ModuleConfig{"automationSettings": map[string]any{"tickIntervalSeconds": float64(0)}}))
+
+	ac = newAC()
+	require.NoError(t, ac.Init(module.ModuleConfig{"automationSettings": map[string]any{"alertTriageEpoch": "yesterday"}}))
+	assert.True(t, ac.getAlertTriageEpoch().Equal(DEFAULT_ALERT_TRIAGE_EPOCH), "an unusable epoch falls back to the default")
 
 	stubEmbeddedSystemPrompt(t)
 	ac, _ = newAgenticTestCoordinator()
-	assert.ErrorContains(t, ac.Init(module.ModuleConfig{"agentic": true, "automationTickIntervalSeconds": float64(0)}),
-		"automationTickIntervalSeconds")
+	assert.ErrorContains(t, ac.Init(module.ModuleConfig{"agentic": true, "automationSettings": map[string]any{"tickIntervalSeconds": float64(0)}}),
+		"automationSettings.tickIntervalSeconds")
+
+	ac, _ = newAgenticTestCoordinator()
+	assert.ErrorContains(t, ac.Init(module.ModuleConfig{"agentic": true, "automationSettings": map[string]any{"alertTriageEpoch": "yesterday"}}), "automationSettings.alertTriageEpoch")
 }
 
 // The due query blocks until its context ends, so the tick's deadline is what frees the worker;
@@ -1003,9 +1058,33 @@ type claimingStore struct {
 	items    []*model.AutomationWorkItem
 	claimErr error
 	requeued []string
+
+	failRunErr error
+	failedRuns []string
 }
 
-func (s *claimingStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string) (*model.AutomationWorkItem, error) {
+// FailAutomationWorkItemRun returns a pending copy with the holding run recorded as failed.
+func (s *claimingStore) FailAutomationWorkItemRun(_ context.Context, itemId, cause string) (*model.AutomationWorkItem, error) {
+	s.failedRuns = append(s.failedRuns, itemId+": "+cause)
+
+	if s.failRunErr != nil {
+		return nil, s.failRunErr
+	}
+
+	for _, item := range s.items {
+		if item.Id == itemId {
+			reset := *item
+			reset.State = model.AutomationWorkItemPending
+			reset.FailedRunIds = append(slices.Clone(item.FailedRunIds), item.RunId)
+
+			return &reset, nil
+		}
+	}
+
+	return nil, database.ErrAutomationWorkItemNotFound
+}
+
+func (s *claimingStore) ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string, _ int) (*model.AutomationWorkItem, error) {
 	if s.claimErr != nil || len(s.items) == 0 {
 		return nil, s.claimErr
 	}
@@ -1046,7 +1125,7 @@ func TestClaimAndSubmitDedupesOnTheClaimedItem(t *testing.T) {
 		release := make(chan struct{})
 		var worked atomic.Pointer[model.AutomationWorkItem]
 
-		item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", func(ctx context.Context, item *model.AutomationWorkItem) error {
+		item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, func(ctx context.Context, item *model.AutomationWorkItem) error {
 			worked.Store(item)
 			<-release
 
@@ -1064,7 +1143,7 @@ func TestClaimAndSubmitDedupesOnTheClaimedItem(t *testing.T) {
 		_, err = run.Pool.Submit(execpool.Job{Key: "Hunter", DedupeKey: item.Id, Run: func(context.Context) error { return nil }})
 		assert.ErrorIs(t, err, execpool.ErrDuplicate, "the dedupe key is the claimed item's id")
 
-		next, _, err := run.ClaimAndSubmit(context.Background(), "Hunter", func(context.Context, *model.AutomationWorkItem) error { return nil })
+		next, _, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, func(context.Context, *model.AutomationWorkItem) error { return nil })
 		require.NoError(t, err)
 		assert.Equal(t, "item-new", next.Id)
 		assert.Equal(t, execpool.KeyStats{Running: 1, Queued: 1}, run.Pool.Stats().Keys["Hunter"])
@@ -1079,7 +1158,7 @@ func TestClaimAndSubmitWithNothingPending(t *testing.T) {
 	store := &claimingStore{}
 	run := claimingRun(t, store, execpool.Config{Name: "test"})
 
-	item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", func(context.Context, *model.AutomationWorkItem) error { return nil })
+	item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, func(context.Context, *model.AutomationWorkItem) error { return nil })
 
 	assert.NoError(t, err)
 	assert.Nil(t, item)
@@ -1091,7 +1170,7 @@ func TestClaimAndSubmitReportsClaimErrors(t *testing.T) {
 	store := &claimingStore{claimErr: errors.New("postgres is down")}
 	run := claimingRun(t, store, execpool.Config{Name: "test"})
 
-	_, _, err := run.ClaimAndSubmit(context.Background(), "Hunter", func(context.Context, *model.AutomationWorkItem) error { return nil })
+	_, _, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, func(context.Context, *model.AutomationWorkItem) error { return nil })
 
 	assert.EqualError(t, err, "postgres is down")
 }
@@ -1109,12 +1188,12 @@ func TestClaimAndSubmitRequeuesWhatThePoolRefuses(t *testing.T) {
 			return nil
 		}
 
-		_, first, err := run.ClaimAndSubmit(context.Background(), "Hunter", block)
+		_, first, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, block)
 		require.NoError(t, err)
-		_, _, err = run.ClaimAndSubmit(context.Background(), "Hunter", block)
+		_, _, err = run.ClaimAndSubmit(context.Background(), "Hunter", 3, block)
 		require.NoError(t, err)
 
-		item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", block)
+		item, handle, err := run.ClaimAndSubmit(context.Background(), "Hunter", 3, block)
 
 		assert.ErrorIs(t, err, execpool.ErrQueueFull)
 		assert.Nil(t, handle)
@@ -1275,4 +1354,73 @@ func TestAutomationEngineStatus(t *testing.T) {
 
 		assert.Empty(t, f.ac.getAutomationEngineStatus().ActiveAutomationIds)
 	})
+}
+
+func runningItem(id, runId string) *model.AutomationWorkItem {
+	return &model.AutomationWorkItem{Id: id, RunId: runId, State: model.AutomationWorkItemRunning, FailedRunIds: []string{"run-0"}}
+}
+
+// A running item no job here holds was left by a job that died before its transition. It goes
+// back to the queue with the dead run counted against it, so its group is not skipped until a
+// restart.
+func TestRecoverOrphanedWorkItemsResetsWhatNoJobHolds(t *testing.T) {
+	orphan := runningItem("item-orphan", "run-dead")
+	pending := &model.AutomationWorkItem{Id: "item-pending", State: model.AutomationWorkItemPending}
+	applying := &model.AutomationWorkItem{Id: "item-applying", State: model.AutomationWorkItemApplying}
+
+	store := &claimingStore{items: []*model.AutomationWorkItem{orphan}}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{pending, orphan, applying})
+
+	require.Len(t, recovered, 3)
+	assert.Same(t, pending, recovered[0])
+	assert.Same(t, applying, recovered[2])
+	assert.Equal(t, "item-orphan", recovered[1].Id)
+	assert.Equal(t, model.AutomationWorkItemPending, recovered[1].State)
+	assert.Equal(t, []string{"run-0", "run-dead"}, recovered[1].FailedRunIds)
+	assert.Equal(t, []string{"item-orphan: " + ErrAutomationWorkItemInterrupted.Error()}, store.failedRuns)
+}
+
+func TestRecoverOrphanedWorkItemsLeavesHeldItemsAlone(t *testing.T) {
+	held := runningItem("item-held", "run-1")
+
+	store := &claimingStore{items: []*model.AutomationWorkItem{held}}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	release := make(chan struct{})
+	_, err := run.Pool.Submit(execpool.Job{Key: "Hunter", DedupeKey: held.Id, Run: func(context.Context) error {
+		<-release
+
+		return nil
+	}})
+	require.NoError(t, err)
+	defer close(release)
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{held})
+
+	require.Len(t, recovered, 1)
+	assert.Same(t, held, recovered[0])
+	assert.Empty(t, store.failedRuns)
+}
+
+func TestRecoverOrphanedWorkItemsDropsWhatASweepEnded(t *testing.T) {
+	store := &claimingStore{}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{runningItem("item-gone", "run-dead")})
+
+	assert.Empty(t, recovered)
+}
+
+func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
+	orphan := runningItem("item-orphan", "run-dead")
+	store := &claimingStore{items: []*model.AutomationWorkItem{orphan}, failRunErr: errors.New("postgres is down")}
+	run := claimingRun(t, store, execpool.Config{Name: "test"})
+
+	recovered := run.recoverOrphanedWorkItems(context.Background(), []*model.AutomationWorkItem{orphan})
+
+	require.Len(t, recovered, 1)
+	assert.Same(t, orphan, recovered[0])
+	assert.Equal(t, model.AutomationWorkItemRunning, recovered[0].State)
 }

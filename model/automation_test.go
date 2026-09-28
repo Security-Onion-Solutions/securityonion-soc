@@ -25,6 +25,7 @@ func TestAutomationTaskJSON(t *testing.T) {
 		},
 		DisplayName:     "Nightly Alert Triage",
 		AutomationKind:  "alert_triage",
+		Agent:           "Investigator",
 		Enabled:         false,
 		IntervalSeconds: 3600,
 		Params:          json.RawMessage(`{"sampleSize":5,"query":"tags:alert"}`),
@@ -40,6 +41,7 @@ func TestAutomationTaskJSON(t *testing.T) {
 	assert.Equal(t, "Nightly Alert Triage", round.DisplayName)
 	assert.Equal(t, automation.UserId, round.UserId)
 	assert.Equal(t, automation.IntervalSeconds, round.IntervalSeconds)
+	assert.Equal(t, "Investigator", round.Agent)
 	assert.False(t, round.Enabled)
 
 	// AutomationKind must not collide with Auditable.Kind, which is the entity kind.

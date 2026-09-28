@@ -312,6 +312,14 @@ func (p *Pool) Stats() Stats {
 	return s
 }
 
+// Holds reports whether a job with this dedupe key is queued or running.
+func (p *Pool) Holds(dedupeKey string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.dedupe[dedupeKey] > 0
+}
+
 // Shutdown stops admitting new jobs and waits for the queued and running ones to
 // finish. If ctx expires first it cancels the running jobs, fails everything still
 // queued, and returns ctx.Err() without waiting any longer. Calling it more than once

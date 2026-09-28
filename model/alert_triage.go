@@ -7,14 +7,15 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	alertTriageEpoch = "1970-01-01T00:00:00Z"
-	// Failed sessions a group may accumulate before the scan stops returning it, applied when a
+	// Failed runs a group may accumulate before the scan stops returning it, applied when a
 	// param omits or zeroes the cap so no group is ever retried without bound.
 	DefaultAlertTriageMaxFailures = 3
 )
@@ -38,8 +39,8 @@ func alertTriageField(schemaPrefix, name string) string {
 	return "event." + AlertTriageObject(schemaPrefix) + "." + name
 }
 
-// AlertTriageUpdate attaches an automation's investigation session to the alerts matched by
-// Query, either as the one successful session or as another failed attempt.
+// AlertTriageUpdate attaches an automation's investigation to the alerts matched by Query,
+// either as the one successful session or as the runs that failed it.
 type AlertTriageUpdate struct {
 	// Search-only OQL selecting the alerts.
 	Query string
@@ -52,25 +53,31 @@ type AlertTriageUpdate struct {
 	RunId     string
 	SessionId string
 	Failed    bool
+	// Every run that failed the alerts' work item; required when Failed.
+	FailedRunIds []string
 }
 
 func (update *AlertTriageUpdate) Validate() error {
 	switch {
 	case update.RunId == "":
 		return errors.New("alert triage update requires a run id")
-	case update.SessionId == "":
+	case !update.Failed && update.SessionId == "":
 		return errors.New("alert triage update requires a session id")
+	case update.Failed && (len(update.FailedRunIds) == 0 || slices.Contains(update.FailedRunIds, "")):
+		return errors.New("failed alert triage update requires its failed run ids")
+	case update.Floor.IsZero():
+		return errors.New("alert triage update requires a floor")
 	case update.Ceiling.IsZero():
 		return errors.New("alert triage update requires a ceiling")
 	case update.Floor.After(update.Ceiling):
 		return errors.New("alert triage update floor must not be after its ceiling")
 	}
-	return validateAlertTriageSearch(update.Query)
+	return ValidateAlertTriageSearch(update.Query)
 }
 
-// validateAlertTriageSearch rejects anything past the search segment, since the query is spliced
+// ValidateAlertTriageSearch rejects anything past the search segment, since the query is spliced
 // into a larger expression.
-func validateAlertTriageSearch(str string) error {
+func ValidateAlertTriageSearch(str string) error {
 	if strings.TrimSpace(str) == "" {
 		return errors.New("alert triage query must not be empty")
 	}
@@ -97,10 +104,42 @@ func BuildAlertTriageUnprocessedQuery(schemaPrefix, filter string, maxFailures i
 	if filter == "" {
 		return base, nil
 	}
-	if err := validateAlertTriageSearch(filter); err != nil {
+	if err := ValidateAlertTriageSearch(filter); err != nil {
 		return "", err
 	}
 	return "(" + base + ") AND (" + filter + ")", nil
+}
+
+// BuildAlertTriageGroupTerms renders one groupby bucket as the search terms that select it again.
+func BuildAlertTriageGroupTerms(fields []string, keys []any) (string, error) {
+	if len(fields) == 0 || len(fields) != len(keys) {
+		return "", fmt.Errorf("alert triage group has %d fields but %d keys", len(fields), len(keys))
+	}
+	segment := NewSearchSegmentEmpty()
+	for i, field := range fields {
+		// The aggregation drops the missing-bucket marker from the field it groups on.
+		field = strings.TrimSuffix(field, "*")
+		value, scalar, err := alertTriageKeyValue(keys[i])
+		if err != nil {
+			return "", err
+		}
+		if err := segment.AddFilter(field, value, scalar, true, false); err != nil {
+			return "", err
+		}
+	}
+	return segment.String(), nil
+}
+
+func alertTriageKeyValue(key any) (string, bool, error) {
+	switch v := key.(type) {
+	case string:
+		return v, false, nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), true, nil
+	case bool:
+		return strconv.FormatBool(v), true, nil
+	}
+	return "", false, fmt.Errorf("alert triage group key %v has unsupported type %T", key, key)
 }
 
 // BuildAlertTriageQuery selects every alert the given run touched, failed attempts included.
@@ -110,11 +149,7 @@ func BuildAlertTriageQuery(schemaPrefix, runId string) string {
 	return segment.String()
 }
 
-// AlertTriageDateRange is floor to ceiling, or the epoch to ceiling when there is no floor.
+// AlertTriageDateRange is floor to ceiling.
 func AlertTriageDateRange(floor time.Time, ceiling time.Time) string {
-	begin := alertTriageEpoch
-	if !floor.IsZero() {
-		begin = floor.UTC().Format(time.RFC3339)
-	}
-	return begin + " - " + ceiling.UTC().Format(time.RFC3339)
+	return floor.UTC().Format(time.RFC3339) + " - " + ceiling.UTC().Format(time.RFC3339)
 }

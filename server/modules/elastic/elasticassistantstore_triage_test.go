@@ -24,6 +24,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func TestAlertTriageSchemaPrefix(t *testing.T) {
+	assert.Equal(t, "x_", (&ElasticAssistantstore{schemaPrefix: "x_"}).AlertTriageSchemaPrefix())
+}
+
 func newTriageTestStore(t *testing.T, srv *server.Server) (*ElasticEventstore, *modmock.MockTransport) {
 	client, transport := modmock.NewMockClient(t)
 	store := &ElasticEventstore{
@@ -58,8 +62,8 @@ func esResponse(body string) *http.Response {
 func triageUpdate() *model.AlertTriageUpdate {
 	return &model.AlertTriageUpdate{
 		Query:     `rule.name:"Foo"`,
-		Floor:     time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-		Ceiling:   time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC),
+		Floor:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Ceiling:   time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC),
 		Count:     3,
 		RunId:     "run-1",
 		SessionId: "session-1",
@@ -104,13 +108,19 @@ func TestAddAlertTriageScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	update := triageUpdate()
 	update.Failed = true
+	update.FailedRunIds = []string{"run-0", "run-1"}
 	store.addAlertTriageScript(criteria, timeNow, update)
 	require.Len(t, criteria.UpdateScripts, 1)
 	script = criteria.UpdateScripts[0]
+	assert.Contains(t, script, "for (def triage_failed_run_id : params.triageFailedRunIds) {")
+	assert.Contains(t, script, "triage_rec.failed_run_ids.add(triage_failed_run_id);")
+	assert.Contains(t, script, "if (params.triageSessionId != '') {")
 	assert.Contains(t, script, "triage_rec.failed_session_ids.add(params.triageSessionId);")
-	assert.Contains(t, script, "triage_rec.failed_count = triage_rec.failed_session_ids.size();")
+	assert.Contains(t, script, "triage_rec.failed_count = triage_rec.failed_run_ids.size();")
 	assert.Contains(t, script, "triage_rec.automation_run_ids.add(params.triageRunId);")
 	assert.NotContains(t, script, "triage_rec.session_id")
+	assert.Equal(t, []string{"run-0", "run-1"}, criteria.Params["triageFailedRunIds"])
+	assert.Len(t, criteria.Params, 5)
 }
 
 func TestAddAlertTriageScript_InjectionAttack(t *testing.T) {
@@ -120,11 +130,14 @@ func TestAddAlertTriageScript_InjectionAttack(t *testing.T) {
 	update := triageUpdate()
 	update.RunId = `run'; ctx._source.other = 'leaked`
 	update.SessionId = `session'; ctx._source.more = 'leaked`
+	update.Failed = true
+	update.FailedRunIds = []string{`run'; ctx._source.most = 'leaked`}
 	store.addAlertTriageScript(criteria, time.Now(), update)
 
 	assert.NotContains(t, criteria.UpdateScripts[0], "leaked")
 	assert.Equal(t, update.RunId, criteria.Params["triageRunId"])
 	assert.Equal(t, update.SessionId, criteria.Params["triageSessionId"])
+	assert.Equal(t, update.FailedRunIds, criteria.Params["triageFailedRunIds"])
 }
 
 func TestAlertTriageUpdateSuccess(t *testing.T) {
@@ -144,8 +157,8 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 
 	body := requestBody(t, reqs[0])
 	assert.Equal(t, `(NOT _exists_:event.so_alerttriage.session_id) AND (rule.name:"Foo")`, gjson.Get(body, "query.bool.must.0.query_string.query").String())
-	assert.Equal(t, "2026-09-01T00:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.gte`).String())
-	assert.Equal(t, "2026-09-22T12:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.lte`).String())
+	assert.Equal(t, "2026-09-25T00:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.gte`).String())
+	assert.Equal(t, "2026-09-30T12:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.lte`).String())
 
 	source := gjson.Get(body, "script.source").String()
 	assert.Contains(t, source, "triage_rec.session_id = params.triageSessionId;")
@@ -162,27 +175,27 @@ func TestAlertTriageUpdateFailure(t *testing.T) {
 	update := triageUpdate()
 	update.Query = `_id:"abc"`
 	update.Failed = true
+	update.SessionId = ""
+	update.FailedRunIds = []string{"run-0", "run-1"}
 	results, err := store.AlertTriageUpdate(context.Background(), update)
 	require.NoError(t, err)
 	assert.Equal(t, 1, results.UpdatedCount)
 
 	body := requestBody(t, transport.GetRequests()[0])
 	assert.Equal(t, `_id: "abc"`, gjson.Get(body, "query.bool.must.0.query_string.query").String())
-	assert.Contains(t, gjson.Get(body, "script.source").String(), "triage_rec.failed_count = triage_rec.failed_session_ids.size();")
+	assert.Contains(t, gjson.Get(body, "script.source").String(), "triage_rec.failed_count = triage_rec.failed_run_ids.size();")
+	assert.Equal(t, `["run-0","run-1"]`, gjson.Get(body, "script.params.triageFailedRunIds").Raw)
+	assert.Equal(t, "", gjson.Get(body, "script.params.triageSessionId").String())
 }
 
-func TestAlertTriageUpdateZeroFloor(t *testing.T) {
+func TestAlertTriageUpdateRequiresFloor(t *testing.T) {
 	store, transport := newTriageTestAssistantstore(t, server.NewFakeAuthorizedServer(nil))
-	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":0,"updated":0,"noops":0,"failures":[]}`), nil)
 
 	update := triageUpdate()
 	update.Floor = time.Time{}
-	results, err := store.AlertTriageUpdate(context.Background(), update)
-	require.NoError(t, err)
-	assert.Equal(t, 0, results.UpdatedCount)
-
-	body := requestBody(t, transport.GetRequests()[0])
-	assert.Equal(t, "1970-01-01T00:00:00Z", gjson.Get(body, `query.bool.must.1.range.@timestamp.gte`).String())
+	_, err := store.AlertTriageUpdate(context.Background(), update)
+	assert.EqualError(t, err, "alert triage update requires a floor")
+	assert.Empty(t, transport.GetRequests())
 }
 
 func TestAlertTriageUpdateSyncHostFailure(t *testing.T) {

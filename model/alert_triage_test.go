@@ -18,6 +18,7 @@ import (
 func validAlertTriageUpdate() *AlertTriageUpdate {
 	return &AlertTriageUpdate{
 		Query:     `rule.name:"Foo"`,
+		Floor:     time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC),
 		Ceiling:   time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC),
 		RunId:     "run-1",
 		SessionId: "session-1",
@@ -72,13 +73,13 @@ func TestAlertTriageRunQuery(t *testing.T) {
 }
 
 func TestAlertTriageDateRange(t *testing.T) {
-	ceiling := time.Date(2026, 9, 22, 14, 3, 11, 0, time.UTC)
+	ceiling := time.Date(2026, 9, 30, 14, 3, 11, 0, time.UTC)
 
-	assert.Equal(t, "1970-01-01T00:00:00Z - 2026-09-22T14:03:11Z", AlertTriageDateRange(time.Time{}, ceiling))
+	assert.Equal(t, "2026-09-01T00:00:00Z - 2026-09-30T14:03:11Z", AlertTriageDateRange(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), ceiling))
 
-	floor := time.Date(2026, 9, 1, 8, 30, 0, 0, time.FixedZone("CST", -6*3600))
+	floor := time.Date(2026, 9, 25, 8, 30, 0, 0, time.FixedZone("CST", -6*3600))
 	dateRange := AlertTriageDateRange(floor, ceiling)
-	assert.Equal(t, "2026-09-01T14:30:00Z - 2026-09-22T14:03:11Z", dateRange)
+	assert.Equal(t, "2026-09-25T14:30:00Z - 2026-09-30T14:03:11Z", dateRange)
 
 	begin, end, err := util.ParseDateRange(dateRange, time.RFC3339, "")
 	require.NoError(t, err)
@@ -86,11 +87,52 @@ func TestAlertTriageDateRange(t *testing.T) {
 	assert.True(t, end.Equal(ceiling))
 }
 
+func TestAlertTriageGroupTerms(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields []string
+		keys   []any
+		want   string
+	}{
+		{"one string", []string{"rule.name"}, []any{"ET SCAN"}, `rule.name:"ET SCAN"`},
+		{"string and number", []string{"rule.name", "event.severity"}, []any{"ET SCAN", float64(3)}, `rule.name:"ET SCAN" AND event.severity:3`},
+		{"fraction stays plain", []string{"score"}, []any{1.5}, `score:1.5`},
+		{"large number not exponent", []string{"bytes"}, []any{float64(1234567890)}, `bytes:1234567890`},
+		{"quotes and backslashes escaped", []string{"message"}, []any{`say "hi" C:\tmp`}, `message:"say \"hi\" C:\\tmp"`},
+		{"spaces and pipe quoted", []string{"message"}, []any{"a | b"}, `message:"a | b"`},
+		{"missing bucket", []string{"rule.name", "event.module*"}, []any{"ET SCAN", "__missing__"}, `rule.name:"ET SCAN" AND NOT _exists_:"event.module"`},
+		{"bool from key_as_string", []string{"event.acknowledged"}, []any{"true"}, `event.acknowledged:"true"`},
+		{"native bool", []string{"flag"}, []any{true}, `flag:true`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := BuildAlertTriageGroupTerms(tt.fields, tt.keys)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			assert.NoError(t, ValidateAlertTriageSearch(got))
+		})
+	}
+
+	_, err := BuildAlertTriageGroupTerms([]string{"a", "b"}, []any{"x"})
+	assert.Error(t, err)
+	_, err = BuildAlertTriageGroupTerms(nil, nil)
+	assert.Error(t, err)
+	_, err = BuildAlertTriageGroupTerms([]string{"a"}, []any{nil})
+	assert.Error(t, err)
+	_, err = BuildAlertTriageGroupTerms([]string{"a"}, []any{[]any{"x"}})
+	assert.Error(t, err)
+}
+
 func TestAlertTriageUpdateValidate(t *testing.T) {
 	assert.NoError(t, validAlertTriageUpdate().Validate())
 
 	failed := validAlertTriageUpdate()
 	failed.Failed = true
+	failed.FailedRunIds = []string{"run-0", "run-1"}
+	assert.NoError(t, failed.Validate())
+
+	// A failed attempt may not have got as far as opening a session.
+	failed.SessionId = ""
 	assert.NoError(t, failed.Validate())
 
 	quotedPipe := validAlertTriageUpdate()
@@ -104,10 +146,13 @@ func TestAlertTriageUpdateValidate(t *testing.T) {
 		{"empty query", func(u *AlertTriageUpdate) { u.Query = " " }},
 		{"unparseable query", func(u *AlertTriageUpdate) { u.Query = `rule.name:"Foo` }},
 		{"query with groupby", func(u *AlertTriageUpdate) { u.Query = `rule.name:"Foo" | groupby rule.name` }},
+		{"missing floor", func(u *AlertTriageUpdate) { u.Floor = time.Time{} }},
 		{"missing ceiling", func(u *AlertTriageUpdate) { u.Ceiling = time.Time{} }},
 		{"floor after ceiling", func(u *AlertTriageUpdate) { u.Floor = u.Ceiling.Add(time.Second) }},
 		{"missing run id", func(u *AlertTriageUpdate) { u.RunId = "" }},
 		{"missing session id", func(u *AlertTriageUpdate) { u.SessionId = "" }},
+		{"failed without run ids", func(u *AlertTriageUpdate) { u.Failed = true }},
+		{"failed with an empty run id", func(u *AlertTriageUpdate) { u.Failed = true; u.FailedRunIds = []string{"run-0", ""} }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

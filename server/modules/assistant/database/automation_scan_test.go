@@ -85,13 +85,13 @@ type automationWorkItemRow struct {
 	runId, failure                    *string
 	payload, result                   []byte
 	attempts                          int
-	sessionIds                        []string
+	sessionIds, failedRunIds          []string
 	createTime, updateTime            *time.Time
 }
 
-// Fills the twelve destinations in automationWorkItemColumns order.
+// Fills the thirteen destinations in automationWorkItemColumns order.
 func expectAutomationWorkItemRow(mRows *mockdb.MockRows, row automationWorkItemRow) {
-	mRows.On("Scan", anyArgs(12)...).Run(func(args mock.Arguments) {
+	mRows.On("Scan", anyArgs(13)...).Run(func(args mock.Arguments) {
 		*(args.Get(0).(*string)) = row.id
 		*(args.Get(1).(*string)) = row.automationId
 		*(args.Get(2).(**string)) = row.runId
@@ -100,10 +100,11 @@ func expectAutomationWorkItemRow(mRows *mockdb.MockRows, row automationWorkItemR
 		*(args.Get(5).(*string)) = row.state
 		*(args.Get(6).(*int)) = row.attempts
 		*(args.Get(7).(*[]string)) = row.sessionIds
-		*(args.Get(8).(*[]byte)) = row.result
-		*(args.Get(9).(**string)) = row.failure
-		*(args.Get(10).(**time.Time)) = row.createTime
-		*(args.Get(11).(**time.Time)) = row.updateTime
+		*(args.Get(8).(*[]string)) = row.failedRunIds
+		*(args.Get(9).(*[]byte)) = row.result
+		*(args.Get(10).(**string)) = row.failure
+		*(args.Get(11).(**time.Time)) = row.createTime
+		*(args.Get(12).(**time.Time)) = row.updateTime
 	}).Return(nil).Once()
 }
 
@@ -135,6 +136,7 @@ func fullWorkItemRow() automationWorkItemRow {
 		state:        string(model.AutomationWorkItemApplying),
 		attempts:     2,
 		sessionIds:   []string{"session-1", "session-2"},
+		failedRunIds: []string{"run-0"},
 		result:       []byte(`{"recommendation":"acknowledge"}`),
 		failure:      ptrString("truncated"),
 		createTime:   &created,
@@ -240,10 +242,10 @@ func TestScanAutomationWorkItemRowMapsEveryColumn(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, sqlContains(automationWorkItemColumns), testAutomationId, testRunId).
+	mDB.On("Query", mock.Anything, sqlContains(automationWorkItemColumns), testAutomationId, testRunId, 3).
 		Return(automationWorkItemRows(row), nil)
 
-	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 3)
 
 	require.NoError(t, err)
 	require.NotNil(t, item)
@@ -255,6 +257,7 @@ func TestScanAutomationWorkItemRowMapsEveryColumn(t *testing.T) {
 	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
 	assert.Equal(t, 2, item.Attempts)
 	assert.Equal(t, []string{"session-1", "session-2"}, item.SessionIds)
+	assert.Equal(t, []string{"run-0"}, item.FailedRunIds)
 	assert.JSONEq(t, `{"recommendation":"acknowledge"}`, string(item.Result))
 	assert.Equal(t, "truncated", item.Error)
 	assert.Equal(t, row.createTime, item.CreateTime)
@@ -268,7 +271,7 @@ func TestScanAutomationWorkItemRowLeavesNullColumnsEmpty(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId).
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId, 3).
 		Return(automationWorkItemRows(automationWorkItemRow{
 			id:           "item-1",
 			automationId: testAutomationId,
@@ -278,7 +281,7 @@ func TestScanAutomationWorkItemRowLeavesNullColumnsEmpty(t *testing.T) {
 			sessionIds:   []string{},
 		}), nil)
 
-	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId)
+	item, err := s.ClaimNextAutomationWorkItem(context.Background(), testAutomationId, testRunId, 3)
 
 	require.NoError(t, err)
 	assert.Empty(t, item.RunId)
