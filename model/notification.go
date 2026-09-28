@@ -168,6 +168,8 @@ type NotificationConfig struct {
 	GlobalSilenceWindowSeconds int `json:"globalSilenceWindowSeconds" example:"300"`
 	// Number of days to retain dismissed notifications before daily background pruning.
 	DismissedPruneDays int `json:"dismissedPruneDays" example:"30"`
+	// Maximum number of notifications returned to clients in list queries.
+	MaxListLimit int `json:"maxListLimit,omitempty" example:"500"`
 	// Map of configured notification destinations keyed by destination identifier.
 	Destinations map[string]DestinationConfig `json:"destinations,omitempty"`
 }
@@ -218,4 +220,14 @@ type NotificationAuditEntry struct {
 	IsDismissed bool `json:"isDismissed" example:"false"`
 	// The timestamp when this user dismissed the notification.
 	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+}
+
+// @Description NotificationListResponse contains the list of notifications and truncation metadata.
+type NotificationListResponse struct {
+	// List of notifications matching the query.
+	Notifications []*NotificationRecord `json:"notifications"`
+	// Indicates whether the notification list was truncated because additional notifications were available beyond the limit.
+	Truncated bool `json:"truncated" example:"false"`
+	// The total count of notifications returned in this response.
+	Count int `json:"count" example:"500"`
 }

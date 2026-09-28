@@ -56,7 +56,13 @@ func TestGetNotifications(t *testing.T) {
 		},
 	}
 
-	mockStore.EXPECT().GetNotifications(gomock.Any(), "unread").Return(expectedRecords, nil).Times(1)
+	expectedResponse := &model.NotificationListResponse{
+		Notifications: expectedRecords,
+		Truncated:     false,
+		Count:         1,
+	}
+
+	mockStore.EXPECT().GetNotifications(gomock.Any(), "unread", 0).Return(expectedResponse, nil).Times(1)
 
 	r := httptest.NewRequest("GET", "/api/notifications?filter=unread", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
@@ -67,13 +73,15 @@ func TestGetNotifications(t *testing.T) {
 	h.GetNotifications(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp []*model.NotificationRecord
+	var resp model.NotificationListResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp, 1)
-	assert.Equal(t, "notif-1", resp[0].ID)
-	assert.Equal(t, true, resp[0].IsRead)
-	assert.Equal(t, false, resp[0].IsDismissed)
+	assert.Len(t, resp.Notifications, 1)
+	assert.Equal(t, "notif-1", resp.Notifications[0].ID)
+	assert.Equal(t, true, resp.Notifications[0].IsRead)
+	assert.Equal(t, false, resp.Notifications[0].IsDismissed)
+	assert.False(t, resp.Truncated)
+	assert.Equal(t, 1, resp.Count)
 }
 
 func TestGetNotifications_NoLicense(t *testing.T) {
@@ -121,7 +129,7 @@ func TestGetNotifications_StoreError(t *testing.T) {
 
 	h := NewNotificationHandler(srv)
 
-	mockStore.EXPECT().GetNotifications(gomock.Any(), "").Return(nil, errors.New("database failure")).Times(1)
+	mockStore.EXPECT().GetNotifications(gomock.Any(), "", 0).Return(nil, errors.New("database failure")).Times(1)
 
 	r := httptest.NewRequest("GET", "/api/notifications", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
@@ -147,7 +155,7 @@ func TestGetNotifications_Unauthorized(t *testing.T) {
 
 	h := NewNotificationHandler(srv)
 
-	mockStore.EXPECT().GetNotifications(gomock.Any(), "").Return(nil, errors.New("unauthorized: missing user in context")).Times(1)
+	mockStore.EXPECT().GetNotifications(gomock.Any(), "", 0).Return(nil, errors.New("unauthorized: missing user in context")).Times(1)
 
 	r := httptest.NewRequest("GET", "/api/notifications", nil)
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestStart, time.Now())
@@ -187,6 +195,60 @@ func TestPutRead(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.PutRead(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPutAllRead_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := servermock.NewMockNotificationstore(ctrl)
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Notificationstore = mockStore
+
+	h := NewNotificationHandler(srv)
+
+	mockStore.EXPECT().SetAllRead(gomock.Any(), true).Return(nil).Times(1)
+
+	body := []byte(`{"isRead": true}`)
+	r := httptest.NewRequest("PUT", "/api/notifications/read/all", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutAllRead(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPutAllDismissed_Success(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := servermock.NewMockNotificationstore(ctrl)
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Notificationstore = mockStore
+
+	h := NewNotificationHandler(srv)
+
+	mockStore.EXPECT().SetAllDismissed(gomock.Any(), true).Return(nil).Times(1)
+
+	body := []byte(`{"isDismissed": true}`)
+	r := httptest.NewRequest("PUT", "/api/notifications/dismiss/all", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PutAllDismissed(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }

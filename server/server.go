@@ -58,6 +58,7 @@ type Server struct {
 	Notifier          Notifier
 	Notificationstore Notificationstore
 	Schedulestore     Schedulestore
+	Alarmstore        Alarmstore
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -130,6 +131,7 @@ func (server *Server) Start() {
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 		RegisterNotificationRoutes(server, server.ApiRouter, "/api/notifications")
 		RegisterScheduleRoutes(server, server.ApiRouter, "/api/schedules")
+		RegisterAlarmRoutes(server, server.ApiRouter, "/api/alarms")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)
 

@@ -1,0 +1,185 @@
+<div data-aid="alarms_manager_component">
+  <v-row class="mb-2 pt-1 align-center">
+    <v-col cols="12" sm="6" md="4">
+      <v-text-field v-model="alarmSearch" density="compact" prepend-inner-icon="fa-search" :label="i18n.search" single-line hide-details clearable data-aid="alarm_search_input"></v-text-field>
+    </v-col>
+  </v-row>
+
+  <v-data-table :sort-by="alarmSortBy" @update:sort-by="val => alarmSortBy = val" @update:items-per-page="val => alarmItemsPerPage = val"
+    :items-per-page-options="alarmItemsPerPageOptions" :items-per-page="alarmItemsPerPage" :headers="tableHeaders" :items="alarms" :search="alarmSearch" data-aid="alarms_table">
+    <template #item.state="{ item }">
+      <v-chip size="small" :color="getAlarmStateColor(item)" :variant="getAlarmStateVariant(item)" density="compact" :prepend-icon="getAlarmStateIcon(item)" data-aid="alarm_state_chip">
+        {{ getAlarmStateLabel(item) }}
+      </v-chip>
+    </template>
+    <template #item.name="{ item }">
+      <div class="d-flex align-center">
+        <span class="font-weight-bold" data-aid="alarm_item_name">{{ item.name }}</span>
+      </div>
+    </template>
+    <template #item.node="{ item }">
+      <span class="text-body-2" data-aid="alarm_item_node">{{ item.nodeId ? item.nodeId : i18n.allNodes }}</span>
+    </template>
+    <template #item.metric="{ item }">
+      <div class="d-flex align-center">
+        <v-chip size="small" variant="outlined" density="compact" data-aid="alarm_metric_chip">
+          {{ getMetricDisplay(item) }}
+        </v-chip>
+      </div>
+    </template>
+    <template #item.condition="{ item }">
+      <span class="text-body-2 font-weight-medium" data-aid="alarm_item_condition">{{ formatCondition(item) }}</span>
+    </template>
+    <template #item.currentValue="{ item }">
+      <span class="text-body-2" data-aid="alarm_item_current_val">{{ getCurrentValue(item) }}</span>
+    </template>
+    <template #item.severity="{ item }">
+      <v-chip size="x-small" :color="getSeverityColor(item.severity)" variant="flat" density="compact" data-aid="alarm_severity_chip">
+        {{ getSeverityLabel(item.severity) }}
+      </v-chip>
+    </template>
+    <template #item.clearedSeverity="{ item }">
+      <v-chip v-if="item.clearedSeverity && item.clearedSeverity !== 'none'" size="x-small" :color="getSeverityColor(item.clearedSeverity)" variant="flat" density="compact" data-aid="alarm_cleared_severity_chip">
+        {{ getSeverityLabel(item.clearedSeverity) }}
+      </v-chip>
+      <span v-else class="text-caption text-medium-emphasis">{{ i18n.none }}</span>
+    </template>
+    <template #item.destinations="{ item }">
+      <div v-if="!item.destinations || item.destinations.length === 0" class="text-caption text-medium-emphasis">
+        {{ i18n.systemRouting }}
+      </div>
+      <div v-else class="d-flex flex-wrap ga-1">
+        <v-chip v-for="d in item.destinations" :key="d" size="x-small" variant="tonal" density="compact">
+          {{ getDestinationName(d) }}
+        </v-chip>
+      </div>
+    </template>
+    <template #item.status="{ item }">
+      <v-chip size="small" :color="item.enabled !== false ? 'success' : 'grey'" :variant="item.enabled !== false ? 'flat' : 'tonal'" density="compact" data-aid="alarm_status_chip">
+        {{ item.enabled !== false ? i18n.enabled : i18n.disabled }}
+      </v-chip>
+    </template>
+    <template #item.actions="{ item }">
+      <v-btn v-if="isSuperuser" icon size="small" variant="text" @click.stop="showEditAlarm(item)" :title="i18n.editAlarm" :aria-label="i18n.ariaAlarmEdit" data-aid="alarm_action_edit">
+        <v-icon size="16">fa-pencil</v-icon>
+      </v-btn>
+      <v-btn v-if="isSuperuser" icon size="small" variant="text" color="error" @click.stop="showDeleteAlarm(item)" :title="i18n.delete" :aria-label="i18n.ariaAlarmDelete" data-aid="alarm_action_delete">
+        <v-icon size="16">fa-trash</v-icon>
+      </v-btn>
+    </template>
+  </v-data-table>
+
+  <!-- Alarm Add/Edit Dialog -->
+  <v-dialog v-model="alarmDialog" persistent max-width="750" scrollable data-aid="alarm_editor_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        {{ form.isEdit ? i18n.editAlarm : i18n.addAlarm }}
+      </v-card-title>
+      <v-card-text>
+        <v-form ref="alarmForm" v-model="form.valid" @submit.prevent>
+          <v-row dense>
+            <v-col cols="12" sm="8">
+              <v-text-field v-model="form.name" :label="i18n.alarmName" :rules="[$root.validators.required]" maxlength="100" required data-aid="alarm_form_name"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="alarm_form_enabled"></v-switch>
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.nodeId" :items="nodeOptions" :label="i18n.alarmScope" density="comfortable" data-aid="alarm_form_node"></v-select>
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.metric" :items="metricOptions" item-title="title" item-value="metric" :label="i18n.alarmMetric" density="comfortable" :rules="[$root.validators.required]" @update:model-value="onMetricChange" data-aid="alarm_form_metric"></v-select>
+            </v-col>
+
+            <v-col v-if="metricKeyOptions.length > 1" cols="12" sm="6">
+              <v-select v-model="form.metricKey" :items="metricKeyOptions" :label="i18n.alarmMetricKey" density="comfortable" data-aid="alarm_form_metric_key"></v-select>
+            </v-col>
+
+            <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
+              <v-select v-model="form.operator" :items="operatorOptions" :label="i18n.alarmOperator" density="comfortable" :rules="[$root.validators.required]" data-aid="alarm_form_operator"></v-select>
+            </v-col>
+
+            <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
+              <v-text-field v-model="form.threshold" :label="i18n.alarmThreshold" :rules="[$root.validators.required]" density="comfortable" required data-aid="alarm_form_threshold"></v-text-field>
+            </v-col>
+
+            <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
+              <v-text-field v-model.number="form.durationSeconds" type="number" min="0" :label="i18n.alarmDuration" :hint="i18n.alarmDurationHelp" persistent-hint density="comfortable" data-aid="alarm_form_duration"></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.severity" :items="severityOptions" :label="i18n.alarmSeverity" :rules="[$root.validators.required]" density="comfortable" data-aid="alarm_form_severity"></v-select>
+            </v-col>
+
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.clearedSeverity" :items="clearedSeverityOptions" :label="i18n.alarmClearedSeverity" :hint="i18n.alarmClearedSeverityHint" persistent-hint density="comfortable" data-aid="alarm_form_cleared_severity"></v-select>
+            </v-col>
+
+            <v-col cols="12">
+              <v-autocomplete
+                v-model="form.destinations"
+                :items="destinationOptions"
+                item-title="title"
+                item-value="value"
+                :label="i18n.destinations"
+                multiple
+                chips
+                closable-chips
+                density="comfortable"
+                :hint="i18n.alarmDestinationsHint"
+                persistent-hint
+                data-aid="alarm_form_destinations">
+              </v-autocomplete>
+            </v-col>
+
+            <v-col cols="12">
+              <v-autocomplete
+                v-model="form.recipients"
+                :items="userOptions"
+                item-title="title"
+                item-value="value"
+                :label="i18n.recipients"
+                multiple
+                chips
+                closable-chips
+                density="comfortable"
+                :hint="i18n.alarmRecipientsHint"
+                persistent-hint
+                data-aid="alarm_form_recipients">
+              </v-autocomplete>
+            </v-col>
+
+            <v-col cols="12">
+              <v-textarea v-model="form.note" :label="i18n.note" rows="2" auto-grow maxlength="1000" density="comfortable" data-aid="alarm_form_note"></v-textarea>
+            </v-col>
+          </v-row>
+        </v-form>
+      </v-card-text>
+      <v-card-actions class="px-6 py-4">
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="alarmDialog = false" data-aid="alarm_form_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="!form.valid" @click="saveAlarm()" data-aid="alarm_form_save">{{ i18n.save }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Delete Confirmation Dialog -->
+  <v-dialog v-model="deleteAlarmDialog" persistent max-width="480" data-aid="alarm_delete_dialog">
+    <v-card>
+      <v-card-title class="text-headline-small" data-aid="alarm_delete_title">
+        {{ i18n.deleteAlarmTitle }}
+      </v-card-title>
+      <v-card-text>
+        <p>{{ i18n.deleteAlarmConfirm }}</p>
+        <p class="text-caption text-medium-emphasis mb-0">{{ i18n.deleteAlarmWarning }}</p>
+      </v-card-text>
+      <v-card-actions class="px-4 py-3">
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="deleteAlarmDialog = false" data-aid="alarm_delete_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn color="error" variant="flat" @click="deleteAlarm()" data-aid="alarm_delete_confirm">{{ i18n.delete }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+</div>

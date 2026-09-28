@@ -14,10 +14,12 @@ import (
 )
 
 type Notificationstore interface {
-	GetNotifications(ctx context.Context, filter string) ([]*model.NotificationRecord, error)
+	GetNotifications(ctx context.Context, filter string, limit ...int) (*model.NotificationListResponse, error)
 	GetLastUnreadTime(ctx context.Context) (*time.Time, error)
 	SetRead(ctx context.Context, id string, isRead bool) error
+	SetAllRead(ctx context.Context, isRead bool) error
 	SetDismissed(ctx context.Context, id string, isDismissed bool) error
+	SetAllDismissed(ctx context.Context, isDismissed bool) error
 	GetAuditLogs(ctx context.Context, id string) ([]*model.NotificationAuditEntry, error)
 }
 

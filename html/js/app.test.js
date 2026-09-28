@@ -944,6 +944,15 @@ test('isAttentionNeeded', () => {
   expect(app.isAttentionNeeded()).toBe(true);
   app.statusByGridId[''].detections.elastalert.syncFailure = false;
 
+  // Attention when active alarm exists
+  app.alarmStates = [{ alarmId: 'alarm-1', status: 'alarm' }];
+  expect(app.isAlarmActive()).toBe(true);
+  expect(app.isGridUnhealthy('')).toBe(true);
+  expect(app.isUnhealthy()).toBe(true);
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.alarmStates = [{ alarmId: 'alarm-1', status: 'ok' }];
+  expect(app.isAlarmActive()).toBe(false);
+
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);
 })

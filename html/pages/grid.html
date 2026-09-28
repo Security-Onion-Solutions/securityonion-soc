@@ -22,7 +22,10 @@
 				<v-toolbar class="so-toolbar elevation-0">
 					<h4 v-if="metricsEnabled" class="ml-2 my-0" data-aid="grid_summary">{{ i18n.gridEps }} {{ formatCount(gridEps) }}</h4>
 					<v-spacer></v-spacer>
-					<v-text-field v-show="activeTab !== 'metrics'" v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
+					<v-text-field v-show="activeTab === 'nodes'" v-model="gridFilter" clearable prepend-inner-icon="fa-filter" :label="i18n.filterResults" hide-details class="toolbar-field no-print mx-2" style="max-width: 250px;" data-aid="grid_filter"></v-text-field>
+					<v-btn v-if="activeTab === 'alarms' && isUserAdmin && alarmsEnabled" icon variant="flat" class="circle-button mx-2" @click.stop="addAlarm()" :title="i18n.addAlarm" :aria-label="i18n.ariaAlarmNew" id="grid-add-alarm-button" data-aid="grid_add_alarm_button">
+						<v-icon>fa-plus</v-icon>
+					</v-btn>
 					<v-btn icon variant="flat" @click.stop="refresh()" id="grid-refresh-button" class="circle-button mx-2" data-aid="grid_refresh_button" :aria-label="i18n.ariaGridRefresh">
 						<v-icon>fa-sync</v-icon>
 					</v-btn>
@@ -38,6 +41,10 @@
 			<v-tabs v-model="activeTab" class="mt-4">
 				<v-tab value="nodes" data-aid="grid_tab_nodes" :aria-label="i18n.metricsNodes">{{ i18n.metricsNodes }}</v-tab>
 				<v-tab v-if="historicalMetricsEnabled" value="metrics" data-aid="grid_tab_metrics" :aria-label="i18n.metrics">{{ i18n.metrics }}</v-tab>
+				<v-tab v-if="alarmsEnabled" value="alarms" data-aid="grid_tab_alarms" :aria-label="i18n.alarms">
+					{{ i18n.alarms }}
+					<v-icon v-if="isAnyAlarmActive" color="warning" size="small" class="ml-1" data-aid="grid_tab_alarms_exclamation">fa-exclamation</v-icon>
+				</v-tab>
 			</v-tabs>
 
 			<v-window v-model="activeTab" class="rounded-t-0 border rounded-b-lg">
@@ -509,6 +516,11 @@
 						</v-col>
 					</v-row>
 				</v-card-text>
+			</v-card>
+		</v-window-item>
+		<v-window-item value="alarms" v-if="alarmsEnabled" class="rounded-t-0">
+			<v-card variant="flat" class="pa-4 rounded-0">
+				<alarms-manager ref="alarmsManager" data-aid="grid_alarms_manager"></alarms-manager>
 			</v-card>
 		</v-window-item>
 	</v-window>

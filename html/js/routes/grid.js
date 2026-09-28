@@ -111,6 +111,20 @@ routes.push({ path: '/grid', name: 'grid', component: {
     metricPanels: [],
     chartResizeTracker: {},
   }},
+  computed: {
+    isUserAdmin() {
+      return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
+    },
+    alarmsEnabled() {
+      const featNtf = this.$root?.FEAT_NTF || 'ntf';
+      const licensed = this.$root?.isLicensed ? this.$root.isLicensed(featNtf) : false;
+      const started = !!this.$root?.notificationsStarted;
+      return this.historicalMetricsEnabled && started && licensed;
+    },
+    isAnyAlarmActive() {
+      return this.$root?.isAlarmActive ? this.$root.isAlarmActive() : false;
+    },
+  },
   created() {
     this.$root.initializeCharts();
   },
@@ -194,10 +208,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
     }
   },
   methods: {
+    addAlarm() {
+      if (this.$refs.alarmsManager && typeof this.$refs.alarmsManager.showAddAlarm === 'function') {
+        this.$refs.alarmsManager.showAddAlarm();
+      }
+    },
     refresh() {
       this.loadData();
       if (this.activeTab === 'metrics') {
         this.loadHistoricalMetrics(true);
+      } else if (this.activeTab === 'alarms' && this.$refs.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+        this.$refs.alarmsManager.loadData();
       }
     },
     initGrid(params) {
@@ -617,6 +638,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (this.activeTab === 'metrics') {
         if (this.$route.query.host !== undefined) {
           this.metricsNodeId = this.$route.query.host;
+        } else if (this.$route.query.nodeId !== undefined) {
+          this.metricsNodeId = this.$route.query.nodeId;
         }
         if (this.$route.query.container !== undefined) {
           this.metricsContainerId = this.$route.query.container;

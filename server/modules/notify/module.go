@@ -24,6 +24,7 @@ const (
 	ConfigSettingNotificationDestinations       = "soc.config.server.modules.notification.destinations"
 	ConfigSettingNotificationEnabled            = "soc.config.server.modules.notification.enabled"
 	ConfigSettingNotificationDismissedPruneDays = "soc.config.server.modules.notification.dismissedPruneDays"
+	ConfigSettingNotificationMaxListLimit       = "soc.config.server.modules.notification.maxListLimit"
 )
 
 type NotificationModule struct {
@@ -92,7 +93,11 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 	mod.notifier = NewNotifier(mod.server, mod.registry, parsedConfig)
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
-		mod.server.Notificationstore = NewNotificationstore(mod.server, mod.store)
+		notifStore := NewNotificationstore(mod.server, mod.store)
+		if parsedConfig.MaxListLimit > 0 {
+			notifStore.SetDefaultLimit(parsedConfig.MaxListLimit)
+		}
+		mod.server.Notificationstore = notifStore
 	}
 
 	log.Info("Notification module initialized")
@@ -111,6 +116,7 @@ func (mod *NotificationModule) registerConfigCallbacks() {
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDestinations, mod)
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationEnabled, mod)
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDismissedPruneDays, mod)
+	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationMaxListLimit, mod)
 }
 
 func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
@@ -147,6 +153,17 @@ func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setti
 			mod.notifier.config.DismissedPruneDays = module.GetIntDefault(mod.config, "dismissedPruneDays", DEFAULT_DISMISSED_PRUNE_DAYS)
 		} else if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
 			mod.notifier.config.DismissedPruneDays = days
+		}
+	case ConfigSettingNotificationMaxListLimit:
+		if removed || setting.Value == "" {
+			limit := module.GetIntDefault(mod.config, "maxListLimit", DEFAULT_MAX_LIST_LIMIT)
+			if ns, ok := mod.server.Notificationstore.(*NotificationstoreImpl); ok {
+				ns.SetDefaultLimit(limit)
+			}
+		} else if limit, err := strconv.Atoi(setting.Value); err == nil && limit > 0 {
+			if ns, ok := mod.server.Notificationstore.(*NotificationstoreImpl); ok {
+				ns.SetDefaultLimit(limit)
+			}
 		}
 	}
 }
