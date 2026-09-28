@@ -34,8 +34,10 @@ const (
 )
 
 var (
-	ErrAlertTriageStoreUnsupported     = errors.New("ERROR_ALERT_TRIAGE_STORE_UNSUPPORTED")
-	ErrAlertTriageUpdateNotImplemented = errors.New("ERROR_ALERT_TRIAGE_UPDATE_NOT_IMPLEMENTED")
+	ErrAlertTriageStoreUnsupported = errors.New("ERROR_ALERT_TRIAGE_STORE_UNSUPPORTED")
+	// The session ended without a report: truncated, or nothing in its final text.
+	ErrAlertTriageNoReport      = errors.New("ERROR_ALERT_TRIAGE_NO_REPORT")
+	ErrAlertTriageAlertNotFound = errors.New("ERROR_ALERT_TRIAGE_ALERT_NOT_FOUND")
 )
 
 // AlertTriageKind groups unprocessed alerts, investigates the latest alert of each group in a
@@ -62,6 +64,11 @@ type alertTriagePayload struct {
 	LatestAlertId        string    `json:"latestAlertId"`
 	LatestAlertTimestamp string    `json:"latestAlertTimestamp"`
 	Count                int       `json:"count"`
+}
+
+// alertTriageResult is what a work item carries from its session to its update.
+type alertTriageResult struct {
+	SessionId string `json:"sessionId"`
 }
 
 func (k *AlertTriageKind) GetName() string        { return alertTriageKindName }
@@ -95,7 +102,7 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"floor": {
 					Type:        "string",
-					Description: "RFC3339 time; alerts before it are never triaged. Blank means the automation's create time. Never earlier than the automationSettings.alertTriageEpoch setting",
+					Description: "RFC3339 time; alerts before it are never triaged. Blank means the automationSettings.alertTriageEpoch setting, and it is never earlier than that",
 				},
 			},
 			Required: []string{"groupBy"},
@@ -175,18 +182,13 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 	return params, nil
 }
 
-// alertTriageFloor is the param, else the automation's create time, clamped to the epoch.
-func alertTriageFloor(params *alertTriageParams, task *model.Automation, epoch time.Time) time.Time {
-	floor := params.floor
-	if floor.IsZero() && task.CreateTime != nil {
-		floor = *task.CreateTime
-	}
-
-	if floor.Before(epoch) {
+// alertTriageFloor is the param clamped to the epoch; a blank param is the epoch itself.
+func alertTriageFloor(params *alertTriageParams, epoch time.Time) time.Time {
+	if params.floor.Before(epoch) {
 		return epoch
 	}
 
-	return floor
+	return params.floor
 }
 
 // alertTriageMetricName is the aggregation carrying the full compound key; the converter names
@@ -240,7 +242,7 @@ func (k *AlertTriageKind) Execute(ctx context.Context, run *AutomationRun) error
 		params:  params,
 		updater: updater,
 		base:    base,
-		floor:   alertTriageFloor(params, run.Task, run.AlertTriageEpoch),
+		floor:   alertTriageFloor(params, run.AlertTriageEpoch),
 		// Second precision, so the bounds stored on the items are exactly the bounds queried.
 		ceiling: time.Now().UTC().Truncate(time.Second),
 		open:    map[string]struct{}{},
@@ -266,20 +268,27 @@ func (k *AlertTriageKind) Execute(ctx context.Context, run *AutomationRun) error
 	return errors.Join(errs...)
 }
 
-// reclaim settles the work a previous run left open before anything new is looked for, giving
-// up on items out of retries and marking the rest open so the scan does not enqueue them again.
-// A running item is one a job still holds or the engine could not return to the queue.
+// reclaim settles what a previous run left open and marks the rest open so the scan skips them.
 func (r *alertTriageRun) reclaim(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
 	for _, item := range r.run.OpenItems {
+		if shuttingDown(ctx) {
+			return
+		}
+
 		switch item.State {
 		case model.AutomationWorkItemPending:
 			if len(item.FailedRunIds) >= r.params.MaxFailures && r.giveUp(ctx, item) {
 				continue
 			}
 		case model.AutomationWorkItemApplying:
-			r.apply(ctx, item)
+			err := r.apply(ctx, item)
+			if err == nil {
+				continue
+			}
+
+			logger.WithError(err).WithField("workItemId", item.Id).Warn("unable to record an alert triage result; retrying next run")
 		case model.AutomationWorkItemRunning:
 			logger.WithField("workItemId", item.Id).Warn("alert triage item is still running; leaving its group open")
 		}
@@ -339,8 +348,8 @@ func (r *alertTriageRun) scan(ctx context.Context) error {
 	}
 
 	log.FromContext(ctx).WithFields(log.Fields{
-		"groups":   len(groups),
-		"enqueued": len(inserted),
+		"groupCount":    len(groups),
+		"enqueuedCount": len(inserted),
 	}).Info("alert triage scan finished")
 
 	return nil
@@ -408,12 +417,10 @@ func (r *alertTriageRun) latestAlerts(ctx context.Context, groups []alertTriageG
 		filter := r.base + " AND " + group.terms
 		filters = append(filters, filter)
 
-		criteria := model.NewEventSearchCriteria()
-		if err := criteria.Populate(filter, r.dateRange(), time.RFC3339, "", "0", "1"); err != nil {
+		criteria, err := latestAlertCriteria(filter, r.dateRange())
+		if err != nil {
 			return nil, err
 		}
-
-		criteria.SortFields = []*model.SortCriteria{{Field: "@timestamp", Order: "desc"}}
 
 		criterias = append(criterias, &model.EventMSearchCriteria{EventSearchCriteria: *criteria})
 	}
@@ -468,48 +475,349 @@ func (r *alertTriageRun) latestAlerts(ctx context.Context, groups []alertTriageG
 	return items, nil
 }
 
-// workItem is the job for one claimed group. Nothing runs its session yet, so every attempt
-// fails.
+func latestAlertCriteria(filter, dateRange string) (*model.EventSearchCriteria, error) {
+	criteria := model.NewEventSearchCriteria()
+	if err := criteria.Populate(filter, dateRange, time.RFC3339, "", "0", "1"); err != nil {
+		return nil, err
+	}
+
+	criteria.SortFields = []*model.SortCriteria{{Field: "@timestamp", Order: "desc"}}
+
+	return criteria, nil
+}
+
+// workItem is the job for one claimed group: a session investigates its latest alert, and the
+// outcome is recorded on the item and its alerts.
 func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWorkItem) error {
 	if ctx.Err() != nil {
 		return context.Cause(ctx)
 	}
 
-	return r.fail(ctx, item, "", ErrAlertTriageUpdateNotImplemented)
+	logger := log.FromContext(ctx).WithField("workItemId", item.Id)
+
+	payload, err := decodeAlertTriagePayload(item)
+	if err != nil {
+		// No retry can read it, and the next scan re-derives the group with a fresh payload.
+		logger.WithError(err).Error("alert triage item cannot be worked; failing it")
+
+		return r.drop(ctx, item, err)
+	}
+
+	alert, repinned, err := r.latestAlert(ctx, payload)
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
+
+	// A retry would find the group just as empty.
+	if errors.Is(err, ErrAlertTriageAlertNotFound) {
+		logger.Info("alert triage group has no alerts left to triage; dropping it")
+
+		return r.drop(ctx, item, err)
+	}
+
+	if err != nil {
+		return r.fail(ctx, item, payload, "", err)
+	}
+
+	if repinned {
+		if err := r.repin(ctx, item, payload, alert); err != nil {
+			return err
+		}
+	}
+
+	fields, _ := r.run.Srv.AssistantManager.FilterEvents([]*model.EventRecord{alert})[0]["payload"].(map[string]any)
+
+	result, err := r.run.RunAgentSession(ctx, item.Id, &model.AgentSessionRequest{
+		Objective: alertTriageObjective(fields, payload.Count, payload.GroupFilter),
+		Agent:     r.run.Task.Agent,
+	})
+
+	if shuttingDown(ctx) {
+		return context.Cause(ctx)
+	}
+
+	sessionId := ""
+	if result != nil {
+		sessionId = result.SessionId
+	}
+
+	if err == nil && (result == nil || result.Truncated || strings.TrimSpace(result.FinalText) == "") {
+		err = ErrAlertTriageNoReport
+	}
+
+	// A report whose session could not be linked to the item counts as failed too.
+	if err != nil {
+		// Interrupted rather than defeated; the params sweep has already settled the item.
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
+		}
+
+		return r.fail(ctx, item, payload, sessionId, err)
+	}
+
+	return r.record(ctx, item, payload, sessionId)
+}
+
+func decodeAlertTriagePayload(item *model.AutomationWorkItem) (*alertTriagePayload, error) {
+	payload := &alertTriagePayload{}
+	if err := json.Unmarshal(item.Payload, payload); err != nil {
+		return nil, fmt.Errorf("alert triage item has an unreadable payload: %w", err)
+	}
+
+	return payload, nil
+}
+
+// latestAlert is the alert the payload pinned, which the run history shows, or once that is gone
+// the group's newest unprocessed alert, found the way the scan found the pinned one. The second
+// return reports the fallback.
+func (r *alertTriageRun) latestAlert(ctx context.Context, payload *alertTriagePayload) (*model.EventRecord, bool, error) {
+	if payload.LatestAlertId != "" {
+		// A zero time widens the lookup to all time.
+		ts, _ := time.Parse(time.RFC3339, payload.LatestAlertTimestamp)
+
+		alert, err := server.FindEventBySocId(ctx, r.run.Srv.Eventstore, payload.LatestAlertId, ts)
+		if err != nil || alert != nil {
+			return alert, false, err
+		}
+	}
+
+	criteria, err := latestAlertCriteria(payload.GroupFilter, model.AlertTriageDateRange(payload.Floor, payload.Ceiling))
+	if err != nil {
+		return nil, false, err
+	}
+
+	results, err := r.run.Srv.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(results.Errors) > 0 {
+		return nil, false, fmt.Errorf("alert triage latest-alert search failed: %s", strings.Join(results.Errors, "; "))
+	}
+
+	if len(results.Events) == 0 {
+		return nil, false, ErrAlertTriageAlertNotFound
+	}
+
+	alert := results.Events[0]
+
+	if payload.LatestAlertId != "" {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"pinnedAlertId": payload.LatestAlertId,
+			"alertId":       alert.Id,
+		}).Info("pinned alert is gone; investigating the group's newest instead")
+	}
+
+	return alert, true, nil
+}
+
+// repin records on the item the alert its session is about to investigate, so the item and the
+// work done agree.
+func (r *alertTriageRun) repin(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, alert *model.EventRecord) error {
+	payload.LatestAlertId = alert.Id
+	payload.LatestAlertTimestamp = alert.Timestamp
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	err = r.run.Store.UpdateAutomationWorkItemPayload(ctx, item.Id, encoded)
+	if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
+		return r.gone(ctx, item)
+	}
+
+	// Left running, for the next run to recover as interrupted.
+	if err != nil {
+		return err
+	}
+
+	item.Payload = encoded
+
+	return nil
+}
+
+// record checkpoints the session on the item, then updates its alerts from the checkpoint.
+func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
+	result, err := json.Marshal(alertTriageResult{SessionId: sessionId})
+	if err != nil {
+		return err
+	}
+
+	writeCtx, done := automationWriteContext(ctx)
+	err = r.run.Store.MarkAutomationWorkItemApplying(writeCtx, item.Id, result)
+	done()
+
+	if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
+		return r.gone(ctx, item)
+	}
+
+	// Left running, for the next run to recover as interrupted.
+	if err != nil {
+		return err
+	}
+
+	item.State = model.AutomationWorkItemApplying
+	item.Result = result
+
+	return r.finish(ctx, item, payload, sessionId)
+}
+
+// apply replays the checkpoint a previous run left on an item.
+func (r *alertTriageRun) apply(ctx context.Context, item *model.AutomationWorkItem) error {
+	payload, result, err := decodeAlertTriageCheckpoint(item)
+	if err != nil {
+		log.FromContext(ctx).WithError(err).WithField("workItemId", item.Id).Error("alert triage item cannot be applied; failing it")
+
+		return r.drop(ctx, item, err)
+	}
+
+	return r.finish(ctx, item, payload, result.SessionId)
+}
+
+// drop ends an item with nothing to record on its alerts; the next scan re-derives its group.
+func (r *alertTriageRun) drop(ctx context.Context, item *model.AutomationWorkItem, cause error) error {
+	if shuttingDown(ctx) {
+		return context.Cause(ctx)
+	}
+
+	writeCtx, done := automationWriteContext(ctx)
+	defer done()
+
+	err := r.run.Store.FailAutomationWorkItem(writeCtx, item.Id, cause.Error())
+	if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
+		return r.gone(ctx, item)
+	}
+
+	return err
+}
+
+// finish records a checkpointed session on the group's alerts and completes the item. The update
+// is idempotent, so a replay is safe.
+func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
+	if shuttingDown(ctx) {
+		return context.Cause(ctx)
+	}
+
+	writeCtx, done := automationWriteContext(ctx)
+	defer done()
+
+	runId := item.RunId
+	if runId == "" {
+		runId = r.run.RunId
+	}
+
+	_, err := r.updater.AlertTriageUpdate(writeCtx, &model.AlertTriageUpdate{
+		Query:     payload.GroupFilter,
+		Floor:     payload.Floor,
+		Ceiling:   payload.Ceiling,
+		Count:     payload.Count,
+		RunId:     runId,
+		SessionId: sessionId,
+	})
+	if err != nil {
+		// Charged to this run with the checkpoint kept, so only the update replays.
+		failed, failErr := r.run.Store.FailAutomationWorkItemApply(writeCtx, item.Id, r.run.RunId, err.Error())
+		if errors.Is(failErr, database.ErrAutomationWorkItemNotFound) {
+			return r.gone(ctx, item)
+		}
+
+		if failErr != nil {
+			return errors.Join(err, failErr)
+		}
+
+		// The session produced the report; only the write failed.
+		ended, recordErr := r.recordFailure(writeCtx, failed, payload, "", err)
+		if ended {
+			return nil
+		}
+
+		// The item is still open, so its group stays held.
+		return errors.Join(err, recordErr)
+	}
+
+	err = r.run.Store.CompleteAutomationWorkItem(writeCtx, item.Id)
+	if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
+		return r.gone(ctx, item)
+	}
+
+	return err
+}
+
+func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePayload, *alertTriageResult, error) {
+	payload, err := decodeAlertTriagePayload(item)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := &alertTriageResult{}
+	if err := json.Unmarshal(item.Result, result); err != nil {
+		return nil, nil, fmt.Errorf("alert triage item has an unreadable result: %w", err)
+	}
+
+	if result.SessionId == "" {
+		return nil, nil, errors.New("alert triage item has no session to record")
+	}
+
+	return payload, result, nil
+}
+
+// gone handles a held item the store no longer has: routine after a params change, which sweeps
+// the run's pending and running work, and a defect otherwise.
+func (r *alertTriageRun) gone(ctx context.Context, item *model.AutomationWorkItem) error {
+	logger := log.FromContext(ctx).WithField("workItemId", item.Id)
+
+	if errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
+		logger.Info("alert triage item was swept by a params change; nothing recorded")
+
+		return nil
+	}
+
+	logger.Error("alert triage item vanished while held")
+
+	return fmt.Errorf("%w: work item %s vanished while held", database.ErrAutomationWorkItemNotFound, item.Id)
 }
 
 // fail records that this run failed the item, on the item and on its alerts, and gives the item
 // up once it is out of retries. The alerts are updated first, so a given-up group never comes
 // back from the scan.
-func (r *alertTriageRun) fail(ctx context.Context, item *model.AutomationWorkItem, sessionId string, cause error) error {
-	logger := log.FromContext(ctx)
-
+func (r *alertTriageRun) fail(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string, cause error) error {
 	failed, err := r.run.Store.FailAutomationWorkItemRun(ctx, item.Id, cause.Error())
 	if errors.Is(err, database.ErrAutomationWorkItemNotFound) {
-		// A params change swept it while the job ran.
-		logger.Info("alert triage item was finalized before its failure was recorded")
-
-		return nil
+		return r.gone(ctx, item)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	logger.WithError(cause).WithFields(log.Fields{
-		"failures":    len(failed.FailedRunIds),
-		"maxFailures": r.params.MaxFailures,
+	_, err = r.recordFailure(ctx, failed, payload, sessionId, cause)
+
+	return err
+}
+
+// recordFailure puts a failure the store already holds on the item's alerts, and gives the item
+// up once it is out of retries, reporting whether it did.
+func (r *alertTriageRun) recordFailure(ctx context.Context, failed *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string, cause error) (bool, error) {
+	log.FromContext(ctx).WithError(cause).WithFields(log.Fields{
+		"workItemId":      failed.Id,
+		"runsFailedCount": len(failed.FailedRunIds),
+		"maxFailures":     r.params.MaxFailures,
 	}).Warn("alert triage item failed")
 
-	if err := r.updateFailedAlerts(ctx, failed, sessionId); err != nil {
-		return err
+	if err := r.updateFailedAlerts(ctx, payload, failed.FailedRunIds, sessionId); err != nil {
+		return false, err
 	}
 
 	if len(failed.FailedRunIds) < r.params.MaxFailures {
-		return nil
+		return false, nil
 	}
 
-	return r.end(ctx, failed)
+	if err := r.end(ctx, failed); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // giveUp ends a pending item that is out of retries, reporting whether it did. One whose alerts
@@ -517,7 +825,11 @@ func (r *alertTriageRun) fail(ctx context.Context, item *model.AutomationWorkIte
 func (r *alertTriageRun) giveUp(ctx context.Context, item *model.AutomationWorkItem) bool {
 	logger := log.FromContext(ctx).WithField("workItemId", item.Id)
 
-	if err := r.updateFailedAlerts(ctx, item, ""); err != nil {
+	payload, err := decodeAlertTriagePayload(item)
+	if err != nil {
+		// Its alerts cannot be found, so there is nothing to record and nothing to hold the item for.
+		logger.WithError(err).Error("alert triage item has an unreadable payload")
+	} else if err := r.updateFailedAlerts(ctx, payload, item.FailedRunIds, ""); err != nil {
 		logger.WithError(err).Warn("unable to record failures on an alert triage group; retrying next run")
 
 		return false
@@ -550,15 +862,7 @@ func (r *alertTriageRun) end(ctx context.Context, item *model.AutomationWorkItem
 }
 
 // updateFailedAlerts records every run that failed the item on each of the group's alerts.
-func (r *alertTriageRun) updateFailedAlerts(ctx context.Context, item *model.AutomationWorkItem, sessionId string) error {
-	payload := &alertTriagePayload{}
-	if err := json.Unmarshal(item.Payload, payload); err != nil {
-		// Its alerts cannot be found, so there is nothing to record and nothing to hold the item for.
-		log.FromContext(ctx).WithError(err).WithField("workItemId", item.Id).Error("alert triage item has an unreadable payload")
-
-		return nil
-	}
-
+func (r *alertTriageRun) updateFailedAlerts(ctx context.Context, payload *alertTriagePayload, failedRunIds []string, sessionId string) error {
 	_, err := r.updater.AlertTriageUpdate(ctx, &model.AlertTriageUpdate{
 		Query:        payload.GroupFilter,
 		Floor:        payload.Floor,
@@ -567,16 +871,10 @@ func (r *alertTriageRun) updateFailedAlerts(ctx context.Context, item *model.Aut
 		RunId:        r.run.RunId,
 		SessionId:    sessionId,
 		Failed:       true,
-		FailedRunIds: item.FailedRunIds,
+		FailedRunIds: failedRunIds,
 	})
 
 	return err
-}
-
-// apply is where an item with a persisted session result records it on the group's alerts.
-func (r *alertTriageRun) apply(ctx context.Context, item *model.AutomationWorkItem) {
-	log.FromContext(ctx).WithField("workItemId", item.Id).WithError(ErrAlertTriageUpdateNotImplemented).
-		Warn("alert triage item has a result to apply; leaving it applying")
 }
 
 // alertTriageObjective opens the session: one alert standing for its group, and a request for a
@@ -589,6 +887,8 @@ func alertTriageObjective(alert map[string]any, count int, groupFilter string) s
 
 	return fmt.Sprintf(`Investigate the alert below. It is the most recent of %d unprocessed alerts matching:
 %s
+
+Write a report for the analyst who will read it: what you found, what you checked, and what you could not determine.
 
 Alert:
 %s`, count, groupFilter, fields)

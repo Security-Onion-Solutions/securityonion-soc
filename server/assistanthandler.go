@@ -2025,14 +2025,14 @@ func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request
 }
 
 // @Summary      Delete an Automation
-// @Description  Remove an automation. An in-flight run is allowed to finish, since that run is often the reason the automation is being removed.
+// @Description  Remove an automation. An in-flight run is allowed to finish, since that run is often the reason the automation is being removed. An automation that ships with the product can be disabled but not removed.
 // @Tags         Assistant
 // @Security     bearer[config/write]
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200           "Automation deleted"
 // @Failure      401           "Request was not properly authenticated"
-// @Failure      403           "Insufficient permissions for this request"
+// @Failure      403           "Insufficient permissions for this request, or the automation ships with the product"
 // @Failure      404           "Automation not found"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/automations/{id} [delete]
@@ -2251,6 +2251,8 @@ func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Requ
 		web.Respond(w, r, http.StatusBadRequest, err)
 	case strings.Contains(err.Error(), "ERROR_AUTOMATION_PARAMS_INVALID"):
 		web.Respond(w, r, http.StatusBadRequest, err)
+	case strings.Contains(err.Error(), "ERROR_SYSTEM_AUTOMATION_UNDELETABLE"):
+		web.Respond(w, r, http.StatusForbidden, err)
 	default:
 		log.FromContext(r.Context()).WithError(err).Error("unable to service automation request")
 		web.Respond(w, r, http.StatusInternalServerError, err)

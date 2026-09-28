@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1423,4 +1424,51 @@ func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
 	require.Len(t, recovered, 1)
 	assert.Same(t, orphan, recovered[0])
 	assert.Equal(t, model.AutomationWorkItemRunning, recovered[0].State)
+}
+
+// A session cannot open without an owner, so an automation with none is skipped rather than
+// failing every item it would queue.
+func TestTickSkipsAnAutomationWithNoOwner(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stored := storedEnabledAutomation(t, automationTestId, `{}`)
+		stored.Value = strings.Replace(stored.Value, `"userId":"user-1"`, `"userId":""`, 1)
+		require.Contains(t, stored.Value, `"userId":""`)
+
+		f := newEngineFixture(t, stored)
+
+		f.startAndWake()
+
+		opens, _, _ := f.snapshot()
+		assert.Zero(t, opens)
+	})
+}
+
+func TestTickListsTheBuiltinAndRunsItOnceEnabled(t *testing.T) {
+	t.Run("never saved: live but never due", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			f := newEngineFixture(t)
+			seedBuiltinAutomation(f.ac)
+
+			f.startAndWake()
+
+			sweeps := f.sweepsSeen()
+			require.Len(t, sweeps, 1)
+			assert.Equal(t, []string{BuiltinAlertTriageAutomationId}, sweeps[0])
+
+			opens, _, _ := f.snapshot()
+			assert.Zero(t, opens)
+		})
+	})
+
+	t.Run("stored enabled copy: runs", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			f := newEngineFixture(t, storedEnabledAutomation(t, BuiltinAlertTriageAutomationId, `{}`))
+			seedBuiltinAutomation(f.ac)
+
+			f.startAndWake()
+
+			opens, _, _ := f.snapshot()
+			assert.Equal(t, 1, opens)
+		})
+	})
 }

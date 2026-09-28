@@ -162,6 +162,20 @@ func (s *Store) EnsureAutomationWorkItemSession(ctx context.Context, itemId, ses
 		RETURNING id`, itemId, sessionId)
 }
 
+// UpdateAutomationWorkItemPayload replaces what a running item is about, for the job that
+// holds it.
+func (s *Store) UpdateAutomationWorkItemPayload(ctx context.Context, itemId string, payload json.RawMessage) error {
+	if len(payload) == 0 {
+		return fmt.Errorf("cannot update a work item to an empty payload")
+	}
+
+	return s.transitionWorkItem(ctx, `
+		UPDATE automation_work_items
+		SET payload = $2::jsonb, updated_at = now()
+		WHERE id = $1 AND state = 'running'
+		RETURNING id`, itemId, string(payload))
+}
+
 // MarkAutomationWorkItemApplying stores the kind's conclusion and moves the item to
 // applying in one statement. Reconciliation leaves applying items alone because everything
 // past this point replays from the stored result, so an empty result is refused: it would
@@ -207,7 +221,7 @@ func (s *Store) FailAutomationWorkItemRun(ctx context.Context, itemId, cause str
 		return nil, fmt.Errorf("cannot update a work item without an id")
 	}
 
-	rows, err := s.db.Query(ctx, `
+	return s.queryWorkItem(ctx, `
 		UPDATE automation_work_items
 		SET failed_run_ids = CASE WHEN run_id IS NULL OR run_id::text = ANY(failed_run_ids)
 		                          THEN failed_run_ids
@@ -215,21 +229,23 @@ func (s *Store) FailAutomationWorkItemRun(ctx context.Context, itemId, cause str
 		    state = 'pending', result = NULL, error = NULLIF($2, ''), updated_at = now()
 		WHERE id = $1 AND state = 'running'
 		RETURNING `+automationWorkItemColumns, itemId, cause)
-	if err != nil {
-		return nil, err
+}
+
+// FailAutomationWorkItemApply charges runId, not the run_id that produced the checkpoint, with a
+// failed apply, keeping the checkpoint for the next run.
+func (s *Store) FailAutomationWorkItemApply(ctx context.Context, itemId, runId, cause string) (*model.AutomationWorkItem, error) {
+	if itemId == "" || runId == "" {
+		return nil, fmt.Errorf("cannot record a failed apply without an item id and a run id")
 	}
 
-	defer rows.Close()
-
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-
-		return nil, ErrAutomationWorkItemNotFound
-	}
-
-	return scanAutomationWorkItemRow(rows)
+	return s.queryWorkItem(ctx, `
+		UPDATE automation_work_items
+		SET failed_run_ids = CASE WHEN $2 = ANY(failed_run_ids)
+		                          THEN failed_run_ids
+		                          ELSE array_append(failed_run_ids, $2) END,
+		    error = NULLIF($3, ''), updated_at = now()
+		WHERE id = $1 AND state = 'applying'
+		RETURNING `+automationWorkItemColumns, itemId, runId, cause)
 }
 
 // FailAutomationWorkItem ends an item for good; a retryable failure goes through
@@ -319,6 +335,27 @@ func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, arg
 	}
 
 	return nil
+}
+
+// queryWorkItem runs a statement returning the one row it changed, scanned. As with
+// transitionWorkItem, a vanished or terminal item is ErrAutomationWorkItemNotFound.
+func (s *Store) queryWorkItem(ctx context.Context, stmt string, args ...any) (*model.AutomationWorkItem, error) {
+	rows, err := s.db.Query(ctx, stmt, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		return nil, ErrAutomationWorkItemNotFound
+	}
+
+	return scanAutomationWorkItemRow(rows)
 }
 
 // ListOpenAutomationWorkItems returns every unfinished item for one automation, oldest

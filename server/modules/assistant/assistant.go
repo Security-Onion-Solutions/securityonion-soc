@@ -236,6 +236,7 @@ type AssistantCoordinator struct {
 	builtinAgents       map[string]model.Agent
 	builtinAgentMapping map[string]string
 	builtinSkills       map[string]model.Skill
+	builtinAutomations  map[string]*model.Automation
 
 	// Serializes the read-modify-write of the agent/skill settings so concurrent
 	// saves merge instead of overwriting each other.
@@ -537,6 +538,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	if ac.isAgentic {
 		ac.setupAgentic(ac.embeddedPrompts)
+		ac.setupBuiltinAutomations()
 		ac.agentMapping = ac.loadAgentMapping(config)
 
 		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))

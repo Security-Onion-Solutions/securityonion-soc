@@ -114,6 +114,21 @@ func (mr *MockAutomationStoreMockRecorder) FailAutomationWorkItem(ctx, itemId, c
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).FailAutomationWorkItem), ctx, itemId, cause)
 }
 
+// FailAutomationWorkItemApply mocks base method.
+func (m *MockAutomationStore) FailAutomationWorkItemApply(ctx context.Context, itemId, runId, cause string) (*model.AutomationWorkItem, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FailAutomationWorkItemApply", ctx, itemId, runId, cause)
+	ret0, _ := ret[0].(*model.AutomationWorkItem)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FailAutomationWorkItemApply indicates an expected call of FailAutomationWorkItemApply.
+func (mr *MockAutomationStoreMockRecorder) FailAutomationWorkItemApply(ctx, itemId, runId, cause any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailAutomationWorkItemApply", reflect.TypeOf((*MockAutomationStore)(nil).FailAutomationWorkItemApply), ctx, itemId, runId, cause)
+}
+
 // FailAutomationWorkItemRun mocks base method.
 func (m *MockAutomationStore) FailAutomationWorkItemRun(ctx context.Context, itemId, cause string) (*model.AutomationWorkItem, error) {
 	m.ctrl.T.Helper()
@@ -170,4 +185,18 @@ func (m *MockAutomationStore) RequeueAutomationWorkItem(ctx context.Context, ite
 func (mr *MockAutomationStoreMockRecorder) RequeueAutomationWorkItem(ctx, itemId, cause any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequeueAutomationWorkItem", reflect.TypeOf((*MockAutomationStore)(nil).RequeueAutomationWorkItem), ctx, itemId, cause)
+}
+
+// UpdateAutomationWorkItemPayload mocks base method.
+func (m *MockAutomationStore) UpdateAutomationWorkItemPayload(ctx context.Context, itemId string, payload json.RawMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateAutomationWorkItemPayload", ctx, itemId, payload)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateAutomationWorkItemPayload indicates an expected call of UpdateAutomationWorkItemPayload.
+func (mr *MockAutomationStoreMockRecorder) UpdateAutomationWorkItemPayload(ctx, itemId, payload any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAutomationWorkItemPayload", reflect.TypeOf((*MockAutomationStore)(nil).UpdateAutomationWorkItemPayload), ctx, itemId, payload)
 }

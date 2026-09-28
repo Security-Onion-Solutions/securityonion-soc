@@ -4818,6 +4818,18 @@ func TestDeleteAutomationMapsMissingToNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestDeleteAutomationMapsSystemToForbidden(t *testing.T) {
+	r, manager, _ := automationRouter(t, true)
+
+	manager.EXPECT().DeleteAutomation(gomock.Any(), automationHandlerTestId).
+		Return(errors.New("ERROR_SYSTEM_AUTOMATION_UNDELETABLE"))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodDelete, "/assistant/automations/"+automationHandlerTestId, nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
 // An automation lives in a config setting, so config is the only permission its routes ask
 // for, and the verb has to match the route or a read would gate on write. Checked on arrival:
 // the manager is a strict mock, so a refused request that still reached it would fail the

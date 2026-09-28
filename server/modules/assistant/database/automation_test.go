@@ -215,6 +215,59 @@ func TestFailAutomationWorkItemRunRequiresAnId(t *testing.T) {
 	assertNoStatements(t, mDB)
 }
 
+// A failed apply charges the run that tried it, not the row's run_id, which is the run that
+// produced the checkpoint; the checkpoint itself stays for the next run to replay.
+func TestFailAutomationWorkItemApplyRecordsTheRun(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	fail := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "WHEN $2 = ANY(failed_run_ids)") &&
+			strings.Contains(sql, "ELSE array_append(failed_run_ids, $2) END") &&
+			strings.Contains(sql, "WHERE id = $1 AND state = 'applying'") &&
+			!strings.Contains(sql, "SET state") &&
+			!strings.Contains(sql, "result =") &&
+			!strings.Contains(sql, "attempts =")
+	})
+
+	mRows := automationWorkItemRows(automationWorkItemRow{
+		id:           "item-1",
+		payload:      []byte(`{}`),
+		state:        string(model.AutomationWorkItemApplying),
+		failedRunIds: []string{"run-0", testRunId},
+	})
+
+	mDB.On("Query", mock.Anything, fail, "item-1", testRunId, "boom").Return(mRows, nil)
+
+	item, err := s.FailAutomationWorkItemApply(context.Background(), "item-1", testRunId, "boom")
+	require.NoError(t, err)
+	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
+	assert.Equal(t, []string{"run-0", testRunId}, item.FailedRunIds)
+	mDB.AssertExpectations(t)
+}
+
+func TestFailAutomationWorkItemApplyOnVanishedItem(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "item-1", testRunId, "boom").Return(emptyRows(), nil)
+
+	_, err := s.FailAutomationWorkItemApply(context.Background(), "item-1", testRunId, "boom")
+	assert.ErrorIs(t, err, ErrAutomationWorkItemNotFound)
+}
+
+func TestFailAutomationWorkItemApplyRequiresIds(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.FailAutomationWorkItemApply(context.Background(), "", testRunId, "boom")
+	assert.Error(t, err)
+
+	_, err = s.FailAutomationWorkItemApply(context.Background(), "item-1", "", "boom")
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
 // Requeueing must preserve attempts and failures: a requeue is not a failure, and must not
 // forgive one either.
 func TestRequeueAutomationWorkItemKeepsAttempts(t *testing.T) {
@@ -353,6 +406,47 @@ func TestMarkAutomationWorkItemApplyingStoresResultVerbatim(t *testing.T) {
 
 	require.NoError(t, s.MarkAutomationWorkItemApplying(context.Background(), "item-1", result))
 	mDB.AssertExpectations(t)
+}
+
+// A re-pin replaces the payload of the item the job holds, and nothing else: no state, no
+// result, no failure accounting.
+func TestUpdateAutomationWorkItemPayloadStoresItVerbatim(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	payload := json.RawMessage(`{"groupFilter":"tags:alert","latestAlertId":"alert-2"}`)
+
+	stmt := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "SET payload = $2::jsonb") &&
+			strings.Contains(sql, "WHERE id = $1 AND state = 'running'") &&
+			!strings.Contains(sql, "SET state") &&
+			!strings.Contains(sql, "result =") &&
+			!strings.Contains(sql, "failed_run_ids")
+	})
+
+	mDB.On("Query", mock.Anything, stmt, "item-1", string(payload)).Return(rowsYielding(1), nil)
+
+	require.NoError(t, s.UpdateAutomationWorkItemPayload(context.Background(), "item-1", payload))
+	mDB.AssertExpectations(t)
+}
+
+func TestUpdateAutomationWorkItemPayloadOnVanishedItem(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "item-1", `{}`).Return(emptyRows(), nil)
+
+	err := s.UpdateAutomationWorkItemPayload(context.Background(), "item-1", json.RawMessage(`{}`))
+	assert.ErrorIs(t, err, ErrAutomationWorkItemNotFound)
+}
+
+func TestUpdateAutomationWorkItemPayloadRefusesAnEmptyPayload(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	assert.Error(t, s.UpdateAutomationWorkItemPayload(context.Background(), "item-1", nil))
+	assert.Error(t, s.UpdateAutomationWorkItemPayload(context.Background(), "", json.RawMessage(`{}`)))
+	assertNoStatements(t, mDB)
 }
 
 // Moving to applying is the checkpoint the apply step resumes from, so an item parked there

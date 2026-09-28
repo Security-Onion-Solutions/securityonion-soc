@@ -16,10 +16,12 @@ type AutomationStore interface {
 	EnsureAutomationWorkItems(ctx context.Context, runId string, items []*model.AutomationWorkItem) ([]*model.AutomationWorkItem, error)
 	ClaimNextAutomationWorkItem(ctx context.Context, automationId, runId string, maxFailures int) (*model.AutomationWorkItem, error)
 	EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error
+	UpdateAutomationWorkItemPayload(ctx context.Context, itemId string, payload json.RawMessage) error
 	MarkAutomationWorkItemApplying(ctx context.Context, itemId string, result json.RawMessage) error
 	CompleteAutomationWorkItem(ctx context.Context, itemId string) error
 	RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error
 	FailAutomationWorkItemRun(ctx context.Context, itemId, cause string) (*model.AutomationWorkItem, error)
+	FailAutomationWorkItemApply(ctx context.Context, itemId, runId, cause string) (*model.AutomationWorkItem, error)
 	FailAutomationWorkItem(ctx context.Context, itemId, cause string) error
 	ListOpenAutomationWorkItems(ctx context.Context, automationId string) ([]*model.AutomationWorkItem, error)
 }

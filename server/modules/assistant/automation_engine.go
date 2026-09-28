@@ -376,6 +376,12 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 		return
 	}
 
+	if automation.UserId == "" {
+		logger.Warn("automation has no owner to run as; skipping")
+
+		return
+	}
+
 	if ac.isAutomationRunning(automation.Id) {
 		logger.Debug("automation already running; skipping")
 
