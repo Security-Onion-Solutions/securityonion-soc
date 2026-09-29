@@ -33,7 +33,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     creditsUsed: 0,
     // creditsUsed split by producing agent (msg.model); buckets sum to creditsUsed.
     creditsByAgent: {}, // { "<agentName>": credits }
-    increaseContextLimit: false,
     restoreLastActive: false,
     alwaysApproveReadRequests: false,
     // A tool POST 409s when another tool turn is already running (backend fails fast
@@ -92,7 +91,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         this.handleRouteSessionId();
       }
     },
-    'increaseContextLimit': 'saveLocalSettings',
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
@@ -106,7 +104,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     },
     isMessageTooLong() {
       if (this.charsPerTokenEstimate <= 0 || !this.newMessage) return false;
-      const contextLimit = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const contextLimit = this.effectiveContextLimit();
       const maxChars = contextLimit * this.charsPerTokenEstimate * 1.1;
       const usedChars = this.newMessage.length + (this.contextLength * this.charsPerTokenEstimate);
       return usedChars >= maxChars;

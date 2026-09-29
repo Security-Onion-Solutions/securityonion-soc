@@ -206,7 +206,6 @@ test('component data initialization', () => {
   expect(comp.creditsRemaining).toBe(0);
   expect(comp.sessionToolState).toBeInstanceOf(Map);
   expect(comp.contextLength).toBe(0);
-  expect(comp.increaseContextLimit).toBe(false);
   expect(comp.restoreLastActive).toBe(false);
   expect(comp.alwaysApproveReadRequests).toBe(false);
   expect(comp.assistantEnabled).toBe(false);
@@ -1127,36 +1126,20 @@ test('checkContextLimitReached returns false when under limit', () => {
   comp.contextLength = 50000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = false;
   
   const result = comp.checkContextLimitReached();
   
   expect(result).toBe(false);
 });
 
-test('checkContextLimitReached returns true when over small limit', () => {
-  const showErrorMock = mockShowError();
+test('checkContextLimitReached uses large limit even when over small limit', () => {
   comp.contextLength = 150000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = false;
-  comp.formatCount = jest.fn().mockReturnValue('100,000');
-  
-  const result = comp.checkContextLimitReached();
-  
-  expect(result).toBe(true);
-  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('100,000+ tokens'));
-});
 
-test('checkContextLimitReached uses large limit when threshold increased', () => {
-  comp.contextLength = 150000;
-  comp.contextLimitSmall = 100000;
-  comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = true;
-  
   const result = comp.checkContextLimitReached();
-  
-  expect(result).toBe(false); // Should be under large limit
+
+  expect(result).toBe(false);
 });
 
 test('checkContextLimitReached returns true when over large limit', () => {
@@ -1164,13 +1147,34 @@ test('checkContextLimitReached returns true when over large limit', () => {
   comp.contextLength = 250000;
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = true;
   comp.formatCount = jest.fn().mockReturnValue('200,000');
-  
+
   const result = comp.checkContextLimitReached();
-  
+
   expect(result).toBe(true);
   expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('200,000+ tokens'));
+});
+
+test('checkContextLimitReached falls back to small limit when large is unset', () => {
+  const showErrorMock = mockShowError();
+  comp.contextLength = 150000;
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 0;
+  comp.formatCount = jest.fn().mockReturnValue('100,000');
+
+  const result = comp.checkContextLimitReached();
+
+  expect(result).toBe(true);
+  expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('100,000+ tokens'));
+});
+
+test('effectiveContextLimit prefers large limit and falls back to small', () => {
+  comp.contextLimitSmall = 100000;
+  comp.contextLimitLarge = 200000;
+  expect(comp.effectiveContextLimit()).toBe(200000);
+
+  comp.contextLimitLarge = 0;
+  expect(comp.effectiveContextLimit()).toBe(100000);
 });
 
 test('updateModelParams updates context limits and balance alert', () => {
@@ -1212,8 +1216,7 @@ test('updateModelParams handles empty models map', () => {
 
 test('getContextColor returns correct color classes', () => {
   comp.contextLimitSmall = 100000;
-  comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = false;
+  comp.contextLimitLarge = 0;
   comp.thresholdColorRatioLow = 0.5;
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
@@ -1224,10 +1227,9 @@ test('getContextColor returns correct color classes', () => {
   expect(comp.getContextColor(100000)).toBe('text-error'); // At max threshold
 });
 
-test('getContextColor uses large limit when threshold increased', () => {
+test('getContextColor uses large limit', () => {
   comp.contextLimitSmall = 100000;
   comp.contextLimitLarge = 200000;
-  comp.increaseContextLimit = true;
   comp.thresholdColorRatioLow = 0.5;
   comp.thresholdColorRatioMed = 0.75;
   comp.thresholdColorRatioMax = 1.0;
@@ -4243,7 +4245,6 @@ test('saveSetting handles numeric values', () => {
 
 test('saveLocalSettings saves all assistant settings with correct defaults', () => {
   // Set up component state
-  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false; // Different from default
@@ -4255,18 +4256,16 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
   expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
-  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
+  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
   // Set up component state with default values
-  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -4275,7 +4274,6 @@ test('saveLocalSettings saves default values correctly', () => {
   
   comp.saveLocalSettings();
   
-  expect(comp.saveSetting).toHaveBeenCalledWith('increaseContextLimit', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', false, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', true, true);
@@ -4283,14 +4281,12 @@ test('saveLocalSettings saves default values correctly', () => {
 
 test('loadLocalSettings loads all settings from localStorage', () => {
   // Mock localStorage values
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -4298,13 +4294,11 @@ test('loadLocalSettings loads all settings from localStorage', () => {
 
 test('loadLocalSettings handles missing localStorage values', () => {
   // Set initial values different from defaults
-  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
   
   // Ensure localStorage has no values (delete them)
-  delete mockLocalStorage['settings.assistant.increaseContextLimit'];
   delete mockLocalStorage['settings.assistant.restoreLastActive'];
   delete mockLocalStorage['settings.assistant.alwaysApproveReadRequests'];
   delete mockLocalStorage['settings.assistant.showChatHistory'];
@@ -4312,7 +4306,6 @@ test('loadLocalSettings handles missing localStorage values', () => {
   comp.loadLocalSettings();
   
   // Values should remain unchanged when localStorage is empty
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -4320,19 +4313,16 @@ test('loadLocalSettings handles missing localStorage values', () => {
 
 test('loadLocalSettings handles partial localStorage values', () => {
   // Set initial values
-  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
   
   // Mock localStorage with only some values
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   // restoreLastActive and alwaysApproveReadRequests are undefined
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(false); // Unchanged
   expect(comp.alwaysApproveReadRequests).toBe(false); // Unchanged
   expect(comp.showChatHistory).toBe(false);
@@ -4340,20 +4330,17 @@ test('loadLocalSettings handles partial localStorage values', () => {
 
 test('loadLocalSettings handles string boolean conversion correctly', () => {
   // Set initial values
-  comp.increaseContextLimit = false;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
   
   // Test various string representations
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'false';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'TRUE'; // Should not match
   mockLocalStorage['settings.assistant.showChatHistory'] = 'true';
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(false);
   expect(comp.alwaysApproveReadRequests).toBe(false); // Should remain unchanged due to 'TRUE' != 'true'
   expect(comp.showChatHistory).toBe(true);
@@ -4361,13 +4348,11 @@ test('loadLocalSettings handles string boolean conversion correctly', () => {
 
 test('loadLocalSettings handles empty string values', () => {
   // Mock localStorage with empty strings
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = '';
   mockLocalStorage['settings.assistant.restoreLastActive'] = '';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = '';
   mockLocalStorage['settings.assistant.showChatHistory'] = '';
   
   // Set initial values
-  comp.increaseContextLimit = true;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
@@ -4375,7 +4360,6 @@ test('loadLocalSettings handles empty string values', () => {
   comp.loadLocalSettings();
   
   // Values should remain unchanged for empty strings
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -4384,20 +4368,17 @@ test('loadLocalSettings handles empty string values', () => {
 test('loadLocalSettings integration with actual localStorage access', () => {
   // Test the actual localStorage access pattern used by loadLocalSettings
   // This simulates how the function actually checks for localStorage values
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   mockLocalStorage['settings.assistant.restoreLastActive'] = 'true';
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   // Set initial values
-  comp.increaseContextLimit = false;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
   
   comp.loadLocalSettings();
   
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true);
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -4406,7 +4387,6 @@ test('loadLocalSettings integration with actual localStorage access', () => {
 // Integration tests for settings functionality
 test('settings integration: save and load cycle', () => {
   // Set up initial state
-  comp.increaseContextLimit = true;
   comp.restoreLastActive = false;
   comp.alwaysApproveReadRequests = true;
   comp.showChatHistory = false;
@@ -4415,19 +4395,16 @@ test('settings integration: save and load cycle', () => {
   comp.saveLocalSettings();
   
   // Verify localStorage state after save (values are stored as strings by the localStorage mock)
-  expect(mockLocalStorage['settings.assistant.increaseContextLimit']).toBe('true');
   expect(mockLocalStorage['settings.assistant.restoreLastActive']).toBeUndefined(); // Should be removed
   expect(mockLocalStorage['settings.assistant.alwaysApproveReadRequests']).toBe('true');
   expect(mockLocalStorage['settings.assistant.showChatHistory']).toBe('false');
   
   // Simulate localStorage state after save (convert to strings as localStorage would)
-  mockLocalStorage['settings.assistant.increaseContextLimit'] = 'true';
   delete mockLocalStorage['settings.assistant.restoreLastActive'];
   mockLocalStorage['settings.assistant.alwaysApproveReadRequests'] = 'true';
   mockLocalStorage['settings.assistant.showChatHistory'] = 'false';
   
   // Reset component state
-  comp.increaseContextLimit = false;
   comp.restoreLastActive = true;
   comp.alwaysApproveReadRequests = false;
   comp.showChatHistory = true;
@@ -4436,7 +4413,6 @@ test('settings integration: save and load cycle', () => {
   comp.loadLocalSettings();
   
   // Verify state was restored correctly
-  expect(comp.increaseContextLimit).toBe(true);
   expect(comp.restoreLastActive).toBe(true); // Should remain unchanged due to undefined localStorage
   expect(comp.alwaysApproveReadRequests).toBe(true);
   expect(comp.showChatHistory).toBe(false);
@@ -7324,7 +7300,6 @@ test('isMessageTooLong returns false when within limit', () => {
   comp.charsPerTokenEstimate = 4;
   comp.newMessage = 'Short message';
   comp.contextLength = 0;
-  comp.increaseContextLimit = false;
   comp.contextLimitSmall = 1000;
 
   // maxChars = 1000 * 4 * 1.1 = 4400
@@ -7336,7 +7311,6 @@ test('isMessageTooLong returns true when message exceeds limit', () => {
   comp.charsPerTokenEstimate = 4;
   comp.newMessage = 'a'.repeat(4400);
   comp.contextLength = 0;
-  comp.increaseContextLimit = false;
   comp.contextLimitSmall = 1000;
 
   // maxChars = 1000 * 4 * 1.1 = 4400
@@ -7348,7 +7322,6 @@ test('isMessageTooLong accounts for context length', () => {
   comp.charsPerTokenEstimate = 4;
   comp.newMessage = 'Hello';
   comp.contextLength = 1000;
-  comp.increaseContextLimit = false;
   comp.contextLimitSmall = 1000;
 
   // maxChars = 1000 * 4 * 1.1 = 4400
@@ -7360,11 +7333,10 @@ test('isMessageTooLong accounts for context length', () => {
   expect(comp.isMessageTooLong()).toBe(true);
 });
 
-test('isMessageTooLong uses large context limit when toggled', () => {
+test('isMessageTooLong uses large context limit when set', () => {
   comp.charsPerTokenEstimate = 4;
   comp.newMessage = 'a'.repeat(4400);
   comp.contextLength = 0;
-  comp.increaseContextLimit = true;
   comp.contextLimitSmall = 1000;
   comp.contextLimitLarge = 2000;
 

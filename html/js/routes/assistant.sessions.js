@@ -153,7 +153,7 @@ globalThis.AssistantSessions = (function() {
     },
 
     checkContextLimitReached() {
-      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.effectiveContextLimit();
       if (this.contextLength >= maxContextLength) {
         const formattedLimit = this.formatCount(maxContextLength);
         this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);

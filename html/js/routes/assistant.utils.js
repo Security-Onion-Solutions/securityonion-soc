@@ -217,8 +217,12 @@ globalThis.AssistantUtils = (function() {
       return investigationPrompt;
     },
 
+    effectiveContextLimit() {
+      return this.contextLimitLarge || this.contextLimitSmall;
+    },
+
     getContextColor(value) {
-      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.effectiveContextLimit();
       const threshold1 = maxContextLength * this.thresholdColorRatioLow;
       const threshold2 = maxContextLength * this.thresholdColorRatioMed;
       const threshold3 = maxContextLength * this.thresholdColorRatioMax;
@@ -230,7 +234,7 @@ globalThis.AssistantUtils = (function() {
     },
 
     getCompressColor() {
-      const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
+      const maxContextLength = this.effectiveContextLimit();
       if (this.contextLength >= maxContextLength / 2) {
         return 'primary';
       }
@@ -249,7 +253,6 @@ globalThis.AssistantUtils = (function() {
     },
 
     saveLocalSettings() {
-      this.saveSetting('increaseContextLimit', this.increaseContextLimit, false);
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
@@ -259,7 +262,6 @@ globalThis.AssistantUtils = (function() {
 
     loadLocalSettings() {
       var prefix = 'settings.assistant';
-      if (localStorage[prefix + '.increaseContextLimit']) this.increaseContextLimit = localStorage[prefix + '.increaseContextLimit'] == 'true';
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';

@@ -4,18 +4,6 @@
 		<v-card class="options-dialog">
 			<v-card-title role="heading" aria-level="2">{{i18n.options}}</v-card-title>
 			<v-card-text data-aid="assistant_options">
-				<span data-aid="assistant_increase_context_limit_toggle">
-					<v-switch
-						v-if="contextLimitLarge > contextLimitSmall"
-						id="increase-context-limit"
-						v-model="increaseContextLimit"
-						density="compact"
-						hide-details
-						class="my-0"
-						:label="i18n.increaseContextLimit"
-						color="primary">
-					</v-switch>
-				</span>
 				<span data-aid="assistant_restore_last_active_toggle">
 					<v-switch
 						id="restore-last-active"
@@ -195,7 +183,7 @@
 						</v-tooltip>
 						<span>{{ i18n.totalCredits }}: <span class="text-primary" data-aid="assistant_total_credits">{{ formatCount(creditsUsed) }}</span></span>
 					</div>
-					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ increaseContextLimit ? $root.formatCountMK(contextLimitLarge) : $root.formatCountMK(contextLimitSmall) }}</span></div>
+					<div class="text-wrap" style="font-size: 14px;">{{ i18n.contextLength }}: <span :class="getContextColor(contextLength)">{{ $root.formatCountMK(contextLength) }}</span> / <span class="font-weight-thin">{{ $root.formatCountMK(effectiveContextLimit()) }}</span></div>
 					<v-icon :color="getCompressColor()"
 						class="ml-4"
 						variant="flat"

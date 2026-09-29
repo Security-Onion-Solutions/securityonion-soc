@@ -1044,7 +1044,6 @@ const i18n = {
       importId: 'Import ID',
       importIdHelp: 'UUID value that is output from so-import-pcap. Only needed for imported PCAPs.',
       includeErrorsHelp: 'Include packet decode failures in view',
-      increaseContextLimit: "Increase context limit (greater credit cost)",
       index: "Index",
       inputTokens: 'Input Tokens',
       instantInsight: 'Instant Insight (max 5 results)',
