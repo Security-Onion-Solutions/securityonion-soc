@@ -101,7 +101,7 @@ func TestLoadHistory(t *testing.T) {
 					for _, opt := range opts {
 						opt(applied)
 					}
-					assert.Equal(t, sessionId, applied.SessionId())
+					assert.Equal(t, []string{sessionId}, applied.SessionIds())
 					assert.True(t, applied.IncludeDeleted())
 					assert.True(t, applied.IncludeMemorySessions())
 					assert.True(t, applied.IncludeAutomationSessions())

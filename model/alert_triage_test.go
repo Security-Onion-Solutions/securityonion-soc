@@ -162,3 +162,15 @@ func TestAlertTriageUpdateValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestAlertTriageGivenUpClause(t *testing.T) {
+	assert.Equal(t, "event.so_alerttriage.failed_count:>=5", AlertTriageGivenUpClause("so_", 5))
+	assert.Equal(t, "event.x_alerttriage.failed_count:>=1", AlertTriageGivenUpClause("x_", 1))
+}
+
+func TestAlertTriageLedgerFieldNames(t *testing.T) {
+	assert.Equal(t, "event.so_alerttriage.failed_session_ids", AlertTriageFieldFailedSessionIds("so_"))
+	assert.Equal(t, "event.so_alerttriage.failed_run_ids", AlertTriageFieldFailedRunIds("so_"))
+	assert.Equal(t, "event.so_alerttriage.automation_run_id", AlertTriageFieldRunId("so_"))
+	assert.Equal(t, "event.so_alerttriage.timestamp", AlertTriageFieldTimestamp("so_"))
+}

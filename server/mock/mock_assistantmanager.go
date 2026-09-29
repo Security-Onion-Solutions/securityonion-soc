@@ -210,6 +210,36 @@ func (mr *MockAssistantManagerMockRecorder) GetAutomation(ctx, id any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomation", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomation), ctx, id)
 }
 
+// GetAutomationRunDetails mocks base method.
+func (m *MockAssistantManager) GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationRunDetails", ctx, automationId, runId, alertLimit)
+	ret0, _ := ret[0].(*model.AutomationRunDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationRunDetails indicates an expected call of GetAutomationRunDetails.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationRunDetails(ctx, automationId, runId, alertLimit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationRunDetails", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationRunDetails), ctx, automationId, runId, alertLimit)
+}
+
+// GetAutomationRunHistory mocks base method.
+func (m *MockAssistantManager) GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationRunHistory", ctx, automationId, limit, offset)
+	ret0, _ := ret[0].(*model.AutomationRunHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationRunHistory indicates an expected call of GetAutomationRunHistory.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationRunHistory(ctx, automationId, limit, offset any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationRunHistory", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationRunHistory), ctx, automationId, limit, offset)
+}
+
 // Health mocks base method.
 func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()

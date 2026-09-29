@@ -254,6 +254,14 @@ func (f *fakeAssistantstore) GetChatHistory(_ context.Context, s *model.Assistan
 	return out, nil
 }
 
+func (f *fakeAssistantstore) GetChatHistoryOutlines(ctx context.Context, sessions []*model.AssistantSession) ([][]*model.StoredMessage, error) {
+	out := make([][]*model.StoredMessage, len(sessions))
+	for i, s := range sessions {
+		out[i], _ = f.GetChatHistory(ctx, s)
+	}
+	return out, nil
+}
+
 func (f *fakeAssistantstore) countToolResults(sessionId, toolUseId string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -280,14 +288,16 @@ func (f *fakeAssistantstore) GetSessions(_ context.Context, opts ...model.GetSes
 	defer f.mu.Unlock()
 	// Honor a session-id filter so loadTurnSession returns the session the caller
 	// asked for (and loadSessionHistory then reads the right history).
-	if id := o.SessionId(); id != "" {
-		if sess, ok := f.sessions[id]; ok {
-			return []*model.AssistantSession{sess}, nil
+	if ids := o.SessionIds(); ids != nil {
+		out := []*model.AssistantSession{}
+		for _, id := range ids {
+			if sess, ok := f.sessions[id]; ok {
+				out = append(out, sess)
+			} else if _, ok := f.msgs[id]; ok {
+				out = append(out, &model.AssistantSession{SessionId: id})
+			}
 		}
-		if _, ok := f.msgs[id]; ok {
-			return []*model.AssistantSession{{SessionId: id}}, nil
-		}
-		return nil, nil
+		return out, nil
 	}
 	return []*model.AssistantSession{{SessionId: "default-session"}}, nil
 }

@@ -98,3 +98,22 @@ func TestAutomationKindJSON(t *testing.T) {
 	assert.Equal(t, "integer", sampleSize["type"])
 	assert.Equal(t, float64(5), sampleSize["default"])
 }
+
+// The run's own fields sit beside itemCounts, so the list renders like the run row.
+func TestAutomationRunSummaryMarshalsFlat(t *testing.T) {
+	started := time.Date(2026, 9, 15, 16, 0, 2, 0, time.UTC)
+
+	raw, err := json.Marshal(&AutomationRunSummary{
+		AutomationRunRecord: AutomationRunRecord{Id: "run-1", State: AutomationRunSucceeded, StartTime: &started},
+		ItemCounts:          map[AutomationWorkItemState]int{AutomationWorkItemDone: 2},
+	})
+	require.NoError(t, err)
+
+	var flat map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &flat))
+
+	assert.JSONEq(t, `"run-1"`, string(flat["id"]))
+	assert.JSONEq(t, `"succeeded"`, string(flat["state"]))
+	assert.JSONEq(t, `{"done":2}`, string(flat["itemCounts"]))
+	assert.NotContains(t, flat, "AutomationRunRecord")
+}

@@ -2240,7 +2240,11 @@ func delegationTestSessions(_ context.Context, opts ...model.GetSessionsOpt) ([]
 	for _, opt := range opts {
 		opt(o)
 	}
-	switch o.SessionId() {
+	var requested string
+	if ids := o.SessionIds(); len(ids) == 1 {
+		requested = ids[0]
+	}
+	switch requested {
 	case "child-1":
 		return []*model.AssistantSession{{
 			SessionId:       "child-1",
@@ -4079,7 +4083,7 @@ func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
 					for _, opt := range opts {
 						opt(o)
 					}
-					assert.Equal(t, "sess-1", o.SessionId())
+					assert.Equal(t, []string{"sess-1"}, o.SessionIds())
 					assert.True(t, o.IncludeDeleted())
 					assert.False(t, o.MessageMeta())
 					assert.Equal(t, tc.wantUsage, o.Usage())

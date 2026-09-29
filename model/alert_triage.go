@@ -99,7 +99,7 @@ func BuildAlertTriageUnprocessedQuery(schemaPrefix, filter string, maxFailures i
 		maxFailures = DefaultAlertTriageMaxFailures
 	}
 	base := "tags:alert AND NOT event.acknowledged:true AND NOT _exists_:" + AlertTriageFieldSessionId(schemaPrefix) +
-		" AND NOT " + AlertTriageFieldFailedCount(schemaPrefix) + ":>=" + strconv.Itoa(maxFailures)
+		" AND NOT " + AlertTriageGivenUpClause(schemaPrefix, maxFailures)
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
 		return base, nil
@@ -152,4 +152,44 @@ func BuildAlertTriageQuery(schemaPrefix, runId string) string {
 // AlertTriageDateRange is floor to ceiling.
 func AlertTriageDateRange(floor time.Time, ceiling time.Time) string {
 	return floor.UTC().Format(time.RFC3339) + " - " + ceiling.UTC().Format(time.RFC3339)
+}
+
+func AlertTriageFieldFailedSessionIds(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "failed_session_ids")
+}
+
+func AlertTriageFieldFailedRunIds(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "failed_run_ids")
+}
+
+func AlertTriageFieldRunId(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "automation_run_id")
+}
+
+func AlertTriageFieldTimestamp(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "timestamp")
+}
+
+// AlertTriageGivenUpClause matches alerts whose group has failed maxFailures times: the scan skips them, the run history counts them.
+func AlertTriageGivenUpClause(schemaPrefix string, maxFailures int) string {
+	return AlertTriageFieldFailedCount(schemaPrefix) + ":>=" + strconv.Itoa(maxFailures)
+}
+
+// @Description One alert as an automation run left it: what it is and what the ledger records about it.
+type AlertTriageAlert struct {
+	Id        string `json:"id" example:"AZmQ3f7c1kX9pLqR2sT4"`
+	Timestamp string `json:"timestamp" example:"2026-09-15T15:58:41.000Z"`
+	RuleName  string `json:"ruleName,omitempty" example:"ET MALWARE Suspicious PowerShell"`
+	Severity  string `json:"severity,omitempty" example:"high"`
+	// The session whose report covers this alert; empty until one succeeds.
+	SessionId string `json:"sessionId,omitempty" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d"`
+	// Sessions that produced no report for this alert.
+	FailedSessionIds []string `json:"failedSessionIds"`
+	// Runs that failed this alert's group; the retry budget.
+	FailedRunIds []string `json:"failedRunIds"`
+	FailedCount  int      `json:"failedCount" example:"1"`
+	// The run that last wrote to this alert; another run's id means it was recorded again later.
+	LatestRunId string `json:"latestRunId,omitempty" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
+	// When the ledger was last written.
+	TriageTime string `json:"triageTime,omitempty" example:"2026-09-15T16:02:41Z"`
 }

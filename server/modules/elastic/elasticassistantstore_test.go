@@ -2894,12 +2894,12 @@ func TestGetSessions_SessionIdFilter(t *testing.T) {
 	// Should have two must clauses: kind=session and sessionId=session123
 	assert.Len(t, mustQuery, 2)
 
-	// Find the sessionId term
+	// Find the sessionId terms clause
 	foundSessionId := false
 	for _, clause := range mustQuery {
-		if term, ok := clause.(map[string]any)["term"].(map[string]any); ok {
-			if sessionId, exists := term["so_session.sessionId"]; exists {
-				assert.Equal(t, "session123", sessionId)
+		if terms, ok := clause.(map[string]any)["terms"].(map[string]any); ok {
+			if sessionIds, exists := terms["so_session.sessionId"]; exists {
+				assert.Equal(t, []any{"session123"}, sessionIds)
 				foundSessionId = true
 			}
 		}
@@ -3976,6 +3976,124 @@ func TestCloneSession_WriteFailureDeletesEveryCreatedClone(t *testing.T) {
 				id = id[:strings.Index(id, `"`)]
 				assert.Contains(t, created[i], `"sessionId":"`+id+`"`)
 			}
+		})
+	}
+}
+
+func TestGetChatHistoryOutlinesFetchesEverySessionInOneRequest(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+		Body: io.NopCloser(strings.NewReader(`{"responses": [
+			{"hits": {"hits": [{"_id": "msg1", "_source": {"so_kind": "chat", "so_chat": {"sessionId": "session1", "message": {"role": "user", "contentStr": "Hello"}}}}]}},
+			{"hits": {"hits": []}}
+		]}`)),
+	}, nil)
+
+	sessions := []*model.AssistantSession{
+		{SessionId: "session1", Auditable: model.Auditable{UserId: "test-user"}},
+		{SessionId: "session2", Tags: []string{model.SessionTagShared}},
+	}
+
+	histories, err := store.GetChatHistoryOutlines(ctx, sessions)
+	assert.NoError(t, err)
+	if !assert.Len(t, histories, 2) {
+		return
+	}
+	assert.Len(t, histories[0], 1)
+	assert.Equal(t, "msg1", histories[0][0].Id)
+	assert.Empty(t, histories[1])
+
+	reqs := transport.GetRequests()
+	if !assert.Len(t, reqs, 1) {
+		return
+	}
+	body, err := reqs[0].GetBody()
+	assert.NoError(t, err)
+	data, err := io.ReadAll(body)
+	assert.NoError(t, err)
+	assert.Less(t, strings.Index(string(data), `"session1"`), strings.Index(string(data), `"session2"`))
+	assert.Equal(t, 2, strings.Count(string(data), `"so_chat.message.contentBlocks.toolResult.content"`))
+	assert.Equal(t, 2, strings.Count(string(data), `"so_chat.message.contentBlocks.thought_signature"`))
+	assert.Contains(t, string(data), `"_source":{"excludes":["so_chat.message.contentStr",`)
+}
+
+func TestGetChatHistoryOutlinesRefusesAnUnreadableSession(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeUnauthorizedServer(), mockEsClient, 1000, nil)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	histories, err := store.GetChatHistoryOutlines(ctx, []*model.AssistantSession{{SessionId: "session1"}})
+	assert.Error(t, err)
+	assert.Nil(t, histories)
+	assert.Empty(t, transport.GetRequests())
+}
+
+func TestGetChatHistoryOutlinesWithNoSessionsQueriesNothing(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
+	store.Init("chat-index", "session-index", "so_")
+
+	histories, err := store.GetChatHistoryOutlines(context.Background(), nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, histories)
+	assert.Empty(t, histories)
+	assert.Empty(t, transport.GetRequests())
+
+	_, err = store.GetChatHistoryOutlines(context.Background(), []*model.AssistantSession{nil})
+	assert.Error(t, err)
+	assert.Empty(t, transport.GetRequests())
+}
+
+// An empty list still filters, matching nothing rather than every session.
+func TestGetSessionsWithSessionIdsAddsATermsClause(t *testing.T) {
+	cases := []struct {
+		name string
+		ids  []string
+		want string
+	}{
+		{name: "some", ids: []string{"session1", "session2"}, want: `"terms":{"so_session.sessionId":["session1","session2"]}`},
+		{name: "empty", ids: []string{}, want: `"terms":{"so_session.sessionId":[]}`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mockEsClient, transport := modmock.NewMockClient(t)
+
+			store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
+			store.Init("chat-index", "session-index", "so_")
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+			transport.AddResponse(&http.Response{
+				StatusCode: 200,
+				Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
+				Body:       io.NopCloser(strings.NewReader(`{"hits": {"total": {"value": 0}, "hits": []}}`)),
+			}, nil)
+
+			_, err := store.GetSessions(ctx, model.GetSessionsWithSessionIds(c.ids))
+			assert.NoError(t, err)
+
+			reqs := transport.GetRequests()
+			if !assert.Len(t, reqs, 1) {
+				return
+			}
+			body, err := reqs[0].GetBody()
+			assert.NoError(t, err)
+			data, err := io.ReadAll(body)
+			assert.NoError(t, err)
+			assert.Contains(t, string(data), c.want)
 		})
 	}
 }

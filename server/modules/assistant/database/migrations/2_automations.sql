@@ -59,3 +59,10 @@ CREATE INDEX IF NOT EXISTS idx_automation_work_items_open
 CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_work_items_one_open_per_group
     ON automation_work_items (automation_id, group_key)
     WHERE state IN ('pending', 'running', 'applying');
+
+-- Run history reads items by the run that last worked them and by the runs that failed them.
+CREATE INDEX IF NOT EXISTS idx_automation_work_items_run_id
+    ON automation_work_items (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_automation_work_items_failed_run_ids
+    ON automation_work_items USING GIN (failed_run_ids);

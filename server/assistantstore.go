@@ -18,6 +18,8 @@ type Assistantstore interface {
 	SavePartialChat(context.Context, *model.StoredMessage) error
 	FinishPartialChat(context.Context, *model.StoredMessage) error
 	GetChatHistory(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
+	// GetChatHistoryOutlines is GetChatHistory for several sessions at once, without text, tool inputs or tool output.
+	GetChatHistoryOutlines(context.Context, []*model.AssistantSession) ([][]*model.StoredMessage, error)
 	GetSessions(context.Context, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
 	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, sessionModel string, err error)
 	CreateSession(context.Context, *model.AssistantSession) error

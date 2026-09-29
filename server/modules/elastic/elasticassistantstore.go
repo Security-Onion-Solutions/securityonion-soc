@@ -441,31 +441,56 @@ func (store *ElasticAssistantstore) GetChatHistory(ctx context.Context, session 
 		return nil, fmt.Errorf("session is required")
 	}
 
+	if err := store.authorizeSessionRead(ctx, session); err != nil {
+		return nil, err
+	}
+
+	return store.searchChatHistory(ctx, session.SessionId)
+}
+
+func (store *ElasticAssistantstore) GetChatHistoryOutlines(ctx context.Context, sessions []*model.AssistantSession) ([][]*model.StoredMessage, error) {
+	if len(sessions) == 0 {
+		return [][]*model.StoredMessage{}, nil
+	}
+
+	ids := make([]string, len(sessions))
+	for i, session := range sessions {
+		if session == nil {
+			return nil, fmt.Errorf("session is required")
+		}
+		if err := store.authorizeSessionRead(ctx, session); err != nil {
+			return nil, err
+		}
+		ids[i] = session.SessionId
+	}
+
+	prefix := store.schemaPrefix + "chat.message."
+
+	return store.searchChatHistories(ctx, ids,
+		prefix+"contentStr",
+		prefix+"contentBlocks.text",
+		prefix+"contentBlocks.input",
+		prefix+"contentBlocks.json",
+		prefix+"contentBlocks.content",
+		prefix+"contentBlocks.thought_signature",
+		prefix+"contentBlocks.toolResult.content")
+}
+
+// authorizeSessionRead is the three-tier read check: owners need read_authored, shared
+// sessions need read_shared, anything else needs read_all.
+func (store *ElasticAssistantstore) authorizeSessionRead(ctx context.Context, session *model.AssistantSession) error {
 	// A missing requestor id (only possible on a non-HTTP call path) leaves
 	// userId empty: never the owner, so access falls through to the read_shared
 	// or read_all authorization checks below.
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
-	if session.UserId == userId {
-		// they own it, can the user read_authored?
-		err := store.server.CheckAuthorized(ctx, "read_authored", "assistant")
-		if err != nil {
-			return nil, err
-		}
-	} else if slices.Contains(session.Tags, model.SessionTagShared) {
-		// they don't own it but it's shared, can the user read_shared?
-		err := store.server.CheckAuthorized(ctx, "read_shared", "assistant")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// they don't own it and it isn't shared, can the user read_all?
-		err := store.server.CheckAuthorized(ctx, "read_all", "assistant")
-		if err != nil {
-			return nil, err
-		}
+	switch {
+	case session.UserId == userId:
+		return store.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	case slices.Contains(session.Tags, model.SessionTagShared):
+		return store.server.CheckAuthorized(ctx, "read_shared", "assistant")
+	default:
+		return store.server.CheckAuthorized(ctx, "read_all", "assistant")
 	}
-
-	return store.searchChatHistory(ctx, session.SessionId)
 }
 
 func (store *ElasticAssistantstore) chatHistoryQuery(sessionId string) map[string]any {
@@ -639,11 +664,15 @@ func (store *ElasticAssistantstore) msearch(ctx context.Context, queries []map[s
 	return response.Responses, nil
 }
 
-// searchChatHistories fetches every session's history in one msearch, in the order given.
-func (store *ElasticAssistantstore) searchChatHistories(ctx context.Context, sessionIds []string) ([][]*model.StoredMessage, error) {
+// searchChatHistories fetches every session's history in one msearch, in the order given,
+// leaving the excluded source fields out of every message.
+func (store *ElasticAssistantstore) searchChatHistories(ctx context.Context, sessionIds []string, excludes ...string) ([][]*model.StoredMessage, error) {
 	queries := make([]map[string]any, len(sessionIds))
 	for i, id := range sessionIds {
 		queries[i] = store.chatHistoryQuery(id)
+		if len(excludes) > 0 {
+			queries[i]["_source"] = map[string]any{"excludes": excludes}
+		}
 	}
 
 	responses, err := store.msearch(ctx, queries)
@@ -660,6 +689,12 @@ func (store *ElasticAssistantstore) searchChatHistories(ctx context.Context, ses
 	}
 
 	return histories, nil
+}
+
+func appendMust(query map[string]any, clause map[string]any) {
+	boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
+	mustQuery, _ := boolQuery["must"].([]map[string]any)
+	boolQuery["must"] = append(mustQuery, clause)
 }
 
 func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
@@ -693,29 +728,11 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 	}
 
 	if opt.UserId() != "" {
-		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
-		mustQuery, _ := boolQuery["must"].([]map[string]any)
-
-		mustQuery = append(mustQuery, map[string]any{
-			"term": map[string]any{
-				store.schemaPrefix + "session.userId": opt.UserId(),
-			},
-		})
-
-		boolQuery["must"] = mustQuery
+		appendMust(query, map[string]any{"term": map[string]any{store.schemaPrefix + "session.userId": opt.UserId()}})
 	}
 
-	if opt.SessionId() != "" {
-		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
-		mustQuery, _ := boolQuery["must"].([]map[string]any)
-
-		mustQuery = append(mustQuery, map[string]any{
-			"term": map[string]any{
-				store.schemaPrefix + "session.sessionId": opt.SessionId(),
-			},
-		})
-
-		boolQuery["must"] = mustQuery
+	if opt.SessionIds() != nil {
+		appendMust(query, map[string]any{"terms": map[string]any{store.schemaPrefix + "session.sessionId": opt.SessionIds()}})
 	}
 
 	mustNot := []any{}
@@ -751,10 +768,7 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 
 	start, end := opt.Range()
 	if !start.IsZero() && !end.IsZero() {
-		boolQuery, _ := query["query"].(map[string]any)["bool"].(map[string]any)
-		mustQuery, _ := boolQuery["must"].([]map[string]any)
-
-		mustQuery = append(mustQuery, map[string]any{
+		appendMust(query, map[string]any{
 			"range": map[string]any{
 				"@timestamp": map[string]any{
 					"gte": start.Format(time.RFC3339),
@@ -762,8 +776,6 @@ func (store *ElasticAssistantstore) GetSessions(ctx context.Context, opts ...mod
 				},
 			},
 		})
-
-		boolQuery["must"] = mustQuery
 	}
 
 	sessions, err := store.searchSessions(ctx, query)

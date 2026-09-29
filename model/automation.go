@@ -128,3 +128,110 @@ type AutomationWorkItem struct {
 	// The time this item last changed state.
 	UpdateTime *time.Time `json:"updateTime,omitempty" example:"2026-09-15T16:02:41Z"`
 }
+
+// @Description Open work items an automation still has to finish, by state.
+type AutomationBacklog struct {
+	Pending  int `json:"pending" example:"3"`
+	Running  int `json:"running" example:"1"`
+	Applying int `json:"applying" example:"0"`
+}
+
+// @Description One run in an automation's history, with its work items counted by state.
+type AutomationRunSummary struct {
+	AutomationRunRecord
+	// Items this run last worked or failed, counted by state; one it failed counts as failed.
+	ItemCounts map[AutomationWorkItemState]int `json:"itemCounts"`
+}
+
+// @Description A page of one automation's runs plus what it still has queued.
+type AutomationRunHistory struct {
+	// The automation these runs belong to, echoed even when it no longer exists.
+	AutomationId string `json:"automationId" example:"5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"`
+	// The automation's current name; empty once it has been deleted or without config/read.
+	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
+	// Indicates the automation has been deleted and only its history remains.
+	AutomationDeleted bool `json:"automationDeleted" example:"false"`
+	// Work still open for this automation, whichever run enqueued it.
+	Backlog AutomationBacklog `json:"backlog"`
+	// The requested page, newest first.
+	Runs []*AutomationRunSummary `json:"runs"`
+	// Indicates more runs exist past this page.
+	HasMore bool `json:"hasMore" example:"true"`
+}
+
+const (
+	// The session whose report the automation recorded.
+	AutomationRunOutcomeReport = "report"
+	// A session that produced no report, or an attempt superseded by a later one.
+	AutomationRunOutcomeFailed = "failed"
+	// A session still being driven.
+	AutomationRunOutcomeRunning = "running"
+
+	AutomationRunStepThought = "thought"
+	AutomationRunStepTool    = "tool"
+
+	AutomationToolStatusOk       = "ok"
+	AutomationToolStatusError    = "error"
+	AutomationToolStatusRejected = "rejected"
+	AutomationToolStatusPending  = "pending"
+)
+
+// @Description One thing a session did, in transcript order: a stretch of thinking or a tool call.
+type AutomationRunStep struct {
+	// thought or tool.
+	Kind string `json:"kind" example:"tool"`
+	// The tool called; absent on a thought.
+	Name string `json:"name,omitempty" example:"query_events"`
+	// ok, error, rejected, or pending while the result is outstanding; absent on a thought.
+	Status string `json:"status,omitempty" example:"ok"`
+	// The start of the thinking; absent on a tool call. The session holds the full text.
+	Text string `json:"text,omitempty"`
+	// Indicates text was cut short.
+	Truncated bool `json:"truncated,omitempty" example:"true"`
+}
+
+// @Description One session a run drove, summarized from its stored messages.
+type AutomationRunSession struct {
+	SessionId string `json:"sessionId" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d"`
+	// The work item this session was an attempt at.
+	ItemId string `json:"itemId" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
+	// The run that made this attempt, best effort: a run that failed before opening a session shifts the mapping.
+	RunId string `json:"runId,omitempty" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
+	// report, failed or running, derived from the item's state and the attempt's position.
+	Outcome string `json:"outcome" example:"report"`
+	// The agent that drove this session.
+	Agent string `json:"agent,omitempty" example:"Investigator"`
+	// Indicates the session is no longer stored; only its id remains on the work item.
+	Missing      bool       `json:"missing,omitempty" example:"false"`
+	CreateTime   *time.Time `json:"createTime,omitempty" example:"2026-09-15T16:00:05Z"`
+	UpdateTime   *time.Time `json:"updateTime,omitempty" example:"2026-09-15T16:02:41Z"`
+	MessageCount int        `json:"messageCount" example:"14"`
+	// What the session did, in order.
+	Steps []AutomationRunStep `json:"steps"`
+}
+
+// @Description Everything one run left behind: its row, its work items, the sessions they drove and the alerts they recorded on.
+type AutomationRunDetails struct {
+	Run *AutomationRunRecord `json:"run"`
+	// The automation this run belongs to, echoed even when it no longer exists.
+	AutomationId string `json:"automationId" example:"5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"`
+	// The automation's current name; empty once it has been deleted or without config/read.
+	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
+	// Indicates the automation has been deleted and only its history remains.
+	AutomationDeleted bool `json:"automationDeleted" example:"false"`
+	// The items this run last worked or failed, oldest first.
+	Items []*AutomationWorkItem `json:"items"`
+	// Every attempt on those items, in item then attempt order, other runs' attempts included.
+	Sessions []*AutomationRunSession `json:"sessions"`
+	// The alerts carrying this run's id, newest first, up to the requested limit.
+	Alerts []*AlertTriageAlert `json:"alerts"`
+	// How many alerts carry this run's id.
+	AlertTotal int `json:"alertTotal" example:"120"`
+	// Indicates the run recorded on alerts that have since aged out of the alert indices.
+	// A best effort: nothing distinguishes a partly expired list from a complete one.
+	AlertsExpired bool `json:"alertsExpired" example:"false"`
+	// The automation's failure cap when it is still defined; 0 when unknown.
+	MaxFailures int `json:"maxFailures" example:"3"`
+	// Alerts of this run whose group has failed maxFailures times; 0 when the cap is unknown.
+	GivenUpAlerts int `json:"givenUpAlerts" example:"12"`
+}

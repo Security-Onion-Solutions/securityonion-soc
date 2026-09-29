@@ -1109,7 +1109,7 @@ func TestGetSessionDetails(t *testing.T) {
 			o(opt)
 		}
 
-		assert.Equal(t, sessionId, opt.SessionId())
+		assert.Equal(t, []string{sessionId}, opt.SessionIds())
 		assert.True(t, opt.IncludeDeleted())
 		assert.True(t, opt.Usage())
 		assert.True(t, opt.Descendants())
@@ -4614,6 +4614,7 @@ var (
 	errAutomationNotFoundStub     = errors.New("ERROR_AUTOMATION_NOT_FOUND")
 	errAutomationKindNotFoundStub = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
 	errAutomationParamsStub       = fmt.Errorf("%w: displayName is required", errors.New("ERROR_AUTOMATION_PARAMS_INVALID"))
+	errAutomationRunNotFoundStub  = errors.New("ERROR_AUTOMATION_RUN_NOT_FOUND")
 )
 
 // recordingAuthorizer answers every check the same way, except one denied operation, and
@@ -4849,6 +4850,8 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 		{http.MethodPost, "/assistant/automations", write},
 		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId, write},
 		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId, write},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", []string{"assistant/read_all"}},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, []string{"assistant/read_all"}},
 	}
 
 	for _, c := range cases {
@@ -4860,6 +4863,89 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 
 			assert.Equal(t, http.StatusForbidden, w.Code)
 			assert.Equal(t, c.asked, auth.asked)
+		})
+	}
+}
+
+const automationHandlerTestRunId = "3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"
+
+// Run history is an admin read like the usage and session views, not a config read.
+func TestGetAutomationRunsRequiresReadAllAndPassesThePage(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().GetAutomationRunHistory(gomock.Any(), automationHandlerTestId, 5, 10).
+		Return(&model.AutomationRunHistory{AutomationId: automationHandlerTestId, DisplayName: "Nightly"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs?limit=5&offset=10", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"Nightly"`)
+	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+}
+
+func TestGetAutomationRunsMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "found", err: nil, wantStatus: http.StatusOK},
+		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "broken", err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager, _ := automationRouter(t, true)
+			manager.EXPECT().GetAutomationRunHistory(gomock.Any(), automationHandlerTestId, 0, 0).
+				Return(&model.AutomationRunHistory{}, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestGetAutomationRunPassesBothIdsAndTheAlertLimit(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().GetAutomationRunDetails(gomock.Any(), automationHandlerTestId, automationHandlerTestRunId, 25).
+		Return(&model.AutomationRunDetails{AutomationId: automationHandlerTestId, AlertTotal: 7}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs/"+automationHandlerTestRunId+"?alertLimit=25", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"alertTotal":7`)
+	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+}
+
+func TestGetAutomationRunMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "found", err: nil, wantStatus: http.StatusOK},
+		{name: "no automation", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "no run", err: errAutomationRunNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "denied", err: model.NewUnauthorized("user-1", "read", "events"), wantStatus: http.StatusForbidden},
+		{name: "broken", err: errors.New("elastic is down"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager, _ := automationRouter(t, true)
+			manager.EXPECT().GetAutomationRunDetails(gomock.Any(), automationHandlerTestId, automationHandlerTestRunId, 0).
+				Return(&model.AutomationRunDetails{}, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs/"+automationHandlerTestRunId, nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
 		})
 	}
 }
