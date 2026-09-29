@@ -58,7 +58,7 @@ var (
 	// The stream ended without a message.
 	ErrAgentTurnEmpty = errors.New("ERROR_AGENT_TURN_EMPTY")
 
-	// A headless run was asked for with no request, no objective, or no owner.
+	// A headless run was asked for with no request, no objective, or no owner in the request or its context.
 	ErrAgentSessionRequestRequired   = errors.New("ERROR_AGENT_SESSION_REQUEST_REQUIRED")
 	ErrAgentSessionObjectiveRequired = errors.New("ERROR_AGENT_SESSION_OBJECTIVE_REQUIRED")
 	ErrAgentSessionOwnerRequired     = errors.New("ERROR_AGENT_SESSION_OWNER_REQUIRED")
@@ -236,6 +236,7 @@ type AssistantCoordinator struct {
 	builtinAgents       map[string]model.Agent
 	builtinAgentMapping map[string]string
 	builtinSkills       map[string]model.Skill
+	builtinAutomations  map[string]*model.Automation
 
 	// Serializes the read-modify-write of the agent/skill settings so concurrent
 	// saves merge instead of overwriting each other.
@@ -537,6 +538,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	if ac.isAgentic {
 		ac.setupAgentic(ac.embeddedPrompts)
+		ac.setupBuiltinAutomations()
 		ac.agentMapping = ac.loadAgentMapping(config)
 
 		ac.builtinAgentMapping = make(map[string]string, len(ac.agentMapping))

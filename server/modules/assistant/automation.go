@@ -6,11 +6,14 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,6 +39,9 @@ const (
 	// A label for one row in a list, so it is capped well below what the setting could
 	// hold.
 	MaxAutomationDisplayNameLength = 100
+
+	// Fixed so the stored copy, its runs and its work items key on the same id in every build.
+	BuiltinAlertTriageAutomationId = "a1d3f5b7-9c2e-4e68-8b4a-6f0c2d9e7b13"
 )
 
 // Wrap ErrInvalidAutomationParams with %w to name the offending field: respondConfigWrite
@@ -45,6 +51,9 @@ var (
 	ErrAutomationKindNotFound  = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
 	ErrInvalidAutomationParams = errors.New("ERROR_AUTOMATION_PARAMS_INVALID")
 	ErrConfigstoreUnavailable  = errors.New("ERROR_CONFIGSTORE_UNAVAILABLE")
+
+	// A system automation can be disabled, never removed.
+	ErrSystemAutomationUndeletable = errors.New("ERROR_SYSTEM_AUTOMATION_UNDELETABLE")
 
 	// The cancel cause a redefined automation gives its run, so a run that unwinds can tell
 	// this from a shutdown, and the reason recorded on the work it was holding.
@@ -101,22 +110,31 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 		return nil, ErrAgentSessionRequestRequired
 	}
 
-	if req.OwnerId == "" && run.Task != nil {
-		req.OwnerId = run.Task.UserId
-	}
-
 	if err := run.Srv.AssistantManager.ValidateAgentSessionRequest(req); err != nil {
 		return nil, err
 	}
 
 	result, runErr := run.Srv.AssistantManager.RunAgentSession(ctx, req)
 	if result != nil && result.SessionId != "" && !shuttingDown(ctx) {
-		if err := run.Store.EnsureAutomationWorkItemSession(ctx, itemId, result.SessionId); err != nil {
+		linkCtx, done := automationWriteContext(ctx)
+		defer done()
+
+		if err := run.Store.EnsureAutomationWorkItemSession(linkCtx, itemId, result.SessionId); err != nil {
 			return result, errors.Join(runErr, err)
 		}
 	}
 
 	return result, runErr
+}
+
+// automationWriteContext detaches from a params-change cancel, so a finished session is still
+// recorded, but never from a shutdown.
+func automationWriteContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if !errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
+		return ctx, func() {}
+	}
+
+	return web.DetachContext(ctx, DETACHED_WRITE_TIMEOUT)
 }
 
 // WorkItemFunc is the body of one pool job. Its context carries the run's cancellation and a
@@ -233,6 +251,48 @@ func (run *AutomationRun) recoverOrphanedWorkItems(ctx context.Context, items []
 	return recovered
 }
 
+// setupBuiltinAutomations defines the automations that ship with the product.
+func (ac *AssistantCoordinator) setupBuiltinAutomations() {
+	ac.builtinAutomations = map[string]*model.Automation{
+		BuiltinAlertTriageAutomationId: {
+			DisplayName:     "Alert Triage",
+			AutomationKind:  alertTriageKindName,
+			Agent:           "Investigator",
+			IntervalSeconds: 300,
+			Params:          json.RawMessage(`{"groupBy":["source.ip","rule.uuid","destination.ip"]}`),
+		},
+	}
+}
+
+func (ac *AssistantCoordinator) isBuiltinAutomation(id string) bool {
+	_, ok := ac.builtinAutomations[id]
+
+	return ok
+}
+
+// overlayBuiltinAutomation is the builtin with stored's Auditable, enabled and agent; a nil stored
+// is the builtin as shipped.
+func (ac *AssistantCoordinator) overlayBuiltinAutomation(id string, stored *model.Automation) *model.Automation {
+	automation := *ac.builtinAutomations[id]
+	automation.Params = bytes.Clone(automation.Params)
+
+	if stored != nil {
+		automation.Auditable = stored.Auditable
+		automation.Enabled = stored.Enabled
+
+		// A blank agent is the shipped one.
+		if strings.TrimSpace(stored.Agent) != "" {
+			automation.Agent = stored.Agent
+		}
+	}
+
+	automation.Id = id
+	automation.Kind = "automation"
+	automation.IsSystem = true
+
+	return &automation
+}
+
 func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKind, error) {
 	kind, ok := ac.AutomationKindLibrary[name]
 	if !ok {
@@ -294,6 +354,8 @@ func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
 
 	automation.Id = id
 	automation.Kind = "automation"
+	// Only the overlay may claim this.
+	automation.IsSystem = false
 
 	return automation, nil
 }
@@ -318,6 +380,7 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 
 	automations := []*model.Automation{}
 	unreadable := 0
+	seen := map[string]bool{}
 
 	for _, setting := range settings {
 		if automationIdFromSetting(setting.Id) == "" {
@@ -335,13 +398,44 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 			continue
 		}
 
+		if ac.isBuiltinAutomation(automation.Id) {
+			automation = ac.overlayBuiltinAutomation(automation.Id, automation)
+			seen[automation.Id] = true
+		}
+
 		automations = append(automations, automation)
+	}
+
+	// Builtins can be disabled but never removed, so one without a stored copy is listed as shipped.
+	for _, id := range slices.Sorted(maps.Keys(ac.builtinAutomations)) {
+		if !seen[id] {
+			automations = append(automations, ac.overlayBuiltinAutomation(id, nil))
+		}
 	}
 
 	return automations, unreadable, nil
 }
 
 func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	stored, err := ac.getStoredAutomation(ctx, id)
+
+	if !ac.isBuiltinAutomation(id) {
+		return stored, err
+	}
+
+	if errors.Is(err, ErrAutomationNotFound) {
+		return ac.overlayBuiltinAutomation(id, nil), nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ac.overlayBuiltinAutomation(id, stored), nil
+}
+
+// getStoredAutomation reads the setting as written, without the builtin overlay.
+func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id string) (*model.Automation, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return nil, ErrConfigstoreUnavailable
 	}
@@ -373,6 +467,18 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 
 	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
 		return err
+	}
+
+	builtin := ac.isBuiltinAutomation(automation.Id)
+
+	if automation.IsSystem != builtin {
+		return fmt.Errorf("%w: isSystem does not match this automation", ErrInvalidAutomationParams)
+	}
+
+	// Into the caller's value: the handler answers with what it passed in. A rejected save
+	// leaves the overlay behind, which the handler discards.
+	if builtin {
+		*automation = *ac.overlayBuiltinAutomation(automation.Id, automation)
 	}
 
 	if err := validateAutomation(automation); err != nil {
@@ -425,7 +531,8 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	// The new definition is stored, so the work the old params derived is now stale. Cancel
 	// first so the run stops claiming, then finalize what it was holding. A failed sweep
 	// leaves that stale work in place.
-	if existing != nil && !jsonEqual(existing.Params, automation.Params) {
+	// A builtin's params come with the build, so a save never changes what its work was derived from.
+	if existing != nil && !builtin && !jsonEqual(existing.Params, automation.Params) {
 		ac.interruptAutomationRun(automation.Id)
 
 		if ac.store != nil {
@@ -468,11 +575,11 @@ func validateAutomation(automation *model.Automation) error {
 	return nil
 }
 
-// stampAutomation settles the fields an automation does not set for itself: identity, owner
+// stampAutomation settles the fields an automation does not set for itself: identity, creator
 // and timestamps, returning the stored copy it read so the caller can see what changed.
 // Caller holds configWriteMu, which is what makes that read and the write that follows it one
 // edit rather than two. Nothing is written back to automation until every check has passed,
-// so a rejected save leaves it as it arrived.
+// so a rejected save leaves it as SaveAutomation handed it over.
 func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation *model.Automation) (*model.Automation, error) {
 	id := automation.Id
 	// The handler puts the path id here, so an absent id is the only thing that means create.
@@ -484,9 +591,15 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 		return nil, fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
 	}
 
-	existing, err := ac.GetAutomation(ctx, id)
+	// The stored copy, not the overlay: only it says whether a builtin was ever saved.
+	existing, err := ac.getStoredAutomation(ctx, id)
 	if err != nil && !errors.Is(err, ErrAutomationNotFound) {
 		return nil, err
+	}
+
+	// A builtin's first save creates its stored copy under the fixed id.
+	if existing == nil && ac.isBuiltinAutomation(id) {
+		create = true
 	}
 
 	if !create && existing == nil {
@@ -505,13 +618,13 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 
 		userId = requestor
 	} else {
-		// Existing runs and work items hold payloads only the original kind can read.
-		if existing.AutomationKind != automation.AutomationKind {
+		// Existing runs and work items hold payloads only the original kind can read. A
+		// builtin's kind is fixed here, so a stored drift heals instead.
+		if !ac.isBuiltinAutomation(id) && existing.AutomationKind != automation.AutomationKind {
 			return nil, fmt.Errorf("%w: automationKind cannot be changed", ErrInvalidAutomationParams)
 		}
 
-		// The owner is the identity unattended sessions execute as, so an edit by a second
-		// admin must not silently hand them that user's RBAC.
+		// UserId records who created the automation; an edit does not reassign it.
 		createTime = existing.CreateTime
 		userId = existing.UserId
 	}
@@ -591,10 +704,14 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 		return err
 	}
 
+	if ac.isBuiltinAutomation(id) {
+		return ErrSystemAutomationUndeletable
+	}
+
 	ac.configWriteMu.Lock()
 	defer ac.configWriteMu.Unlock()
 
-	if _, err := ac.GetAutomation(ctx, id); err != nil {
+	if _, err := ac.getStoredAutomation(ctx, id); err != nil {
 		return err
 	}
 

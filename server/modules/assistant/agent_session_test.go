@@ -239,7 +239,7 @@ func (f *headlessFixture) executedIds() []string {
 }
 
 func baseRequest() *model.AgentSessionRequest {
-	return &model.AgentSessionRequest{Objective: "investigate alert 42", Agent: "Hunter", OwnerId: "user-1"}
+	return &model.AgentSessionRequest{Objective: "investigate alert 42", Agent: "Hunter"}
 }
 
 func assertUnlocked(t *testing.T, ac *AssistantCoordinator, sessionId string) {
@@ -371,10 +371,15 @@ func TestValidateAgentSessionRequest(t *testing.T) {
 	f := newHeadlessFixture(t, ctrl)
 
 	assert.Error(t, f.ac.ValidateAgentSessionRequest(nil))
-	assert.ErrorIs(t, f.ac.ValidateAgentSessionRequest(&model.AgentSessionRequest{Agent: "Hunter", OwnerId: "u"}), ErrAgentSessionObjectiveRequired)
-	assert.ErrorIs(t, f.ac.ValidateAgentSessionRequest(&model.AgentSessionRequest{Agent: "Hunter", Objective: "o"}), ErrAgentSessionOwnerRequired)
-	assert.Error(t, f.ac.ValidateAgentSessionRequest(&model.AgentSessionRequest{Agent: "Nobody", Objective: "o", OwnerId: "u"}))
+	assert.ErrorIs(t, f.ac.ValidateAgentSessionRequest(&model.AgentSessionRequest{Agent: "Hunter"}), ErrAgentSessionObjectiveRequired)
+	assert.Error(t, f.ac.ValidateAgentSessionRequest(&model.AgentSessionRequest{Agent: "Nobody", Objective: "o"}))
 	assert.NoError(t, f.ac.ValidateAgentSessionRequest(baseRequest()))
+
+	// The owner comes from the context or the request, so only the run can judge it. No
+	// session id comes back, so there is nothing for a caller to record.
+	result, err := f.ac.RunAgentSession(context.Background(), baseRequest())
+	assert.ErrorIs(t, err, ErrAgentSessionOwnerRequired)
+	assert.Nil(t, result)
 }
 
 func TestRunAgentSession_SessionIdOnCreateFailure(t *testing.T) {
@@ -1194,6 +1199,33 @@ func TestRunAgentSession_StampsAutomationRequestId(t *testing.T) {
 	}
 }
 
+// The session runs as the caller's requestor unless the request names an owner.
+func TestRunAgentSession_OwnerComesFromContextUnlessRequested(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req  *model.AgentSessionRequest
+		want string
+	}{
+		"context requestor":  {req: baseRequest(), want: "test-user"},
+		"requested override": {req: &model.AgentSessionRequest{Objective: "o", Agent: "Hunter", OwnerId: "user-1"}, want: "user-1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			f := newHeadlessFixture(t, ctrl, sseToolUses(sseToolCall{"t1", "query_events", `{}`}), sseText("done"))
+			var seen any
+			f.tool.executeFunc = func(ctx context.Context, _ *server.Server, _ *model.ToolRequest) (*model.ToolResponse, error) {
+				seen = ctx.Value(web.ContextKeyRequestorId)
+				return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+			}
+
+			_, err := f.ac.RunAgentSession(userCtx(), tc.req)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, seen)
+		})
+	}
+}
+
 // --- AutomationRun wrapper --------------------------------------------------
 
 // fakeAutomationStore records the one call the wrapper makes; the package's gomock
@@ -1219,8 +1251,10 @@ func TestAutomationRunRunAgentSession_RecordsSessionOnItem(t *testing.T) {
 
 	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
 	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
-			assert.Equal(t, "user-1", req.OwnerId)
+		func(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+			// The run context is the identity; the wrapper names no owner of its own.
+			assert.Empty(t, req.OwnerId)
+			assert.Equal(t, server.SYSTEM_ID, ctx.Value(web.ContextKeyRequestorId))
 			assert.Equal(t, []string{"run:run-7"}, req.Tags)
 			return want, nil
 		})
@@ -1232,7 +1266,8 @@ func TestAutomationRunRunAgentSession_RecordsSessionOnItem(t *testing.T) {
 		Store: store,
 	}
 
-	got, err := run.RunAgentSession(context.Background(), "item-1", &model.AgentSessionRequest{Objective: "o", Agent: "Hunter", Tags: []string{"run:run-7"}})
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+	got, err := run.RunAgentSession(ctx, "item-1", &model.AgentSessionRequest{Objective: "o", Agent: "Hunter", Tags: []string{"run:run-7"}})
 	require.NoError(t, err)
 	assert.Same(t, want, got)
 	assert.Equal(t, "item-1", store.itemId)

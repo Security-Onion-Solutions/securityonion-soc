@@ -18,8 +18,8 @@ type AutomationKindDefinition struct {
 	DisplayName string `json:"displayName" example:"Alert Triage"`
 	// A summary of what this kind does, shown alongside the label.
 	Description string `json:"description" example:"Groups, samples and triages alerts"`
-	// The settings this kind accepts, one property per form field. Interval and owning
-	// user belong to the automation rather than the kind, so they are absent here.
+	// The settings this kind accepts, one property per form field. Interval and creator
+	// belong to the automation rather than the kind, so they are absent here.
 	ParamSchema JSONSchema `json:"paramSchema"`
 }
 
@@ -36,6 +36,8 @@ type Automation struct {
 	Enabled bool `json:"enabled" example:"true"`
 	// How often this automation comes due, in seconds.
 	IntervalSeconds int `json:"intervalSeconds" example:"300"`
+	// Ships with the product: only enabled and agent can be changed, and it cannot be deleted.
+	IsSystem bool `json:"isSystem" example:"false"`
 	// The settings for this automation, matching its kind's paramSchema. Opaque to
 	// everything but that kind.
 	Params json.RawMessage `json:"params" swaggertype:"object"`

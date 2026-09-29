@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -25,6 +26,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
@@ -1276,6 +1278,25 @@ func TestAutomationRunContextCarriesItsLogger(t *testing.T) {
 	})
 }
 
+// A run executes under the server context, whatever the automation's creator.
+func TestAutomationRunContextCarriesTheServerRequestor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f.ac.srv.Context = context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+		var seen any
+		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
+			seen = ctx.Value(web.ContextKeyRequestorId)
+
+			return nil
+		}
+
+		f.startAndWake()
+
+		assert.Equal(t, server.SYSTEM_ID, seen)
+	})
+}
+
 func TestSubmitNamesTheItemInTheJobLogger(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := &claimingStore{}
@@ -1423,4 +1444,50 @@ func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
 	require.Len(t, recovered, 1)
 	assert.Same(t, orphan, recovered[0])
 	assert.Equal(t, model.AutomationWorkItemRunning, recovered[0].State)
+}
+
+// The creator is a record, not the identity a run needs, so an automation without one runs.
+func TestTickRunsAnAutomationWithNoCreator(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stored := storedEnabledAutomation(t, automationTestId, `{}`)
+		stored.Value = strings.Replace(stored.Value, `"userId":"user-1"`, `"userId":""`, 1)
+		require.Contains(t, stored.Value, `"userId":""`)
+
+		f := newEngineFixture(t, stored)
+
+		f.startAndWake()
+
+		opens, _, _ := f.snapshot()
+		assert.Equal(t, 1, opens)
+	})
+}
+
+func TestTickListsTheBuiltinAndRunsItOnceEnabled(t *testing.T) {
+	t.Run("never saved: live but never due", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			f := newEngineFixture(t)
+			seedBuiltinAutomation(f.ac)
+
+			f.startAndWake()
+
+			sweeps := f.sweepsSeen()
+			require.Len(t, sweeps, 1)
+			assert.Equal(t, []string{BuiltinAlertTriageAutomationId}, sweeps[0])
+
+			opens, _, _ := f.snapshot()
+			assert.Zero(t, opens)
+		})
+	})
+
+	t.Run("stored enabled copy: runs", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			f := newEngineFixture(t, storedEnabledAutomation(t, BuiltinAlertTriageAutomationId, `{}`))
+			seedBuiltinAutomation(f.ac)
+
+			f.startAndWake()
+
+			opens, _, _ := f.snapshot()
+			assert.Equal(t, 1, opens)
+		})
+	})
 }

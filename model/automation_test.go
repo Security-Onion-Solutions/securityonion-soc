@@ -43,6 +43,8 @@ func TestAutomationTaskJSON(t *testing.T) {
 	assert.Equal(t, automation.IntervalSeconds, round.IntervalSeconds)
 	assert.Equal(t, "Investigator", round.Agent)
 	assert.False(t, round.Enabled)
+	assert.False(t, round.IsSystem)
+	assert.Contains(t, string(raw), `"isSystem":false`)
 
 	// AutomationKind must not collide with Auditable.Kind, which is the entity kind.
 	assert.Equal(t, "alert_triage", round.AutomationKind)

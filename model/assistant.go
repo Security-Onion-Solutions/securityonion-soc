@@ -611,7 +611,7 @@ type AgentSessionRequest struct {
 	Objective string
 	// Agent name, whose configured mapping resolves the model.
 	Agent string
-	// Owner of the created session; tool calls are authorized as this identity.
+	// Optional. Runs the session as this identity instead of the requestor in ctx.
 	OwnerId string
 	// Tags stamped on the created session in addition to AutomationSessionTags.
 	Tags []string

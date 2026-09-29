@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
@@ -313,7 +314,6 @@ func TestAutomationRunPlumbing(t *testing.T) {
 			result, err := run.Srv.AssistantManager.RunAgentSession(ctx, &model.AgentSessionRequest{
 				Objective: "triage group A",
 				Agent:     "Hunter",
-				OwnerId:   run.Task.UserId,
 				MaxTurns:  8,
 			})
 			if err != nil {
@@ -338,7 +338,6 @@ func TestAutomationRunPlumbing(t *testing.T) {
 	require.NotNil(t, gotReq)
 	assert.Equal(t, "triage group A", gotReq.Objective)
 	assert.Equal(t, "Hunter", gotReq.Agent)
-	assert.Equal(t, "user-1", gotReq.OwnerId)
 	assert.Equal(t, 8, gotReq.MaxTurns)
 }
 
@@ -630,7 +629,7 @@ func TestSaveAutomationRejectsAKindChange(t *testing.T) {
 	assert.Empty(t, cfg.updates)
 }
 
-func TestSaveAutomationStampsOwnerAndCreateTime(t *testing.T) {
+func TestSaveAutomationStampsCreatorAndCreateTime(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 
@@ -644,7 +643,7 @@ func TestSaveAutomationStampsOwnerAndCreateTime(t *testing.T) {
 	require.NotNil(t, automation.UpdateTime)
 }
 
-func TestSaveAutomationKeepsTheOriginalOwnerOnUpdate(t *testing.T) {
+func TestSaveAutomationKeepsTheOriginalCreatorOnUpdate(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
 
@@ -657,7 +656,7 @@ func TestSaveAutomationKeepsTheOriginalOwnerOnUpdate(t *testing.T) {
 
 	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
 
-	assert.Equal(t, "user-1", automation.UserId, "the owner is not reassigned by an edit")
+	assert.Equal(t, "user-1", automation.UserId, "the creator is not reassigned by an edit")
 	require.Len(t, cfg.updates, 1)
 }
 
@@ -1179,4 +1178,487 @@ func TestWatchStoredAutomationsSurvivesWithoutAStore(t *testing.T) {
 	ac.watchStoredAutomations(context.Background())
 
 	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
+}
+
+// seedBuiltinAutomation gives a bare coordinator the shipped automations, as Init would.
+func seedBuiltinAutomation(ac *AssistantCoordinator) *model.Automation {
+	ac.setupBuiltinAutomations()
+
+	return ac.builtinAutomations[BuiltinAlertTriageAutomationId]
+}
+
+// storedBuiltinAutomation is a stored copy of the builtin with every fixed field altered, so a
+// test can tell what the overlay kept from what it restored.
+func storedBuiltinAutomation(t *testing.T, enabled bool, agent string) *model.Setting {
+	t.Helper()
+
+	created := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	raw, err := json.Marshal(&model.Automation{
+		Auditable:       model.Auditable{Id: BuiltinAlertTriageAutomationId, UserId: "user-1", CreateTime: &created},
+		DisplayName:     "Renamed",
+		AutomationKind:  "other_kind",
+		Agent:           agent,
+		Enabled:         enabled,
+		IntervalSeconds: 7,
+		Params:          json.RawMessage(`{"groupBy":["x"]}`),
+	})
+	require.NoError(t, err)
+
+	return &model.Setting{Id: automationSettingId(BuiltinAlertTriageAutomationId), Value: string(raw)}
+}
+
+func assertBuiltinFixedFields(t *testing.T, builtin, automation *model.Automation) {
+	t.Helper()
+
+	assert.Equal(t, BuiltinAlertTriageAutomationId, automation.Id)
+	assert.Equal(t, "automation", automation.Kind)
+	assert.True(t, automation.IsSystem)
+	assert.Equal(t, builtin.DisplayName, automation.DisplayName)
+	assert.Equal(t, builtin.AutomationKind, automation.AutomationKind)
+	assert.Equal(t, builtin.IntervalSeconds, automation.IntervalSeconds)
+	assert.JSONEq(t, string(builtin.Params), string(automation.Params))
+}
+
+func TestListAutomationsIncludesTheBuiltinAsShipped(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automations, unreadable, err := ac.scanAutomations(context.Background())
+	require.NoError(t, err)
+	require.Len(t, automations, 1)
+	assert.Zero(t, unreadable)
+
+	assertBuiltinFixedFields(t, builtin, automations[0])
+	assert.False(t, automations[0].Enabled, "shipped disabled")
+	assert.Equal(t, builtin.Agent, automations[0].Agent)
+	assert.Nil(t, automations[0].CreateTime)
+	assert.Empty(t, automations[0].UserId)
+}
+
+func TestListAutomationsOverlaysOnlyWhatAStoredBuiltinMayChange(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{
+		storedAutomation(t, automationTestId, "Nightly"),
+		storedBuiltinAutomation(t, true, "Hunter"),
+	}
+
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automations, err := ac.ListAutomations(context.Background())
+	require.NoError(t, err)
+	require.Len(t, automations, 2, "a stored builtin is not listed twice")
+
+	assert.Equal(t, automationTestId, automations[0].Id)
+	assert.False(t, automations[0].IsSystem)
+
+	assertBuiltinFixedFields(t, builtin, automations[1])
+	assert.True(t, automations[1].Enabled)
+	assert.Equal(t, "Hunter", automations[1].Agent)
+	assert.Equal(t, "user-1", automations[1].UserId)
+	require.NotNil(t, automations[1].CreateTime)
+	assert.Equal(t, 2026, automations[1].CreateTime.Year())
+}
+
+// A malformed stored copy still counts as unreadable, which holds the orphan sweep; the
+// builtin itself is listed as shipped rather than lost.
+func TestListAutomationsRestoresAnUnreadableBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{
+		{Id: automationSettingId(BuiltinAlertTriageAutomationId), Value: "{not json"},
+	}
+
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automations, unreadable, err := ac.scanAutomations(context.Background())
+	require.NoError(t, err)
+	require.Len(t, automations, 1)
+	assert.Equal(t, 1, unreadable)
+
+	assertBuiltinFixedFields(t, builtin, automations[0])
+	assert.False(t, automations[0].Enabled)
+}
+
+// The flag is what a UI locks fields and hides delete on, so a hand-edited entry cannot claim it.
+func TestUnmarshalAutomationIgnoresAStoredIsSystem(t *testing.T) {
+	automation, err := unmarshalAutomation(automationSettingId(automationTestId),
+		`{"displayName":"Nightly","automationKind":"alert_triage","isSystem":true}`)
+
+	require.NoError(t, err)
+	assert.False(t, automation.IsSystem)
+}
+
+func TestGetAutomationReturnsTheBuiltinAsShippedWithoutAStoredCopy(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automation, err := ac.GetAutomation(context.Background(), BuiltinAlertTriageAutomationId)
+	require.NoError(t, err)
+
+	assertBuiltinFixedFields(t, builtin, automation)
+	assert.False(t, automation.Enabled)
+
+	// The copy handed out must not alias the definition.
+	automation.Params[0] = ' '
+	assert.JSONEq(t, string(builtin.Params), string(ac.builtinAutomations[BuiltinAlertTriageAutomationId].Params))
+}
+
+func TestGetAutomationOverlaysAStoredBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, "Hunter")}
+
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automation, err := ac.GetAutomation(context.Background(), BuiltinAlertTriageAutomationId)
+	require.NoError(t, err)
+
+	assertBuiltinFixedFields(t, builtin, automation)
+	assert.True(t, automation.Enabled)
+	assert.Equal(t, "Hunter", automation.Agent)
+	assert.Equal(t, "user-1", automation.UserId)
+}
+
+func TestGetAutomationFallsBackToTheShippedAgentWhenTheStoredOneIsBlank(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, " ")}
+
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automation, err := ac.GetAutomation(context.Background(), BuiltinAlertTriageAutomationId)
+	require.NoError(t, err)
+
+	assert.True(t, automation.Enabled)
+	assert.Equal(t, builtin.Agent, automation.Agent)
+}
+
+func TestGetAutomationStillRequiresAConfigstoreForTheBuiltin(t *testing.T) {
+	ac := &AssistantCoordinator{srv: &server.Server{}}
+	seedBuiltinAutomation(ac)
+
+	_, err := ac.GetAutomation(context.Background(), BuiltinAlertTriageAutomationId)
+
+	assert.ErrorIs(t, err, ErrConfigstoreUnavailable)
+}
+
+// The first save is the create: it records the creator, under the fixed id rather than a
+// generated one.
+func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automation := &model.Automation{
+		Auditable:       model.Auditable{Id: BuiltinAlertTriageAutomationId},
+		IsSystem:        true,
+		DisplayName:     "Renamed",
+		AutomationKind:  "other_kind",
+		Agent:           automationTestAgent,
+		Enabled:         true,
+		IntervalSeconds: 7,
+		Params:          json.RawMessage(`{"groupBy":["x"]}`),
+	}
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	// The caller's value is what the handler answers with.
+	assertBuiltinFixedFields(t, builtin, automation)
+	assert.True(t, automation.Enabled)
+	assert.Equal(t, automationTestAgent, automation.Agent)
+	assert.Equal(t, "user-1", automation.UserId)
+	assert.NotNil(t, automation.CreateTime)
+
+	require.Len(t, cfg.updates, 1)
+	assert.Equal(t, automationSettingId(BuiltinAlertTriageAutomationId), cfg.updates[0].Id)
+	assert.Equal(t, ConfigSettingAutomationTemplate, cfg.updates[0].DuplicatedFromID)
+
+	// The stored copy is complete, so a build without the overlay still reads a valid automation.
+	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
+	require.NoError(t, err)
+	assert.Equal(t, builtin.DisplayName, stored.DisplayName)
+	assert.Equal(t, builtin.IntervalSeconds, stored.IntervalSeconds)
+	assert.JSONEq(t, string(builtin.Params), string(stored.Params))
+	assert.True(t, stored.Enabled)
+
+	assert.Equal(t, []string{automationSettingId(BuiltinAlertTriageAutomationId)}, cfg.registered)
+}
+
+// The creator is settled by the builtin's first save; no later edit, enabling included, moves it.
+func TestSaveAutomationBuiltinCreatorIsSettledAtFirstSave(t *testing.T) {
+	cases := []struct {
+		name          string
+		storedEnabled bool
+		enabled       bool
+		agent         string
+		wantCreator   string
+	}{
+		{"enabling keeps the creator", false, true, automationTestAgent, "user-1"},
+		{"an edit while enabled keeps the creator", true, true, automationTestAgent, "user-1"},
+		{"disabling keeps the creator", true, false, "Hunter", "user-1"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			cfg.settings = []*model.Setting{storedBuiltinAutomation(t, c.storedEnabled, "Hunter")}
+
+			ac := automationCoordinator(cfg)
+			seedBuiltinAutomation(ac)
+
+			automation := &model.Automation{
+				Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId},
+				IsSystem:  true,
+				Enabled:   c.enabled,
+				Agent:     c.agent,
+			}
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-2")
+			require.NoError(t, ac.SaveAutomation(ctx, automation))
+
+			assert.Equal(t, c.wantCreator, automation.UserId)
+			require.NotNil(t, automation.CreateTime)
+			assert.Equal(t, 2026, automation.CreateTime.Year(), "the create time never moves")
+			assert.Equal(t, c.agent, automation.Agent)
+			assert.Equal(t, c.enabled, automation.Enabled)
+			require.Len(t, cfg.updates, 1)
+		})
+	}
+}
+
+func TestSaveAutomationEnablingAStoredAutomationKeepsItsCreator(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(cfg)
+
+	automation := validAutomation()
+	automation.Id = automationTestId
+	automation.Enabled = true
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-2")
+	require.NoError(t, ac.SaveAutomation(ctx, automation))
+
+	assert.Equal(t, "user-1", automation.UserId)
+}
+
+// A first save that leaves the builtin disabled still records its creator.
+func TestSaveAutomationFirstSaveOfADisabledBuiltinSettlesItsCreator(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	automation := &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true}
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	assert.False(t, automation.Enabled)
+	assert.Equal(t, "user-1", automation.UserId)
+	assert.NotNil(t, automation.CreateTime)
+
+	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
+	require.NoError(t, err)
+	assert.Equal(t, "user-1", stored.UserId)
+}
+
+// Enabling with nothing but the flag is a complete definition: what the tick and the kind read
+// comes from the shipped builtin and the stamp.
+func TestSaveAutomationEnablingTheBuiltinWithAMinimalBodyIsRunnable(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-2")
+	require.NoError(t, ac.SaveAutomation(ctx, &model.Automation{
+		Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId},
+		IsSystem:  true,
+		Enabled:   true,
+	}))
+	cfg.settings = []*model.Setting{cfg.updates[0]}
+
+	automations, err := ac.ListAutomations(context.Background())
+	require.NoError(t, err)
+	require.Len(t, automations, 1)
+
+	automation := automations[0]
+	assertBuiltinFixedFields(t, builtin, automation)
+	assert.True(t, automation.Enabled)
+	assert.Equal(t, "user-2", automation.UserId)
+	assert.Equal(t, builtin.Agent, automation.Agent)
+	assert.NotNil(t, automation.CreateTime)
+	assert.True(t, automationDue(automation, nil, time.Now()))
+
+	_, _, err = ac.resolveAgent(automation.Agent)
+	require.NoError(t, err)
+}
+
+func TestSaveAutomationRejectsAnIsSystemThatDisagreesWithTheId(t *testing.T) {
+	cases := []struct {
+		name       string
+		automation *model.Automation
+	}{
+		{"a create claiming to be system", func() *model.Automation {
+			a := validAutomation()
+			a.IsSystem = true
+
+			return a
+		}()},
+		{"a custom automation claiming to be system", func() *model.Automation {
+			a := validAutomation()
+			a.Id = automationTestId
+			a.IsSystem = true
+
+			return a
+		}()},
+		{"the builtin denying it", &model.Automation{
+			Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId},
+			Enabled:   true,
+			Agent:     automationTestAgent,
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+			ac := automationCoordinator(cfg)
+			seedBuiltinAutomation(ac)
+
+			err := ac.SaveAutomation(automationSaveCtx(), c.automation)
+
+			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+			assert.ErrorContains(t, err, "isSystem")
+			assert.Empty(t, cfg.updates)
+		})
+	}
+}
+
+func TestSaveAutomationRequiresAnAvailableAgentForTheBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	automation := &model.Automation{
+		Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId},
+		IsSystem:  true,
+		Enabled:   true,
+		Agent:     "Nobody",
+	}
+
+	assert.ErrorIs(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams)
+	assert.Empty(t, cfg.updates)
+}
+
+// The tick already runs the shipped params, so the open work was derived from them even when
+// the stored copy predates a build that changed them.
+func TestSaveAutomationKeepsTheBuiltinWorkWhenItsParamsChangedBetweenBuilds(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, automationTestAgent)}
+
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	cancelled := false
+	release := ac.registerAutomationRun(BuiltinAlertTriageAutomationId, func(error) { cancelled = true })
+	defer release()
+
+	automation := &model.Automation{
+		Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId},
+		IsSystem:  true,
+		Enabled:   true,
+		Agent:     automationTestAgent,
+	}
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	assert.False(t, cancelled)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "a builtin save must not touch work items")
+	}
+
+	// The stored copy catches up to the shipped params.
+	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ac.builtinAutomations[BuiltinAlertTriageAutomationId].Params), string(stored.Params))
+}
+
+func TestSaveAutomationKeepsTheBuiltinWorkWhenOnlyEnabledChanges(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	// A stored copy written by this build carries the fixed params.
+	first := &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true, Agent: automationTestAgent}
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), first))
+	cfg.settings = []*model.Setting{cfg.updates[0]}
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	cancelled := false
+	release := ac.registerAutomationRun(BuiltinAlertTriageAutomationId, func(error) { cancelled = true })
+	defer release()
+
+	second := &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true, Enabled: true, Agent: automationTestAgent}
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), second))
+
+	assert.False(t, cancelled)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "unchanged params must not touch work items")
+	}
+}
+
+func TestDeleteAutomationRefusesTheBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, automationTestAgent)}
+
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	assert.ErrorIs(t, ac.DeleteAutomation(context.Background(), BuiltinAlertTriageAutomationId), ErrSystemAutomationUndeletable)
+	assert.Empty(t, cfg.removals)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "a refused delete must not touch work items")
+	}
+}
+
+func TestDeleteAutomationChecksAuthorizationBeforeRefusingTheBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinatorAs(cfg, false)
+	seedBuiltinAutomation(ac)
+
+	var unauthorized *model.Unauthorized
+	assert.ErrorAs(t, ac.DeleteAutomation(context.Background(), BuiltinAlertTriageAutomationId), &unauthorized)
+}
+
+// The builtin is live from the first start, so its setting is watched before any save and its
+// queue is never orphaned.
+func TestWatchStoredAutomationsRegistersTheBuiltinBeforeItsFirstSave(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	mDB := &mockdb.MockDB{}
+	ac.store = automationTestStore(mDB)
+
+	live := expectOrphanSweep(mDB, 0)
+
+	ac.watchStoredAutomations(context.Background())
+
+	assert.Equal(t, []string{BuiltinAlertTriageAutomationId}, *live)
+	assert.Equal(t, []string{automationSettingId(BuiltinAlertTriageAutomationId)}, cfg.registered)
+	mDB.AssertExpectations(t)
 }

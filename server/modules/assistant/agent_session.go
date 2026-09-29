@@ -41,6 +41,18 @@ func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.
 		return nil, ErrAgentSessionRequestRequired
 	}
 
+	// Stores and tools take the owner from the requestor id, so the session belongs to,
+	// and the agent is authorized as, the caller's requestor unless the request names one.
+	ownerCtx := ctx
+	if req.OwnerId != "" {
+		ownerCtx = context.WithValue(ctx, web.ContextKeyRequestorId, req.OwnerId)
+	}
+
+	// Before the id is minted: callers record any session id they are handed.
+	if owner, _ := ownerCtx.Value(web.ContextKeyRequestorId).(string); owner == "" {
+		return nil, ErrAgentSessionOwnerRequired
+	}
+
 	sessionId := uuid.NewString()
 	result = &model.AgentSessionResult{SessionId: sessionId}
 
@@ -70,9 +82,6 @@ func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.
 		return result, err
 	}
 
-	// Stores and tools take the owner from the requestor id; this is what makes the
-	// session theirs and authorizes the agent as them.
-	ownerCtx := context.WithValue(ctx, web.ContextKeyRequestorId, req.OwnerId)
 	ownerCtx = context.WithValue(ownerCtx, web.ContextKeyRequestId, requestId)
 	ownerCtx = log.NewContext(ownerCtx, logger)
 
@@ -97,10 +106,6 @@ func (ac *AssistantCoordinator) ValidateAgentSessionRequest(req *model.AgentSess
 
 	if strings.TrimSpace(req.Objective) == "" {
 		return ErrAgentSessionObjectiveRequired
-	}
-
-	if req.OwnerId == "" {
-		return ErrAgentSessionOwnerRequired
 	}
 
 	if !ac.isAgentic {
