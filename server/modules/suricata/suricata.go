@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -32,7 +31,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"golang.org/x/mod/semver"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
@@ -65,7 +63,6 @@ const (
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
 	DEFAULT_AUTO_UPDATE_ENABLED                   = false
-	DEFAULT_MIGRATIONS_DIR                        = "/opt/so/conf/soc/migrations/"
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 )
 
@@ -1530,72 +1527,7 @@ func (e *SuricataEngine) executeRuleDeletion(
 }
 
 func (e *SuricataEngine) checkForMigrations() {
-	e.logger().Info("checking for suricata migrations")
-
-	migrationFinder := regexp.MustCompile(`^suricata-migration-(.*)$`)
-
-	migDir := DEFAULT_MIGRATIONS_DIR
-
-	items, err := e.ReadDir(migDir)
-	if err != nil {
-		e.logger().WithError(err).Error("unable to read directory")
-		return
-	}
-
-	migStates := map[string]string{} // map[semver]stateFilePath
-	versions := []string{}
-
-	// discover and read the state files
-	for _, item := range items {
-		if item.IsDir() {
-			continue
-		}
-
-		matches := migrationFinder.FindStringSubmatch(item.Name())
-		if matches == nil {
-			continue
-		}
-
-		ver := matches[1]
-
-		path := filepath.Join(migDir, item.Name())
-		migStates[ver] = path
-		versions = append(versions, ver)
-	}
-
-	// attempt to apply migrations in order
-	semver.Sort(versions)
-
-	if len(versions) == 0 {
-		e.logger().Info("no suricata migrations found")
-	} else {
-		e.logger().WithField("migrationCount", len(versions)).Info("found suricata migrations")
-	}
-
-	for _, key := range versions {
-		e.EngineState.Migrating = true
-
-		state := migStates[key]
-
-		migFunc, ok := e.migrations[key]
-		if !ok {
-			e.logger().WithField("migrationVersion", key).Error("migration function not found")
-			continue
-		}
-
-		e.logger().WithField("migrationVersion", key).Info("attempting migration")
-
-		err := migFunc(state)
-		if err != nil {
-			e.logger().WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
-			e.EngineState.MigrationFailure = true
-			break
-		}
-	}
-
-	e.EngineState.Migrating = false
-
-	e.logger().Info("done checking for suricata migrations")
+	detections.RunMigrations(e.IOManager, model.EngineNameSuricata, e.migrations, &e.EngineState)
 }
 
 func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok bool, err error) {
