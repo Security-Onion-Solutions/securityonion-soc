@@ -9,8 +9,11 @@ package postgresmetrics
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgres"
@@ -19,18 +22,26 @@ import (
 
 const DEFAULT_CACHE_EXPIRATION_MS = 30000
 const DEFAULT_MAX_METRIC_AGE_SECONDS = 1200
+const DEFAULT_ALARM_EVALUATION_INTERVAL = 30 * time.Second
 
 type PostgresMetricsModule struct {
-	config  module.ModuleConfig
-	server  *server.Server
-	metrics *PostgresMetrics
-	dbConn  *postgres.DB
+	config             module.ModuleConfig
+	server             *server.Server
+	metrics            *PostgresMetrics
+	telegrafDBConn     *postgres.DB
+	metricsStore       *database.Store
+	alarmStore         *AlarmstoreImpl
+	stopChan           chan struct{}
+	evaluationInterval time.Duration
+	isRunning          bool
+	mu                 sync.RWMutex
 }
 
 func NewPostgresMetricsModule(srv *server.Server) *PostgresMetricsModule {
 	return &PostgresMetricsModule{
-		server:  srv,
-		metrics: NewPostgresMetrics(srv),
+		server:             srv,
+		metrics:            NewPostgresMetrics(srv),
+		evaluationInterval: DEFAULT_ALARM_EVALUATION_INTERVAL,
 	}
 }
 
@@ -56,51 +67,121 @@ func (mod *PostgresMetricsModule) Init(cfg module.ModuleConfig) error {
 		}
 	}
 
+	// Metrics data store (telegraf/postgres metrics time series)
 	host := module.GetStringDefault(cfg, "host", "")
-	if host == "" {
-		log.Info("No host configured for postgresmetrics module; skipping database initialization")
-		return nil
+	if host != "" {
+		dbCfg := postgres.Config{
+			Host:     host,
+			Port:     module.GetIntDefault(cfg, "port", 5432),
+			Database: module.GetStringDefault(cfg, "database", ""),
+			Username: module.GetStringDefault(cfg, "user", ""),
+			Password: module.GetStringDefault(cfg, "password", ""),
+			SSLMode:  module.GetStringDefault(cfg, "sslMode", "allow"),
+		}
+
+		dbConn, err := postgres.Open(context.Background(), dbCfg)
+		if err != nil {
+			return fmt.Errorf("postgresmetrics module: failed to connect to metrics database: %w", err)
+		}
+
+		mod.telegrafDBConn = dbConn
+		mod.metricsStore = database.New(dbConn)
+	} else if mod.server != nil && mod.server.DB != nil {
+		mod.metricsStore = database.New(mod.server.DB)
 	}
 
-	dbCfg := postgres.Config{
-		Host:     host,
-		Port:     module.GetIntDefault(cfg, "port", 5432),
-		Database: module.GetStringDefault(cfg, "database", ""),
-		Username: module.GetStringDefault(cfg, "user", ""),
-		Password: module.GetStringDefault(cfg, "password", ""),
-		SSLMode:  module.GetStringDefault(cfg, "sslMode", "allow"),
+	if mod.metricsStore != nil {
+		mod.metrics.SetStore(mod.metricsStore)
 	}
-
-	dbConn, err := postgres.Open(context.Background(), dbCfg)
-	if err != nil {
-		return fmt.Errorf("postgresmetrics module: failed to connect to metrics database: %w", err)
-	}
-
-	mod.dbConn = dbConn
-	dbStore := database.New(dbConn)
-	mod.metrics.SetStore(dbStore)
 
 	mod.metrics.Init(cacheExpirationMs, maxMetricAgeSeconds)
 
+	// Alarm states store (uses default SOC postgres DB connection)
+	var alarmDBStore *database.Store
+	if mod.server != nil && mod.server.DB != nil {
+		alarmDBStore = database.New(mod.server.DB)
+		ctx := context.Background()
+		if mod.server.Context != nil {
+			ctx = mod.server.Context
+		}
+		if err := alarmDBStore.Migrate(ctx); err != nil {
+			log.WithError(err).Warn("postgresmetrics module: alarm database migration warning")
+		}
+	}
+
 	if mod.server != nil {
 		mod.server.Metrics = mod.metrics
-		log.Info("Postgres metrics module initialized and registered as server metrics provider")
+		mod.alarmStore = NewAlarmstore(mod.server, alarmDBStore)
+		mod.server.Alarmstore = mod.alarmStore
+		log.Info("Postgres metrics module initialized and registered as server metrics and alarm provider")
 	}
 
 	return nil
 }
 
 func (mod *PostgresMetricsModule) Start() error {
+	mod.mu.Lock()
+	if mod.isRunning {
+		mod.mu.Unlock()
+		return nil
+	}
+
+	mod.stopChan = make(chan struct{})
+	mod.isRunning = true
+	mod.mu.Unlock()
+
+	go mod.evaluationLoop()
+
 	return nil
 }
 
 func (mod *PostgresMetricsModule) Stop() error {
-	if mod.dbConn != nil {
-		mod.dbConn.Close()
+	mod.mu.Lock()
+	if mod.isRunning {
+		mod.isRunning = false
+		if mod.stopChan != nil {
+			close(mod.stopChan)
+		}
+	}
+	mod.mu.Unlock()
+
+	if mod.telegrafDBConn != nil {
+		mod.telegrafDBConn.Close()
 	}
 	return nil
 }
 
 func (mod *PostgresMetricsModule) IsRunning() bool {
-	return mod.server.Metrics == mod.metrics
+	mod.mu.RLock()
+	defer mod.mu.RUnlock()
+	return mod.isRunning
+}
+
+func (mod *PostgresMetricsModule) evaluationLoop() {
+	interval := mod.evaluationInterval
+	if interval <= 0 {
+		interval = DEFAULT_ALARM_EVALUATION_INTERVAL
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	ctx := context.Background()
+	if mod.server != nil && mod.server.Context != nil {
+		ctx = mod.server.Context
+	}
+
+	for {
+		select {
+		case <-mod.stopChan:
+			log.Debug("Postgresmetrics alarm evaluation loop exiting")
+			return
+		case <-ticker.C:
+			if licensing.IsEnabled(licensing.FEAT_NTF) && mod.alarmStore != nil {
+				if err := mod.alarmStore.EvaluateAlarms(ctx); err != nil {
+					log.WithError(err).Warn("Failed to evaluate alarms in background loop")
+				}
+			}
+		}
+	}
 }

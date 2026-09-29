@@ -332,11 +332,16 @@ test('helpers for channel and severity formatting', () => {
   expect(comp.getChannelIcon('matrix')).toBe('fa-comments');
   expect(comp.getChannelIcon('other')).toBe('fa-envelope');
 
-  expect(comp.getSeverityColor('critical')).toBe('red');
-  expect(comp.getSeverityColor('high')).toBe('orange');
-  expect(comp.getSeverityColor('medium')).toBe('amber');
-  expect(comp.getSeverityColor('low')).toBe('blue');
-  expect(comp.getSeverityColor('info')).toBe('grey');
+  comp.$root = {
+    colorSeverity: (sev) => {
+      if (sev === 'critical') return 'red-darken-4';
+      if (sev === 'high') return 'red-lighten-1';
+      return 'grey';
+    },
+  };
+  expect(comp.colorSeverity('critical')).toBe('red-darken-4');
+  expect(comp.colorSeverity('high')).toBe('red-lighten-1');
+  expect(comp.colorSeverity('info')).toBe('grey');
 
   expect(comp.getSeverityLabel('critical')).toBe('Critical');
   expect(comp.getSeverityLabel('high')).toBe('High');

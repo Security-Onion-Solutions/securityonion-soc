@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,7 @@ type Schedulestore interface {
 
 type SchedulestoreImpl struct {
 	server *Server
+	mu     sync.Mutex
 }
 
 func NewSchedulestore(srv *Server) *SchedulestoreImpl {
@@ -146,6 +148,9 @@ func (s *SchedulestoreImpl) CreateSchedule(ctx context.Context, schedule *model.
 		return nil, ErrInvalidScheduleID
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	schedules, err := s.loadSchedulesRaw(ctx)
 	if err != nil {
 		return nil, err
@@ -192,6 +197,9 @@ func (s *SchedulestoreImpl) UpdateSchedule(ctx context.Context, id string, sched
 
 	schedule.ID = id
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	schedules, err := s.loadSchedulesRaw(ctx)
 	if err != nil {
 		return nil, err
@@ -229,6 +237,9 @@ func (s *SchedulestoreImpl) DeleteSchedule(ctx context.Context, id string) error
 	if !model.IsValidScheduleID(id) {
 		return ErrInvalidScheduleID
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	schedules, err := s.loadSchedulesRaw(ctx)
 	if err != nil {

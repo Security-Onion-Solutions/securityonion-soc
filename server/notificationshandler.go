@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +51,8 @@ func RegisterNotificationRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Post("/send", h.PostSendNotification)
 
 		r.Get("/", h.GetNotifications)
+		r.Put("/read/all", h.PutAllRead)
+		r.Put("/dismiss/all", h.PutAllDismissed)
 		r.Put("/{id}/read", h.PutRead)
 		r.Put("/{id}/dismiss", h.PutDismiss)
 		r.Get("/{id}/audit", h.GetAudit)
@@ -403,12 +407,13 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 }
 
 // @Summary      Get Notifications
-// @Description  Retrieves notifications for the current user, optionally filtered.
+// @Description  Retrieves notifications for the current user, optionally filtered. Results are capped at the specified limit (defaults to newest 500) and return a truncated flag when additional notifications exist.
 // @Tags         Notifications
 // @Security     bearer[notifications/read]
 // @Param        filter  query  string  false  "Filter parameter (all, unread, dismissed)"
+// @Param        limit   query  int     false  "Maximum number of notifications to return (defaults to 500)"
 // @Produce      json
-// @Success      200  {array}  model.NotificationRecord  "The list of notifications"
+// @Success      200  {object}  model.NotificationListResponse  "The list of notifications and truncation metadata"
 // @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
@@ -425,8 +430,14 @@ func (h *NotificationHandler) GetNotifications(w http.ResponseWriter, r *http.Re
 	logger := log.FromContext(ctx)
 
 	filter := r.URL.Query().Get("filter")
+	limit := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if val, err := strconv.Atoi(l); err == nil && val > 0 {
+			limit = val
+		}
+	}
 
-	notifications, err := h.server.Notificationstore.GetNotifications(ctx, filter)
+	notifications, err := h.server.Notificationstore.GetNotifications(ctx, filter, limit)
 	if err != nil {
 		logger.WithError(err).Error("failed to get notifications")
 		h.respondError(w, r, err)
@@ -440,6 +451,90 @@ func (h *NotificationHandler) GetNotifications(w http.ResponseWriter, r *http.Re
 type ToggleReadRequest struct {
 	// Indicates whether the notification should be marked as read.
 	IsRead bool `json:"isRead" example:"true"`
+}
+
+// @Summary      Bulk Toggle Read Notifications
+// @Description  Marks all eligible notifications as read or unread for the current user.
+// @Tags         Notifications
+// @Security     bearer[notifications/write]
+// @Param        request  body  ToggleReadRequest  false  "Payload to toggle read"
+// @Accept       json
+// @Produce      json
+// @Success      200         "All notifications were successfully updated"
+// @Failure      400         "Invalid request body or parameters"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      403         "Insufficient permissions for this request"
+// @Failure      405         "Notification module has not been enabled on the server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/notifications/read/all [put]
+func (h *NotificationHandler) PutAllRead(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
+		return
+	}
+
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	req := ToggleReadRequest{IsRead: true}
+	if r.Body != nil && r.Body != http.NoBody {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			logger.WithError(err).Error("failed to decode request body")
+			web.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	err := h.server.Notificationstore.SetAllRead(ctx, req.IsRead)
+	if err != nil {
+		logger.WithError(err).Error("failed to update all read state")
+		h.respondError(w, r, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
+}
+
+// @Summary      Bulk Toggle Dismiss Notifications
+// @Description  Marks all eligible notifications as dismissed or active for the current user.
+// @Tags         Notifications
+// @Security     bearer[notifications/write]
+// @Param        request  body  ToggleDismissRequest  false  "Payload to toggle dismiss"
+// @Accept       json
+// @Produce      json
+// @Success      200         "All notifications were successfully updated"
+// @Failure      400         "Invalid request body or parameters"
+// @Failure      401         "Request was not properly authenticated"
+// @Failure      403         "Insufficient permissions for this request"
+// @Failure      405         "Notification module has not been enabled on the server"
+// @Failure      500         "Internal SOC error; review SOC logs"
+// @Router       /connect/notifications/dismiss/all [put]
+func (h *NotificationHandler) PutAllDismissed(w http.ResponseWriter, r *http.Request) {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) {
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
+		return
+	}
+
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	req := ToggleDismissRequest{IsDismissed: true}
+	if r.Body != nil && r.Body != http.NoBody {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			logger.WithError(err).Error("failed to decode request body")
+			web.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	err := h.server.Notificationstore.SetAllDismissed(ctx, req.IsDismissed)
+	if err != nil {
+		logger.WithError(err).Error("failed to update all dismiss state")
+		h.respondError(w, r, err)
+		return
+	}
+
+	web.Respond(w, r, http.StatusOK, nil)
 }
 
 // @Summary      Toggle Read Notification

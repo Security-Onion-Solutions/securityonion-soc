@@ -66,3 +66,14 @@ test('delegates sendNotification to destinationsManager.showSendDialog', () => {
   comp.sendNotification();
   expect(showSendDialogMock).toHaveBeenCalledWith(null);
 });
+
+test('onScheduleUpdated triggers getSchedules on destinationsManager', () => {
+  const getSchedulesMock = jest.fn();
+  comp.$refs = {
+    destinationsManager: {
+      getSchedules: getSchedulesMock,
+    },
+  };
+  comp.onScheduleUpdated();
+  expect(getSchedulesMock).toHaveBeenCalled();
+});

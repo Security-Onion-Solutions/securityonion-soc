@@ -133,6 +133,36 @@ describe('notifications.js', () => {
       expect(mockPapiGet).toHaveBeenCalledWith('notifications?filter=active');
       expect(ctx.notifications).toEqual(mockData);
       expect(ctx.unreadCount).toBe(1);
+      expect(ctx.notificationsTruncated).toBe(false);
+    });
+
+    it('handles truncated response format correctly', async () => {
+      const mockRecords = [
+        { id: 'notif-1', title: 'Alert 1', isRead: false, isDismissed: false },
+      ];
+      const mockResponse = {
+        notifications: mockRecords,
+        truncated: true,
+        count: 1
+      };
+      const mockPapiGet = jest.fn().mockResolvedValue({ data: mockResponse });
+      const ctx = {
+        username: 'admin',
+        FEAT_NTF: 'ntf',
+        notificationsStarted: true,
+        isLicensed: jest.fn(() => true),
+        notificationShowDismissed: false,
+        notifications: [],
+        unreadCount: 0,
+        notificationsTruncated: false,
+        papi: { get: mockPapiGet }
+      };
+
+      await socNotifications.loadNotifications.call(ctx);
+      expect(mockPapiGet).toHaveBeenCalledWith('notifications?filter=active');
+      expect(ctx.notifications).toEqual(mockRecords);
+      expect(ctx.notificationsTruncated).toBe(true);
+      expect(ctx.unreadCount).toBe(1);
     });
 
     it('fetches notifications with all filter when notificationShowDismissed is true', async () => {
@@ -280,6 +310,25 @@ describe('notifications.js', () => {
     });
   });
 
+  describe('markAllAsRead', () => {
+    it('sends bulk read request and reloads notifications and unread count', async () => {
+      const mockPapiPut = jest.fn().mockResolvedValue({ data: { success: true } });
+      const mockLoadNotifications = jest.fn();
+      const mockLoadUnreadCount = jest.fn();
+
+      const ctx = {
+        papi: { put: mockPapiPut },
+        loadNotifications: mockLoadNotifications,
+        loadUnreadCount: mockLoadUnreadCount
+      };
+
+      await socNotifications.markAllAsRead.call(ctx, true);
+      expect(mockPapiPut).toHaveBeenCalledWith('notifications/read/all', { isRead: true });
+      expect(mockLoadNotifications).toHaveBeenCalled();
+      expect(mockLoadUnreadCount).toHaveBeenCalled();
+    });
+  });
+
   describe('dismissNotification', () => {
     it('updates dismissal status and reloads notifications', async () => {
       const mockPapiPut = jest.fn().mockResolvedValue({ data: { success: true } });
@@ -293,6 +342,42 @@ describe('notifications.js', () => {
       await socNotifications.dismissNotification.call(ctx, 'notif-1', true);
       expect(mockPapiPut).toHaveBeenCalledWith('notifications/notif-1/dismiss', { isDismissed: true });
       expect(mockLoadNotifications).toHaveBeenCalled();
+    });
+  });
+
+  describe('dismissAll', () => {
+    it('sends bulk dismiss request and reloads notifications and unread count', async () => {
+      const mockPapiPut = jest.fn().mockResolvedValue({ data: { success: true } });
+      const mockLoadNotifications = jest.fn();
+      const mockLoadUnreadCount = jest.fn();
+
+      const ctx = {
+        papi: { put: mockPapiPut },
+        loadNotifications: mockLoadNotifications,
+        loadUnreadCount: mockLoadUnreadCount
+      };
+
+      await socNotifications.dismissAll.call(ctx, true);
+      expect(mockPapiPut).toHaveBeenCalledWith('notifications/dismiss/all', { isDismissed: true });
+      expect(mockLoadNotifications).toHaveBeenCalled();
+      expect(mockLoadUnreadCount).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleNotificationShowDismissed', () => {
+    it('toggles notificationShowDismissed boolean and reloads notifications', async () => {
+      const mockLoadNotifications = jest.fn();
+      const ctx = {
+        notificationShowDismissed: false,
+        loadNotifications: mockLoadNotifications
+      };
+
+      await socNotifications.toggleNotificationShowDismissed.call(ctx);
+      expect(ctx.notificationShowDismissed).toBe(true);
+      expect(mockLoadNotifications).toHaveBeenCalled();
+
+      await socNotifications.toggleNotificationShowDismissed.call(ctx);
+      expect(ctx.notificationShowDismissed).toBe(false);
     });
   });
 

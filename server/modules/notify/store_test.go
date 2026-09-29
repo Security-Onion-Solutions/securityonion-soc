@@ -98,16 +98,17 @@ func TestStoreGetNotifications_Success(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin", "admin").Return(mockRows, nil).Once()
+	}), "admin", "admin", 501).Return(mockRows, nil).Once()
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	res, err := store.GetNotifications(ctx, "unread")
 	assert.NoError(t, err)
-	assert.Len(t, res, 1)
-	assert.Equal(t, "notif-1", res[0].ID)
-	assert.Equal(t, true, res[0].IsRead)
-	assert.Equal(t, false, res[0].IsDismissed)
-	assert.Equal(t, "val", res[0].Fields["key"])
+	assert.NotNil(t, res)
+	assert.Len(t, res.Notifications, 1)
+	assert.Equal(t, "notif-1", res.Notifications[0].ID)
+	assert.Equal(t, true, res.Notifications[0].IsRead)
+	assert.Equal(t, false, res.Notifications[0].IsDismissed)
+	assert.Equal(t, "val", res.Notifications[0].Fields["key"])
 }
 
 func TestStoreGetNotifications_WithUserstoreCreationDate(t *testing.T) {
@@ -131,12 +132,13 @@ func TestStoreGetNotifications_WithUserstoreCreationDate(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "analyst@soc.local", "user-uuid-123", userCreated).Return(mockRows, nil).Once()
+	}), "analyst@soc.local", "user-uuid-123", userCreated, 501).Return(mockRows, nil).Once()
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-uuid-123")
 	res, err := store.GetNotifications(ctx, "all")
 	assert.NoError(t, err)
-	assert.Empty(t, res)
+	assert.NotNil(t, res)
+	assert.Empty(t, res.Notifications)
 	mDB.AssertExpectations(t)
 }
 
@@ -151,12 +153,13 @@ func TestStoreGetNotifications_ReadAllAuditor(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin").Return(mockRows, nil).Once()
+	}), "admin", 501).Return(mockRows, nil).Once()
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	res, err := store.GetNotifications(ctx, "unread")
 	assert.NoError(t, err)
-	assert.Empty(t, res)
+	assert.NotNil(t, res)
+	assert.Empty(t, res.Notifications)
 	mDB.AssertExpectations(t)
 }
 
@@ -182,12 +185,56 @@ func TestStoreGetNotifications_MissingUser(t *testing.T) {
 	assert.Nil(t, res)
 }
 
+func TestStoreGetNotifications_CustomLimit(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	srv := newTestServer(true, mDB)
+	store := NewNotificationstore(srv, nil)
+
+	mockRows := new(mockdb.MockRows)
+	mockRows.On("Close").Return()
+	mockRows.On("Next").Return(false).Once()
+
+	// When custom limit 25 is passed (< default 500), query uses 26 (25+1)
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "admin", "admin", 26).Return(mockRows, nil).Once()
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	res, err := store.GetNotifications(ctx, "unread", 25)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+
+	mockRows2 := new(mockdb.MockRows)
+	mockRows2.On("Close").Return()
+	mockRows2.On("Next").Return(false).Once()
+
+	// When custom limit exceeds default limit (e.g. 1000 > 500), capped at default 500 -> 501
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "admin", "admin", 501).Return(mockRows2, nil).Once()
+
+	res, err = store.GetNotifications(ctx, "unread", 1000)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+}
+
+func TestStoreSetDefaultLimit_Clamped(t *testing.T) {
+	store := NewNotificationstore(nil, nil)
+	assert.Equal(t, DEFAULT_MAX_LIST_LIMIT, store.GetDefaultLimit())
+
+	store.SetDefaultLimit(100)
+	assert.Equal(t, 100, store.GetDefaultLimit())
+
+	store.SetDefaultLimit(100000)
+	assert.Equal(t, MAX_ALLOWED_LIST_LIMIT, store.GetDefaultLimit())
+}
+
 func TestStoreGetNotifications_DBError(t *testing.T) {
 	mDB := new(mockdb.MockDB)
 	srv := newTestServer(true, mDB)
 	store := NewNotificationstore(srv, nil)
 
-	mDB.On("Query", mock.Anything, mock.Anything, "admin", "admin").Return(new(mockdb.MockRows), errors.New("db error")).Once()
+	mDB.On("Query", mock.Anything, mock.Anything, "admin", "admin", 501).Return(new(mockdb.MockRows), errors.New("db error")).Once()
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
 	res, err := store.GetNotifications(ctx, "")

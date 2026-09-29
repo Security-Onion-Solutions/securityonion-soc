@@ -22,7 +22,7 @@
         {{ i18n.allSeverities }}
       </div>
       <div v-else class="d-flex flex-wrap ga-1">
-        <v-chip v-for="sev in item.severities" :key="sev" size="x-small" :color="getSeverityColor(sev)" variant="flat" density="compact">
+        <v-chip v-for="sev in item.severities" :key="sev" size="x-small" :color="colorSeverity(sev)" variant="flat" density="compact">
           {{ getSeverityLabel(sev) }}
         </v-chip>
       </div>

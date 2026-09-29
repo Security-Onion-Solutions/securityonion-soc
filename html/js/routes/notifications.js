@@ -16,7 +16,25 @@ routes.push({
         tab: 'destinations',
       };
     },
+    watch: {
+      tab(newTab) {
+        if (newTab === 'destinations') {
+          if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
+            this.$refs.destinationsManager.loadData();
+          }
+        } else if (newTab === 'schedules') {
+          if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.loadData === 'function') {
+            this.$refs.schedulesManager.loadData();
+          }
+        }
+      },
+    },
     methods: {
+      onScheduleUpdated() {
+        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.getSchedules === 'function') {
+          this.$refs.destinationsManager.getSchedules();
+        }
+      },
       sendNotification() {
         if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.showSendDialog === 'function') {
           this.$refs.destinationsManager.showSendDialog(null);
@@ -33,8 +51,14 @@ routes.push({
         }
       },
       refresh() {
-        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
-          this.$refs.destinationsManager.loadData();
+        if (this.tab === 'destinations') {
+          if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
+            this.$refs.destinationsManager.loadData();
+          }
+        } else if (this.tab === 'schedules') {
+          if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.loadData === 'function') {
+            this.$refs.schedulesManager.loadData();
+          }
         }
       },
     },

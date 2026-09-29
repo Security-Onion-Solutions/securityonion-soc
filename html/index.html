@@ -78,18 +78,44 @@
             <v-card width="400" max-height="600" class="d-flex flex-column">
               <v-card-item class="py-2" :class="theme.global.current.dark ? 'bg-grey-darken-3' : 'bg-grey-lighten-4'">
                 <div class="d-flex align-center justify-between w-100">
-                  <v-switch v-model="notificationShowDismissed" density="compact" hide-details inset color="primary" class="my-0" data-aid="notification_dismissed_toggle" @update:model-value="loadNotifications">
-                    <template #label>
-                      <span class="text-caption mr-1" :class="theme.global.current.dark ? 'text-white' : 'text-grey-darken-4'">{{ i18n.dismissed }}</span>
-                    </template>
-                  </v-switch>
+                  <span class="text-subtitle-2 font-weight-bold" data-aid="notifications_popup_title">{{ i18n.notifications }} ({{ notifications.length }})</span>
                   <v-spacer></v-spacer>
-                  <v-btn icon size="x-small" variant="text" :color="theme.global.current.dark ? 'white' : 'grey-darken-4'" data-aid="notification_action_refresh" :title="i18n.refresh" @click="refreshNotifications">
-                    <v-icon size="small">fa-sync</v-icon>
+                  <v-btn icon size="x-small" variant="text" :color="theme.global.current.dark ? 'white' : 'grey-darken-4'" data-aid="notification_options_menu" :title="i18n.options" :aria-label="i18n.options" @click.stop="showNotificationOptions = !showNotificationOptions">
+                    <v-icon size="small">fa-ellipsis-v</v-icon>
                   </v-btn>
                 </div>
               </v-card-item>
-              <v-divider></v-divider>
+              <v-expand-transition>
+                <div v-if="showNotificationOptions" class="border-b" :class="theme.global.current.dark ? 'bg-grey-darken-4' : 'bg-grey-lighten-3'" data-aid="notification_options_dropdown">
+                  <v-list density="compact" bg-color="transparent" class="py-1">
+                    <v-list-item @click.stop="showNotificationOptions = false; refreshNotifications()" data-aid="notification_action_refresh">
+                      <template #prepend>
+                        <v-icon size="small" class="mr-2">fa-sync</v-icon>
+                      </template>
+                      <v-list-item-title>{{ i18n.refresh }}</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click.stop="showNotificationOptions = false; toggleNotificationShowDismissed()" data-aid="notification_action_toggle_dismissed">
+                      <template #prepend>
+                        <v-icon size="small" class="mr-2">{{ notificationShowDismissed ? 'fa-eye-slash' : 'fa-eye' }}</v-icon>
+                      </template>
+                      <v-list-item-title>{{ notificationShowDismissed ? i18n.hideDismissed : i18n.showDismissed }}</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click.stop="showNotificationOptions = false; markAllAsRead(true)" data-aid="notification_action_mark_all_read">
+                      <template #prepend>
+                        <v-icon size="small" class="mr-2">fa-check-double</v-icon>
+                      </template>
+                      <v-list-item-title>{{ i18n.markAllAsRead }}</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item @click.stop="showNotificationOptions = false; dismissAll(true)" data-aid="notification_action_dismiss_all">
+                      <template #prepend>
+                        <v-icon size="small" class="mr-2">fa-times-circle</v-icon>
+                      </template>
+                      <v-list-item-title>{{ i18n.dismissAll }}</v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </div>
+              </v-expand-transition>
+              <v-divider v-if="!showNotificationOptions"></v-divider>
               <v-list class="flex-grow-1 overflow-y-auto" style="min-height: 200px;">
                 <v-list-item v-if="notifications.length === 0">
                   <v-list-item-title class="text-center text-grey py-4" v-text="i18n.noNotifications" data-aid="notification_empty_state"></v-list-item-title>
@@ -144,17 +170,17 @@
 
                         <!-- Action buttons -->
                         <div class="d-flex align-center mt-2">
-                          <v-btn v-if="notif.isRead" size="x-small" variant="text" color="grey" class="px-1 mr-2" data-aid="notification_action_mark_unread" @click.stop="markAsRead(notif.id, false)">
-                            {{ i18n.markAsUnread }}
-                          </v-btn>
-                          <v-btn v-if="!notif.isRead" size="x-small" variant="text" color="info" class="px-1 mr-2" data-aid="notification_action_mark_read" @click.stop="markAsRead(notif.id, true)">
-                            {{ i18n.markAsRead }}
-                          </v-btn>
                           <v-btn v-if="!notif.isDismissed" size="x-small" variant="text" color="error" class="px-1 mr-2" data-aid="notification_action_dismiss" @click.stop="dismissNotification(notif.id, true)">
                             {{ i18n.dismiss }}
                           </v-btn>
                           <v-btn v-if="notif.isDismissed" size="x-small" variant="text" color="success" class="px-1 mr-2" data-aid="notification_action_restore" @click.stop="dismissNotification(notif.id, false)">
                             {{ i18n.restore }}
+                          </v-btn>
+                          <v-btn v-if="notif.isRead" size="x-small" variant="text" color="grey" class="px-1 mr-2" data-aid="notification_action_mark_unread" @click.stop="markAsRead(notif.id, false)">
+                            {{ i18n.markAsUnread }}
+                          </v-btn>
+                          <v-btn v-if="!notif.isRead" size="x-small" variant="text" color="info" class="px-1 mr-2" data-aid="notification_action_mark_read" @click.stop="markAsRead(notif.id, true)">
+                            {{ i18n.markAsRead }}
                           </v-btn>
                           <v-spacer></v-spacer>
                           <!-- Audit list popover -->
@@ -180,6 +206,10 @@
                   </v-list-item>
                   <v-divider v-if="notifications.indexOf(notif) < notifications.length - 1" :key="'div-'+notif.id"></v-divider>
                 </template>
+                <div v-if="notificationsTruncated" class="pa-3 text-center text-caption text-medium-emphasis border-t" data-aid="notifications_truncated_note">
+                  <v-icon size="x-small" class="mr-1">fa-info-circle</v-icon>
+                  {{ i18n.notificationsTruncatedNote }}
+                </div>
               </v-list>
             </v-card>
           </v-menu>
@@ -555,16 +585,6 @@
                   <v-list-item-title v-text="i18n.gridMembers"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_config" v-if="$root.isUserAdmin()">
-                <template #prepend>
-                  <router-link to="/config" class="text-decoration-none" aria-hidden="true" tabindex="-1">
-                    <v-icon>fa-gear</v-icon>
-                  </router-link>
-                </template>
-                <router-link to="/config" class="text-decoration-none d-block">
-                  <v-list-item-title v-text="i18n.config"></v-list-item-title>
-                </router-link>
-              </v-list-item>
               <v-list-item data-aid="nav_admin_notifications" v-if="$root.isUserAdmin() && isLicensed(FEAT_NTF) && notificationsStarted" :class="{ 'nav-active': $route.name === 'notifications' }">
                 <template #prepend>
                   <router-link to="/notifications" class="text-decoration-none" aria-hidden="true" tabindex="-1">
@@ -573,6 +593,16 @@
                 </template>
                 <router-link to="/notifications" class="text-decoration-none d-block">
                   <v-list-item-title v-text="i18n.notifications"></v-list-item-title>
+                </router-link>
+              </v-list-item>
+              <v-list-item data-aid="nav_admin_config" v-if="$root.isUserAdmin()">
+                <template #prepend>
+                  <router-link to="/config" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-gear</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/config" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.config"></v-list-item-title>
                 </router-link>
               </v-list-item>
               <v-list-item data-aid="nav_admin_license" v-if="$root.isUserAdmin()">
@@ -662,6 +692,7 @@
     <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/destinations-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/schedules-manager.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/alarms-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/case.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/clients.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/colors.js?v=VERSION_PLACEHOLDER"></script>

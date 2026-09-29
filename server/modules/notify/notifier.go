@@ -33,6 +33,7 @@ type NotifierImpl struct {
 	registry  *ChannelRegistry
 	config    model.NotificationConfig
 	mu        sync.RWMutex
+	destMu    sync.Mutex
 	silenceMu sync.Mutex
 	silenced  map[string]*silencerEntry
 }

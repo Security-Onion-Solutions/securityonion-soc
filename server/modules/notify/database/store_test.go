@@ -9,6 +9,7 @@ package database
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,14 +105,76 @@ func TestStore_GetNotifications(t *testing.T) {
 	userCreated := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "admin", "admin", userCreated).Return(mockRows, nil).Once()
+	}), "admin", "admin", userCreated, 501).Return(mockRows, nil).Once()
 
-	res, err := s.GetNotifications(context.Background(), "admin", []string{"admin"}, false, "active", userCreated)
+	res, err := s.GetNotifications(context.Background(), "admin", []string{"admin"}, false, "active", userCreated, 500)
 	assert.NoError(t, err)
-	assert.Len(t, res, 1)
-	assert.Equal(t, "notif-1", res[0].ID)
-	assert.Equal(t, "val", res[0].Fields["key"])
-	assert.Equal(t, []string{"admin"}, res[0].Recipients)
+	assert.NotNil(t, res)
+	assert.Len(t, res.Notifications, 1)
+	assert.Equal(t, "notif-1", res.Notifications[0].ID)
+	assert.Equal(t, "val", res.Notifications[0].Fields["key"])
+	assert.Equal(t, []string{"admin"}, res.Notifications[0].Recipients)
+	assert.False(t, res.Truncated)
+	assert.Equal(t, 1, res.Count)
+}
+
+func TestStore_GetNotifications_EmptyUserIdentifiersNotReadAll(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	s := &Store{db: mDB}
+
+	mockRows := new(mockdb.MockRows)
+	mockRows.On("Close").Return()
+	mockRows.On("Next").Return(false).Once()
+
+	userCreated := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "n.recipients IS NULL OR n.recipients = '[]'::jsonb")
+	}), "user1", userCreated, 501).Return(mockRows, nil).Once()
+
+	res, err := s.GetNotifications(context.Background(), "user1", nil, false, "active", userCreated, 500)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Empty(t, res.Notifications)
+	mDB.AssertExpectations(t)
+}
+
+func TestStore_SetAllRead_EmptyUserIdentifiersNotReadAll(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	s := &Store{db: mDB}
+
+	mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "n.recipients IS NULL OR n.recipients = '[]'::jsonb")
+	}), "user1", true, mock.Anything).Return(nil).Once()
+
+	err := s.SetAllRead(context.Background(), "user1", nil, false, time.Time{}, true)
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestStore_SetAllRead(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	s := &Store{db: mDB}
+
+	mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "admin", true, mock.Anything).Return(nil).Once()
+
+	err := s.SetAllRead(context.Background(), "admin", nil, true, time.Time{}, true)
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
+}
+
+func TestStore_SetAllDismissed(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	s := &Store{db: mDB}
+
+	mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "admin", true, mock.Anything).Return(nil).Once()
+
+	err := s.SetAllDismissed(context.Background(), "admin", nil, true, time.Time{}, true)
+	assert.NoError(t, err)
+	mDB.AssertExpectations(t)
 }
 
 func TestStore_SetRead(t *testing.T) {
