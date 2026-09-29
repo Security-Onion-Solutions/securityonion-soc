@@ -61,6 +61,8 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/automations/{id}", h.GetAutomation)
 		r.Put("/automations/{id}", h.UpdateAutomation)
 		r.Delete("/automations/{id}", h.DeleteAutomation)
+		r.Get("/automations/{id}/runs", h.GetAutomationRuns)
+		r.Get("/automations/{id}/runs/{runId}", h.GetAutomationRun)
 
 		r.Get("/memories", h.GetMemories)
 		r.Post("/memories", h.CreateMemory)
@@ -2053,6 +2055,72 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 	h.respondAutomation(w, r, nil, err)
 }
 
+// @Summary      List an Automation's Runs
+// @Description  Retrieve a page of one automation's runs, newest first, with each run's work items counted by state and the work the automation still has queued. A deleted automation keeps its history and is reported with an empty display name.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_all]
+// @Param        id      path   string  true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        limit   query  int     false  "Page size, at most 500" example(50)
+// @Param        offset  query  int     false  "Page offset" example(0)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunHistory "The page of runs"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found and no runs remain for it"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id}/runs [get]
+func (h *AssistantHandler) GetAutomationRuns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+
+	history, err := h.server.AssistantManager.GetAutomationRunHistory(ctx, urlParamId(r), limit, offset)
+	h.respondAutomation(w, r, history, err)
+}
+
+// @Summary      Get an Automation Run
+// @Description  Retrieve everything one run left behind: its work items, every session those items drove with the tools it used and a preview of its thinking, and the alerts the run recorded on. Open a session with GET /connect/assistant/sessions/{sessionId}; while a session is still running its turns also stream on the assistant:stream broadcast as model.AgentStreamEvent. Reading the alerts also requires events/read.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_all, events/read]
+// @Param        id          path   string  true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        runId       path   string  true   "Run ID" example(3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934)
+// @Param        alertLimit  query  int     false  "Alerts to return, at most 10000" example(500)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunDetails "The run"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Run not found under this automation"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id}/runs/{runId} [get]
+func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	alertLimit, _ := strconv.Atoi(r.URL.Query().Get("alertLimit"))
+
+	details, err := h.server.AssistantManager.GetAutomationRunDetails(ctx, urlParamId(r), decodePathValue(chi.URLParam(r, "runId")), alertLimit)
+	h.respondAutomation(w, r, details, err)
+}
+
 // @Summary      List Assistant Memories
 // @Description  Retrieve a page of the memories the requestor is allowed to read. A query orders results by semantic similarity instead of recency.
 // @Tags         Assistant
@@ -2245,7 +2313,8 @@ func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Requ
 	}
 
 	switch {
-	case strings.Contains(err.Error(), "ERROR_AUTOMATION_NOT_FOUND"):
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_NOT_FOUND"),
+		strings.Contains(err.Error(), "ERROR_AUTOMATION_RUN_NOT_FOUND"):
 		web.Respond(w, r, http.StatusNotFound, err)
 	case strings.Contains(err.Error(), "ERROR_AUTOMATION_KIND_NOT_FOUND"):
 		web.Respond(w, r, http.StatusBadRequest, err)

@@ -382,11 +382,13 @@ func TestListOpenAutomationWorkItemsReadsTheOpenSetOldestFirst(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+// A later claim re-points run_id, so the run that failed an item finds it again only through
+// failed_run_ids.
 func TestListAutomationWorkItemsReadsOneRun(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, sqlContains("WHERE run_id = $1"), "run-1").
+	mDB.On("Query", mock.Anything, sqlContainsAll("WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text]", "ORDER BY created_at"), "run-1").
 		Return(automationWorkItemRows(fullWorkItemRow()), nil)
 
 	items, err := s.ListAutomationWorkItems(context.Background(), "run-1")
@@ -505,6 +507,115 @@ func TestLatestAutomationRunStartTimesReportsScanErrors(t *testing.T) {
 	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
 
 	_, err := s.LatestAutomationRunStartTimes(context.Background(), []string{testAutomationId})
+
+	assert.EqualError(t, err, "bad row")
+}
+
+// The backlog is a count over the open partial index, never a row read.
+func TestCountOpenAutomationWorkItemsGroupsByState(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mRows := &mockdb.MockRows{}
+	for _, row := range []struct {
+		state model.AutomationWorkItemState
+		count int
+	}{{model.AutomationWorkItemPending, 3}, {model.AutomationWorkItemRunning, 1}} {
+		mRows.On("Next").Return(true).Once()
+		mRows.On("Scan", anyArgs(2)...).Run(func(args mock.Arguments) {
+			*(args.Get(0).(*model.AutomationWorkItemState)) = row.state
+			*(args.Get(1).(*int)) = row.count
+		}).Return(nil).Once()
+	}
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, sqlContainsAll(
+		"SELECT state, count(*)",
+		"WHERE automation_id = $1 AND state IN "+openWorkItemStates,
+		"GROUP BY state"), testAutomationId).
+		Return(mRows, nil)
+
+	counts, err := s.CountOpenAutomationWorkItems(context.Background(), testAutomationId)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[model.AutomationWorkItemState]int{model.AutomationWorkItemPending: 3, model.AutomationWorkItemRunning: 1}, counts)
+	mDB.AssertExpectations(t)
+
+	_, err = s.CountOpenAutomationWorkItems(context.Background(), "")
+	assert.Error(t, err)
+}
+
+func workItemCountRows(rows ...[3]any) *mockdb.MockRows {
+	mRows := &mockdb.MockRows{}
+
+	for _, row := range rows {
+		mRows.On("Next").Return(true).Once()
+		mRows.On("Scan", anyArgs(3)...).Run(func(args mock.Arguments) {
+			*(args.Get(0).(*string)) = row[0].(string)
+			*(args.Get(1).(*model.AutomationWorkItemState)) = row[1].(model.AutomationWorkItemState)
+			*(args.Get(2).(*int)) = row[2].(int)
+		}).Return(nil).Once()
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	return mRows
+}
+
+func TestCountAutomationWorkItemsByRunGroupsByRunAndState(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+	ids := []string{"run-1", "run-2", "run-3"}
+
+	mDB.On("Query", mock.Anything, sqlContainsAll(
+		"FROM unnest($1::uuid[]) AS r(id)",
+		"ON w.run_id = r.id OR w.failed_run_ids @> ARRAY[r.id::text]",
+		"WHEN w.failed_run_ids @> ARRAY[r.id::text] THEN 'failed'",
+		"GROUP BY 1, 2"), ids).
+		Return(workItemCountRows(
+			[3]any{"run-1", model.AutomationWorkItemDone, 3},
+			[3]any{"run-1", model.AutomationWorkItemFailed, 1},
+			[3]any{"run-2", model.AutomationWorkItemPending, 2},
+		), nil)
+
+	counts, err := s.CountAutomationWorkItemsByRun(context.Background(), ids)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]map[model.AutomationWorkItemState]int{
+		"run-1": {model.AutomationWorkItemDone: 3, model.AutomationWorkItemFailed: 1},
+		"run-2": {model.AutomationWorkItemPending: 2},
+	}, counts)
+	mDB.AssertExpectations(t)
+}
+
+func TestCountAutomationWorkItemsByRunWithNoIdsQueriesNothing(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	counts, err := s.CountAutomationWorkItemsByRun(context.Background(), nil)
+
+	require.NoError(t, err)
+	assert.NotNil(t, counts)
+	assert.Empty(t, counts)
+	assertNoStatements(t, mDB)
+}
+
+func TestCountAutomationWorkItemsByRunReportsScanErrors(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mRows := &mockdb.MockRows{}
+	mRows.On("Next").Return(true).Once()
+	mRows.On("Scan", anyArgs(3)...).Return(errors.New("bad row"))
+	mRows.On("Close").Return()
+
+	mDB.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(mRows, nil)
+
+	_, err := s.CountAutomationWorkItemsByRun(context.Background(), []string{"run-1"})
 
 	assert.EqualError(t, err, "bad row")
 }

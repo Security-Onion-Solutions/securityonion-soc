@@ -111,3 +111,13 @@ func TestMigrationRunsAndItemsKeyOnAutomationId(t *testing.T) {
 	assert.Contains(t, sql, "ON automation_work_items (automation_id, created_at)")
 	assert.Contains(t, sql, "ON automation_work_items (automation_id, group_key)")
 }
+
+// Run history reads by run_id and failed_run_ids, neither of which the open-item
+// indexes cover.
+func TestMigrationIndexesWorkItemsByRun(t *testing.T) {
+	sql := automationMigration(t)
+
+	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_run_id")
+	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_failed_run_ids")
+	assert.Contains(t, sql, "USING GIN (failed_run_ids)")
+}

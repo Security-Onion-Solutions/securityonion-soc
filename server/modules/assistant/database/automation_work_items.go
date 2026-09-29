@@ -379,7 +379,7 @@ func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId st
 	return collectWorkItems(rows)
 }
 
-// ListAutomationWorkItems returns the items one run worked, for the run detail view.
+// ListAutomationWorkItems returns the items one run last worked or failed; a claim re-points run_id.
 func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*model.AutomationWorkItem, error) {
 	if runId == "" {
 		return nil, fmt.Errorf("cannot list work items without a run id")
@@ -388,7 +388,7 @@ func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*m
 	rows, err := s.db.Query(ctx, `
 		SELECT `+automationWorkItemColumns+`
 		FROM automation_work_items
-		WHERE run_id = $1
+		WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text]
 		ORDER BY created_at`, runId)
 	if err != nil {
 		return nil, err
@@ -397,6 +397,78 @@ func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*m
 	defer rows.Close()
 
 	return collectWorkItems(rows)
+}
+
+// CountOpenAutomationWorkItems counts one automation's unfinished items by state.
+func (s *Store) CountOpenAutomationWorkItems(ctx context.Context, automationId string) (map[model.AutomationWorkItemState]int, error) {
+	if automationId == "" {
+		return nil, fmt.Errorf("cannot count open work items without an automation id")
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT state, count(*)
+		FROM automation_work_items
+		WHERE automation_id = $1 AND state IN `+openWorkItemStates+`
+		GROUP BY state`, automationId)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	counts := map[model.AutomationWorkItemState]int{}
+
+	for rows.Next() {
+		var state model.AutomationWorkItemState
+		var count int
+
+		if err := rows.Scan(&state, &count); err != nil {
+			return nil, err
+		}
+
+		counts[state] = count
+	}
+
+	return counts, rows.Err()
+}
+
+// CountAutomationWorkItemsByRun counts ListAutomationWorkItems by state per run; an item a run failed stays failed for it.
+func (s *Store) CountAutomationWorkItemsByRun(ctx context.Context, runIds []string) (map[string]map[model.AutomationWorkItemState]int, error) {
+	counts := map[string]map[model.AutomationWorkItemState]int{}
+	if len(runIds) == 0 {
+		return counts, nil
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT r.id::text,
+		       CASE WHEN w.failed_run_ids @> ARRAY[r.id::text] THEN 'failed' ELSE w.state END,
+		       count(*)
+		FROM unnest($1::uuid[]) AS r(id)
+		JOIN automation_work_items w ON w.run_id = r.id OR w.failed_run_ids @> ARRAY[r.id::text]
+		GROUP BY 1, 2`, runIds)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var runId string
+		var state model.AutomationWorkItemState
+		var count int
+
+		if err := rows.Scan(&runId, &state, &count); err != nil {
+			return nil, err
+		}
+
+		if counts[runId] == nil {
+			counts[runId] = map[model.AutomationWorkItemState]int{}
+		}
+
+		counts[runId][state] = count
+	}
+
+	return counts, rows.Err()
 }
 
 func collectWorkItems(rows db.Rows) ([]*model.AutomationWorkItem, error) {

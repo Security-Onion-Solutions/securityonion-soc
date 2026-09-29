@@ -7,7 +7,7 @@ type GetSessionsOpts struct {
 	includeMemorySessions     bool
 	includeAutomationSessions bool
 	userId                    string
-	sessionId                 string
+	sessionIds                []string
 	usage                     bool
 	descendants               bool
 	skipMessageMeta           bool
@@ -23,8 +23,8 @@ func (gso *GetSessionsOpts) UserId() string {
 	return gso.userId
 }
 
-func (gso *GetSessionsOpts) SessionId() string {
-	return gso.sessionId
+func (gso *GetSessionsOpts) SessionIds() []string {
+	return gso.sessionIds
 }
 
 func (gso *GetSessionsOpts) Range() (time.Time, time.Time) {
@@ -93,7 +93,16 @@ func GetSessionsWithUserId(userId string) GetSessionsOpt {
 
 func GetSessionsWithSessionId(sessionId string) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
-		gso.sessionId = sessionId
+		if sessionId != "" {
+			gso.sessionIds = []string{sessionId}
+		}
+	}
+}
+
+// GetSessionsWithSessionIds matches any of the given sessions in one query.
+func GetSessionsWithSessionIds(sessionIds []string) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.sessionIds = sessionIds
 	}
 }
 
