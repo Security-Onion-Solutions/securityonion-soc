@@ -613,6 +613,9 @@ type AgentSessionRequest struct {
 	Agent string
 	// Optional. Runs the session as this identity instead of the requestor in ctx.
 	OwnerId string
+	// Optional. The id to create the session with, so a caller can record it first;
+	// minted when empty.
+	SessionId string
 	// Tags stamped on the created session in addition to AutomationSessionTags.
 	Tags []string
 	// Ceiling on model turns across the session and every sub-agent it delegates

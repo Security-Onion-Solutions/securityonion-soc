@@ -4950,6 +4950,41 @@ func TestGetAutomationRunMapsErrors(t *testing.T) {
 	}
 }
 
+// The static segment wins over {id}, so the activity never reads as an automation named "activity".
+func TestGetAutomationActivityRequiresReadAll(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().GetAutomationActivity(gomock.Any()).
+		Return(&model.AutomationActivity{SchedulerRunning: true, Runs: []*model.AutomationRunActivity{}}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/activity", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"schedulerRunning":true`)
+	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+}
+
+func TestGetAutomationActivityRefusesWithoutReadAll(t *testing.T) {
+	r, _, auth := automationRouter(t, false)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/activity", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+}
+
+func TestGetAutomationActivityMapsErrors(t *testing.T) {
+	r, manager, _ := automationRouter(t, true)
+	manager.EXPECT().GetAutomationActivity(gomock.Any()).Return(nil, errors.New("postgres is down"))
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/activity", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
 func cloneSessionRequest(sessionId string) *http.Request {
 	req := httptest.NewRequest("POST", "/assistant/sessions/"+sessionId+"/clone", nil)
 	rctx := chi.NewRouteContext()

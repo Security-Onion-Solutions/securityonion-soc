@@ -255,13 +255,18 @@ func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, items
 		}
 	}
 
+	live := map[string]bool{}
+	for _, phase := range ac.AgentSessionPhases() {
+		live[phase.RootSessionId] = true
+	}
+
 	for _, item := range items {
 		for i, id := range item.SessionIds {
 			summary := &model.AutomationRunSession{
 				SessionId: id,
 				ItemId:    item.Id,
 				RunId:     automationAttemptRun(item, i),
-				Outcome:   automationSessionOutcome(item, i),
+				Outcome:   automationSessionOutcome(item, i, live[id]),
 				Steps:     []model.AutomationRunStep{},
 			}
 
@@ -300,8 +305,8 @@ func automationAttemptRun(item *model.AutomationWorkItem, index int) string {
 	return item.RunId
 }
 
-// automationSessionOutcome reads an attempt's fate off its item: only the newest attempt can be the report or running.
-func automationSessionOutcome(item *model.AutomationWorkItem, index int) string {
+// automationSessionOutcome reads an attempt's fate off its item: only the newest can be the report, and only a live one is running.
+func automationSessionOutcome(item *model.AutomationWorkItem, index int, live bool) string {
 	last := index == len(item.SessionIds)-1
 
 	switch item.State {
@@ -310,7 +315,7 @@ func automationSessionOutcome(item *model.AutomationWorkItem, index int) string 
 			return model.AutomationRunOutcomeReport
 		}
 	case model.AutomationWorkItemRunning:
-		if last {
+		if last && live {
 			return model.AutomationRunOutcomeRunning
 		}
 	}

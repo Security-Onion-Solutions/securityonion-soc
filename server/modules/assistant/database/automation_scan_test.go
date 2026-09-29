@@ -310,6 +310,18 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			args:      []any{testAutomationId, defaultAutomationRunLimit},
 		},
 		{
+			name:      "in flight",
+			query:     AutomationRunQuery{InFlight: true},
+			fragments: []string{"FROM automation_runs WHERE state IN ('queued', 'running') ORDER BY", "LIMIT $1"},
+			args:      []any{defaultAutomationRunLimit},
+		},
+		{
+			name:      "in flight by automation",
+			query:     AutomationRunQuery{AutomationId: testAutomationId, InFlight: true},
+			fragments: []string{"WHERE automation_id = $1 AND state IN ('queued', 'running') ORDER BY", "LIMIT $2"},
+			args:      []any{testAutomationId, defaultAutomationRunLimit},
+		},
+		{
 			name:      "limit only",
 			query:     AutomationRunQuery{Limit: 10},
 			fragments: []string{"LIMIT $1"},

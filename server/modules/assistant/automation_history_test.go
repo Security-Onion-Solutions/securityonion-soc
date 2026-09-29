@@ -360,8 +360,8 @@ func TestAutomationRunDetailsRejectsARunOfAnotherAutomation(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAutomationRunNotFound)
 }
 
-// Every attempt is listed, in item then attempt order, and only the newest attempt of an
-// item can be the report or still running.
+// Every attempt is listed, in item then attempt order. Only the newest attempt of an item can
+// be the report, and only a live one is running.
 func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.T) {
 	f := newHistoryFixture(t)
 	f.store.run = historyRun(historyRunId, model.AutomationRunRunning)
@@ -372,7 +372,11 @@ func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.
 		historyItem("failed", model.AutomationWorkItemFailed, "s5"),
 		historyItem("applying", model.AutomationWorkItemApplying, "s6"),
 		historyItem("queued", model.AutomationWorkItemPending),
+		// Claimed again and waiting for a slot; its newest session is the failed attempt before.
+		historyItem("waiting", model.AutomationWorkItemRunning, "s7"),
 	}
+	f.ac.setAgentPhase("s3", "s3", automationTestAgent, model.AgentPhaseWaitingLLM)
+	f.ac.setAgentPhase("s3-child", "s3", automationTestAgent, model.AgentPhaseWaitingLLM)
 
 	created := time.Date(2026, 9, 15, 16, 0, 5, 0, time.UTC)
 	for _, id := range []string{"s1", "s2", "s3", "s5", "s6"} {
@@ -405,6 +409,7 @@ func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.
 		"s4:pending:failed",
 		"s5:failed:failed",
 		"s6:applying:report",
+		"s7:waiting:failed",
 	}, got)
 
 	assert.Equal(t, historyOtherRunId, details.Sessions[0].RunId)
@@ -412,7 +417,7 @@ func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.
 	assert.Equal(t, historyRunId, details.Sessions[2].RunId)
 
 	assert.Equal(t, 1, f.chats.sessionCalls)
-	assert.Equal(t, []string{"s1", "s2", "s3", "s4", "s5", "s6"}, f.chats.sessionOpts.SessionIds())
+	assert.Equal(t, []string{"s1", "s2", "s3", "s4", "s5", "s6", "s7"}, f.chats.sessionOpts.SessionIds())
 	assert.True(t, f.chats.sessionOpts.IncludeDeleted())
 	assert.True(t, f.chats.sessionOpts.IncludeAutomationSessions())
 	assert.False(t, f.chats.sessionOpts.MessageMeta())

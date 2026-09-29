@@ -69,6 +69,7 @@ type AssistantManager interface {
 	DeleteAutomation(ctx context.Context, id string) error
 	GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error)
 	GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error)
+	GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error)
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error

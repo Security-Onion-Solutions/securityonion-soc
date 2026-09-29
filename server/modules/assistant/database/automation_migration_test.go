@@ -36,7 +36,7 @@ func TestMigrationDedupesRunsWithAPartialIndex(t *testing.T) {
 	sql := automationMigration(t)
 
 	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS "+idxRunsOneInFlight)
-	assert.Contains(t, sql, "WHERE state IN ('queued', 'running')")
+	assert.Contains(t, sql, "WHERE state IN "+inFlightRunStates)
 }
 
 // ON CONFLICT infers a partial index only from an identical predicate, and a mismatch is

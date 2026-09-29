@@ -545,7 +545,7 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 		err = ErrAlertTriageNoReport
 	}
 
-	// A report whose session could not be linked to the item counts as failed too.
+	// A session that could not be linked to the item never started, and fails with no session.
 	if err != nil {
 		// Interrupted rather than defeated; the params sweep has already settled the item.
 		if ctx.Err() != nil {

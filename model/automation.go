@@ -197,7 +197,7 @@ type AutomationRunSession struct {
 	ItemId string `json:"itemId" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
 	// The run that made this attempt, best effort: a run that failed before opening a session shifts the mapping.
 	RunId string `json:"runId,omitempty" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
-	// report, failed or running, derived from the item's state and the attempt's position.
+	// report, failed or running, derived from the item's state, the attempt's position and whether its session is live.
 	Outcome string `json:"outcome" example:"report"`
 	// The agent that drove this session.
 	Agent string `json:"agent,omitempty" example:"Investigator"`
@@ -234,4 +234,68 @@ type AutomationRunDetails struct {
 	MaxFailures int `json:"maxFailures" example:"3"`
 	// Alerts of this run whose group has failed maxFailures times; 0 when the cap is unknown.
 	GivenUpAlerts int `json:"givenUpAlerts" example:"12"`
+}
+
+// @Description What agents are doing right now: every automation run in flight with its automation's open work, what each live session is doing, and the load on the pool that runs agent work.
+type AutomationActivity struct {
+	// Indicates the automation scheduler is running; it stays stopped when agents are off, on airgapped grids and without a database.
+	SchedulerRunning bool `json:"schedulerRunning" example:"true"`
+	// The pool that runs agent work, interactive turns included.
+	Pool AgentPoolActivity `json:"pool"`
+	// Runs queued or running, newest first.
+	Runs []*AutomationRunActivity `json:"runs"`
+}
+
+// @Description Load on the pool that runs agent work, interactive turns included.
+type AgentPoolActivity struct {
+	// Jobs waiting for a slot.
+	Queued int `json:"queued" example:"21"`
+	// Jobs holding a slot.
+	Running int `json:"running" example:"4"`
+	// The most jobs started from the queue at once; interactive turns count toward it but can run past it. 0 means unlimited.
+	MaxConcurrent int `json:"maxConcurrent" example:"4"`
+	// The most jobs allowed to wait; 0 means unlimited.
+	MaxQueueDepth int `json:"maxQueueDepth" example:"0"`
+	// The most jobs ever waiting at once since the server started.
+	PeakQueued int `json:"peakQueued" example:"25"`
+	// The most jobs ever running at once since the server started.
+	PeakRunning int `json:"peakRunning" example:"4"`
+	// Jobs refused because the queue was full, since the server started.
+	Rejected uint64 `json:"rejected" example:"0"`
+	// Jobs refused because the same work was already queued or running, since the server started.
+	Deduped uint64 `json:"deduped" example:"2"`
+	// Interactive turns refused because their agent was at its limit, since the server started.
+	Busy uint64 `json:"busy" example:"1"`
+	// Each agent with work queued or running, by name.
+	Agents []*AgentPoolLoad `json:"agents"`
+}
+
+// @Description One agent's share of the pool.
+type AgentPoolLoad struct {
+	// The agent's name, or the model selector of an interactive turn that names no agent.
+	Name    string `json:"name" example:"Investigator"`
+	Queued  int    `json:"queued" example:"21"`
+	Running int    `json:"running" example:"2"`
+	// The agent's maxConcurrentInstances; 0 means unlimited.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
+}
+
+// @Description One run in flight and the work its automation still has open.
+type AutomationRunActivity struct {
+	AutomationRunSummary
+	// The automation's current name; empty once it has been deleted or without config/read.
+	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
+	// Indicates the automation has been deleted and this run is finishing without it.
+	AutomationDeleted bool `json:"automationDeleted" example:"false"`
+	// The automation's unfinished items, oldest first, whichever run enqueued them.
+	Items []*AutomationWorkItemActivity `json:"items"`
+}
+
+// @Description One unfinished work item and what is happening to it. A running item that is neither queued nor has phases is preparing its session.
+type AutomationWorkItemActivity struct {
+	AutomationWorkItem
+	// Indicates the item's job is waiting for a pool slot.
+	Queued bool `json:"queued" example:"false"`
+	// The item's live session first, then each child it delegated to; empty while no session runs for it.
+	Phases []AgentSessionPhase `json:"phases"`
 }

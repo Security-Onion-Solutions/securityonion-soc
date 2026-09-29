@@ -104,6 +104,7 @@ func (m *triageAssistantManager) RunAgentSession(ctx context.Context, req *model
 	}
 
 	result := *m.result
+	result.SessionId = req.SessionId
 
 	return &result, m.err
 }
@@ -204,6 +205,7 @@ type triageWorkStore struct {
 	applyingErr  error
 	completeErr  error
 	repinErr     error
+	sessionErr   error
 	// Runs before a transition answers, the way a params change cancels the run first.
 	sweep    func()
 	running  map[string]*model.AutomationWorkItem
@@ -281,6 +283,10 @@ func (s *triageWorkStore) EnsureAutomationWorkItemSession(ctx context.Context, i
 	// The real store refuses a cancelled context.
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+
+	if s.sessionErr != nil {
+		return s.sessionErr
 	}
 
 	if item := s.running[itemId]; item != nil {
@@ -471,7 +477,7 @@ func newTriageFixture(t *testing.T, params string, open ...*model.AutomationWork
 
 	f := &triageFixture{es: server.NewFakeEventstore(), store: &triageWorkStore{}, kind: &AlertTriageKind{}, pinned: map[string]*model.EventRecord{}}
 	f.alerts = &triageAssistantstore{prefix: "so_", work: f.store}
-	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{SessionId: "sess-1", FinalText: "report"}}
+	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{FinalText: "report"}}
 	f.es.MSearchResults = []*model.EventMSearchResults{model.NewEventMSearchResults()}
 
 	// An item ends only after its alerts carry the outcome.
@@ -572,6 +578,16 @@ func (f *triageFixture) submittedKeys() []string {
 	defer f.mu.Unlock()
 
 	return slices.Clone(f.keys)
+}
+
+// sessionId is the id the fixture's one session was started with.
+func (f *triageFixture) sessionId(t *testing.T) string {
+	t.Helper()
+
+	requests := f.manager.sessions()
+	require.Len(t, requests, 1)
+
+	return requests[0].SessionId
 }
 
 func bucket(count float64, keys ...any) *model.EventMetric {
@@ -756,7 +772,7 @@ func TestAlertTriageSubmitsOnlyInsertedRows(t *testing.T) {
 
 	require.NoError(t, f.kind.Execute(context.Background(), f.run))
 
-	assert.ElementsMatch(t, []string{"ensure", "claim:item-1", "claim:none", "session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+	assert.ElementsMatch(t, []string{"ensure", "claim:item-1", "claim:none", "session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 	assert.Equal(t, `rule.name:"ET POLICY" AND source.ip:"5.6.7.8"`, f.store.ensured[0][1].GroupKey)
 }
 
@@ -907,7 +923,7 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
 	require.NoError(t, r.workItem(ctx, item))
-	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 
 	// The lookup names the pinned alert and searches around its timestamp.
 	require.Len(t, f.es.InputSearchCriterias, 1)
@@ -929,14 +945,17 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	assert.Contains(t, requests[0].Objective, `"_id": "alert-1"`)
 	assert.Contains(t, requests[0].Objective, `"ip": "1.2.3.4"`)
 
+	// The item, its result and its alerts all hold the id the session was started with.
+	sessionId := requests[0].SessionId
+	assert.NotEmpty(t, sessionId)
 	assert.Equal(t, model.AutomationWorkItemDone, item.State)
-	assert.JSONEq(t, `{"sessionId":"sess-1"}`, string(item.Result))
-	assert.Equal(t, []string{"sess-1"}, item.SessionIds)
+	assert.Equal(t, []string{sessionId}, item.SessionIds)
+	assert.JSONEq(t, `{"sessionId":"`+sessionId+`"}`, string(item.Result))
 
 	updates := f.alerts.recorded()
 	require.Len(t, updates, 1)
 	assert.False(t, updates[0].Failed)
-	assert.Equal(t, "sess-1", updates[0].SessionId)
+	assert.Equal(t, sessionId, updates[0].SessionId)
 	assert.Equal(t, "run-1", updates[0].RunId)
 	assert.Equal(t, `tags:alert AND rule.name:"A"`, updates[0].Query)
 	assert.True(t, updates[0].Floor.Equal(triageTestEpoch))
@@ -952,9 +971,9 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 		err     error
 		wantErr string
 	}{
-		{"session error", &model.AgentSessionResult{SessionId: "sess-1"}, errors.New("model is down"), "model is down"},
-		{"truncated", &model.AgentSessionResult{SessionId: "sess-1", FinalText: "half", Truncated: true}, nil, ErrAlertTriageNoReport.Error()},
-		{"empty report", &model.AgentSessionResult{SessionId: "sess-1", FinalText: " \n"}, nil, ErrAlertTriageNoReport.Error()},
+		{"session error", &model.AgentSessionResult{}, errors.New("model is down"), "model is down"},
+		{"truncated", &model.AgentSessionResult{FinalText: "half", Truncated: true}, nil, ErrAlertTriageNoReport.Error()},
+		{"empty report", &model.AgentSessionResult{FinalText: " \n"}, nil, ErrAlertTriageNoReport.Error()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -971,7 +990,7 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 			updates := f.alerts.recorded()
 			require.Len(t, updates, 1)
 			assert.True(t, updates[0].Failed)
-			assert.Equal(t, "sess-1", updates[0].SessionId)
+			assert.Equal(t, f.sessionId(t), updates[0].SessionId)
 			assert.Equal(t, "run-1", updates[0].RunId)
 			assert.Equal(t, []string{"run-0", "run-1"}, updates[0].FailedRunIds)
 		})
@@ -979,16 +998,29 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 
 	t.Run("reaching the cap updates the alerts then gives up", func(t *testing.T) {
 		f, r := newTriageJob(t)
-		f.manager.result = &model.AgentSessionResult{SessionId: "sess-1", Truncated: true}
+		f.manager.result = &model.AgentSessionResult{Truncated: true}
 		item := f.claimed(t, "run-a", "run-b")
 
 		require.NoError(t, r.workItem(context.Background(), item))
 		assert.Equal(t, []string{"session:item-1", "failrun:item-1", "alerts:run-a,run-b,run-1", "fail:item-1"}, f.store.log())
 	})
 
+	t.Run("a session that cannot be linked never starts", func(t *testing.T) {
+		f, r := newTriageJob(t)
+		f.store.sessionErr = errors.New("pg down")
+		item := f.claimed(t)
+
+		require.NoError(t, r.workItem(context.Background(), item))
+		assert.Empty(t, f.manager.sessions())
+		assert.Equal(t, []string{"session:item-1", "failrun:item-1", "alerts:run-1"}, f.store.log())
+		assert.Empty(t, item.SessionIds)
+		assert.Equal(t, "pg down", item.Error)
+		assert.Empty(t, f.alerts.recorded()[0].SessionId)
+	})
+
 	t.Run("alerts that cannot be updated keep the item", func(t *testing.T) {
 		f, r := newTriageJob(t)
-		f.manager.result = &model.AgentSessionResult{SessionId: "sess-1", Truncated: true}
+		f.manager.result = &model.AgentSessionResult{Truncated: true}
 		f.alerts.updateErr = errors.New("elasticsearch is down")
 		item := f.claimed(t, "run-a", "run-b")
 
@@ -998,7 +1030,7 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 
 	t.Run("swept while it ran", func(t *testing.T) {
 		f, r := newTriageJob(t)
-		f.manager.result = &model.AgentSessionResult{SessionId: "sess-1", Truncated: true}
+		f.manager.result = &model.AgentSessionResult{Truncated: true}
 
 		ctx, cancel := context.WithCancelCause(context.Background())
 		f.store.sweep = func() { cancel(ErrAutomationParamsChanged) }
@@ -1010,7 +1042,7 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 
 	t.Run("vanished on a live run", func(t *testing.T) {
 		f, r := newTriageJob(t)
-		f.manager.result = &model.AgentSessionResult{SessionId: "sess-1", Truncated: true}
+		f.manager.result = &model.AgentSessionResult{Truncated: true}
 		f.store.failRunErr = database.ErrAutomationWorkItemNotFound
 
 		assert.ErrorIs(t, r.workItem(context.Background(), f.claimed(t)), database.ErrAutomationWorkItemNotFound)
@@ -1019,7 +1051,7 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 
 	t.Run("store failure", func(t *testing.T) {
 		f, r := newTriageJob(t)
-		f.manager.result = &model.AgentSessionResult{SessionId: "sess-1", Truncated: true}
+		f.manager.result = &model.AgentSessionResult{Truncated: true}
 		f.store.failRunErr = errors.New("postgres is down")
 
 		assert.ErrorContains(t, r.workItem(context.Background(), f.claimed(t)), "postgres is down")
@@ -1058,7 +1090,7 @@ func TestAlertTriageWorkItemAlertLookup(t *testing.T) {
 
 		// The item is re-pinned to the alert actually investigated before its session opens.
 		require.NoError(t, r.workItem(context.Background(), item))
-		assert.Equal(t, []string{"repin:item-1", "session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+		assert.Equal(t, []string{"repin:item-1", "session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 
 		// Both id lookups miss, then the group's own query runs over the payload's window.
 		require.Len(t, f.es.InputSearchCriterias, 3)
@@ -1117,7 +1149,7 @@ func TestAlertTriageWorkItemAlertLookup(t *testing.T) {
 
 		// Still found, so still pinned: one all-time id lookup and no re-pin.
 		require.NoError(t, r.workItem(context.Background(), item))
-		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 
 		require.Len(t, f.es.InputSearchCriterias, 1)
 		assert.Contains(t, f.es.InputSearchCriterias[0].RawQuery, `_id:"alert-1"`)
@@ -1163,7 +1195,7 @@ func TestAlertTriageWorkItemAlertLookup(t *testing.T) {
 		item.Payload = payload
 
 		require.NoError(t, r.workItem(context.Background(), item))
-		assert.Equal(t, []string{"repin:item-1", "session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+		assert.Equal(t, []string{"repin:item-1", "session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 
 		// Straight to the group's own query, and the item now names what it found.
 		require.Len(t, f.es.InputSearchCriterias, 1)
@@ -1243,7 +1275,7 @@ func TestAlertTriageUpdateErrorSpendsARetry(t *testing.T) {
 	// The checkpoint survives with this run charged against it, so the next run replays only
 	// the update.
 	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
-	assert.JSONEq(t, `{"sessionId":"sess-1"}`, string(item.Result))
+	assert.JSONEq(t, `{"sessionId":"`+f.sessionId(t)+`"}`, string(item.Result))
 	assert.Equal(t, []string{"run-1"}, item.FailedRunIds)
 }
 
@@ -1253,7 +1285,7 @@ func TestAlertTriageCompleteErrorKeepsApplying(t *testing.T) {
 	item := f.claimed(t)
 
 	assert.ErrorContains(t, r.workItem(context.Background(), item), "postgres is down")
-	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
 	assert.Len(t, f.alerts.recorded(), 1)
 }
@@ -1264,9 +1296,9 @@ func TestAlertTriageInterruptedSessionWritesNothing(t *testing.T) {
 		cause  error
 		events []string
 	}{
-		// The session is linked to the item either way, unless the engine is stopping.
+		// The session is linked to the item before it starts, and nothing is written after.
 		{"params changed", ErrAutomationParamsChanged, []string{"session:item-1"}},
-		{"shutdown", ErrAutomationSchedulerStopped, nil},
+		{"shutdown", ErrAutomationSchedulerStopped, []string{"session:item-1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1274,7 +1306,7 @@ func TestAlertTriageInterruptedSessionWritesNothing(t *testing.T) {
 
 			ctx, cancel := context.WithCancelCause(context.Background())
 			f.manager.onRun = func(context.Context) { cancel(tt.cause) }
-			f.manager.result, f.manager.err = &model.AgentSessionResult{SessionId: "sess-1"}, tt.cause
+			f.manager.result, f.manager.err = &model.AgentSessionResult{}, tt.cause
 
 			assert.ErrorIs(t, r.workItem(ctx, f.claimed(t)), tt.cause)
 			assert.Equal(t, tt.events, f.store.log())
@@ -1293,7 +1325,7 @@ func TestAlertTriageReportAfterParamsChangeIsRecorded(t *testing.T) {
 
 		// Every write after the cancel runs detached from it.
 		require.NoError(t, r.workItem(ctx, item))
-		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
+		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 		assert.Equal(t, model.AutomationWorkItemDone, item.State)
 	})
 
@@ -1316,7 +1348,7 @@ func TestAlertTriageReportAfterParamsChangeIsRecorded(t *testing.T) {
 		f.manager.onRun = func(context.Context) { cancel(ErrAutomationSchedulerStopped) }
 
 		assert.ErrorIs(t, r.workItem(ctx, f.claimed(t)), ErrAutomationSchedulerStopped)
-		assert.Empty(t, f.store.log())
+		assert.Equal(t, []string{"session:item-1"}, f.store.log(), "only the link made before the session started")
 		assert.Empty(t, f.alerts.recorded())
 	})
 }
