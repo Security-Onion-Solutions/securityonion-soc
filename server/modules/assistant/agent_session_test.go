@@ -431,6 +431,20 @@ func TestRunAgentSession_MintsSessionIdAndStampsTags(t *testing.T) {
 	assert.Equal(t, "investigate alert 42", sess.Title)
 }
 
+func TestRunAgentSession_CreatesTheRequestedSessionId(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newHeadlessFixture(t, ctrl, sseText("done"))
+	req := baseRequest()
+	req.SessionId = "0b9e3c2a-7d41-4f8e-9a6b-5c1d2e3f4a5b"
+
+	res, err := f.ac.RunAgentSession(userCtx(), req)
+	require.NoError(t, err)
+	assert.Equal(t, req.SessionId, res.SessionId)
+	assert.NotNil(t, f.store.session(req.SessionId))
+}
+
 func TestRunAgentSession_BusyChildResolvesAsErrorResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1241,7 +1255,7 @@ func (f *fakeAutomationStore) EnsureAutomationWorkItemSession(_ context.Context,
 	return f.err
 }
 
-func TestAutomationRunRunAgentSession_RecordsSessionOnItem(t *testing.T) {
+func TestAutomationRunRunAgentSession_LinksSessionBeforeRunning(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1252,6 +1266,11 @@ func TestAutomationRunRunAgentSession_RecordsSessionOnItem(t *testing.T) {
 	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
 	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+			// The item already leads to the session it is about to run.
+			assert.NotEmpty(t, req.SessionId)
+			assert.Equal(t, "item-1", store.itemId)
+			assert.Equal(t, req.SessionId, store.sessionId)
+
 			// The run context is the identity; the wrapper names no owner of its own.
 			assert.Empty(t, req.OwnerId)
 			assert.Equal(t, server.SYSTEM_ID, ctx.Value(web.ContextKeyRequestorId))
@@ -1267,21 +1286,48 @@ func TestAutomationRunRunAgentSession_RecordsSessionOnItem(t *testing.T) {
 	}
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
-	got, err := run.RunAgentSession(ctx, "item-1", &model.AgentSessionRequest{Objective: "o", Agent: "Hunter", Tags: []string{"run:run-7"}})
+	req := &model.AgentSessionRequest{Objective: "o", Agent: "Hunter", Tags: []string{"run:run-7"}}
+	got, err := run.RunAgentSession(ctx, "item-1", req)
 	require.NoError(t, err)
 	assert.Same(t, want, got)
-	assert.Equal(t, "item-1", store.itemId)
-	assert.Equal(t, "session-9", store.sessionId)
+	assert.Empty(t, req.SessionId, "the caller's request is left as it was")
 }
 
-func TestAutomationRunRunAgentSession_FailedRunStillRecordsSession(t *testing.T) {
+func TestAutomationRunRunAgentSession_KeepsRequestedSessionId(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	store := &fakeAutomationStore{}
 	manager := servermock.NewMockAssistantManager(ctrl)
 	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
-	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).Return(&model.AgentSessionResult{SessionId: "session-9"}, ErrAgentSessionBusy)
+	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+			assert.Equal(t, "session-9", req.SessionId)
+			return &model.AgentSessionResult{SessionId: req.SessionId}, nil
+		})
+
+	run := &AutomationRun{
+		Srv:   &server.Server{AssistantManager: manager},
+		Task:  &model.Automation{},
+		Store: store,
+	}
+
+	_, err := run.RunAgentSession(context.Background(), "item-1", &model.AgentSessionRequest{Objective: "o", SessionId: "session-9"})
+	require.NoError(t, err)
+	assert.Equal(t, "session-9", store.sessionId)
+}
+
+func TestAutomationRunRunAgentSession_FailedRunStaysLinked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := &fakeAutomationStore{}
+	manager := servermock.NewMockAssistantManager(ctrl)
+	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
+	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+			return &model.AgentSessionResult{SessionId: req.SessionId}, ErrAgentSessionBusy
+		})
 
 	run := &AutomationRun{
 		Srv:   &server.Server{AssistantManager: manager},
@@ -1291,42 +1337,44 @@ func TestAutomationRunRunAgentSession_FailedRunStillRecordsSession(t *testing.T)
 
 	got, err := run.RunAgentSession(context.Background(), "item-1", &model.AgentSessionRequest{OwnerId: "user-1"})
 	assert.ErrorIs(t, err, ErrAgentSessionBusy)
-	assert.Equal(t, "session-9", got.SessionId)
-	assert.Equal(t, "session-9", store.sessionId)
+	assert.NotEmpty(t, got.SessionId)
+	assert.Equal(t, got.SessionId, store.sessionId)
 }
 
-func TestAutomationRunRunAgentSession_ShutdownRecordsNothing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestAutomationRunRunAgentSession_CancelledRunStartsNothing(t *testing.T) {
+	for _, cause := range []error{ErrAutomationSchedulerStopped, ErrAutomationParamsChanged} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	store := &fakeAutomationStore{}
-	manager := servermock.NewMockAssistantManager(ctrl)
-	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
-	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).Return(&model.AgentSessionResult{SessionId: "session-9"}, ErrAutomationSchedulerStopped)
+			store := &fakeAutomationStore{}
+			manager := servermock.NewMockAssistantManager(ctrl)
+			manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
 
-	run := &AutomationRun{
-		Srv:   &server.Server{AssistantManager: manager},
-		Task:  &model.Automation{},
-		Store: store,
+			run := &AutomationRun{
+				Srv:   &server.Server{AssistantManager: manager},
+				Task:  &model.Automation{},
+				Store: store,
+			}
+
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(cause)
+
+			got, err := run.RunAgentSession(ctx, "item-1", &model.AgentSessionRequest{OwnerId: "user-1"})
+			assert.ErrorIs(t, err, cause)
+			assert.Nil(t, got)
+			assert.Empty(t, store.sessionId)
+		})
 	}
-
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cancel(ErrAutomationSchedulerStopped)
-
-	got, err := run.RunAgentSession(ctx, "item-1", &model.AgentSessionRequest{OwnerId: "user-1"})
-	assert.ErrorIs(t, err, ErrAutomationSchedulerStopped)
-	assert.Equal(t, "session-9", got.SessionId)
-	assert.Empty(t, store.sessionId, "the session is not linked to the item at shutdown")
 }
 
-func TestAutomationRunRunAgentSession_StoreErrorIsReported(t *testing.T) {
+func TestAutomationRunRunAgentSession_LinkFailureStartsNothing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	store := &fakeAutomationStore{err: errors.New("pg down")}
 	manager := servermock.NewMockAssistantManager(ctrl)
 	manager.EXPECT().ValidateAgentSessionRequest(gomock.Any()).Return(nil)
-	manager.EXPECT().RunAgentSession(gomock.Any(), gomock.Any()).Return(&model.AgentSessionResult{SessionId: "session-9"}, nil)
 
 	run := &AutomationRun{
 		Srv:   &server.Server{AssistantManager: manager},
@@ -1336,7 +1384,7 @@ func TestAutomationRunRunAgentSession_StoreErrorIsReported(t *testing.T) {
 
 	got, err := run.RunAgentSession(context.Background(), "item-1", &model.AgentSessionRequest{OwnerId: "user-1"})
 	require.EqualError(t, err, "pg down")
-	assert.Equal(t, "session-9", got.SessionId)
+	assert.Nil(t, got)
 }
 
 func TestAutomationRunRunAgentSession_InvalidRequestRecordsNothing(t *testing.T) {

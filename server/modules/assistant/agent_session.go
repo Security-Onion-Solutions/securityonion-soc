@@ -48,12 +48,15 @@ func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.
 		ownerCtx = context.WithValue(ctx, web.ContextKeyRequestorId, req.OwnerId)
 	}
 
-	// Before the id is minted: callers record any session id they are handed.
 	if owner, _ := ownerCtx.Value(web.ContextKeyRequestorId).(string); owner == "" {
 		return nil, ErrAgentSessionOwnerRequired
 	}
 
-	sessionId := uuid.NewString()
+	sessionId := req.SessionId
+	if sessionId == "" {
+		sessionId = uuid.NewString()
+	}
+
 	result = &model.AgentSessionResult{SessionId: sessionId}
 
 	budget := &turnBudget{max: req.MaxTurns}

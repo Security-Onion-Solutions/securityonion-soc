@@ -103,8 +103,8 @@ type AutomationRun struct {
 	OpenItems []*model.AutomationWorkItem
 }
 
-// RunAgentSession runs one headless session for a work item and records the session on
-// the item, failed runs included, so the item always leads to the transcript.
+// RunAgentSession runs one headless session for a work item. The session is recorded on the
+// item before it starts, so the item leads to the transcript while it runs and after it fails.
 func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
 	if req == nil {
 		return nil, ErrAgentSessionRequestRequired
@@ -114,17 +114,20 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 		return nil, err
 	}
 
-	result, runErr := run.Srv.AssistantManager.RunAgentSession(ctx, req)
-	if result != nil && result.SessionId != "" && !shuttingDown(ctx) {
-		linkCtx, done := automationWriteContext(ctx)
-		defer done()
-
-		if err := run.Store.EnsureAutomationWorkItemSession(linkCtx, itemId, result.SessionId); err != nil {
-			return result, errors.Join(runErr, err)
-		}
+	if ctx.Err() != nil {
+		return nil, context.Cause(ctx)
 	}
 
-	return result, runErr
+	started := *req
+	if started.SessionId == "" {
+		started.SessionId = uuid.NewString()
+	}
+
+	if err := run.Store.EnsureAutomationWorkItemSession(ctx, itemId, started.SessionId); err != nil {
+		return nil, causeOr(ctx, err)
+	}
+
+	return run.Srv.AssistantManager.RunAgentSession(ctx, &started)
 }
 
 // automationWriteContext detaches from a params-change cancel, so a finished session is still

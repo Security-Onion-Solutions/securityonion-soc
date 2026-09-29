@@ -58,6 +58,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 
 		r.Get("/automations", h.GetAutomations)
 		r.Post("/automations", h.CreateAutomation)
+		r.Get("/automations/activity", h.GetAutomationActivity)
 		r.Get("/automations/{id}", h.GetAutomation)
 		r.Put("/automations/{id}", h.UpdateAutomation)
 		r.Delete("/automations/{id}", h.DeleteAutomation)
@@ -2119,6 +2120,32 @@ func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Reque
 
 	details, err := h.server.AssistantManager.GetAutomationRunDetails(ctx, urlParamId(r), decodePathValue(chi.URLParam(r, "runId")), alertLimit)
 	h.respondAutomation(w, r, details, err)
+}
+
+// @Summary      Get Automation Activity
+// @Description  Report what agents are doing right now: every automation run queued or running with its automation's open work items, whether each item is waiting for a pool slot, what each item's live session and the children it delegated to are doing, and the load on the pool that runs agent work, interactive turns included. Open a session with GET /connect/assistant/sessions/{sessionId}; its turns stream on the assistant:stream broadcast as model.AgentStreamEvent.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_all]
+// @Produce      json
+// @Success      200 {object} model.AutomationActivity "The activity"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/activity [get]
+func (h *AssistantHandler) GetAutomationActivity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read_all", "assistant"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	activity, err := h.server.AssistantManager.GetAutomationActivity(ctx)
+	h.respondAutomation(w, r, activity, err)
 }
 
 // @Summary      List Assistant Memories

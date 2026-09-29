@@ -210,6 +210,21 @@ func (mr *MockAssistantManagerMockRecorder) GetAutomation(ctx, id any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomation", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomation), ctx, id)
 }
 
+// GetAutomationActivity mocks base method.
+func (m *MockAssistantManager) GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationActivity", ctx)
+	ret0, _ := ret[0].(*model.AutomationActivity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationActivity indicates an expected call of GetAutomationActivity.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationActivity(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationActivity", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationActivity), ctx)
+}
+
 // GetAutomationRunDetails mocks base method.
 func (m *MockAssistantManager) GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error) {
 	m.ctrl.T.Helper()

@@ -320,6 +320,21 @@ func (p *Pool) Holds(dedupeKey string) bool {
 	return p.dedupe[dedupeKey] > 0
 }
 
+// QueuedDedupeKeys reports the dedupe keys of the jobs waiting for a slot.
+func (p *Pool) QueuedDedupeKeys() map[string]bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	keys := make(map[string]bool, len(p.queue))
+	for _, e := range p.queue {
+		if e.job.DedupeKey != "" {
+			keys[e.job.DedupeKey] = true
+		}
+	}
+
+	return keys
+}
+
 // Shutdown stops admitting new jobs and waits for the queued and running ones to
 // finish. If ctx expires first it cancels the running jobs, fails everything still
 // queued, and returns ctx.Err() without waiting any longer. Calling it more than once

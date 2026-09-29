@@ -489,6 +489,33 @@ func TestPool_HoldsTracksADedupeKeyWhileQueuedOrRunning(t *testing.T) {
 	})
 }
 
+func TestPool_QueuedDedupeKeysTracksAKeyOnlyWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: func(string) int { return 1 }})
+		first, second := newGate(), newGate()
+
+		assert.Empty(t, p.QueuedDedupeKeys())
+
+		h := submit(t, p, Job{Key: "a", DedupeKey: "other", Run: first.job("other")})
+		submit(t, p, Job{Key: "a", DedupeKey: "task", Run: second.job("task")})
+		submit(t, p, Job{Key: "a", Run: second.job("anonymous")})
+		synctest.Wait()
+
+		// "task" is held back by its key's limit, "other" is running, and the anonymous job has no key to report.
+		assert.Equal(t, map[string]bool{"task": true}, p.QueuedDedupeKeys())
+
+		first.open()
+		<-h.Done()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"task"}, second.startedKeys())
+		assert.Empty(t, p.QueuedDedupeKeys(), "admitted once the slot freed")
+		assert.True(t, p.Holds("task"))
+
+		second.open()
+	})
+}
+
 func TestPool_EmptyDedupeKeyNeverRefuses(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// The fan-out case: several jobs on one agent, deduped on nothing. A single

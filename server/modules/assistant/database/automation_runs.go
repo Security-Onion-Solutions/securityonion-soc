@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/db"
@@ -19,6 +20,9 @@ import (
 const idxRunsOneInFlight = "idx_automation_runs_one_in_flight"
 
 const automationRunColumns = `id, automation_id, state, started_at, ended_at, error`
+
+// The states idx_automation_runs_one_in_flight covers.
+const inFlightRunStates = `('queued', 'running')`
 
 const defaultAutomationRunLimit = 10000
 
@@ -150,17 +154,28 @@ func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.Auto
 // defaultAutomationRunLimit runs.
 type AutomationRunQuery struct {
 	AutomationId string
-	Limit        int
-	Offset       int
+	// Only runs queued or running.
+	InFlight bool
+	Limit    int
+	Offset   int
 }
 
 func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery) ([]*model.AutomationRunRecord, error) {
 	stmt := `SELECT ` + automationRunColumns + ` FROM automation_runs`
 	args := []any{}
+	where := []string{}
 
 	if query.AutomationId != "" {
 		args = append(args, query.AutomationId)
-		stmt += fmt.Sprintf(` WHERE automation_id = $%d`, len(args))
+		where = append(where, fmt.Sprintf(`automation_id = $%d`, len(args)))
+	}
+
+	if query.InFlight {
+		where = append(where, `state IN `+inFlightRunStates)
+	}
+
+	if len(where) > 0 {
+		stmt += ` WHERE ` + strings.Join(where, ` AND `)
 	}
 
 	stmt += ` ORDER BY started_at DESC, id`
