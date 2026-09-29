@@ -766,3 +766,37 @@ func TestOverrideEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectionPlaybookCategory(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name      string
+		Detection Detection
+		Expected  string
+	}{
+		{
+			Name:      "Single Event Sigma Rule",
+			Detection: Detection{Category: "process_creation", RuleType: RuleTypeSingle},
+			Expected:  "process_creation",
+		},
+		{
+			Name:      "Sigma Correlation",
+			Detection: Detection{RuleType: RuleTypeCorrelation},
+			Expected:  PlaybookCategoryCorrelation,
+		},
+		{
+			Name:      "Not Sigma",
+			Detection: Detection{Category: "ET SCAN"},
+			Expected:  "ET SCAN",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, test.Expected, test.Detection.PlaybookCategory())
+		})
+	}
+}

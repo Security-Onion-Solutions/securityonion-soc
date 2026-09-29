@@ -26,3 +26,10 @@ func WithCommunity(isCommunity bool) GetAllOption {
 		return fmt.Sprintf(`%s AND %sdetection.isCommunity:"%t"`, query, schemaPrefix, isCommunity)
 	}
 }
+
+// WithoutRuleType selects detections stored without a rule type.
+func WithoutRuleType() GetAllOption {
+	return func(query string, schemaPrefix string) string {
+		return fmt.Sprintf(`%s AND NOT _exists_:%sdetection.ruleType`, query, schemaPrefix)
+	}
+}

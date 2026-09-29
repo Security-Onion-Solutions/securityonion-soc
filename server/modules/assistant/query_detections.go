@@ -195,6 +195,9 @@ func filterDetections(events []*model.EventRecord, extraFields ...string) []map[
 		"so_detection.sourceUpdated",
 		"so_detection.product",
 		"so_detection.service",
+		"so_detection.ruleType",
+		"so_detection.correlationType",
+		"so_detection.correlationTimespan",
 	}
 
 	filtered := make([]map[string]any, 0, len(events))

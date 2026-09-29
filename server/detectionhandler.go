@@ -261,7 +261,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		respondInvalidRule(w, r, err)
 		return
 	}
 
@@ -454,7 +454,7 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 
 	_, err = eng.ValidateRule(detect.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		respondInvalidRule(w, r, err)
 		return
 	}
 
@@ -1260,6 +1260,13 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 	engInt, _ := h.server.DetectionEngines.Load(model.EngineNameElastAlert)
 	eng := engInt.(DetectionEngine)
 
+	// A rule that previews must also save.
+	_, err = eng.ValidateRule(det.Content)
+	if err != nil {
+		respondInvalidRule(w, r, err)
+		return
+	}
+
 	eaQuery, err := eng.ConvertRule(ctx, det)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -1358,6 +1365,16 @@ func (h *DetectionHandler) GenPublicId(w http.ResponseWriter, r *http.Request) {
 	}
 
 	web.Respond(w, r, http.StatusOK, GenPublicIdResp{PublicId: id})
+}
+
+// respondInvalidRule returns the validation error unmasked; it only describes the submitted rule.
+func respondInvalidRule(w http.ResponseWriter, r *http.Request, err error) {
+	ctx := r.Context()
+	log.FromContext(ctx).WithError(err).WithFields(log.Fields{
+		"requestId":   ctx.Value(web.ContextKeyRequestId),
+		"requestorId": ctx.Value(web.ContextKeyRequestorId),
+	}).Warn("Request did not complete successfully")
+	web.Respond(w, r, http.StatusBadRequest, "invalid rule: "+err.Error())
 }
 
 func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {
