@@ -17,30 +17,12 @@ components.push({
     },
     emits: ['schedules-loaded', 'schedule-saved', 'schedule-deleted'],
     data() {
-      const daysOfMonthList = [];
-      for (let i = 1; i <= 31; i++) {
-        daysOfMonthList.push({
-          title: `${this.$root?.i18n?.dayPrefix} ${i}`,
-          value: i,
-        });
-      }
-      daysOfMonthList.push({
-        title: this.$root?.i18n?.lastDayOfMonth,
-        value: -1,
-      });
-
       return {
         i18n: this.$root?.i18n || {},
         schedules: [],
         now: new Date(),
         activeEvaluationInterval: null,
-        scheduleHeaders: [
-          { title: this.$root?.i18n?.name, value: 'name' },
-          { title: this.$root?.i18n?.timezone, value: 'timezone' },
-          { title: this.$root?.i18n?.recurrenceSummary, value: 'summary', sortable: false },
-          { title: this.$root?.i18n?.status, value: 'status', sortable: false },
-          { title: this.$root?.i18n?.actions, value: 'actions', sortable: false, align: 'end' },
-        ],
+        destinationSortBy: [{ key: 'name', order: 'asc' }],
         scheduleSortBy: [{ key: 'name', order: 'asc' }],
         scheduleItemsPerPage: 10,
         scheduleItemsPerPageOptions: [10, 25, 50, 100],
@@ -61,51 +43,83 @@ components.push({
           excludeScheduleIds: [],
         },
         timezones: [],
-        daysOfWeekOptions: [
-          { title: this.$root?.i18n?.daySunday, value: 0 },
-          { title: this.$root?.i18n?.dayMonday, value: 1 },
-          { title: this.$root?.i18n?.dayTuesday, value: 2 },
-          { title: this.$root?.i18n?.dayWednesday, value: 3 },
-          { title: this.$root?.i18n?.dayThursday, value: 4 },
-          { title: this.$root?.i18n?.dayFriday, value: 5 },
-          { title: this.$root?.i18n?.daySaturday, value: 6 },
-        ],
-        weekNumberOptions: [
-          { title: this.$root?.i18n?.ordinalFirst, value: 1 },
-          { title: this.$root?.i18n?.ordinalSecond, value: 2 },
-          { title: this.$root?.i18n?.ordinalThird, value: 3 },
-          { title: this.$root?.i18n?.ordinalFourth, value: 4 },
-          { title: this.$root?.i18n?.ordinalFifth, value: 5 },
-          { title: this.$root?.i18n?.ordinalLast, value: -1 },
-        ],
-        monthOptions: [
-          { title: this.$root?.i18n?.monthJan, value: 1 },
-          { title: this.$root?.i18n?.monthFeb, value: 2 },
-          { title: this.$root?.i18n?.monthMar, value: 3 },
-          { title: this.$root?.i18n?.monthApr, value: 4 },
-          { title: this.$root?.i18n?.monthMay, value: 5 },
-          { title: this.$root?.i18n?.monthJun, value: 6 },
-          { title: this.$root?.i18n?.monthJul, value: 7 },
-          { title: this.$root?.i18n?.monthAug, value: 8 },
-          { title: this.$root?.i18n?.monthSep, value: 9 },
-          { title: this.$root?.i18n?.monthOct, value: 10 },
-          { title: this.$root?.i18n?.monthNov, value: 11 },
-          { title: this.$root?.i18n?.monthDec, value: 12 },
-        ],
-        daysOfMonthOptions: daysOfMonthList,
-        patternModeOptions: [
-          { title: this.$root?.i18n?.onDayOfMonth, value: 'dayOfMonth' },
-          { title: this.$root?.i18n?.onNthWeekday, value: 'nthWeekday' },
-        ],
-        recurrenceTypes: [
-          { title: this.$root?.i18n?.daily, value: 'daily' },
-          { title: this.$root?.i18n?.weekly, value: 'weekly' },
-          { title: this.$root?.i18n?.monthly, value: 'monthly' },
-          { title: this.$root?.i18n?.annually, value: 'annually' },
-        ],
       };
     },
     computed: {
+      scheduleHeaders() {
+        return [
+          { title: this.i18n?.name, value: 'name' },
+          { title: this.i18n?.timezone, value: 'timezone' },
+          { title: this.i18n?.recurrenceSummary, value: 'summary', sortable: false },
+          { title: this.i18n?.status, value: 'status', sortable: false },
+          { title: this.i18n?.actions, value: 'actions', sortable: false, align: 'end' },
+        ];
+      },
+      recurrenceTypes() {
+        return [
+          { title: this.i18n?.daily, value: 'daily' },
+          { title: this.i18n?.weekly, value: 'weekly' },
+          { title: this.i18n?.monthly, value: 'monthly' },
+          { title: this.i18n?.annually, value: 'annually' },
+        ];
+      },
+      patternModeOptions() {
+        return [
+          { title: this.i18n?.onDayOfMonth || this.i18n?.onDay, value: 'dayOfMonth' },
+          { title: this.i18n?.onNthWeekday, value: 'nthWeekday' },
+        ];
+      },
+      daysOfWeekOptions() {
+        return [
+          { title: this.i18n?.daySunday, value: 0 },
+          { title: this.i18n?.dayMonday, value: 1 },
+          { title: this.i18n?.dayTuesday, value: 2 },
+          { title: this.i18n?.dayWednesday, value: 3 },
+          { title: this.i18n?.dayThursday, value: 4 },
+          { title: this.i18n?.dayFriday, value: 5 },
+          { title: this.i18n?.daySaturday, value: 6 },
+        ];
+      },
+      weekNumberOptions() {
+        return [
+          { title: this.i18n?.ordinalFirst, value: 1 },
+          { title: this.i18n?.ordinalSecond, value: 2 },
+          { title: this.i18n?.ordinalThird, value: 3 },
+          { title: this.i18n?.ordinalFourth, value: 4 },
+          { title: this.i18n?.ordinalFifth, value: 5 },
+          { title: this.i18n?.ordinalLast, value: -1 },
+        ];
+      },
+      monthOptions() {
+        return [
+          { title: this.i18n?.monthJan, value: 1 },
+          { title: this.i18n?.monthFeb, value: 2 },
+          { title: this.i18n?.monthMar, value: 3 },
+          { title: this.i18n?.monthApr, value: 4 },
+          { title: this.i18n?.monthMay, value: 5 },
+          { title: this.i18n?.monthJun, value: 6 },
+          { title: this.i18n?.monthJul, value: 7 },
+          { title: this.i18n?.monthAug, value: 8 },
+          { title: this.i18n?.monthSep, value: 9 },
+          { title: this.i18n?.monthOct, value: 10 },
+          { title: this.i18n?.monthNov, value: 11 },
+          { title: this.i18n?.monthDec, value: 12 },
+        ];
+      },
+      daysOfMonthOptions() {
+        const daysOfMonthList = [];
+        for (let i = 1; i <= 31; i++) {
+          daysOfMonthList.push({
+            title: `${this.i18n?.dayPrefix || 'Day'} ${i}`,
+            value: i,
+          });
+        }
+        daysOfMonthList.push({
+          title: this.i18n?.lastDayOfMonth,
+          value: -1,
+        });
+        return daysOfMonthList;
+      },
       eligibleExceptionSchedules() {
         return this.getEligibleExceptionSchedules(this.form.id, this.schedules);
       },

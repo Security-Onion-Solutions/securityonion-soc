@@ -178,11 +178,12 @@ func TestAlarmstore_CreateAlarm(t *testing.T) {
 
 	// Duplicate ID
 	duplicate := &model.Alarm{
-		ID:       created.ID,
-		Name:     "Duplicate",
-		Metric:   "cpu",
-		Operator: "gt",
-		Severity: "low",
+		ID:        created.ID,
+		Name:      "Duplicate",
+		Metric:    "cpu",
+		Operator:  "gt",
+		Threshold: "80",
+		Severity:  "low",
 	}
 	_, err = alarmStore.CreateAlarm(ctx, duplicate)
 	assert.ErrorIs(t, err, postgresmetrics.ErrDuplicateAlarmID)

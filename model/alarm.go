@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	MAX_ALARM_ID_LEN   = 64
-	MAX_ALARM_NAME_LEN = 100
-	MAX_ALARM_NOTE_LEN = 1000
+	MAX_ALARM_ID_LEN        = 64
+	MAX_ALARM_NAME_LEN      = 100
+	MAX_ALARM_NOTE_LEN      = 1000
+	MAX_ALARM_THRESHOLD_LEN = 100
 
 	AlarmOperatorGT       = "gt"
 	AlarmOperatorGTE      = "gte"
@@ -28,6 +29,13 @@ const (
 
 	AlarmStatusOk     = "ok"
 	AlarmStatusActive = "alarm"
+
+	AlarmMetricTypeNumeric = "numeric"
+	AlarmMetricTypeString  = "string"
+	AlarmMetricTypeBool    = "bool"
+
+	AlarmMetricScopeNode      = "node"
+	AlarmMetricScopeContainer = "container"
 )
 
 var alarmIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
@@ -57,6 +65,18 @@ func ValidateAlarmNote(note string) error {
 	return nil
 }
 
+// ValidateAlarmThreshold checks that the threshold is non-empty and within length limits.
+func ValidateAlarmThreshold(threshold string) error {
+	trimmed := strings.TrimSpace(threshold)
+	if trimmed == "" {
+		return errors.New("alarm threshold is required")
+	}
+	if len(trimmed) > MAX_ALARM_THRESHOLD_LEN {
+		return errors.New("alarm threshold exceeds maximum allowed length")
+	}
+	return nil
+}
+
 // ValidateAlarm validates all required fields and constraints on an Alarm.
 func ValidateAlarm(alarm *Alarm) error {
 	if alarm == nil {
@@ -73,6 +93,9 @@ func ValidateAlarm(alarm *Alarm) error {
 	}
 	if !IsValidAlarmOperator(alarm.Operator) {
 		return errors.New("invalid alarm operator")
+	}
+	if err := ValidateAlarmThreshold(alarm.Threshold); err != nil {
+		return err
 	}
 	if strings.TrimSpace(alarm.Severity) == "" {
 		return errors.New("alarm severity is required")
@@ -195,6 +218,8 @@ type AlarmMetricInfo struct {
 	Type string `json:"type" example:"numeric"`
 	// Unit of measurement: 'percent', 'bytes', 'seconds', etc.
 	Units string `json:"units,omitempty" example:"percent"`
+	// Scope of the metric: 'node' or 'container'.
+	Scope string `json:"scope,omitempty" example:"node"`
 }
 
 // UnmarshalAlarms parses a JSON array string into an Alarm slice.

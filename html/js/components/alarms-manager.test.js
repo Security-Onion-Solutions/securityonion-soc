@@ -75,7 +75,7 @@ test('showAddAlarm initializes form defaults', () => {
   expect(comp.form.threshold).toBe('80');
   expect(comp.form.durationSeconds).toBe(120);
   expect(comp.form.severity).toBe('high');
-  expect(comp.form.clearedSeverity).toBe('none');
+  expect(comp.form.clearedSeverity).toBe('info');
   expect(comp.form.enabled).toBe(true);
 });
 
@@ -280,6 +280,21 @@ test('alarm state helpers and formatting', () => {
   expect(comp.getCurrentValue(activeAlarm)).toBe('92.0');
   expect(comp.getDestinationName('soc-bell')).toBe('SOC Bell');
   expect(comp.getDestinationName('unknown-dest')).toBe('unknown-dest');
+
+  expect(comp.getMetricDisplay({ metric: 'cpu', metricKey: 'cpu_used' })).toBe('CPU Usage');
+
+  comp.metrics = [
+    { metric: 'load', titleKey: 'metricsLoadAverage', keys: ['load1', 'load5'], labelKeys: ['metricsLoad1', 'metricsLoad5'] },
+  ];
+  comp.i18n.metricsLoadAverage = 'Load Average';
+  comp.i18n.metricsLoad5 = '5m';
+  expect(comp.getMetricDisplay({ metric: 'load', metricKey: 'load5' })).toBe('Load Average (5m)');
+
+  comp.$root = {
+    colorSeverity: (sev) => (sev === 'critical' ? 'red-darken-4' : 'grey'),
+  };
+  expect(comp.colorSeverity('critical')).toBe('red-darken-4');
+  expect(comp.colorSeverity('info')).toBe('grey');
 });
 
 test('onAlarmStateUpdate inserts or updates alarm states in real time', () => {
@@ -309,4 +324,40 @@ test('onAlarmStateUpdate inserts or updates alarm states in real time', () => {
 
   expect(comp.states).toHaveLength(2);
   expect(comp.states[1].alarmId).toBe('alarm-2');
+});
+
+test('thresholdHint and booleanThresholdOptions computed properties', () => {
+  comp.i18n = {
+    unitPercent: 'Unit: percent',
+    unitSeconds: 'Unit: seconds',
+    alarmThresholdStringHint: 'Varies per metric. Ex: fault',
+    trueLabel: 'True',
+    falseLabel: 'False',
+  };
+
+  comp.metrics = [
+    { metric: 'cpu', type: 'numeric', units: 'percent' },
+    { metric: 'system_uptime', type: 'numeric', units: 'seconds' },
+    { metric: 'os_needs_restart', type: 'bool' },
+    { metric: 'node_status', type: 'string' },
+  ];
+
+  comp.form.metric = 'cpu';
+  expect(comp.thresholdHint()).toBe('Unit: percent');
+  expect(comp.selectedMetricType()).toBe('numeric');
+
+  comp.form.metric = 'system_uptime';
+  expect(comp.thresholdHint()).toBe('Unit: seconds');
+
+  comp.form.metric = 'os_needs_restart';
+  expect(comp.thresholdHint()).toBe('');
+  expect(comp.selectedMetricType()).toBe('bool');
+  expect(comp.booleanThresholdOptions()).toEqual([
+    { title: 'True', value: 'true' },
+    { title: 'False', value: 'false' },
+  ]);
+
+  comp.form.metric = 'node_status';
+  expect(comp.thresholdHint()).toBe('Varies per metric. Ex: fault');
+  expect(comp.selectedMetricType()).toBe('string');
 });

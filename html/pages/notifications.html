@@ -36,7 +36,7 @@
 
         <!-- Activation Schedules Tab -->
         <v-tabs-window-item value="schedules" data-aid="notifications_schedules_tab">
-          <schedules-manager ref="schedulesManager" data-aid="notifications_schedules_manager"></schedules-manager>
+          <schedules-manager ref="schedulesManager" @schedule-saved="onScheduleUpdated" @schedule-deleted="onScheduleUpdated" data-aid="notifications_schedules_manager"></schedules-manager>
         </v-tabs-window-item>
       </v-tabs-window>
     </v-col>

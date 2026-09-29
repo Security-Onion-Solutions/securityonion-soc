@@ -60,17 +60,20 @@ func (h *AlarmHandler) respondError(w http.ResponseWriter, r *http.Request, err 
 	if err == nil {
 		return
 	}
-	errStr := err.Error()
-	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "Missing Authorizer") {
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "missing authorizer") {
 		web.Respond(w, r, http.StatusUnauthorized, err)
-	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "Unauthorized") || strings.Contains(errStr, "not authorized") {
+	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "not authorized") {
 		web.Respond(w, r, http.StatusForbidden, err)
 	} else if errors.Is(err, ErrAlarmNotFound) || strings.Contains(errStr, "not found") {
 		web.Respond(w, r, http.StatusNotFound, err)
 	} else if errors.Is(err, ErrInvalidAlarmID) || errors.Is(err, ErrDuplicateAlarmID) ||
 		strings.Contains(errStr, "invalid") || strings.Contains(errStr, "already exists") ||
 		strings.Contains(errStr, "cannot") || strings.Contains(errStr, "exceeds") ||
-		strings.Contains(errStr, "required") {
+		strings.Contains(errStr, "required") || strings.Contains(errStr, "threshold") ||
+		strings.Contains(errStr, "number") || strings.Contains(errStr, "boolean") ||
+		strings.Contains(errStr, "metric") || strings.Contains(errStr, "operator") ||
+		strings.Contains(errStr, "severity") || strings.Contains(errStr, "duration") {
 		web.Respond(w, r, http.StatusBadRequest, err)
 	} else {
 		web.Respond(w, r, http.StatusInternalServerError, err)

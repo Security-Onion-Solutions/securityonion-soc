@@ -6,6 +6,7 @@
 package postgresmetrics
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -14,55 +15,98 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
+var defaultAlarmMetrics = []model.AlarmMetricInfo{
+	{Metric: "cpu", TitleKey: "metricsCpuUsage", Keys: []string{"cpu_used"}, LabelKeys: []string{"cpuUsageAbbr"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "memory", TitleKey: "metricsMemUsage", Keys: []string{"memory_used"}, LabelKeys: []string{"memUsageAbbr"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "load", TitleKey: "metricsLoadAverage", Keys: []string{"load1", "load5", "load15"}, LabelKeys: []string{"metricsLoad1", "metricsLoad5", "metricsLoad15"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "swap", TitleKey: "swapUsage", Keys: []string{"swap_used"}, LabelKeys: []string{"swapUsage"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "io_wait", TitleKey: "metricsIoWait", Keys: []string{"io_wait"}, LabelKeys: []string{"metricsIoWait"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "disk", TitleKey: "metricsDiskUsage", Keys: []string{"disk_used_root", "disk_used_nsm"}, LabelKeys: []string{"diskUsageRootAbbr", "diskUsageNsmAbbr"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "system_uptime", TitleKey: "metricsSystemUptime", Keys: []string{"system_uptime"}, LabelKeys: []string{"metricsUptimeDays"}, Type: model.AlarmMetricTypeNumeric, Units: "seconds", Scope: model.AlarmMetricScopeNode},
+	{Metric: "elasticsearch_size", TitleKey: "metricsElasticsearchSize", Keys: []string{"elasticsearch_size"}, LabelKeys: []string{"metricsStorageSize"}, Type: model.AlarmMetricTypeNumeric, Units: "gb", Scope: model.AlarmMetricScopeNode},
+	{Metric: "influxdb_size", TitleKey: "diskUsageInfluxDb", Keys: []string{"influxdb_size"}, LabelKeys: []string{"metricsStorageSize"}, Type: model.AlarmMetricTypeNumeric, Units: "gb", Scope: model.AlarmMetricScopeNode},
+	{Metric: "redis_queue", TitleKey: "metricsRedisQueue", Keys: []string{"redis_queue"}, LabelKeys: []string{"metricsQueueSize"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "pcap_retention", TitleKey: "metricsPcapRetention", Keys: []string{"pcap_retention"}, LabelKeys: []string{"metricsRetentionDays"}, Type: model.AlarmMetricTypeNumeric, Units: "days", Scope: model.AlarmMetricScopeNode},
+	{Metric: "eps", TitleKey: "eps", Keys: []string{"consumption_eps", "production_eps"}, LabelKeys: []string{"metricsConsumptionEps", "metricsProductionEps"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "failed_events", TitleKey: "failedEvents", Keys: []string{"failed_events"}, LabelKeys: []string{"failedEvents"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "loss", TitleKey: "metricsLoss", Keys: []string{"suricata_loss", "zeek_loss"}, LabelKeys: []string{"suricataLoss", "zeekLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "capture_loss", TitleKey: "metricsCaptureLoss", Keys: []string{"zeek_capture_loss"}, LabelKeys: []string{"metricsLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
+	{Metric: "net", TitleKey: "metricsNetTraffic", Keys: []string{"traffic_man_in", "traffic_man_out", "traffic_mon_in"}, LabelKeys: []string{"metricsTrafficManIn", "metricsTrafficManOut", "metricsTrafficMonIn"}, Type: model.AlarmMetricTypeNumeric, Units: "mbs", Scope: model.AlarmMetricScopeNode},
+	{Metric: "net_drops", TitleKey: "metricsMonitorDrops", Keys: []string{"traffic_mon_drops"}, LabelKeys: []string{"metricsDrops"}, Type: model.AlarmMetricTypeNumeric, Units: "mbs", Scope: model.AlarmMetricScopeNode},
+	{Metric: "container_cpu", TitleKey: "metricsContainerCpu", Keys: []string{"container_cpu"}, LabelKeys: []string{"metricsCpuPct"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeContainer},
+	{Metric: "container_mem", TitleKey: "metricsContainerMem", Keys: []string{"container_mem"}, LabelKeys: []string{"metricsMemPct"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeContainer},
+	{Metric: "container_net_in", TitleKey: "metricsContainerNetIn", Keys: []string{"container_net_in"}, LabelKeys: []string{"metricsTrafficMonIn"}, Type: model.AlarmMetricTypeNumeric, Units: "bits", Scope: model.AlarmMetricScopeContainer},
+	{Metric: "container_uptime", TitleKey: "metricsContainerUptime", Keys: []string{"container_uptime"}, LabelKeys: []string{"metricsUptime"}, Type: model.AlarmMetricTypeNumeric, Units: "seconds", Scope: model.AlarmMetricScopeContainer},
+	{Metric: "node_status", TitleKey: "nodeStatus", Keys: []string{"status"}, LabelKeys: []string{"status"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "connection_status", TitleKey: "nodeStatusConnection", Keys: []string{"connectionStatus"}, LabelKeys: []string{"connectionStatus"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "raid_status", TitleKey: "nodeStatusRaid", Keys: []string{"raidStatus"}, LabelKeys: []string{"raidStatus"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "process_status", TitleKey: "nodeStatusProcess", Keys: []string{"processStatus"}, LabelKeys: []string{"processStatus"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "eventstore_status", TitleKey: "eventstoreStatus", Keys: []string{"eventstoreStatus"}, LabelKeys: []string{"eventstoreStatus"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "os_needs_restart", TitleKey: "restartRequired", Keys: []string{"osNeedsRestart"}, LabelKeys: []string{"restartRequired"}, Type: model.AlarmMetricTypeBool, Scope: model.AlarmMetricScopeNode},
+	{Metric: "suri_rules_loaded", TitleKey: "suriRulesLoaded", Keys: []string{"suriRulesLoaded"}, LabelKeys: []string{"suriRulesLoaded"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "suri_rules_failed", TitleKey: "suriRulesFailed", Keys: []string{"suriRulesFailed"}, LabelKeys: []string{"suriRulesFailed"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "suri_rules_status", TitleKey: "suriRulesStatus", Keys: []string{"suriRulesStatus"}, LabelKeys: []string{"suriRulesStatus"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "suri_rules_reload_time", TitleKey: "suriRulesReloadTime", Keys: []string{"suriRulesReloadTime"}, LabelKeys: []string{"suriRulesReloadTime"}, Type: model.AlarmMetricTypeString, Scope: model.AlarmMetricScopeNode},
+	{Metric: "highstate_age", TitleKey: "lastHighstate", Keys: []string{"highstateAgeSeconds"}, LabelKeys: []string{"lastHighstate"}, Type: model.AlarmMetricTypeNumeric, Units: "seconds", Scope: model.AlarmMetricScopeNode},
+	{Metric: "gmd_enabled", TitleKey: "gmd", Keys: []string{"gmdEnabled"}, LabelKeys: []string{"gmd"}, Type: model.AlarmMetricTypeBool, Scope: model.AlarmMetricScopeNode},
+	{Metric: "lks_enabled", TitleKey: "lks", Keys: []string{"lksEnabled"}, LabelKeys: []string{"lks"}, Type: model.AlarmMetricTypeBool, Scope: model.AlarmMetricScopeNode},
+	{Metric: "fps_enabled", TitleKey: "fps", Keys: []string{"fpsEnabled"}, LabelKeys: []string{"fps"}, Type: model.AlarmMetricTypeBool, Scope: model.AlarmMetricScopeNode},
+}
+
 // DefaultAlarmMetrics returns available grid metric metadata for alarm configurations.
 func DefaultAlarmMetrics() []model.AlarmMetricInfo {
-	return []model.AlarmMetricInfo{
-		{Metric: "cpu", TitleKey: "metricsCpuUsage", Keys: []string{"cpu_used"}, LabelKeys: []string{"cpuUsageAbbr"}, Type: "numeric", Units: "percent"},
-		{Metric: "memory", TitleKey: "metricsMemUsage", Keys: []string{"memory_used"}, LabelKeys: []string{"memUsageAbbr"}, Type: "numeric", Units: "percent"},
-		{Metric: "load", TitleKey: "metricsLoadAverage", Keys: []string{"load1", "load5", "load15"}, LabelKeys: []string{"metricsLoad1", "metricsLoad5", "metricsLoad15"}, Type: "numeric"},
-		{Metric: "swap", TitleKey: "swapUsage", Keys: []string{"swap_used"}, LabelKeys: []string{"swapUsage"}, Type: "numeric", Units: "percent"},
-		{Metric: "io_wait", TitleKey: "metricsIoWait", Keys: []string{"io_wait"}, LabelKeys: []string{"metricsIoWait"}, Type: "numeric", Units: "percent"},
-		{Metric: "disk", TitleKey: "metricsDiskUsage", Keys: []string{"disk_used_root", "disk_used_nsm"}, LabelKeys: []string{"diskUsageRootAbbr", "diskUsageNsmAbbr"}, Type: "numeric", Units: "percent"},
-		{Metric: "system_uptime", TitleKey: "metricsSystemUptime", Keys: []string{"system_uptime"}, LabelKeys: []string{"metricsUptimeDays"}, Type: "numeric", Units: "seconds"},
-		{Metric: "elasticsearch_size", TitleKey: "metricsElasticsearchSize", Keys: []string{"elasticsearch_size"}, LabelKeys: []string{"metricsStorageSize"}, Type: "numeric", Units: "gb"},
-		{Metric: "influxdb_size", TitleKey: "diskUsageInfluxDb", Keys: []string{"influxdb_size"}, LabelKeys: []string{"metricsStorageSize"}, Type: "numeric", Units: "gb"},
-		{Metric: "redis_queue", TitleKey: "metricsRedisQueue", Keys: []string{"redis_queue"}, LabelKeys: []string{"metricsQueueSize"}, Type: "numeric"},
-		{Metric: "pcap_retention", TitleKey: "metricsPcapRetention", Keys: []string{"pcap_retention"}, LabelKeys: []string{"metricsRetentionDays"}, Type: "numeric", Units: "days"},
-		{Metric: "eps", TitleKey: "eps", Keys: []string{"consumption_eps", "production_eps"}, LabelKeys: []string{"metricsConsumptionEps", "metricsProductionEps"}, Type: "numeric"},
-		{Metric: "failed_events", TitleKey: "failedEvents", Keys: []string{"failed_events"}, LabelKeys: []string{"failedEvents"}, Type: "numeric"},
-		{Metric: "loss", TitleKey: "metricsLoss", Keys: []string{"suricata_loss", "zeek_loss"}, LabelKeys: []string{"suricataLoss", "zeekLoss"}, Type: "numeric", Units: "percent"},
-		{Metric: "capture_loss", TitleKey: "metricsCaptureLoss", Keys: []string{"zeek_capture_loss"}, LabelKeys: []string{"metricsLoss"}, Type: "numeric", Units: "percent"},
-		{Metric: "net", TitleKey: "metricsNetTraffic", Keys: []string{"traffic_man_in", "traffic_man_out", "traffic_mon_in"}, LabelKeys: []string{"metricsTrafficManIn", "metricsTrafficManOut", "metricsTrafficMonIn"}, Type: "numeric", Units: "mbs"},
-		{Metric: "net_drops", TitleKey: "metricsMonitorDrops", Keys: []string{"traffic_mon_drops"}, LabelKeys: []string{"metricsDrops"}, Type: "numeric", Units: "mbs"},
-		{Metric: "container_cpu", TitleKey: "metricsContainerCpu", Keys: []string{"container_cpu"}, LabelKeys: []string{"metricsCpuPct"}, Type: "numeric", Units: "percent"},
-		{Metric: "container_mem", TitleKey: "metricsContainerMem", Keys: []string{"container_mem"}, LabelKeys: []string{"metricsMemPct"}, Type: "numeric", Units: "percent"},
-		{Metric: "container_net_in", TitleKey: "metricsContainerNetIn", Keys: []string{"container_net_in"}, LabelKeys: []string{"metricsTrafficMonIn"}, Type: "numeric", Units: "bits"},
-		{Metric: "container_uptime", TitleKey: "metricsContainerUptime", Keys: []string{"container_uptime"}, LabelKeys: []string{"metricsUptime"}, Type: "numeric", Units: "seconds"},
-		{Metric: "node_status", TitleKey: "nodeStatus", Keys: []string{"status"}, LabelKeys: []string{"status"}, Type: "string"},
-		{Metric: "connection_status", TitleKey: "nodeStatusConnection", Keys: []string{"connectionStatus"}, LabelKeys: []string{"connectionStatus"}, Type: "string"},
-		{Metric: "raid_status", TitleKey: "nodeStatusRaid", Keys: []string{"raidStatus"}, LabelKeys: []string{"raidStatus"}, Type: "string"},
-		{Metric: "process_status", TitleKey: "nodeStatusProcess", Keys: []string{"processStatus"}, LabelKeys: []string{"processStatus"}, Type: "string"},
-		{Metric: "eventstore_status", TitleKey: "eventstoreStatus", Keys: []string{"eventstoreStatus"}, LabelKeys: []string{"eventstoreStatus"}, Type: "string"},
-		{Metric: "os_needs_restart", TitleKey: "restartRequired", Keys: []string{"osNeedsRestart"}, LabelKeys: []string{"restartRequired"}, Type: "bool"},
-		{Metric: "suri_rules_loaded", TitleKey: "suriRulesLoaded", Keys: []string{"suriRulesLoaded"}, LabelKeys: []string{"suriRulesLoaded"}, Type: "numeric"},
-		{Metric: "suri_rules_failed", TitleKey: "suriRulesFailed", Keys: []string{"suriRulesFailed"}, LabelKeys: []string{"suriRulesFailed"}, Type: "numeric"},
-		{Metric: "suri_rules_status", TitleKey: "suriRulesStatus", Keys: []string{"suriRulesStatus"}, LabelKeys: []string{"suriRulesStatus"}, Type: "string"},
-		{Metric: "suri_rules_reload_time", TitleKey: "suriRulesReloadTime", Keys: []string{"suriRulesReloadTime"}, LabelKeys: []string{"suriRulesReloadTime"}, Type: "string"},
-		{Metric: "highstate_age", TitleKey: "lastHighstate", Keys: []string{"highstateAgeSeconds"}, LabelKeys: []string{"lastHighstate"}, Type: "numeric", Units: "seconds"},
-		{Metric: "gmd_enabled", TitleKey: "gmd", Keys: []string{"gmdEnabled"}, LabelKeys: []string{"gmd"}, Type: "bool"},
-		{Metric: "lks_enabled", TitleKey: "lks", Keys: []string{"lksEnabled"}, LabelKeys: []string{"lks"}, Type: "bool"},
-		{Metric: "fps_enabled", TitleKey: "fps", Keys: []string{"fpsEnabled"}, LabelKeys: []string{"fps"}, Type: "bool"},
+	res := make([]model.AlarmMetricInfo, len(defaultAlarmMetrics))
+	copy(res, defaultAlarmMetrics)
+	return res
+}
+
+// GetAlarmMetricInfo returns the AlarmMetricInfo for a given metric name.
+func GetAlarmMetricInfo(metric string) (*model.AlarmMetricInfo, bool) {
+	name := strings.ToLower(strings.TrimSpace(metric))
+	for i := range defaultAlarmMetrics {
+		if strings.ToLower(defaultAlarmMetrics[i].Metric) == name {
+			return &defaultAlarmMetrics[i], true
+		}
 	}
+	return nil, false
 }
 
 // IsContainerMetric returns true if the metric targets container-level metrics across a node.
 func IsContainerMetric(metric string) bool {
-	switch metric {
-	case "container_cpu", "container_mem", "container_net_in", "container_uptime":
-		return true
-	default:
-		return false
+	if info, found := GetAlarmMetricInfo(metric); found {
+		return info.Scope == model.AlarmMetricScopeContainer
 	}
+	return false
+}
+
+// ValidateAlarmThreshold checks that the threshold is valid for the given metric type.
+func ValidateAlarmThreshold(metric, threshold string) error {
+	trimmed := strings.TrimSpace(threshold)
+	if trimmed == "" {
+		return errors.New("alarm threshold is required")
+	}
+	if len(trimmed) > model.MAX_ALARM_THRESHOLD_LEN {
+		return errors.New("alarm threshold exceeds maximum allowed length")
+	}
+
+	info, found := GetAlarmMetricInfo(metric)
+	if !found {
+		return nil
+	}
+
+	switch info.Type {
+	case model.AlarmMetricTypeBool:
+		if trimmed != "true" && trimmed != "false" && trimmed != "1" && trimmed != "0" {
+			return errors.New("alarm threshold must be a boolean value (true/false)")
+		}
+	case model.AlarmMetricTypeString:
+		return nil
+	default:
+		if _, err := strconv.ParseFloat(trimmed, 64); err != nil {
+			return errors.New("alarm threshold must be a valid number")
+		}
+	}
+	return nil
 }
 
 // EvaluateCondition evaluates whether an actual metric value breaches the configured threshold.

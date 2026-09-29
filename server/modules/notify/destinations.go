@@ -68,6 +68,8 @@ func (n *NotifierImpl) checkAuth(ctx context.Context, op string) error {
 
 func (n *NotifierImpl) loadDestinationsMap(ctx context.Context) (map[string]model.DestinationConfig, error) {
 	if n.server == nil || n.server.Configstore == nil {
+		n.mu.RLock()
+		defer n.mu.RUnlock()
 		dests := make(map[string]model.DestinationConfig, len(n.config.Destinations))
 		for k, v := range n.config.Destinations {
 			dests[k] = v
@@ -80,10 +82,12 @@ func (n *NotifierImpl) loadDestinationsMap(ctx context.Context) (map[string]mode
 		return nil, err
 	}
 	if setting == nil || strings.TrimSpace(setting.Value) == "" {
+		n.mu.RLock()
 		dests := make(map[string]model.DestinationConfig, len(n.config.Destinations))
 		for k, v := range n.config.Destinations {
 			dests[k] = v
 		}
+		n.mu.RUnlock()
 		if len(dests) > 0 {
 			return dests, nil
 		}
@@ -108,7 +112,10 @@ func (n *NotifierImpl) saveDestinationsMap(ctx context.Context, dests map[string
 		}
 	}
 
+	n.mu.Lock()
 	n.config.Destinations = dests
+	n.mu.Unlock()
+
 	return nil
 }
 
@@ -206,8 +213,8 @@ func (n *NotifierImpl) CreateDestination(ctx context.Context, dest *model.Destin
 		}
 	}
 
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.destMu.Lock()
+	defer n.destMu.Unlock()
 
 	destsMap, err := n.loadDestinationsMap(ctx)
 	if err != nil {
@@ -258,8 +265,8 @@ func (n *NotifierImpl) UpdateDestination(ctx context.Context, id string, dest *m
 		}
 	}
 
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.destMu.Lock()
+	defer n.destMu.Unlock()
 
 	destsMap, err := n.loadDestinationsMap(ctx)
 	if err != nil {
@@ -292,8 +299,8 @@ func (n *NotifierImpl) DeleteDestination(ctx context.Context, id string) error {
 		return server.ErrCannotDeleteDefaultDestination
 	}
 
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.destMu.Lock()
+	defer n.destMu.Unlock()
 
 	destsMap, err := n.loadDestinationsMap(ctx)
 	if err != nil {

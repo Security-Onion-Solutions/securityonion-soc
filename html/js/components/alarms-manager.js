@@ -95,12 +95,51 @@ components.push({
       selectedMetricObj() {
         return (this.metrics || []).find(m => m.metric === this.form.metric);
       },
+      selectedMetricType() {
+        const metricObj = typeof this.selectedMetricObj === 'function' ? this.selectedMetricObj() : (this.selectedMetricObj || (this.metrics || []).find(m => m.metric === this.form.metric));
+        return metricObj?.type || 'numeric';
+      },
+      booleanThresholdOptions() {
+        return [
+          { title: this.i18n?.trueLabel, value: 'true' },
+          { title: this.i18n?.falseLabel, value: 'false' },
+        ];
+      },
+      thresholdHint() {
+        const metricObj = typeof this.selectedMetricObj === 'function' ? this.selectedMetricObj() : (this.selectedMetricObj || (this.metrics || []).find(m => m.metric === this.form.metric));
+        if (!metricObj) {
+          return '';
+        }
+        if (metricObj.type === 'string') {
+          return this.i18n?.alarmThresholdStringHint;
+        }
+        if (metricObj.type === 'bool') {
+          return '';
+        }
+        switch (metricObj.units) {
+          case 'percent':
+            return this.i18n?.unitPercent;
+          case 'seconds':
+            return this.i18n?.unitSeconds;
+          case 'days':
+            return this.i18n?.unitDays;
+          case 'gb':
+            return this.i18n?.unitGigabytes;
+          case 'mbs':
+            return this.i18n?.unitMbps;
+          case 'bits':
+            return this.i18n?.unitBits;
+          default:
+            return '';
+        }
+      },
       metricKeyOptions() {
-        if (!this.selectedMetricObj || !this.selectedMetricObj.keys) {
+        const metricObj = typeof this.selectedMetricObj === 'function' ? this.selectedMetricObj() : (this.selectedMetricObj || (this.metrics || []).find(m => m.metric === this.form.metric));
+        if (!metricObj || !metricObj.keys) {
           return [];
         }
-        return this.selectedMetricObj.keys.map((k, idx) => ({
-          title: (this.selectedMetricObj.labelKeys && this.i18n[this.selectedMetricObj.labelKeys[idx]]) ? this.i18n[this.selectedMetricObj.labelKeys[idx]] : k,
+        return metricObj.keys.map((k, idx) => ({
+          title: (metricObj.labelKeys && this.i18n[metricObj.labelKeys[idx]]) ? this.i18n[metricObj.labelKeys[idx]] : k,
           value: k,
         }));
       },
@@ -231,6 +270,12 @@ components.push({
         const defaultMetric = this.metrics.length > 0 ? this.metrics[0].metric : 'cpu';
         const defaultMetricObj = (this.metrics || []).find(m => m.metric === defaultMetric);
         const defaultOp = (defaultMetricObj?.type === 'string' || defaultMetricObj?.type === 'bool') ? 'eq' : 'gt';
+        let defaultThreshold = '80';
+        if (defaultMetricObj?.type === 'string') {
+          defaultThreshold = '';
+        } else if (defaultMetricObj?.type === 'bool') {
+          defaultThreshold = 'true';
+        }
 
         this.form = {
           isEdit: false,
@@ -242,10 +287,10 @@ components.push({
           metric: defaultMetric,
           metricKey: (defaultMetricObj?.keys && defaultMetricObj.keys.length > 0) ? defaultMetricObj.keys[0] : '',
           operator: defaultOp,
-          threshold: '80',
+          threshold: defaultThreshold,
           durationSeconds: 120,
           severity: 'high',
-          clearedSeverity: 'none',
+          clearedSeverity: 'info',
           destinations: [],
           recipients: [],
           note: '',
@@ -308,6 +353,19 @@ components.push({
         const validOps = this.getOperatorOptions().map(o => o.value);
         if (!validOps.includes(this.form.operator)) {
           this.form.operator = validOps.length > 0 ? validOps[0] : 'eq';
+        }
+        if (metricObj?.type === 'bool') {
+          if (this.form.threshold !== 'true' && this.form.threshold !== 'false') {
+            this.form.threshold = 'true';
+          }
+        } else if (metricObj?.type === 'string') {
+          if (this.form.threshold === '80' || this.form.threshold === 'true' || this.form.threshold === 'false') {
+            this.form.threshold = '';
+          }
+        } else if (metricObj?.type === 'numeric') {
+          if (this.form.threshold === 'true' || this.form.threshold === 'false') {
+            this.form.threshold = '80';
+          }
         }
       },
       async saveAlarm() {
@@ -372,6 +430,7 @@ components.push({
         return this.states.filter(s => s.alarmId === alarm.id);
       },
       isAlarmActive(alarm) {
+        if (!alarm || alarm.enabled === false) return false;
         const states = this.getAlarmStatesFor(alarm);
         return states.some(s => s.status === 'alarm');
       },
@@ -402,8 +461,11 @@ components.push({
       getMetricDisplay(alarm) {
         const m = (this.metrics || []).find(met => met.metric === alarm.metric);
         const title = m ? ((m.titleKey && this.i18n[m.titleKey]) ? this.i18n[m.titleKey] : (m.title || m.metric)) : alarm.metric;
-        if (alarm.metricKey) {
-          return `${title} (${alarm.metricKey})`;
+        if (m && m.keys && m.keys.length > 1 && alarm.metricKey) {
+          const idx = m.keys.indexOf(alarm.metricKey);
+          if (idx >= 0 && m.labelKeys && m.labelKeys[idx] && this.i18n[m.labelKeys[idx]]) {
+            return `${title} (${this.i18n[m.labelKeys[idx]]})`;
+          }
         }
         return title;
       },
@@ -433,15 +495,8 @@ components.push({
         if (active) return `${active.nodeId}: ${active.currentValue}`;
         return states[0].currentValue || '—';
       },
-      getSeverityColor(sev) {
-        switch (sev) {
-          case 'critical': return 'error';
-          case 'high': return 'deep-orange';
-          case 'medium': return 'warning';
-          case 'low': return 'info';
-          case 'info': return 'primary';
-          default: return 'grey';
-        }
+      colorSeverity(sev) {
+        return this.$root?.colorSeverity ? this.$root.colorSeverity(sev) : 'icon';
       },
       getSeverityLabel(sev) {
         switch (sev) {

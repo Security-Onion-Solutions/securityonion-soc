@@ -20,10 +20,11 @@ func TestValidateAlarm(t *testing.T) {
 
 	t.Run("empty name", func(t *testing.T) {
 		a := &Alarm{
-			Name:     "",
-			Metric:   "cpu",
-			Operator: "gt",
-			Severity: "high",
+			Name:      "",
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
@@ -32,10 +33,11 @@ func TestValidateAlarm(t *testing.T) {
 
 	t.Run("name exceeds max length", func(t *testing.T) {
 		a := &Alarm{
-			Name:     strings.Repeat("a", MAX_ALARM_NAME_LEN+1),
-			Metric:   "cpu",
-			Operator: "gt",
-			Severity: "high",
+			Name:      strings.Repeat("a", MAX_ALARM_NAME_LEN+1),
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
@@ -43,11 +45,12 @@ func TestValidateAlarm(t *testing.T) {
 
 	t.Run("note exceeds max length", func(t *testing.T) {
 		a := &Alarm{
-			Name:     "Valid Name",
-			Note:     strings.Repeat("n", MAX_ALARM_NOTE_LEN+1),
-			Metric:   "cpu",
-			Operator: "gt",
-			Severity: "high",
+			Name:      "Valid Name",
+			Note:      strings.Repeat("n", MAX_ALARM_NOTE_LEN+1),
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
@@ -55,10 +58,11 @@ func TestValidateAlarm(t *testing.T) {
 
 	t.Run("missing metric", func(t *testing.T) {
 		a := &Alarm{
-			Name:     "Valid Name",
-			Metric:   "",
-			Operator: "gt",
-			Severity: "high",
+			Name:      "Valid Name",
+			Metric:    "",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
@@ -66,21 +70,49 @@ func TestValidateAlarm(t *testing.T) {
 
 	t.Run("invalid operator", func(t *testing.T) {
 		a := &Alarm{
-			Name:     "Valid Name",
-			Metric:   "cpu",
-			Operator: "invalid_op",
-			Severity: "high",
+			Name:      "Valid Name",
+			Metric:    "cpu",
+			Operator:  "invalid_op",
+			Threshold: "80",
+			Severity:  "high",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
 	})
 
+	t.Run("missing threshold", func(t *testing.T) {
+		a := &Alarm{
+			Name:      "Valid Name",
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "",
+			Severity:  "high",
+		}
+		err := ValidateAlarm(a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "threshold is required")
+	})
+
+	t.Run("threshold exceeds max length", func(t *testing.T) {
+		a := &Alarm{
+			Name:      "Valid Name",
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: strings.Repeat("x", MAX_ALARM_THRESHOLD_LEN+1),
+			Severity:  "high",
+		}
+		err := ValidateAlarm(a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "threshold exceeds maximum")
+	})
+
 	t.Run("missing severity", func(t *testing.T) {
 		a := &Alarm{
-			Name:     "Valid Name",
-			Metric:   "cpu",
-			Operator: "gt",
-			Severity: "",
+			Name:      "Valid Name",
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "",
 		}
 		err := ValidateAlarm(a)
 		assert.Error(t, err)
@@ -91,6 +123,7 @@ func TestValidateAlarm(t *testing.T) {
 			Name:            "Valid Name",
 			Metric:          "cpu",
 			Operator:        "gt",
+			Threshold:       "80",
 			Severity:        "high",
 			DurationSeconds: -10,
 		}

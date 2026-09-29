@@ -10,6 +10,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -115,6 +116,9 @@ func (s *Store) GetAlarmState(ctx context.Context, alarmID, nodeID string) (*mod
 		&state.UpdatedAt,
 	)
 	if err != nil {
+		if s.isMissingRelationError(err) || strings.Contains(strings.ToLower(err.Error()), "no rows") {
+			return nil, nil
+		}
 		return nil, err
 	}
 	state.TriggeredAt = triggeredAt

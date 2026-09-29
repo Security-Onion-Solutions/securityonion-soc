@@ -200,20 +200,8 @@ components.push({
             return type;
         }
       },
-      getSeverityColor(sev) {
-        switch ((sev || '').toLowerCase()) {
-          case 'critical':
-            return 'red';
-          case 'high':
-            return 'orange';
-          case 'medium':
-            return 'amber';
-          case 'low':
-            return 'blue';
-          case 'info':
-          default:
-            return 'grey';
-        }
+      colorSeverity(sev) {
+        return this.$root?.colorSeverity ? this.$root.colorSeverity(sev) : 'icon';
       },
       getSeverityLabel(sev) {
         switch ((sev || '').toLowerCase()) {
@@ -232,6 +220,8 @@ components.push({
         }
       },
       showAddDestination() {
+        this.getSchedules();
+        this.loadUsers();
         this.form = {
           isEdit: false,
           valid: false,
@@ -249,6 +239,8 @@ components.push({
         this.destinationDialog = true;
       },
       showEditDestination(dest) {
+        this.getSchedules();
+        this.loadUsers();
         const recipientsSupported = Boolean(dest?.recipientsSupported);
         const enableRecipients = dest?.enableRecipients !== undefined
           ? Boolean(dest.enableRecipients)
@@ -341,6 +333,7 @@ components.push({
       },
       showSendDialog(dest = null) {
         this.sendTargetDestination = dest;
+        this.getSchedules();
         this.loadUsers();
         let defaultTitle = '';
         if (dest) {

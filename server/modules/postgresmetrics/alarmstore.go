@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -48,6 +49,28 @@ func NewAlarmstore(srv *server.Server, dbStore *database.Store) *AlarmstoreImpl 
 func (s *AlarmstoreImpl) getConfigstore() server.Configstore {
 	if s.server != nil {
 		return s.server.Configstore
+	}
+	return nil
+}
+
+func (s *AlarmstoreImpl) getDBStore(ctx context.Context) *database.Store {
+	if s.dbStore != nil {
+		return s.dbStore
+	}
+	if s.server != nil && s.server.DB != nil {
+		st := database.New(s.server.DB)
+		readCtx := ctx
+		if readCtx == nil {
+			readCtx = context.Background()
+		}
+		if s.server.Context != nil {
+			readCtx = s.server.Context
+		}
+		if err := st.Migrate(readCtx); err != nil {
+			log.Warnf("postgresmetrics: alarm database migration warning: %v", err)
+		}
+		s.dbStore = st
+		return s.dbStore
 	}
 	return nil
 }
@@ -154,6 +177,10 @@ func (s *AlarmstoreImpl) CreateAlarm(ctx context.Context, alarm *model.Alarm) (*
 		return nil, err
 	}
 
+	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -196,6 +223,10 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 		return nil, err
 	}
 
+	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -219,6 +250,12 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 	alarms[foundIdx] = *alarm
 	if err := s.saveAlarms(ctx, alarms); err != nil {
 		return nil, err
+	}
+
+	if !alarm.Enabled {
+		if dbStore := s.getDBStore(ctx); dbStore != nil {
+			_ = dbStore.DeleteAlarmStatesForAlarm(ctx, id)
+		}
 	}
 
 	return alarm, nil
@@ -258,8 +295,8 @@ func (s *AlarmstoreImpl) DeleteAlarm(ctx context.Context, id string) error {
 		return err
 	}
 
-	if s.dbStore != nil {
-		_ = s.dbStore.DeleteAlarmStatesForAlarm(ctx, id)
+	if dbStore := s.getDBStore(ctx); dbStore != nil {
+		_ = dbStore.DeleteAlarmStatesForAlarm(ctx, id)
 	}
 
 	return nil
@@ -269,10 +306,11 @@ func (s *AlarmstoreImpl) GetAlarmStates(ctx context.Context) ([]model.AlarmState
 	if err := s.checkReadAuth(ctx); err != nil {
 		return nil, err
 	}
-	if s.dbStore == nil {
+	dbStore := s.getDBStore(ctx)
+	if dbStore == nil {
 		return []model.AlarmState{}, nil
 	}
-	return s.dbStore.GetAlarmStates(ctx)
+	return dbStore.GetAlarmStates(ctx)
 }
 
 func (s *AlarmstoreImpl) GetAlarmMetrics(ctx context.Context) ([]model.AlarmMetricInfo, error) {
@@ -312,6 +350,8 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 		return nil
 	}
 
+	dbStore := s.getDBStore(ctx)
+
 	var nodes []*model.Node
 	if s.server != nil && s.server.Datastore != nil {
 		nodes = s.server.Datastore.GetNodes(ctx)
@@ -321,6 +361,9 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 
 	for _, alarm := range alarms {
 		if !alarm.Enabled {
+			if dbStore != nil {
+				_ = dbStore.DeleteAlarmStatesForAlarm(ctx, alarm.ID)
+			}
 			continue
 		}
 
@@ -398,8 +441,13 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 			}
 
 			var state *model.AlarmState
-			if s.dbStore != nil {
-				state, _ = s.dbStore.GetAlarmState(ctx, alarm.ID, node.Id)
+			if dbStore != nil {
+				var err error
+				state, err = dbStore.GetAlarmState(ctx, alarm.ID, node.Id)
+				if err != nil {
+					log.FromContext(ctx).WithError(err).WithField("alarmId", alarm.ID).WithField("nodeId", node.Id).Warn("failed to get alarm state from database; skipping evaluation cycle for node")
+					continue
+				}
 			}
 
 			if breached {
@@ -437,8 +485,8 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 
 				state.CurrentValue = valStr
 				state.LastEvaluated = now
-				if s.dbStore != nil {
-					_ = s.dbStore.UpsertAlarmState(ctx, state)
+				if dbStore != nil {
+					_ = dbStore.UpsertAlarmState(ctx, state)
 				}
 				s.broadcastAlarmState(state)
 			} else {
@@ -449,16 +497,16 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 					s.triggerClearedNotification(ctx, &alarm, node.Id, valStr, state.DurationActiveSeconds)
 					state.CurrentValue = valStr
 					state.LastEvaluated = now
-					if s.dbStore != nil {
-						_ = s.dbStore.UpsertAlarmState(ctx, state)
+					if dbStore != nil {
+						_ = dbStore.UpsertAlarmState(ctx, state)
 					}
 					s.broadcastAlarmState(state)
 				} else if state != nil && state.FirstBreachedAt != nil {
 					state.FirstBreachedAt = nil
 					state.CurrentValue = valStr
 					state.LastEvaluated = now
-					if s.dbStore != nil {
-						_ = s.dbStore.UpsertAlarmState(ctx, state)
+					if dbStore != nil {
+						_ = dbStore.UpsertAlarmState(ctx, state)
 					}
 					s.broadcastAlarmState(state)
 				}

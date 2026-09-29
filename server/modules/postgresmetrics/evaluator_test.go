@@ -144,3 +144,46 @@ func TestIsContainerMetric(t *testing.T) {
 	assert.False(t, postgresmetrics.IsContainerMetric("cpu"))
 	assert.False(t, postgresmetrics.IsContainerMetric("memory"))
 }
+
+func TestDefaultAlarmMetrics(t *testing.T) {
+	metrics := postgresmetrics.DefaultAlarmMetrics()
+	assert.NotEmpty(t, metrics)
+
+	info, found := postgresmetrics.GetAlarmMetricInfo("cpu")
+	assert.True(t, found)
+	assert.NotNil(t, info)
+	assert.Equal(t, "cpu", info.Metric)
+	assert.Equal(t, "numeric", info.Type)
+	assert.Equal(t, "node", info.Scope)
+
+	info, found = postgresmetrics.GetAlarmMetricInfo("container_cpu")
+	assert.True(t, found)
+	assert.NotNil(t, info)
+	assert.Equal(t, "container_cpu", info.Metric)
+	assert.Equal(t, "container", info.Scope)
+
+	_, found = postgresmetrics.GetAlarmMetricInfo("non_existent_metric")
+	assert.False(t, found)
+}
+
+func TestValidateAlarmThreshold(t *testing.T) {
+	// Numeric
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("cpu", "80"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("cpu", "80.5"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("cpu", "80%"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("cpu", "invalid"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("cpu", ""))
+
+	// Boolean
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "true"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "false"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "1"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "0"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "maybe"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("os_needs_restart", "80"))
+
+	// String
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("node_status", "fault"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("node_status", "OK"))
+	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("node_status", ""))
+}

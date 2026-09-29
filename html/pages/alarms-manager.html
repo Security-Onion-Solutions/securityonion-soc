@@ -34,12 +34,12 @@
       <span class="text-body-2" data-aid="alarm_item_current_val">{{ getCurrentValue(item) }}</span>
     </template>
     <template #item.severity="{ item }">
-      <v-chip size="x-small" :color="getSeverityColor(item.severity)" variant="flat" density="compact" data-aid="alarm_severity_chip">
+      <v-chip size="x-small" :color="colorSeverity(item.severity)" variant="flat" density="compact" data-aid="alarm_severity_chip">
         {{ getSeverityLabel(item.severity) }}
       </v-chip>
     </template>
     <template #item.clearedSeverity="{ item }">
-      <v-chip v-if="item.clearedSeverity && item.clearedSeverity !== 'none'" size="x-small" :color="getSeverityColor(item.clearedSeverity)" variant="flat" density="compact" data-aid="alarm_cleared_severity_chip">
+      <v-chip v-if="item.clearedSeverity && item.clearedSeverity !== 'none'" size="x-small" :color="colorSeverity(item.clearedSeverity)" variant="flat" density="compact" data-aid="alarm_cleared_severity_chip">
         {{ getSeverityLabel(item.clearedSeverity) }}
       </v-chip>
       <span v-else class="text-caption text-medium-emphasis">{{ i18n.none }}</span>
@@ -102,7 +102,28 @@
             </v-col>
 
             <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
-              <v-text-field v-model="form.threshold" :label="i18n.alarmThreshold" :rules="[$root.validators.required]" density="comfortable" required data-aid="alarm_form_threshold"></v-text-field>
+              <v-select
+                v-if="selectedMetricType === 'bool'"
+                v-model="form.threshold"
+                :items="booleanThresholdOptions"
+                item-title="title"
+                item-value="value"
+                :label="i18n.alarmThreshold"
+                :rules="[$root.validators.required]"
+                density="comfortable"
+                data-aid="alarm_form_threshold_bool">
+              </v-select>
+              <v-text-field
+                v-else
+                v-model="form.threshold"
+                :label="i18n.alarmThreshold"
+                :rules="[$root.validators.required]"
+                :hint="thresholdHint"
+                persistent-hint
+                density="comfortable"
+                required
+                data-aid="alarm_form_threshold">
+              </v-text-field>
             </v-col>
 
             <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">

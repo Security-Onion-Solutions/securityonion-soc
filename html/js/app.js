@@ -243,6 +243,7 @@ $(document).ready(function () {
           notificationMenu: false,
           notificationShowDismissed: false,
           notifications: [],
+          notificationsTruncated: false,
           expandedNotifications: {},
           unreadCount: 0,
           notificationAudits: {},
@@ -1080,10 +1081,12 @@ $(document).ready(function () {
           return text
         },
         colorSeverity(value) {
-          if (value == "low_false") return "yellow";
-          if (value == "medium_false") return "orange-darken-1";
-          if (value == "high_false") return "red-lighten-1";
-          if (value == "critical_false") return "red-darken-4";
+          const val = (value || '').toLowerCase();
+          if (val == "low_false" || val == "low") return "yellow";
+          if (val == "medium_false" || val == "medium") return "orange-darken-1";
+          if (val == "high_false" || val == "high") return "red-lighten-1";
+          if (val == "critical_false" || val == "critical") return "red-darken-4";
+          if (val == "info_false" || val == "info") return "grey";
           return "icon";
         },
         colorizeChip(color) {

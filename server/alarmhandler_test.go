@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -196,6 +197,38 @@ func TestPostAlarm(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, resp.ID)
 	assert.Equal(t, "Disk Full", resp.Name)
+}
+
+func TestPostAlarm_InvalidThreshold(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	fakeStore := NewFakeAlarmstore()
+	fakeStore.Err = errors.New("alarm threshold must be a valid number")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Alarmstore = fakeStore
+
+	h := NewAlarmHandler(srv)
+
+	newAlarm := model.Alarm{
+		Name:      "Bad Numeric Threshold",
+		Metric:    "cpu",
+		Operator:  "gt",
+		Threshold: "1;3",
+		Severity:  "high",
+	}
+	body, _ := json.Marshal(newAlarm)
+
+	r := httptest.NewRequest("POST", "/api/alarms/", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostAlarm(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestPutAlarm(t *testing.T) {

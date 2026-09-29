@@ -112,7 +112,7 @@
             <v-expansion-panel-text class="pt-3">
               <v-row dense>
                 <v-col cols="12" sm="6">
-                  <v-select v-model="def.type" :items="recurrenceTypes" :label="i18n.recurrence" density="compact" data-aid="schedule_def_type"></v-select>
+                  <v-select v-model="def.type" :items="recurrenceTypes" item-title="title" item-value="value" :label="i18n.recurrence" density="compact" data-aid="schedule_def_type"></v-select>
                 </v-col>
               </v-row>
 
@@ -133,7 +133,7 @@
               <!-- Weekly Days of Week -->
               <v-row dense v-if="def.type === 'weekly'">
                 <v-col cols="12">
-                  <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_daysofweek"></v-select>
+                  <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" item-title="title" item-value="value" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_daysofweek"></v-select>
                 </v-col>
               </v-row>
 
@@ -141,17 +141,17 @@
               <template v-if="def.type === 'monthly'">
                 <v-row dense>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence" density="compact" data-aid="schedule_def_monthly_mode"></v-select>
+                    <v-select v-model="def.mode" :items="patternModeOptions" item-title="title" item-value="value" :label="i18n.recurrencePattern" density="compact" data-aid="schedule_def_monthly_mode"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" v-if="def.mode === 'dayOfMonth'">
-                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_monthly_daysofmonth"></v-select>
+                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" item-title="title" item-value="value" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_monthly_daysofmonth"></v-select>
                   </v-col>
                   <template v-else>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_weeknumbers"></v-select>
+                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" item-title="title" item-value="value" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_weeknumbers"></v-select>
                     </v-col>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_month_daysofweek"></v-select>
+                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" item-title="title" item-value="value" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_month_daysofweek"></v-select>
                     </v-col>
                   </template>
                 </v-row>
@@ -161,22 +161,22 @@
               <template v-if="def.type === 'annually'">
                 <v-row dense>
                   <v-col cols="12">
-                    <v-select v-model="def.months" :items="monthOptions" :label="i18n.months" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
+                    <v-select v-model="def.months" :items="monthOptions" item-title="title" item-value="value" :label="i18n.months" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
                   </v-col>
                 </v-row>
                 <v-row dense>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="def.mode" :items="patternModeOptions" :label="i18n.recurrence" density="compact" data-aid="schedule_def_annual_mode"></v-select>
+                    <v-select v-model="def.mode" :items="patternModeOptions" item-title="title" item-value="value" :label="i18n.recurrencePattern" density="compact" data-aid="schedule_def_annual_mode"></v-select>
                   </v-col>
                   <v-col cols="12" sm="6" v-if="def.mode === 'dayOfMonth'">
-                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofmonth"></v-select>
+                    <v-select v-model="def.daysOfMonth" :items="daysOfMonthOptions" item-title="title" item-value="value" :label="i18n.daysOfMonth" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofmonth"></v-select>
                   </v-col>
                   <template v-else>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_weeknumbers"></v-select>
+                      <v-select v-model="def.weekNumbers" :items="weekNumberOptions" item-title="title" item-value="value" :label="i18n.weekNumbers" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_weeknumbers"></v-select>
                     </v-col>
                     <v-col cols="12" sm="3">
-                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofweek"></v-select>
+                      <v-select v-model="def.daysOfWeek" :items="daysOfWeekOptions" item-title="title" item-value="value" :label="i18n.daysOfWeek" multiple chips closable-chips density="compact" data-aid="schedule_def_annual_daysofweek"></v-select>
                     </v-col>
                   </template>
                 </v-row>

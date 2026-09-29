@@ -304,3 +304,27 @@ test('detectBrowserTimezone falls back gracefully', () => {
   comp.detectBrowserTimezone();
   expect(comp.form.timezone).toBeTruthy();
 });
+
+test('recurrenceTypes and patternModeOptions computed properties return translated titles', () => {
+  comp.i18n = {
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+    annually: 'Annually',
+    onDayOfMonth: 'On day(s) of month',
+    onNthWeekday: 'On the Nth weekday',
+  };
+  const recTypes = typeof comp.recurrenceTypes === 'function' ? comp.recurrenceTypes() : comp.recurrenceTypes;
+  expect(recTypes).toEqual([
+    { title: 'Daily', value: 'daily' },
+    { title: 'Weekly', value: 'weekly' },
+    { title: 'Monthly', value: 'monthly' },
+    { title: 'Annually', value: 'annually' },
+  ]);
+
+  const patternModes = typeof comp.patternModeOptions === 'function' ? comp.patternModeOptions() : comp.patternModeOptions;
+  expect(patternModes).toEqual([
+    { title: 'On day(s) of month', value: 'dayOfMonth' },
+    { title: 'On the Nth weekday', value: 'nthWeekday' },
+  ]);
+});

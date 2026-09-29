@@ -353,7 +353,7 @@ func (s *Store) SetAllRead(ctx context.Context, username string, userIdentifiers
 
 	query := `
 		INSERT INTO notification_user_states (notification_id, user_id, is_read, read_at)
-		SELECT n.id, $1, $2, $3
+		SELECT n.id, $1::text, $2::boolean, $3::timestamptz
 		FROM notifications n
 		WHERE 1=1`
 
@@ -423,7 +423,7 @@ func (s *Store) SetAllDismissed(ctx context.Context, username string, userIdenti
 
 	query := `
 		INSERT INTO notification_user_states (notification_id, user_id, is_dismissed, dismissed_at)
-		SELECT n.id, $1, $2, $3
+		SELECT n.id, $1::text, $2::boolean, $3::timestamptz
 		FROM notifications n
 		WHERE 1=1`
 
