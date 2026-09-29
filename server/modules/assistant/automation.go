@@ -110,10 +110,6 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 		return nil, ErrAgentSessionRequestRequired
 	}
 
-	if req.OwnerId == "" && run.Task != nil {
-		req.OwnerId = run.Task.UserId
-	}
-
 	if err := run.Srv.AssistantManager.ValidateAgentSessionRequest(req); err != nil {
 		return nil, err
 	}
@@ -535,7 +531,8 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	// The new definition is stored, so the work the old params derived is now stale. Cancel
 	// first so the run stops claiming, then finalize what it was holding. A failed sweep
 	// leaves that stale work in place.
-	if existing != nil && !jsonEqual(existing.Params, automation.Params) {
+	// A builtin's params come with the build, so a save never changes what its work was derived from.
+	if existing != nil && !builtin && !jsonEqual(existing.Params, automation.Params) {
 		ac.interruptAutomationRun(automation.Id)
 
 		if ac.store != nil {
@@ -578,7 +575,7 @@ func validateAutomation(automation *model.Automation) error {
 	return nil
 }
 
-// stampAutomation settles the fields an automation does not set for itself: identity, owner
+// stampAutomation settles the fields an automation does not set for itself: identity, creator
 // and timestamps, returning the stored copy it read so the caller can see what changed.
 // Caller holds configWriteMu, which is what makes that read and the write that follows it one
 // edit rather than two. Nothing is written back to automation until every check has passed,
@@ -594,8 +591,7 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 		return nil, fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
 	}
 
-	// The stored copy, not the overlay: a fixed param that changed between builds must still
-	// read as a change.
+	// The stored copy, not the overlay: only it says whether a builtin was ever saved.
 	existing, err := ac.getStoredAutomation(ctx, id)
 	if err != nil && !errors.Is(err, ErrAutomationNotFound) {
 		return nil, err
@@ -628,8 +624,7 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 			return nil, fmt.Errorf("%w: automationKind cannot be changed", ErrInvalidAutomationParams)
 		}
 
-		// The owner is the identity unattended sessions execute as, so an edit by a second
-		// admin must not silently hand them that user's RBAC.
+		// UserId records who created the automation; an edit does not reassign it.
 		createTime = existing.CreateTime
 		userId = existing.UserId
 	}

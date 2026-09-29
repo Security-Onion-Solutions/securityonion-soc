@@ -314,7 +314,6 @@ func TestAutomationRunPlumbing(t *testing.T) {
 			result, err := run.Srv.AssistantManager.RunAgentSession(ctx, &model.AgentSessionRequest{
 				Objective: "triage group A",
 				Agent:     "Hunter",
-				OwnerId:   run.Task.UserId,
 				MaxTurns:  8,
 			})
 			if err != nil {
@@ -339,7 +338,6 @@ func TestAutomationRunPlumbing(t *testing.T) {
 	require.NotNil(t, gotReq)
 	assert.Equal(t, "triage group A", gotReq.Objective)
 	assert.Equal(t, "Hunter", gotReq.Agent)
-	assert.Equal(t, "user-1", gotReq.OwnerId)
 	assert.Equal(t, 8, gotReq.MaxTurns)
 }
 
@@ -631,7 +629,7 @@ func TestSaveAutomationRejectsAKindChange(t *testing.T) {
 	assert.Empty(t, cfg.updates)
 }
 
-func TestSaveAutomationStampsOwnerAndCreateTime(t *testing.T) {
+func TestSaveAutomationStampsCreatorAndCreateTime(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 
@@ -645,7 +643,7 @@ func TestSaveAutomationStampsOwnerAndCreateTime(t *testing.T) {
 	require.NotNil(t, automation.UpdateTime)
 }
 
-func TestSaveAutomationKeepsTheOriginalOwnerOnUpdate(t *testing.T) {
+func TestSaveAutomationKeepsTheOriginalCreatorOnUpdate(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
 
@@ -658,7 +656,7 @@ func TestSaveAutomationKeepsTheOriginalOwnerOnUpdate(t *testing.T) {
 
 	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
 
-	assert.Equal(t, "user-1", automation.UserId, "the owner is not reassigned by an edit")
+	assert.Equal(t, "user-1", automation.UserId, "the creator is not reassigned by an edit")
 	require.Len(t, cfg.updates, 1)
 }
 
@@ -1233,7 +1231,7 @@ func TestListAutomationsIncludesTheBuiltinAsShipped(t *testing.T) {
 	assert.Zero(t, unreadable)
 
 	assertBuiltinFixedFields(t, builtin, automations[0])
-	assert.False(t, automations[0].Enabled, "shipped disabled: no owner until an admin saves it")
+	assert.False(t, automations[0].Enabled, "shipped disabled")
 	assert.Equal(t, builtin.Agent, automations[0].Agent)
 	assert.Nil(t, automations[0].CreateTime)
 	assert.Empty(t, automations[0].UserId)
@@ -1348,8 +1346,8 @@ func TestGetAutomationStillRequiresAConfigstoreForTheBuiltin(t *testing.T) {
 	assert.ErrorIs(t, err, ErrConfigstoreUnavailable)
 }
 
-// The first save is the create: it settles the owner the sessions run as, under the fixed id
-// rather than a generated one.
+// The first save is the create: it records the creator, under the fixed id rather than a
+// generated one.
 func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
@@ -1390,19 +1388,18 @@ func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
 	assert.Equal(t, []string{automationSettingId(BuiltinAlertTriageAutomationId)}, cfg.registered)
 }
 
-// The owner is who the sessions act as, and it is settled by the builtin's first save; no later
-// edit, enabling included, moves it.
-func TestSaveAutomationBuiltinOwnerIsSettledAtFirstSave(t *testing.T) {
+// The creator is settled by the builtin's first save; no later edit, enabling included, moves it.
+func TestSaveAutomationBuiltinCreatorIsSettledAtFirstSave(t *testing.T) {
 	cases := []struct {
 		name          string
 		storedEnabled bool
 		enabled       bool
 		agent         string
-		wantOwner     string
+		wantCreator   string
 	}{
-		{"enabling keeps the owner", false, true, automationTestAgent, "user-1"},
-		{"an edit while enabled keeps the owner", true, true, automationTestAgent, "user-1"},
-		{"disabling keeps the owner", true, false, "Hunter", "user-1"},
+		{"enabling keeps the creator", false, true, automationTestAgent, "user-1"},
+		{"an edit while enabled keeps the creator", true, true, automationTestAgent, "user-1"},
+		{"disabling keeps the creator", true, false, "Hunter", "user-1"},
 	}
 
 	for _, c := range cases {
@@ -1423,7 +1420,7 @@ func TestSaveAutomationBuiltinOwnerIsSettledAtFirstSave(t *testing.T) {
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-2")
 			require.NoError(t, ac.SaveAutomation(ctx, automation))
 
-			assert.Equal(t, c.wantOwner, automation.UserId)
+			assert.Equal(t, c.wantCreator, automation.UserId)
 			require.NotNil(t, automation.CreateTime)
 			assert.Equal(t, 2026, automation.CreateTime.Year(), "the create time never moves")
 			assert.Equal(t, c.agent, automation.Agent)
@@ -1433,7 +1430,7 @@ func TestSaveAutomationBuiltinOwnerIsSettledAtFirstSave(t *testing.T) {
 	}
 }
 
-func TestSaveAutomationEnablingAStoredAutomationKeepsItsOwner(t *testing.T) {
+func TestSaveAutomationEnablingAStoredAutomationKeepsItsCreator(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
 
@@ -1449,9 +1446,8 @@ func TestSaveAutomationEnablingAStoredAutomationKeepsItsOwner(t *testing.T) {
 	assert.Equal(t, "user-1", automation.UserId)
 }
 
-// A first save that leaves the builtin disabled still settles its owner, so enabling later has
-// someone to run as.
-func TestSaveAutomationFirstSaveOfADisabledBuiltinSettlesItsOwner(t *testing.T) {
+// A first save that leaves the builtin disabled still records its creator.
+func TestSaveAutomationFirstSaveOfADisabledBuiltinSettlesItsCreator(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 	seedBuiltinAutomation(ac)
@@ -1557,9 +1553,9 @@ func TestSaveAutomationRequiresAnAvailableAgentForTheBuiltin(t *testing.T) {
 	assert.Empty(t, cfg.updates)
 }
 
-// The fixed params can change between builds, so a stored copy that predates the change
-// derived its open work from the old ones.
-func TestSaveAutomationSweepsWhenTheBuiltinParamsChangedBetweenBuilds(t *testing.T) {
+// The tick already runs the shipped params, so the open work was derived from them even when
+// the stored copy predates a build that changed them.
+func TestSaveAutomationKeepsTheBuiltinWorkWhenItsParamsChangedBetweenBuilds(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, automationTestAgent)}
 
@@ -1568,8 +1564,6 @@ func TestSaveAutomationSweepsWhenTheBuiltinParamsChangedBetweenBuilds(t *testing
 
 	mDB := &mockdb.MockDB{}
 	ac.store = automationTestStore(mDB)
-	mDB.On("Query", mock.Anything, sqlLike("UPDATE automation_work_items", "state = 'failed'"),
-		BuiltinAlertTriageAutomationId, ErrAutomationParamsChanged.Error()).Return(rowsYielding(1), nil)
 
 	cancelled := false
 	release := ac.registerAutomationRun(BuiltinAlertTriageAutomationId, func(error) { cancelled = true })
@@ -1584,8 +1578,16 @@ func TestSaveAutomationSweepsWhenTheBuiltinParamsChangedBetweenBuilds(t *testing
 
 	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
 
-	assert.True(t, cancelled)
-	mDB.AssertExpectations(t)
+	assert.False(t, cancelled)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "a builtin save must not touch work items")
+	}
+
+	// The stored copy catches up to the shipped params.
+	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ac.builtinAutomations[BuiltinAlertTriageAutomationId].Params), string(stored.Params))
 }
 
 func TestSaveAutomationKeepsTheBuiltinWorkWhenOnlyEnabledChanges(t *testing.T) {

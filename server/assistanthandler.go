@@ -1962,7 +1962,7 @@ func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary      Create an Automation
-// @Description  Define a new scheduled automation. The server assigns its id and owner; changing an automation's params drops the work its previous definition had queued.
+// @Description  Define a new scheduled automation. The server assigns its id and creator; changing an automation's params drops the work its previous definition had queued.
 // @Tags         Assistant
 // @Security     bearer[config/write]
 // @Param        request  body  model.Automation  true  "Automation definition"

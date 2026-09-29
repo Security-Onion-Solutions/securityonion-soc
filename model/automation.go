@@ -18,8 +18,8 @@ type AutomationKindDefinition struct {
 	DisplayName string `json:"displayName" example:"Alert Triage"`
 	// A summary of what this kind does, shown alongside the label.
 	Description string `json:"description" example:"Groups, samples and triages alerts"`
-	// The settings this kind accepts, one property per form field. Interval and owning
-	// user belong to the automation rather than the kind, so they are absent here.
+	// The settings this kind accepts, one property per form field. Interval and creator
+	// belong to the automation rather than the kind, so they are absent here.
 	ParamSchema JSONSchema `json:"paramSchema"`
 }
 

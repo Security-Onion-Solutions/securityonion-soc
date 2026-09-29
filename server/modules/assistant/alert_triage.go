@@ -716,14 +716,21 @@ func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkI
 		SessionId: sessionId,
 	})
 	if err != nil {
-		// Charged to this run with the checkpoint kept, so only the update replays.
-		failed, failErr := r.run.Store.FailAutomationWorkItemApply(writeCtx, item.Id, r.run.RunId, err.Error())
-		if errors.Is(failErr, database.ErrAutomationWorkItemNotFound) {
-			return r.gone(ctx, item)
-		}
+		failed := item
 
-		if failErr != nil {
-			return errors.Join(err, failErr)
+		// Charged to this run with the checkpoint kept, so only the update replays. An item out
+		// of retries is charged nothing more; it waits only for its alerts to take its failures.
+		if len(item.FailedRunIds) < r.params.MaxFailures {
+			var failErr error
+
+			failed, failErr = r.run.Store.FailAutomationWorkItemApply(writeCtx, item.Id, r.run.RunId, err.Error())
+			if errors.Is(failErr, database.ErrAutomationWorkItemNotFound) {
+				return r.gone(ctx, item)
+			}
+
+			if failErr != nil {
+				return errors.Join(err, failErr)
+			}
 		}
 
 		// The session produced the report; only the write failed.

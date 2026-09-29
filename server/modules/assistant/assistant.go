@@ -58,7 +58,7 @@ var (
 	// The stream ended without a message.
 	ErrAgentTurnEmpty = errors.New("ERROR_AGENT_TURN_EMPTY")
 
-	// A headless run was asked for with no request, no objective, or no owner.
+	// A headless run was asked for with no request, no objective, or no owner in the request or its context.
 	ErrAgentSessionRequestRequired   = errors.New("ERROR_AGENT_SESSION_REQUEST_REQUIRED")
 	ErrAgentSessionObjectiveRequired = errors.New("ERROR_AGENT_SESSION_OBJECTIVE_REQUIRED")
 	ErrAgentSessionOwnerRequired     = errors.New("ERROR_AGENT_SESSION_OWNER_REQUIRED")

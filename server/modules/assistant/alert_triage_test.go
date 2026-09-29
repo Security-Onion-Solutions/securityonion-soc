@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,16 +81,18 @@ func (s *triageAssistantstore) recorded() []*model.AlertTriageUpdate {
 type triageAssistantManager struct {
 	server.AssistantManager
 
-	mu       sync.Mutex
-	result   *model.AgentSessionResult
-	err      error
-	onRun    func(ctx context.Context)
-	requests []*model.AgentSessionRequest
+	mu         sync.Mutex
+	result     *model.AgentSessionResult
+	err        error
+	onRun      func(ctx context.Context)
+	requests   []*model.AgentSessionRequest
+	requestors []any
 }
 
 func (m *triageAssistantManager) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
 	m.mu.Lock()
 	m.requests = append(m.requests, req)
+	m.requestors = append(m.requestors, ctx.Value(web.ContextKeyRequestorId))
 	m.mu.Unlock()
 
 	if m.onRun != nil {
@@ -902,7 +905,8 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	f, r := newTriageJob(t)
 	item := f.claimed(t)
 
-	require.NoError(t, r.workItem(context.Background(), item))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+	require.NoError(t, r.workItem(ctx, item))
 	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:sess-1", "complete:item-1"}, f.store.log())
 
 	// The lookup names the pinned alert and searches around its timestamp.
@@ -913,11 +917,13 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	assert.True(t, lookup.BeginTime.Equal(pinned.Add(-24*time.Hour)))
 	assert.True(t, lookup.EndTime.Equal(pinned.Add(24*time.Hour)))
 
-	// The automation's agent, as its owner, is handed the projected alert and its group.
+	// The automation's agent, under the run's server context, is handed the projected
+	// alert and its group.
 	requests := f.manager.sessions()
 	require.Len(t, requests, 1)
 	assert.Equal(t, automationTestAgent, requests[0].Agent)
-	assert.Equal(t, "user-1", requests[0].OwnerId)
+	assert.Empty(t, requests[0].OwnerId)
+	assert.Equal(t, []any{server.SYSTEM_ID}, f.manager.requestors)
 	assert.Contains(t, requests[0].Objective, "4 unprocessed alerts")
 	assert.Contains(t, requests[0].Objective, `tags:alert AND rule.name:"A"`)
 	assert.Contains(t, requests[0].Objective, `"_id": "alert-1"`)
@@ -1439,6 +1445,40 @@ func TestAlertTriageApplyAtTheCapStillRecordsAReport(t *testing.T) {
 	// The report is paid for; the budget only decides when a failing update stops being retried.
 	assert.Equal(t, []string{"alerts:ok:sess-old", "complete:item-old", "claim:none"}, f.store.log())
 	assert.Equal(t, model.AutomationWorkItemDone, checkpointed.State)
+}
+
+// An item already out of retries is charged nothing more for a failed apply; its alerts take
+// the failures it has and it ends.
+func TestAlertTriageApplyFailurePastTheCapChargesNoRun(t *testing.T) {
+	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
+
+	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
+	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
+	f.alerts.applyErr = errors.New("elasticsearch rejected the update")
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	assert.Equal(t, []string{"alerts:error", "alerts:run-a,run-b,run-c", "fail:item-old", "claim:none"}, f.store.log())
+	assert.Equal(t, []string{"run-a", "run-b", "run-c"}, checkpointed.FailedRunIds)
+}
+
+// An item out of retries whose alerts cannot be updated at all stays applying, and does not
+// gain a run for every run that tries it.
+func TestAlertTriageStuckApplyPastTheCapDoesNotGrow(t *testing.T) {
+	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
+
+	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
+	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
+	f.alerts.updateErr = errors.New("elasticsearch is down")
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	assert.Equal(t, []string{"alerts:error", "alerts:error", "claim:none"}, f.store.log())
+	assert.Equal(t, model.AutomationWorkItemApplying, checkpointed.State)
+	assert.Equal(t, []string{"run-a", "run-b", "run-c"}, checkpointed.FailedRunIds)
+	assert.Equal(t, alertTriageDefaultGroupCap+1, f.es.InputSearchCriterias[0].MetricLimit)
 }
 
 func TestAlertTriageReclaimEndsUnusableCheckpoints(t *testing.T) {
