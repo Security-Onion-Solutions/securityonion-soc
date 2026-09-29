@@ -50,7 +50,7 @@ func (s *Store) GetAlarmStates(ctx context.Context) ([]model.AlarmState, error) 
 	}
 	defer rows.Close()
 
-	var states []model.AlarmState
+	states := make([]model.AlarmState, 0)
 	for rows.Next() {
 		var state model.AlarmState
 		var triggeredAt, clearedAt, firstBreachedAt *time.Time
