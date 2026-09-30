@@ -635,6 +635,16 @@
                   <v-list-item-title v-text="i18n.agentstudio"></v-list-item-title>
                 </router-link>
               </v-list-item>
+              <v-list-item data-aid="nav_admin_agentspy" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic" :class="{ 'nav-active': $route.name === 'agentspy' }">
+                <template #prepend>
+                  <router-link to="/agentspy" class="text-decoration-none" aria-hidden="true" tabindex="-1">
+                    <v-icon>fa-user-secret</v-icon>
+                  </router-link>
+                </template>
+                <router-link to="/agentspy" class="text-decoration-none d-block">
+                  <v-list-item-title v-text="i18n.agentSpy"></v-list-item-title>
+                </router-link>
+              </v-list-item>
             </v-list-item-group>
           </v-list>
           <v-divider v-if="hasEnabledTools()"></v-divider>
@@ -690,6 +700,7 @@
     <script src="js/components/detection-details-col.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/tool-use-card.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/delegation-child.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/components/agentspy-item.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/automation-param-field.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/destinations-manager.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/components/schedules-manager.js?v=VERSION_PLACEHOLDER"></script>
@@ -719,6 +730,7 @@
     <script src="js/routes/queries.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/aimetrics.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/agentstudio.js?v=VERSION_PLACEHOLDER"></script>
+    <script src="js/routes/agentspy.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/routes/notifications.js?v=VERSION_PLACEHOLDER"></script>
     <script src="js/custom.js?v=VERSION_PLACEHOLDER"></script>
   </body>

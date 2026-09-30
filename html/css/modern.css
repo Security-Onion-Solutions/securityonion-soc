@@ -1425,3 +1425,25 @@ dfn {
 .agentstudio-dialog-body {
   max-height: 70vh;
 }
+
+/* Tabular figures keep the ticking column from jittering. */
+.agentspy-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grows to the viewport bottom, then scrolls; 328px is the surrounding chrome. */
+#agentspy-transcript {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 328px);
+}
+
+.agentspy-stream {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.agentspy-message + .agentspy-message {
+  margin-top: 12px;
+}

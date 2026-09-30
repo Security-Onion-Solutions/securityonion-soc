@@ -1,0 +1,61 @@
+<div class="expanded-row-wrapper pa-4">
+  <v-card variant="flat" class="agentstudio-editor">
+    <v-tabs v-model="ctx.itemTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentspy_item_subtabs_' + item.id">
+      <v-tab value="details" :data-aid="'agentspy_item_subtab_details_' + item.id"><v-icon class="mr-2">fa-id-card</v-icon>{{ ctx.i18n.details }}</v-tab>
+      <v-tab value="payload" :data-aid="'agentspy_item_subtab_payload_' + item.id"><v-icon class="mr-2">fa-code</v-icon>{{ ctx.i18n.agentSpyPayload }}</v-tab>
+      <v-tab value="sessions" :data-aid="'agentspy_item_subtab_sessions_' + item.id"><v-icon class="mr-2">fa-comments</v-icon>{{ ctx.i18n.agentSpyAttempts }}</v-tab>
+      <v-tab v-if="item.result" value="result" :data-aid="'agentspy_item_subtab_result_' + item.id"><v-icon class="mr-2">fa-clipboard-check</v-icon>{{ ctx.i18n.agentSpyResult }}</v-tab>
+    </v-tabs>
+    <v-divider></v-divider>
+    <v-card-text>
+      <v-tabs-window v-model="ctx.itemTabs[item.id]">
+        <v-tabs-window-item v-for="tab in ctx.kvTabs(item)" :key="tab" :value="tab">
+          <v-data-table density="compact" hide-default-header hide-default-footer :headers="ctx.expandedHeaders" :items="ctx.tabRows(item, tab)" items-per-page="-1" :data-aid="'agentspy_item_' + tab + '_' + item.id">
+            <template #item="{ item: kvp }">
+              <tr class="main-row" :data-aid="'agentspy_item_' + tab + '_field_' + kvp.key">
+                <th scope="row" class="expansion">
+                  <div class="d-inline-block expansion va-middle" :title="kvp.help" v-text="kvp.key"></div>
+                </th>
+                <td class="expansion va-middle">
+                  <div class="d-inline-block expansion hardwrap">{{ kvp.value }}</div>
+                  <router-link v-if="kvp.link" :to="kvp.link" class="no-print text-decoration-none ml-2" :data-aid="'agentspy_item_config_' + item.id" :aria-label="ctx.i18n.agentSpyOpenAutomation">
+                    <v-icon size="small" class="theme-icon" :title="ctx.i18n.agentSpyOpenAutomation">fa-gear</v-icon>
+                  </router-link>
+                </td>
+              </tr>
+            </template>
+          </v-data-table>
+        </v-tabs-window-item>
+
+        <v-tabs-window-item value="sessions">
+          <v-alert v-if="ctx.attemptsWithoutSession(item)" type="warning" icon="fa-info" variant="tonal" density="compact" class="mb-3" :data-aid="'agentspy_attempts_orphaned_' + item.id">
+            {{ ctx.$root.replaceActionVar(ctx.$root.replaceActionVar(ctx.i18n.agentSpyAttemptsOrphaned, 'attempts', item.attempts), 'sessions', (item.sessionIds || []).length) }}
+          </v-alert>
+          <v-data-table :headers="ctx.attemptHeaders" :items="ctx.attemptsFor(item)" item-value="sessionId" density="compact"
+            hide-default-footer :no-data-text="ctx.i18n.agentSpyAttemptsEmpty" :data-aid="'agentspy_attempts_table_' + item.id">
+            <template #item="{ item: attempt }">
+              <tr class="main-row">
+                <td class="text-right">{{ attempt.attempt }}</td>
+                <td>{{ attempt.sessionId }}</td>
+                <td>
+                  <v-chip size="small" :color="attempt.live ? 'primary' : ''" :variant="attempt.live ? 'flat' : 'tonal'">{{ attempt.live ? ctx.i18n.agentSpyLive : ctx.stateLabel(attempt.state) }}</v-chip>
+                </td>
+                <td>
+                  <span v-if="attempt.startTime">{{ ctx.$root.formatDateTime(attempt.startTime) }}</span>
+                  <span v-else class="text-disabled">&mdash;</span>
+                </td>
+                <td>
+                  <router-link v-if="attempt.watchable" :to="ctx.buildSessionLink(item.id, attempt.sessionId)" class="no-print" style="text-decoration: none" data-aid="agentspy_watch_session" :title="ctx.i18n.agentSpyWatch" :aria-label="ctx.i18n.agentSpyWatch">
+                    <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
+                  </router-link>
+                  <span v-else class="text-disabled">{{ ctx.i18n.agentSpyNoTranscript }}</span>
+                </td>
+              </tr>
+            </template>
+          </v-data-table>
+        </v-tabs-window-item>
+
+      </v-tabs-window>
+    </v-card-text>
+  </v-card>
+</div>
