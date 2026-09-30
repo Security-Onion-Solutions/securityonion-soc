@@ -161,7 +161,6 @@ func (h *AlarmHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 // @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
-// @Failure      405         "Alarm module has not been enabled on the server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/states [get]
 func (h *AlarmHandler) GetStates(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +173,7 @@ func (h *AlarmHandler) GetStates(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
+		web.Respond(w, r, http.StatusOK, []*model.AlarmState{})
 		return
 	}
 

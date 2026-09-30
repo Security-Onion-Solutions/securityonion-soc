@@ -190,7 +190,7 @@ components.push({
     methods: {
       onAlarmStateUpdate(state) {
         if (!state || !state.alarmId) return;
-        if (!this.states) this.states = [];
+        if (!Array.isArray(this.states)) this.states = [];
         const idx = this.states.findIndex(s => s.alarmId === state.alarmId && s.nodeId === state.nodeId);
         if (idx !== -1) {
           this.states.splice(idx, 1, state);
@@ -237,7 +237,7 @@ components.push({
       async getStates() {
         try {
           const res = await this.$root.papi.get('alarms/states');
-          this.states = res && res.data ? res.data : (res || []);
+          this.states = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         } catch (error) {
           this.states = [];
         }
@@ -426,7 +426,7 @@ components.push({
         }
       },
       getAlarmStatesFor(alarm) {
-        if (!alarm || !this.states) return [];
+        if (!alarm || !Array.isArray(this.states)) return [];
         return this.states.filter(s => s.alarmId === alarm.id);
       },
       isAlarmActive(alarm) {

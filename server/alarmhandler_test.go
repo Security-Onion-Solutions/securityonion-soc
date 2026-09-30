@@ -120,6 +120,30 @@ func TestGetAlarmStates(t *testing.T) {
 	assert.Len(t, resp, 1)
 }
 
+func TestGetAlarmStates_StoreNil(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Alarmstore = nil
+
+	h := NewAlarmHandler(srv)
+
+	r := httptest.NewRequest("GET", "/api/alarms/states", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.GetStates(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp []*model.AlarmState
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Empty(t, resp)
+}
+
 func TestGetAlarm(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
