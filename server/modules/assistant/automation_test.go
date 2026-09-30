@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
@@ -857,6 +858,105 @@ func TestAutomationPathsRequireAConfigstore(t *testing.T) {
 
 	for _, err := range []error{listErr, getErr, saveErr, deleteErr} {
 		assert.ErrorIs(t, err, ErrConfigstoreUnavailable)
+	}
+}
+
+// systemOnlyConfigstore refuses every requestor but the server, like the real one without config/read.
+type systemOnlyConfigstore struct {
+	automationConfigstore
+}
+
+func (s *systemOnlyConfigstore) refuseNonSystem(ctx context.Context) error {
+	if id, _ := ctx.Value(web.ContextKeyRequestorId).(string); id != server.SYSTEM_ID {
+		return model.NewUnauthorized(id, "read", "config")
+	}
+
+	return nil
+}
+
+func (s *systemOnlyConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
+	if err := s.refuseNonSystem(ctx); err != nil {
+		return nil, err
+	}
+
+	return s.automationConfigstore.GetSettings(ctx, includeDefault)
+}
+
+func (s *systemOnlyConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	if err := s.refuseNonSystem(ctx); err != nil {
+		return nil, err
+	}
+
+	return s.automationConfigstore.GetSetting(ctx, id)
+}
+
+// An analyst holds automations/read but not config/read, so the settings are read as the server.
+func TestListAndGetAutomationReadTheSettingsAsTheServer(t *testing.T) {
+	cfg := &systemOnlyConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinator(&cfg.automationConfigstore)
+	ac.srv.Configstore = cfg
+	ac.srv.Context = context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+
+	automations, err := ac.ListAutomations(automationSaveCtx())
+	require.NoError(t, err)
+	require.Len(t, automations, 1)
+	assert.Equal(t, "Nightly", automations[0].DisplayName)
+
+	automation, err := ac.GetAutomation(automationSaveCtx(), automationTestId)
+	require.NoError(t, err)
+	assert.Equal(t, "Nightly", automation.DisplayName)
+}
+
+// unreadyConfigstore waits on its context like the real one before its first load.
+type unreadyConfigstore struct {
+	automationConfigstore
+}
+
+func (u *unreadyConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
+	<-ctx.Done()
+
+	return nil, ctx.Err()
+}
+
+func (u *unreadyConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	<-ctx.Done()
+
+	return nil, ctx.Err()
+}
+
+// A read that never saw the request's cancellation would deadlock the bubble.
+func TestListAndGetAutomationStopWithTheRequest(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ac := automationCoordinator(&automationConfigstore{})
+		ac.srv.Configstore = &unreadyConfigstore{}
+
+		ctx, cancel := context.WithCancel(automationSaveCtx())
+		cancel()
+
+		_, listErr := ac.ListAutomations(ctx)
+		_, getErr := ac.GetAutomation(ctx, automationTestId)
+
+		assert.ErrorIs(t, listErr, context.Canceled)
+		assert.ErrorIs(t, getErr, context.Canceled)
+	})
+}
+
+func TestListAndGetAutomationRequireAutomationsRead(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+
+	ac := automationCoordinatorAs(cfg, false)
+
+	_, listErr := ac.ListAutomations(automationSaveCtx())
+	_, getErr := ac.GetAutomation(automationSaveCtx(), automationTestId)
+
+	for _, err := range []error{listErr, getErr} {
+		var unauthorized *model.Unauthorized
+		require.ErrorAs(t, err, &unauthorized)
+		assert.Equal(t, "read", unauthorized.Operation)
+		assert.Equal(t, "automations", unauthorized.Target)
 	}
 }
 

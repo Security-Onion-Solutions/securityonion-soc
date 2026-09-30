@@ -215,6 +215,23 @@ func TestAutomationRunHistoryRequiresAStoreAndAnId(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAutomationRunNotFound)
 }
 
+// A strict mock with no expectations: the refusal comes before any statement.
+func TestAutomationHistoryAndActivityRequireAutomationsRead(t *testing.T) {
+	ac := automationCoordinatorAs(&automationConfigstore{}, false)
+	ac.store = automationTestStore(&mockdb.MockDB{})
+
+	_, historyErr := ac.GetAutomationRunHistory(context.Background(), automationTestId, 0, 0)
+	_, detailsErr := ac.GetAutomationRunDetails(context.Background(), automationTestId, historyRunId, 0)
+	_, activityErr := ac.GetAutomationActivity(context.Background())
+
+	for _, err := range []error{historyErr, detailsErr, activityErr} {
+		var unauthorized *model.Unauthorized
+		require.ErrorAs(t, err, &unauthorized)
+		assert.Equal(t, "read", unauthorized.Operation)
+		assert.Equal(t, "automations", unauthorized.Target)
+	}
+}
+
 func TestAutomationRunHistoryCountsBacklogAndItems(t *testing.T) {
 	f := newHistoryFixture(t)
 	f.store.runs = []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunSucceeded), historyRun(historyOtherRunId, model.AutomationRunRunning)}
@@ -296,38 +313,6 @@ func TestAutomationRunHistoryDeletedAutomationRendersFromId(t *testing.T) {
 	assert.Equal(t, 0, details.MaxFailures)
 	assert.Equal(t, 0, details.GivenUpAlerts)
 	// The cap is unknown, so there is no given-up query.
-	assert.Len(t, f.events.InputSearchCriterias, 1)
-}
-
-// deniedConfigstore refuses every setting read, as the configstore does without config/read.
-type deniedConfigstore struct {
-	automationConfigstore
-}
-
-func (d *deniedConfigstore) GetSetting(context.Context, string) (*model.Setting, error) {
-	return nil, model.NewUnauthorized("auditor", "read", "config")
-}
-
-// assistant/read_all is enough; without config/read the automation is shown unnamed, not deleted.
-func TestAutomationRunHistoryWithoutConfigReadRendersUnnamed(t *testing.T) {
-	f := newHistoryFixture(t)
-	f.ac.srv.Configstore = &deniedConfigstore{}
-	f.store.runs = []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunSucceeded)}
-	f.store.run = f.store.runs[0]
-
-	history, err := f.ac.automationRunHistory(context.Background(), f.store, automationTestId, 0, 0)
-	require.NoError(t, err)
-
-	assert.Empty(t, history.DisplayName)
-	assert.False(t, history.AutomationDeleted)
-	assert.Len(t, history.Runs, 1)
-
-	details, err := f.ac.automationRunDetails(context.Background(), f.store, automationTestId, historyRunId, 0)
-	require.NoError(t, err)
-
-	assert.Empty(t, details.DisplayName)
-	assert.False(t, details.AutomationDeleted)
-	assert.Equal(t, 0, details.MaxFailures)
 	assert.Len(t, f.events.InputSearchCriterias, 1)
 }
 

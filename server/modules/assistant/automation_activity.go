@@ -23,6 +23,10 @@ type automationActivityStore interface {
 }
 
 func (ac *AssistantCoordinator) GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error) {
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
 	// A nil *database.Store is a non-nil interface.
 	if ac.store == nil {
 		return ac.automationActivity(ctx, nil)

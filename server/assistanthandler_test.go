@@ -4617,7 +4617,7 @@ var (
 	errAutomationRunNotFoundStub  = errors.New("ERROR_AUTOMATION_RUN_NOT_FOUND")
 )
 
-// recordingAuthorizer answers every check the same way, except one denied operation, and
+// recordingAuthorizer answers every check the same way, except one denied target/operation, and
 // records what was asked, which is how route permissions are pinned; FakeAuthorizer is all-or-nothing.
 type recordingAuthorizer struct {
 	authorized bool
@@ -4626,9 +4626,10 @@ type recordingAuthorizer struct {
 }
 
 func (a *recordingAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation, target string) error {
-	a.asked = append(a.asked, target+"/"+operation)
+	permission := target + "/" + operation
+	a.asked = append(a.asked, permission)
 
-	if a.authorized && operation != a.denied {
+	if a.authorized && permission != a.denied {
 		return nil
 	}
 
@@ -4670,7 +4671,7 @@ func TestGetAutomationsListsAndRequiresRead(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"Nightly"`)
-	assert.Equal(t, []string{"config/read"}, auth.asked)
+	assert.Equal(t, []string{"automations/read"}, auth.asked)
 }
 
 func TestGetAutomationMapsErrors(t *testing.T) {
@@ -4837,7 +4838,7 @@ func TestDeleteAutomationMapsSystemToForbidden(t *testing.T) {
 // controller rather than pass quietly. web.Respond answers a model.Unauthorized with 403
 // whatever status the handler passed, matching the agent and skill routes.
 func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
-	read := []string{"config/read"}
+	read := []string{"automations/read"}
 	write := []string{"config/write"}
 
 	cases := []struct {
@@ -4850,8 +4851,9 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 		{http.MethodPost, "/assistant/automations", write},
 		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId, write},
 		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId, write},
-		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", []string{"assistant/read_all"}},
-		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, []string{"assistant/read_all"}},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", read},
+		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, read},
+		{http.MethodGet, "/assistant/automations/activity", read},
 	}
 
 	for _, c := range cases {
@@ -4869,8 +4871,7 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 
 const automationHandlerTestRunId = "3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"
 
-// Run history is an admin read like the usage and session views, not a config read.
-func TestGetAutomationRunsRequiresReadAllAndPassesThePage(t *testing.T) {
+func TestGetAutomationRunsRequiresAutomationsReadAndPassesThePage(t *testing.T) {
 	r, manager, auth := automationRouter(t, true)
 
 	manager.EXPECT().GetAutomationRunHistory(gomock.Any(), automationHandlerTestId, 5, 10).
@@ -4881,7 +4882,7 @@ func TestGetAutomationRunsRequiresReadAllAndPassesThePage(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"Nightly"`)
-	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+	assert.Equal(t, []string{"automations/read"}, auth.asked)
 }
 
 func TestGetAutomationRunsMapsErrors(t *testing.T) {
@@ -4920,7 +4921,19 @@ func TestGetAutomationRunPassesBothIdsAndTheAlertLimit(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"alertTotal":7`)
-	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+	assert.Equal(t, []string{"automations/read", "events/read"}, auth.asked)
+}
+
+// The alerts need events/read, so a caller without it is refused before any run is read.
+func TestGetAutomationRunRefusesWithoutEventsRead(t *testing.T) {
+	r, _, auth := automationRouter(t, true)
+	auth.denied = "events/read"
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs/"+automationHandlerTestRunId, nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, []string{"automations/read", "events/read"}, auth.asked)
 }
 
 func TestGetAutomationRunMapsErrors(t *testing.T) {
@@ -4951,7 +4964,7 @@ func TestGetAutomationRunMapsErrors(t *testing.T) {
 }
 
 // The static segment wins over {id}, so the activity never reads as an automation named "activity".
-func TestGetAutomationActivityRequiresReadAll(t *testing.T) {
+func TestGetAutomationActivityRequiresAutomationsRead(t *testing.T) {
 	r, manager, auth := automationRouter(t, true)
 
 	manager.EXPECT().GetAutomationActivity(gomock.Any()).
@@ -4962,17 +4975,17 @@ func TestGetAutomationActivityRequiresReadAll(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"schedulerRunning":true`)
-	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+	assert.Equal(t, []string{"automations/read"}, auth.asked)
 }
 
-func TestGetAutomationActivityRefusesWithoutReadAll(t *testing.T) {
+func TestGetAutomationActivityRefusesWithoutAutomationsRead(t *testing.T) {
 	r, _, auth := automationRouter(t, false)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/activity", nil))
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Equal(t, []string{"assistant/read_all"}, auth.asked)
+	assert.Equal(t, []string{"automations/read"}, auth.asked)
 }
 
 func TestGetAutomationActivityMapsErrors(t *testing.T) {
@@ -5058,7 +5071,7 @@ func TestCloneSession_StoreUnauthorized(t *testing.T) {
 // Rollback goes through DeleteSession, so a caller who cannot delete cannot clone.
 func TestCloneSession_RequiresDeleteAuthored(t *testing.T) {
 	srv, _, _ := newAssistantTestServer(t, true)
-	srv.Authorizer = &recordingAuthorizer{authorized: true, denied: "delete_authored"}
+	srv.Authorizer = &recordingAuthorizer{authorized: true, denied: "assistant/delete_authored"}
 	handler := NewAssistantHandler(srv)
 
 	w := httptest.NewRecorder()

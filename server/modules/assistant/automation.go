@@ -363,8 +363,20 @@ func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
 	return automation, nil
 }
 
+// Callers need only automations/read, so the settings are read as the server.
 func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
-	automations, _, err := ac.scanAutomations(ctx)
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return nil, ErrConfigstoreUnavailable
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
+	readCtx, cancel := web.MergeCancel(ac.srv.Context, ctx)
+	defer cancel()
+
+	automations, _, err := ac.scanAutomations(readCtx)
 
 	return automations, err
 }
@@ -419,8 +431,20 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 	return automations, unreadable, nil
 }
 
+// Callers need only automations/read, so the setting is read as the server.
 func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
-	stored, err := ac.getStoredAutomation(ctx, id)
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return nil, ErrConfigstoreUnavailable
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
+	readCtx, cancel := web.MergeCancel(ac.srv.Context, ctx)
+	defer cancel()
+
+	stored, err := ac.getStoredAutomation(readCtx, id)
 
 	if !ac.isBuiltinAutomation(id) {
 		return stored, err

@@ -41,6 +41,10 @@ type automationHistoryStore interface {
 }
 
 func (ac *AssistantCoordinator) GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error) {
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
 	if ac.store == nil {
 		return nil, ErrNoDatabase
 	}
@@ -53,6 +57,10 @@ func (ac *AssistantCoordinator) GetAutomationRunHistory(ctx context.Context, aut
 }
 
 func (ac *AssistantCoordinator) GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error) {
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
 	if ac.store == nil {
 		return nil, ErrNoDatabase
 	}
@@ -185,15 +193,11 @@ type automationDescription struct {
 	MaxFailures int
 }
 
-// describeAutomation treats a deleted automation, or one unreadable as config, as a description rather than an error.
+// describeAutomation treats a deleted automation as a description rather than an error.
 func (ac *AssistantCoordinator) describeAutomation(ctx context.Context, id string) (automationDescription, error) {
 	automation, err := ac.GetAutomation(ctx, id)
 	if errors.Is(err, ErrAutomationNotFound) {
 		return automationDescription{Deleted: true}, nil
-	}
-	var unauthorized *model.Unauthorized
-	if errors.As(err, &unauthorized) {
-		return automationDescription{}, nil
 	}
 	if err != nil {
 		return automationDescription{}, err
