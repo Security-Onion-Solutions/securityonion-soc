@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -680,8 +681,17 @@ func (ac *AssistantCoordinator) DeleteAgent(ctx context.Context, name string) er
 		if !removed {
 			return nil, ErrAgentNotFound
 		}
-		return remaining, nil
+		// Otherwise a later agent reusing the name would inherit the delegation.
+		return removeDelegateReferences(remaining, name), nil
 	})
+}
+
+func removeDelegateReferences(agents []model.StoredAgent, name string) []model.StoredAgent {
+	for i := range agents {
+		agents[i].CanDelegateTo = slices.DeleteFunc(agents[i].CanDelegateTo, func(target string) bool { return target == name })
+	}
+
+	return agents
 }
 
 // SaveSkill writes a single skill into the assistant.skills setting.
@@ -750,13 +760,29 @@ func (ac *AssistantCoordinator) DeleteSkill(ctx context.Context, name string) er
 		return ErrSystemAgentImmutable
 	}
 
-	return ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
+	err := ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
 		remaining, removed := removeByName(skills, name, func(s model.StoredSkill) string { return s.Name })
 		if !removed {
 			return nil, ErrAgentNotFound
 		}
 		return remaining, nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Otherwise a later skill reusing the name would be granted to these agents.
+	return ac.updateStoredAgents(ctx, func(agents []model.StoredAgent) ([]model.StoredAgent, error) {
+		return removeSkillReferences(agents, name), nil
+	})
+}
+
+func removeSkillReferences(agents []model.StoredAgent, name string) []model.StoredAgent {
+	for i := range agents {
+		agents[i].AllowedSkills = slices.DeleteFunc(agents[i].AllowedSkills, func(granted string) bool { return granted == name })
+	}
+
+	return agents
 }
 
 // updateStoredAgents applies mutate to the stored agent list and writes it back.

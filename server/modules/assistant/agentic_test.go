@@ -999,6 +999,17 @@ func TestDeleteAgent(t *testing.T) {
 		assert.Contains(t, lines[0], `"name":"Orchestrator"`)
 	})
 
+	t.Run("drops the agent from other agents' delegates", func(t *testing.T) {
+		ac, store := configWriteCoordinator(`{"name":"Orchestrator","canDelegateTo":["Custom","Investigator"]}
+{"name":"Custom"}`)
+
+		require.NoError(t, ac.DeleteAgent(context.Background(), "Custom"))
+
+		lines := store.lastWritten()
+		require.Len(t, lines, 1)
+		assert.Contains(t, lines[0], `"canDelegateTo":["Investigator"]`)
+	})
+
 	t.Run("refuses a system agent", func(t *testing.T) {
 		ac, store := configWriteCoordinator(stored)
 
@@ -1042,7 +1053,7 @@ func TestSaveAndDeleteSkill(t *testing.T) {
 		ac, store := configWriteCoordinator(stored)
 
 		require.NoError(t, ac.DeleteSkill(context.Background(), "Custom"))
-		assert.Len(t, store.lastWritten(), 1)
+		assert.Equal(t, 1, strings.Count(store.written[0], `"name":`))
 	})
 
 	t.Run("refuses a rename onto an existing skill", func(t *testing.T) {
@@ -1069,6 +1080,19 @@ func TestSaveSkillRenameUpdatesAgents(t *testing.T) {
 	require.Len(t, store.written, 2)
 	assert.Contains(t, store.written[0], `"name":"Renamed"`)
 	assert.Contains(t, store.written[1], `"allowedSkills":["Renamed","Hunt"]`)
+}
+
+func TestDeleteSkillUpdatesAgents(t *testing.T) {
+	ac, store := configWriteCoordinator("")
+	store.settings = []*model.Setting{
+		{Id: ConfigSettingSkills, Value: `{"name":"Custom","tools":["query_events"]}`},
+		{Id: ConfigSettingAgents, Value: `{"name":"Hunter","allowedSkills":["Custom","Hunt"]}`},
+	}
+
+	require.NoError(t, ac.DeleteSkill(context.Background(), "Custom"))
+
+	require.Len(t, store.written, 2)
+	assert.Contains(t, store.written[1], `"allowedSkills":["Hunt"]`)
 }
 
 func TestConcurrentSavesDoNotClobber(t *testing.T) {

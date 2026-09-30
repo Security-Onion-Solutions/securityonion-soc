@@ -161,20 +161,23 @@
           <v-col cols="12" md="6">
             <v-text-field :model-value="providerFor(newAgent.modelSelector)" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
           </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field v-model.number="newAgent.maxConcurrentInstances" type="number" min="0" :label="i18n.agentStudioMaxInstances" variant="outlined" density="comfortable" prepend-inner-icon="fa-layer-group" :hint="i18n.agentStudioMaxInstancesHelp" persistent-hint data-aid="agentstudio_new_agent_max_instances"></v-text-field>
+          </v-col>
           <v-col cols="12">
             <v-select v-model="newAgent.allowedSkills" :items="skillNames" :label="i18n.agentStudioSkills" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioSkillsHelp" persistent-hint></v-select>
           </v-col>
-          <v-col cols="12">
+          <v-col cols="12" md="6">
             <v-select v-model="newAgent.canDelegateTo" :items="agentNames" :label="i18n.agentStudioDelegatesTo" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegationHelp" persistent-hint></v-select>
           </v-col>
-          <v-col cols="12">
+          <v-col cols="12" md="6">
             <v-select v-model="newAgent.delegators" :items="agentNames" :label="i18n.agentStudioDelegators" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegatorsHelp" persistent-hint data-aid="agentstudio_new_agent_delegators"></v-select>
           </v-col>
           <v-col cols="12">
             <v-textarea v-model="newAgent.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
           </v-col>
           <v-col cols="12">
-            <v-textarea v-model="newAgent.persona" :label="i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="8" auto-grow :hint="i18n.agentStudioPersonaHelp" persistent-hint></v-textarea>
+            <v-textarea v-model="newAgent.persona" :label="i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="5" auto-grow :hint="i18n.agentStudioPersonaHelp" persistent-hint></v-textarea>
           </v-col>
         </v-row>
       </v-card-text>
@@ -242,6 +245,57 @@
     </v-card>
   </v-dialog>
 
+  <!-- Create automation dialog -->
+  <v-dialog v-model="createAutomationDialog" persistent width="900px" scrollable data-aid="agentstudio_create_automation_dialog">
+    <v-card>
+      <v-card-title class="py-4" role="heading" aria-level="2">
+        <v-icon class="mr-2">fa-robot</v-icon>{{ i18n.agentStudioNewAutomation }}
+      </v-card-title>
+      <v-divider></v-divider>
+      <v-card-text class="agentstudio-dialog-body">
+        <v-row>
+          <v-col cols="12" md="8">
+            <v-text-field v-model="newAutomation.displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" autofocus hide-details data-aid="agentstudio_new_automation_name"></v-text-field>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-select :model-value="newAutomation.automationKind" @update:model-value="onNewAutomationKind" :items="automationKindItems()" :label="i18n.kind" variant="outlined" density="comfortable" :hint="i18n.agentStudioAutomationKindHelp" persistent-hint data-aid="agentstudio_new_automation_kind"></v-select>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-select v-model="newAutomation.agent" :items="automationAgentItems()" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint data-aid="agentstudio_new_automation_agent"></v-select>
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field v-model.number="newAutomation.intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint data-aid="agentstudio_new_automation_interval"></v-text-field>
+          </v-col>
+          <v-col v-for="field in automationKindFields(newAutomation.automationKind)" :key="field.key" cols="12" :md="field.type === 'integer' || field.type === 'number' ? 6 : 12">
+            <automation-param-field :field="field" :params="newAutomation.params"></automation-param-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider></v-divider>
+      <v-card-actions>
+        <v-switch v-model="newAutomation.enabled" color="primary" density="compact" inset hide-details class="ml-4" :label="i18n.agentStudioEnabled" data-aid="agentstudio_new_automation_enabled"></v-switch>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="createAutomationDialog = false" data-aid="agentstudio_create_automation_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" :color="automationValid(newAutomation) ? 'primary' : ''" :disabled="!automationValid(newAutomation)" @click="saveNewAutomation()" data-aid="agentstudio_create_automation_confirm">{{ i18n.create }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="confirmDeleteDialog" persistent max-width="390" data-aid="agentstudio_delete_dialog">
+    <v-card v-if="deleteTarget">
+      <v-card-title class="headline" role="heading" aria-level="2" v-text="deleteTarget.kind === 'agent' ? i18n.agentStudioDeleteAgentTitle : i18n.agentStudioDeleteAutomationTitle"></v-card-title>
+      <v-card-text v-text="deleteTarget.kind === 'agent' ? i18n.agentStudioDeleteAgentConfirm : i18n.agentStudioDeleteAutomationConfirm"></v-card-text>
+      <v-card-text class="font-weight-bold" v-text="deleteTarget.item.displayName || deleteTarget.item.name" data-aid="agentstudio_delete_dialog_name"></v-card-text>
+      <v-card-text v-text="i18n.continue"></v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click.stop="cancelDelete()" data-aid="agentstudio_delete_dialog_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" color="error" @click.stop="performDelete()" data-aid="agentstudio_delete_dialog_confirm">{{ i18n.delete }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+
   <v-dialog v-model="scanHistoricalDialog" persistent width="500px" scrollable data-aid="agentstudio_memoryscan_history_dialog">
     <v-card>
       <v-card-title class="py-4" role="heading" aria-level="2">
@@ -276,6 +330,9 @@
           <v-tab v-if="memoryEnabled" value="memories" data-aid="agentstudio_memories_tab">
             <v-icon class="mr-2">fa-brain</v-icon>{{ i18n.agentStudioMemories }}
           </v-tab>
+          <v-tab v-if="agentic" value="automations" data-aid="agentstudio_automations_tab">
+            <v-icon class="mr-2">fa-robot</v-icon>{{ i18n.agentStudioAutomations }}
+          </v-tab>
         </v-tabs>
         <v-spacer></v-spacer>
 
@@ -297,7 +354,10 @@
           <v-btn v-else-if="tab === 'skills'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn v-else icon variant="flat" class="circle-button mx-2" @click.stop="showAddMemory()" data-aid="agentstudio_create_new_memory" :aria-label="i18n.agentStudioNewMemory" :title="i18n.agentStudioNewMemory">
+          <v-btn v-else-if="tab === 'automations' && !automationsReadOnly" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAutomation()" data-aid="agentstudio_create_new_automation" :aria-label="i18n.agentStudioNewAutomation" :title="i18n.agentStudioNewAutomation">
+            <v-icon>fa-plus</v-icon>
+          </v-btn>
+          <v-btn v-else-if="tab === 'memories'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddMemory()" data-aid="agentstudio_create_new_memory" :aria-label="i18n.agentStudioNewMemory" :title="i18n.agentStudioNewMemory">
             <v-icon>fa-plus</v-icon>
           </v-btn>
           <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.configSettings" :title="i18n.configSettings">
@@ -403,6 +463,9 @@
                                   <v-col cols="12" md="6">
                                     <v-text-field :model-value="providerFor(draftForAgent(item).modelSelector)" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
                                   </v-col>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field v-model.number="draftForAgent(item).maxConcurrentInstances" type="number" min="0" :label="i18n.agentStudioMaxInstances" variant="outlined" density="comfortable" prepend-inner-icon="fa-layer-group" :hint="i18n.agentStudioMaxInstancesHelp" persistent-hint :data-aid="'agentstudio_agent_max_instances_' + item.id"></v-text-field>
+                                  </v-col>
                                 </v-row>
                               </v-tabs-window-item>
 
@@ -444,8 +507,11 @@
                           </v-card-text>
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
+                            <v-btn v-if="item.enabled" variant="text" color="primary" :to="chatWithAgentLink(item)" :data-aid="'agentstudio_agent_chat_' + item.id">
+                              <v-icon class="mr-2" size="small">fa-microchip</v-icon>{{ i18n.openInOnionAi }}
+                            </v-btn>
                             <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateAgent(item)" :data-aid="'agentstudio_agent_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="removeAgent(item)" :data-aid="'agentstudio_agent_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('agent', item)" :data-aid="'agentstudio_agent_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
                             <v-btn variant="text" :color="agentDirty(item) ? 'primary' : ''" :disabled="!agentDirty(item)" @click.stop="saveAgent(item)" :data-aid="'agentstudio_agent_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
@@ -642,6 +708,149 @@
                   </tr>
                 </template>
               </v-data-table-server>
+            </v-col>
+          </v-row>
+        </v-tabs-window-item>
+
+        <!-- Automations tab -->
+        <v-tabs-window-item v-if="agentic" value="automations">
+          <v-row>
+            <v-col id="agentstudio-automations" class="section-panel" data-aid="agentstudio_automations_section">
+              <v-data-table :sort-by="sortByAutomations" @update:sort-by="val => sortByAutomations = val"
+                :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" must-sort :headers="automationHeaders" :items="automations" item-value="id" v-model:expanded="expandedAutomations"
+                :no-data-text="i18n.agentStudioAutomationsEmpty" data-aid="agentstudio_automations_table">
+                <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+                  <tr>
+                    <template v-for="header in columns" :key="header.key">
+                      <th :class="{'is-sorted': isSorted(header)}" :data-aid="'agentstudio_automations_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                        <span @click="toggleSort(header)">{{ header.title }}</span>
+                        <template v-if="isSorted(header)">
+                          <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
+                        </template>
+                      </th>
+                    </template>
+                  </tr>
+                </template>
+                <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                  <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true, 'agentstudio-row-disabled': !item.enabled}">
+                    <td>
+                      <v-btn icon variant="text" size="small" @click.stop="onToggleAutomation(item, toggleExpand, internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentStudioExpand" data-aid="agentstudio_automations_expand">
+                        <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
+                        <v-icon v-else>fa-angle-right</v-icon>
+                      </v-btn>
+                    </td>
+                    <td>
+                      {{ item.displayName }}
+                      <v-chip v-if="item.isSystem" size="x-small" variant="outlined" class="ml-2" :title="i18n.agentStudioSystemAutomationHelp">{{ i18n.agentStudioSystem }}</v-chip>
+                    </td>
+                    <td><v-chip size="small" variant="tonal">{{ automationKindLabel(item.automationKind) }}</v-chip></td>
+                    <td>{{ formatInterval(item.intervalSeconds) }}</td>
+                    <td><v-chip size="small" variant="outlined">{{ item.agent }}</v-chip></td>
+                    <td>
+                      <div v-if="automationStatus(item)" class="d-flex align-center ga-2" :data-aid="'agentstudio_automation_status_' + item.id">
+                        <v-chip size="small" :color="automationStatusColor(automationStatus(item))" :variant="automationStatusColor(automationStatus(item)) ? 'flat' : 'tonal'">
+                          <v-progress-circular v-if="automationStatus(item) === 'running'" indeterminate size="12" width="2" class="mr-2"></v-progress-circular>
+                          {{ automationStatusLabel(automationStatus(item)) }}
+                        </v-chip>
+                        <span class="text-body-small text-medium-emphasis text-no-wrap" :title="i18n.agentStudioAutomationLastRun">{{ automationLastRun(item) }}</span>
+                      </div>
+                      <span v-else class="text-disabled">&mdash;</span>
+                    </td>
+                    <td>
+                      <div class="d-flex align-center">
+                        <v-switch :model-value="item.enabled" @update:model-value="toggleAutomationEnabled(item)" :disabled="!automationKind(item.automationKind)" color="primary" density="compact" hide-details inset
+                          :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled" :data-aid="'agentstudio_automation_enabled_' + item.id"></v-switch>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+                <template #expanded-row="{ item }">
+                  <tr class="expanded-row" data-aid="agentstudio_automations_expanded">
+                    <td :colspan="automationHeaders.length" class="px-0">
+                      <div class="expanded-row-wrapper pa-4">
+                        <v-card variant="flat" class="agentstudio-editor">
+                          <v-tabs v-model="automationTabs[item.id]" color="primary" density="comfortable" class="flex-grow-0" :data-aid="'agentstudio_automation_subtabs_' + item.id">
+                            <v-tab value="general" :data-aid="'agentstudio_automation_subtab_general_' + item.id"><v-icon class="mr-2">fa-id-card</v-icon>{{ i18n.general }}</v-tab>
+                            <v-tab value="settings" :data-aid="'agentstudio_automation_subtab_settings_' + item.id"><v-icon class="mr-2">fa-sliders</v-icon>{{ i18n.settings }}</v-tab>
+                            <v-tab value="activity" :data-aid="'agentstudio_automation_subtab_activity_' + item.id"><v-icon class="mr-2">fa-clock-rotate-left</v-icon>{{ i18n.agentStudioAutomationActivity }}</v-tab>
+                          </v-tabs>
+                          <v-divider></v-divider>
+                          <v-card-text>
+                            <v-tabs-window v-model="automationTabs[item.id]">
+                              <v-tabs-window-item value="general">
+                                <v-row>
+                                  <v-col cols="12" md="8">
+                                    <v-text-field v-if="item.isSystem" :model-value="item.displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-else v-model="draftForAutomation(item).displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details :data-aid="'agentstudio_automation_name_' + item.id"></v-text-field>
+                                  </v-col>
+                                  <!-- Read-only: the server refuses kind changes. -->
+                                  <v-col cols="12" md="4">
+                                    <v-text-field :model-value="automationKindLabel(item.automationKind)" :label="i18n.kind" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                  </v-col>
+                                  <v-col cols="12" md="6">
+                                    <v-select v-model="draftForAutomation(item).agent" :items="automationAgentChoices(item)" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint :data-aid="'agentstudio_automation_agent_' + item.id"></v-select>
+                                  </v-col>
+                                  <!-- The server restores a built-in's interval on save. -->
+                                  <v-col cols="12" md="6">
+                                    <v-text-field v-if="item.isSystem" :model-value="item.intervalSeconds" type="number" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" readonly hide-details></v-text-field>
+                                    <v-text-field v-else v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
+                                  </v-col>
+                                  <!-- A built-in's userId is its first saver, not a creator. -->
+                                  <v-col v-if="!item.isSystem && item.userId" cols="12" md="6">
+                                    <v-text-field :model-value="automationCreatorLabel(item)" :label="i18n.agentStudioAutomationCreatedBy" variant="outlined" density="comfortable" prepend-inner-icon="fa-user" readonly persistent-hint
+                                      :hint="i18n.agentStudioAutomationCreatedByHelp" :data-aid="'agentstudio_automation_creator_' + item.id"></v-text-field>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="settings">
+                                <v-alert v-if="!automationKind(item.automationKind)" type="warning" variant="tonal" density="compact" icon="fa-info" :data-aid="'agentstudio_automation_kind_unknown_' + item.id">{{ i18n.agentStudioAutomationKindUnknown }}</v-alert>
+                                <v-row v-else>
+                                  <v-col v-for="field in automationKindFields(item.automationKind)" :key="field.key" cols="12" :md="field.type === 'integer' || field.type === 'number' ? 6 : 12">
+                                    <automation-param-field :field="field" :params="draftForAutomation(item).params" :readonly="item.isSystem"></automation-param-field>
+                                  </v-col>
+                                </v-row>
+                              </v-tabs-window-item>
+
+                              <v-tabs-window-item value="activity">
+                                <v-row class="mb-2">
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="automationLastRun(item)" :label="i18n.agentStudioAutomationLastRun" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                  </v-col>
+                                  <v-col cols="12" md="6">
+                                    <v-text-field :model-value="automationNextRun(item) || i18n.never" :label="i18n.agentStudioAutomationNextRun" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                  </v-col>
+                                </v-row>
+                                <div v-if="automationBacklog(item).length" class="d-flex align-center flex-wrap ga-2 mb-3" :data-aid="'agentstudio_automation_backlog_' + item.id">
+                                  <v-chip v-for="entry in automationBacklog(item)" :key="entry.state" size="small" variant="tonal">{{ automationStatusLabel(entry.state) }}: {{ entry.count }}</v-chip>
+                                </div>
+                                <!-- Slots, not raw <tr>/<td>, which would close the enclosing expanded-row cell. -->
+                                <v-data-table v-if="automationHistory(item).runs.length" :headers="runHeaders" :items="automationHistory(item).runs" item-value="id" density="compact" hide-default-footer items-per-page="-1" class="agentstudio-runs" :data-aid="'agentstudio_automation_runs_' + item.id">
+                                  <template #item.startTime="{ value }">{{ value ? $root.formatDateTime(value) : '' }}</template>
+                                  <template #item.done="{ item: run }">{{ runItemCount(run, 'done') }}</template>
+                                  <template #item.failed="{ item: run }">{{ runItemCount(run, 'failed') }}</template>
+                                  <template #item.state="{ item: run }">
+                                    <v-chip size="x-small" :color="automationStatusColor(run.state)" :variant="automationStatusColor(run.state) ? 'flat' : 'tonal'" :title="run.error || ''">{{ automationStatusLabel(run.state) }}</v-chip>
+                                  </template>
+                                </v-data-table>
+                                <div v-else-if="automationRuns[item.id] && !automationRuns[item.id].loading" class="text-body-small text-medium-emphasis">{{ i18n.agentStudioAutomationRunsEmpty }}</div>
+                                <v-btn v-if="automationHistory(item).hasMore" variant="text" color="primary" size="small" class="mt-2" :loading="automationHistory(item).loading" @click.stop="loadAutomationRuns(item, true)" :data-aid="'agentstudio_automation_runs_more_' + item.id">{{ i18n.loadMore }}</v-btn>
+                              </v-tabs-window-item>
+                            </v-tabs-window>
+                          </v-card-text>
+                          <v-divider></v-divider>
+                          <v-card-actions class="px-4">
+                            <v-btn v-if="!automationsReadOnly && automationKind(item.automationKind)" variant="text" color="primary" @click.stop="duplicateAutomation(item)" :data-aid="'agentstudio_automation_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('automation', item)" :data-aid="'agentstudio_automation_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-spacer></v-spacer>
+                            <v-btn variant="text" :color="automationDirty(item) && automationValid(draftForAutomation(item)) ? 'primary' : ''" :disabled="!automationDirty(item) || !automationValid(draftForAutomation(item))" @click.stop="saveAutomation(item)" :data-aid="'agentstudio_automation_save_' + item.id">{{ i18n.save }}</v-btn>
+                          </v-card-actions>
+                        </v-card>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </v-data-table>
             </v-col>
           </v-row>
         </v-tabs-window-item>
