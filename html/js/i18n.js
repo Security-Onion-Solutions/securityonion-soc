@@ -1970,6 +1970,8 @@ const i18n = {
       ERROR_SALT_IMPORT: 'Unable to import file on minion; ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_STATE: 'Unable to sync settings. Ensure that salt is running on the manager node and check salt logs.',
       ERROR_SALT_ALREADY_RUNNING: 'Another synchronization operation is already running. Wait for it to complete and try again.',
+      ERROR_SESSION_ACCESS_DENIED: 'You don\'t have access to this session.',
+      ERROR_SESSION_NOT_ON_ALERT: 'This session is not an investigation of that alert, so its copy cannot be added to it.',
       ERROR_SESSION_ATTACHED_TO_CASES: 'Unable to unshare session. The session is attached to {count} case(s).',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',

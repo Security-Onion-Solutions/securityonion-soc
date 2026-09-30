@@ -43,18 +43,18 @@ func (m *MockAssistantstore) EXPECT() *MockAssistantstoreMockRecorder {
 }
 
 // CloneSession mocks base method.
-func (m *MockAssistantstore) CloneSession(ctx context.Context, sessionId string) (*model.AssistantSession, error) {
+func (m *MockAssistantstore) CloneSession(ctx context.Context, sessionId, entityType, entityId string) (*model.AssistantSession, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CloneSession", ctx, sessionId)
+	ret := m.ctrl.Call(m, "CloneSession", ctx, sessionId, entityType, entityId)
 	ret0, _ := ret[0].(*model.AssistantSession)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CloneSession indicates an expected call of CloneSession.
-func (mr *MockAssistantstoreMockRecorder) CloneSession(ctx, sessionId any) *gomock.Call {
+func (mr *MockAssistantstoreMockRecorder) CloneSession(ctx, sessionId, entityType, entityId any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneSession", reflect.TypeOf((*MockAssistantstore)(nil).CloneSession), ctx, sessionId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneSession", reflect.TypeOf((*MockAssistantstore)(nil).CloneSession), ctx, sessionId, entityType, entityId)
 }
 
 // CreateSession mocks base method.

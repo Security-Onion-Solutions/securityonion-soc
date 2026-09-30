@@ -602,6 +602,12 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// @Description The sessions whose access to check.
+type SessionAccessRequest struct {
+	// Up to 50 session ids.
+	SessionIds []string `json:"sessionIds" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
+}
+
 // AgentSessionRequest drives one agent session to its final turn with no browser
 // attached: the session is created, the objective seeded, and turns and tool
 // results looped until the agent stops or the turn cap trips.

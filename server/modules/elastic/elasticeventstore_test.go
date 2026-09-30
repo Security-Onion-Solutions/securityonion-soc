@@ -1069,48 +1069,38 @@ func TestAddUpdateScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
+	investigateHeader := `
 			boolean track_timing = params.trackTiming;
 			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
-	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+			ctx._source.event.investigated = true;`
+	assert.Equal(t, investigateHeader, criteria.UpdateScripts[0])
 	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Nil(t, criteria.Params["sessionId"])
 
 	// Test investigation case with session ID
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
-			boolean track_timing = params.trackTiming;
-			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
-			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			ctx._source.event.investigation_session_id = params.sessionId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
+	expected = investigateHeader + investigationListsScript + `
+			if (!inv_ids.contains(params.sessionId)) {
+				inv_ids.add(params.sessionId);
+				inv_by.add(params.userId);
+				inv_times.add(track_timing ? now_date : null);
+			}` + investigationStoreScript
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
+	assert.Equal(t, "admin", criteria.Params["userId"])
 
 	// Test investigation delete case
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
-		if (ctx._source.event.containsKey('investigation_session_id')) {
 			ctx._source.event.remove('investigation_session_id');
-		}
-	`
+			ctx._source.event.remove('investigated_by');
+			ctx._source.event.remove('investigated_timestamp');`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Nil(t, criteria.Params["sessionId"])
 
@@ -1118,11 +1108,13 @@ func TestAddUpdateScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
-		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
-			ctx._source.event.remove('investigation_session_id');
-		}
-	`
+	expected = investigationListsScript + `
+			int inv_index = inv_ids.indexOf(params.sessionId);
+			if (inv_index >= 0) {
+				inv_ids.remove(inv_index);
+				inv_by.remove(inv_index);
+				inv_times.remove(inv_index);` + investigationStoreScript + `
+			}`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
 }
@@ -1411,8 +1403,9 @@ func TestAddInvestigateScript_InjectionAttack(t *testing.T) {
 	store.addInvestigateScript(updateCriteria, time.Now(), attackUser, attackSession)
 
 	script := updateCriteria.UpdateScripts[0]
-	assert.Contains(t, script, `ctx._source.event.investigated_by = params.userId;`)
-	assert.Contains(t, script, `ctx._source.event.investigation_session_id = params.sessionId;`)
+	assert.Contains(t, script, `inv_by.add(params.userId);`)
+	assert.Contains(t, script, `inv_ids.add(params.sessionId);`)
+	assert.NotContains(t, script, "leaked")
 	assert.Equal(t, attackUser, updateCriteria.Params["userId"])
 	assert.Equal(t, attackSession, updateCriteria.Params["sessionId"])
 }

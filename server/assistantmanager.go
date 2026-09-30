@@ -31,9 +31,15 @@ var ErrToolUseNotFound = errors.New("ERROR_TOOL_USE_NOT_FOUND")
 // caller may read. The handler maps it to 404 Not Found.
 var ErrSessionNotFound = errors.New("ERROR_SESSION_NOT_FOUND")
 
+// ErrSessionAccessDenied means the session exists but the caller may not access it (403).
+var ErrSessionAccessDenied = errors.New("ERROR_SESSION_ACCESS_DENIED")
+
 // ErrSessionNotRoot is returned when an operation that only applies to a root
 // session targets a delegation sub-session. The handler maps it to 400.
 var ErrSessionNotRoot = errors.New("ERROR_SESSION_NOT_ROOT")
+
+// ErrSessionNotOnAlert means the target alert does not reference the cloned session (400).
+var ErrSessionNotOnAlert = errors.New("ERROR_SESSION_NOT_ON_ALERT")
 
 // ErrToolAlreadyResolved is returned when the targeted tool_use already has a
 // tool_result in the session's history, so approving or rejecting it again must

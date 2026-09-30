@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 		r.Post("/sessions/{sessionId}/clone", h.CloneSession)
+		r.Post("/sessions/access", h.PostSessionsAccess)
 
 		r.Put("/agents/{name}", h.SaveAgent)
 		r.Delete("/agents/{name}", h.DeleteAgent)
@@ -657,8 +659,23 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// GetSessions drops unreadable sessions; distinguish that (403) from not found.
 	if root == nil {
-		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
+		userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+
+		_, exists, _, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, sessionId)
+		if err != nil {
+			logger.WithError(err).Error("unable to check whether session exists")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
+
+		if exists {
+			web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+		} else {
+			web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound.Error())
+		}
 
 		return
 	}
@@ -911,13 +928,15 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 }
 
 // @Summary      Clone an Assistant Session
-// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued.
+// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation; that requires events/write.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored, assistant/delete_authored]
-// @Param        sessionId  path  string  true  "Session ID to clone"
+// @Param        sessionId   path   string  true   "Session ID to clone"
+// @Param        entityType  query  string  false  "alert_investigation, to record the copy on an alert" example(alert_investigation)
+// @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
 // @Produce      json
 // @Success      201  {object}  model.AssistantSession  "The new session"
-// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session"
+// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session, or the alert does not reference the session"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Session not found"
@@ -948,7 +967,29 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	clone, err := h.server.Assistantstore.CloneSession(ctx, sessionId)
+	entityType := r.URL.Query().Get("entityType")
+	entityId := r.URL.Query().Get("entityId")
+	if entityType != "" || entityId != "" {
+		if entityType != "alert_investigation" || entityId == "" {
+			web.Respond(w, r, http.StatusBadRequest, "entityType must be alert_investigation, with the alert's soc_id as entityId")
+			return
+		}
+
+		// Validate before copying so a refusal leaves nothing behind.
+		err = h.validateCloneAlert(ctx, entityId, sessionId)
+		if errors.Is(err, ErrSessionNotOnAlert) {
+			web.Respond(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if err != nil {
+			logger.WithError(err).WithField("entityId", entityId).Error("unable to check the alert for a clone")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
+	}
+
+	clone, err := h.server.Assistantstore.CloneSession(ctx, sessionId, entityType, entityId)
 	if errors.Is(err, ErrSessionNotFound) {
 		web.Respond(w, r, http.StatusNotFound, err)
 		return
@@ -964,7 +1005,143 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if entityId != "" {
+		_ = h.handleEntityAssociation(ctx, entityType, entityId, clone.SessionId)
+	}
+
 	web.Respond(w, r, http.StatusCreated, clone)
+}
+
+// FindEventBySocId quotes the id into its query, so restrict it to id characters.
+var cloneAlertIdPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+// validateCloneAlert requires the alert to already reference the session, so unrelated
+// sessions cannot be attached to arbitrary alerts.
+func (h *AssistantHandler) validateCloneAlert(ctx context.Context, socId string, sessionId string) error {
+	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		return err
+	}
+
+	if !cloneAlertIdPattern.MatchString(socId) {
+		return ErrSessionNotOnAlert
+	}
+
+	if h.server.Eventstore == nil {
+		return fmt.Errorf("eventstore is not available")
+	}
+
+	alert, err := FindEventBySocId(ctx, h.server.Eventstore, socId, time.Time{})
+	if err != nil {
+		return err
+	}
+
+	// The lookup also matches log.id.uid and event.id; the stamp uses soc_id only.
+	if alert == nil || alert.Id != socId {
+		return ErrSessionNotOnAlert
+	}
+
+	fields := []string{"event.investigation_session_id"}
+	if updater, ok := h.server.Assistantstore.(AlertTriageUpdater); ok {
+		fields = append(fields, model.AlertTriageFieldSessionId(updater.AlertTriageSchemaPrefix()))
+	}
+
+	for _, field := range fields {
+		if slices.Contains(payloadStrings(alert.Payload[field]), sessionId) {
+			return nil
+		}
+	}
+
+	return ErrSessionNotOnAlert
+}
+
+func payloadStrings(value any) []string {
+	switch v := value.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		values := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				values = append(values, s)
+			}
+		}
+
+		return values
+	}
+
+	return nil
+}
+
+// MaxSessionAccessIds caps the ids per access check.
+const MaxSessionAccessIds = 50
+
+// @Summary      Check Access to Assistant Sessions
+// @Description  Report, for each session id, whether the caller could open that session. Nothing else about a session is returned, and one that does not exist reads the same as one the caller may not open.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Param        request  body  model.SessionAccessRequest  true  "The sessions to check"
+// @Produce      json
+// @Success      200  {object}  map[string]bool  "Whether each session can be opened, keyed by session id"
+// @Failure      400           "No session ids, or more than 50"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/sessions/access [post]
+func (h *AssistantHandler) PostSessionsAccess(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	req := &model.SessionAccessRequest{}
+
+	err = json.NewDecoder(r.Body).Decode(req)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	ids := []string{}
+	for _, id := range req.SessionIds {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 || len(ids) > MaxSessionAccessIds {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Sprintf("between 1 and %d session ids are required", MaxSessionAccessIds))
+		return
+	}
+
+	// Mirror the lookup used to open a session, so true means it would open.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionIds(ids),
+		model.GetSessionsWithIncludeDeleted(true),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		logger.WithError(err).Error("unable to check session access")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	access := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		access[id] = false
+	}
+
+	for _, s := range sessions {
+		if _, requested := access[s.SessionId]; requested {
+			access[s.SessionId] = true
+		}
+	}
+
+	web.Respond(w, r, http.StatusOK, access)
 }
 
 // @Summary      Delete Your Assistant Session
@@ -992,6 +1169,31 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	if sessionId == "" {
 		logger.Error("sessionId is required")
 		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	// The store silently no-ops on others' sessions; check ownership first so another
+	// user's investigation isn't unlinked from its alert.
+	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	owned, exists, _, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, sessionId)
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	if !exists {
+		web.Respond(w, r, http.StatusNoContent, nil)
+
+		return
+	}
+
+	if !owned {
+		logger.WithField("assistantSessionId", sessionId).Warn("user attempted to delete a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
 
 		return
 	}

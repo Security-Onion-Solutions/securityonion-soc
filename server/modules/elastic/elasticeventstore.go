@@ -1407,45 +1407,76 @@ func (store *ElasticEventstore) addInvestigateScript(updateCriteria *model.Event
 			boolean track_timing = params.trackTiming;
 			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;`
+
+			ctx._source.event.investigated = true;`
 
 	if sessionIdStr != "" {
 		updateCriteria.Params["sessionId"] = sessionIdStr
-		script += `
-			ctx._source.event.investigation_session_id = params.sessionId;`
+		script += investigationListsScript + `
+			if (!inv_ids.contains(params.sessionId)) {
+				inv_ids.add(params.sessionId);
+				inv_by.add(params.userId);
+				inv_times.add(track_timing ? now_date : null);
+			}` + investigationStoreScript
 	}
 
-	script += `
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
 	updateCriteria.AddUpdateScript(script)
 }
+
+// investigationListsScript loads investigations as parallel session/user/time lists (scalars
+// become one-entry lists); the others are trimmed or null-padded to match the session list.
+const investigationListsScript = `
+			def inv_event = ctx._source.event;
+			List inv_ids = new ArrayList();
+			List inv_by = new ArrayList();
+			List inv_times = new ArrayList();
+			def inv_value = inv_event.investigation_session_id;
+			if (inv_value instanceof List) { inv_ids.addAll(inv_value); } else if (inv_value != null) { inv_ids.add(inv_value); }
+			inv_value = inv_event.investigated_by;
+			if (inv_value instanceof List) { inv_by.addAll(inv_value); } else if (inv_value != null) { inv_by.add(inv_value); }
+			inv_value = inv_event.investigated_timestamp;
+			if (inv_value instanceof List) { inv_times.addAll(inv_value); } else if (inv_value != null) { inv_times.add(inv_value); }
+			while (inv_by.size() > inv_ids.size()) { inv_by.remove(0); }
+			while (inv_by.size() < inv_ids.size()) { inv_by.add(null); }
+			while (inv_times.size() > inv_ids.size()) { inv_times.remove(0); }
+			while (inv_times.size() < inv_ids.size()) { inv_times.add(null); }`
+
+// investigationStoreScript writes the lists back, dropping empty ones; times only exist with reporting.
+const investigationStoreScript = `
+			if (inv_ids.isEmpty()) {
+				inv_event.remove('investigation_session_id');
+				inv_event.remove('investigated_by');
+				inv_event.remove('investigated_timestamp');
+			} else {
+				inv_event.investigation_session_id = inv_ids;
+				inv_event.investigated_by = inv_by;
+				boolean inv_timed = false;
+				for (def inv_time : inv_times) { if (inv_time != null) { inv_timed = true; } }
+				if (inv_timed) { inv_event.investigated_timestamp = inv_times; } else { inv_event.remove('investigated_timestamp'); }
+			}`
 
 func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.EventUpdateCriteria) {
 	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
 }
 
-// With a session id, only that session's link is removed so deleting a clone
+// With a session id, only that session's investigation is removed so deleting a clone
 // leaves an alert still pointing at its source session untouched.
 func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria, sessionId ...string) {
 	if len(sessionId) > 0 && sessionId[0] != "" {
 		updateCriteria.Params["sessionId"] = sessionId[0]
-		updateCriteria.AddUpdateScript(`
-		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
-			ctx._source.event.remove('investigation_session_id');
-		}
-	`)
+		updateCriteria.AddUpdateScript(investigationListsScript + `
+			int inv_index = inv_ids.indexOf(params.sessionId);
+			if (inv_index >= 0) {
+				inv_ids.remove(inv_index);
+				inv_by.remove(inv_index);
+				inv_times.remove(inv_index);` + investigationStoreScript + `
+			}`)
 		return
 	}
 	updateCriteria.AddUpdateScript(`
-		if (ctx._source.event.containsKey('investigation_session_id')) {
 			ctx._source.event.remove('investigation_session_id');
-		}
-	`)
+			ctx._source.event.remove('investigated_by');
+			ctx._source.event.remove('investigated_timestamp');`)
 }
 
 func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, ack bool, esc bool, userId string) {

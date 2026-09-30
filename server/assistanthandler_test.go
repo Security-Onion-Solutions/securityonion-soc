@@ -1209,19 +1209,45 @@ func TestGetSessionDetailsNotFound(t *testing.T) {
 
 	// Mock GetSessions to return empty result
 	mockAssistantStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{}, nil)
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(false, false, false, "", nil)
 
 	// Execute the handler
 	handler.GetSessionDetails(w, req)
 
 	// Verify response
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_SESSION_NOT_FOUND")
+}
 
-	// Verify response body returns empty session details
-	var responseDetails model.AssistantSessionDetails
-	err := json.Unmarshal(w.Body.Bytes(), &responseDetails)
-	assert.NoError(t, err)
-	assert.Nil(t, responseDetails.Session)
-	assert.Nil(t, responseDetails.History)
+func TestGetSessionDetailsAccessDenied(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+
+	sessionId := "someone-elses-session"
+	req := httptest.NewRequest("GET", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{}, nil)
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(false, true, false, "", nil)
+
+	handler.GetSessionDetails(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_SESSION_ACCESS_DENIED")
+	assert.NotContains(t, w.Body.String(), sessionId)
 }
 
 func TestGetSessionDetailsMissingSessionId(t *testing.T) {
@@ -2315,6 +2341,7 @@ func TestDeleteSession(t *testing.T) {
 	}, nil)
 
 	// Mock DeleteSession
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, false, "", nil)
 	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
 
 	// Execute the handler
@@ -2382,6 +2409,7 @@ func TestDeleteSessionInvestigation(t *testing.T) {
 	}, nil)
 
 	// Mock DeleteSession
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, false, "", nil)
 	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
 
 	// Execute the handler
@@ -2446,6 +2474,7 @@ func TestDeleteSessionInvestigationClearFails(t *testing.T) {
 	}, nil)
 
 	// Mock DeleteSession - should still be called
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", sessionId).Return(true, true, false, "", nil)
 	mockAssistantStore.EXPECT().DeleteSession(gomock.Any(), sessionId).Return(nil)
 
 	// Execute the handler
@@ -2525,6 +2554,130 @@ func TestDeleteSessionUnauthorized(t *testing.T) {
 	handler.DeleteSession(w, req)
 
 	// Verify response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func newDeleteSessionRequest(sessionId string) *http.Request {
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/assistant/sessions/%s", sessionId), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("sessionId", sessionId)
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	return req.WithContext(ctx)
+}
+
+func TestDeleteSessionNotOwned(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", "theirs").Return(false, true, false, "", nil)
+
+	handler.DeleteSession(w, newDeleteSessionRequest("theirs"))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_SESSION_ACCESS_DENIED")
+}
+
+func TestDeleteSessionMissing(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().DoesUserOwnSession(gomock.Any(), "test-user-123", "gone").Return(false, false, false, "", nil)
+
+	handler.DeleteSession(w, newDeleteSessionRequest("gone"))
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func newSessionsAccessRequest(body string) *http.Request {
+	req := httptest.NewRequest("POST", "/assistant/sessions/access", strings.NewReader(body))
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	return req.WithContext(ctx)
+}
+
+func TestPostSessionsAccess(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+	w := httptest.NewRecorder()
+
+	mockAssistantStore.EXPECT().GetSessions(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*model.AssistantSession{{SessionId: "mine", Title: "secret title"}}, nil)
+
+	handler.PostSessionsAccess(w, newSessionsAccessRequest(`{"sessionIds":["mine","theirs","missing","mine"," "]}`))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var access map[string]bool
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &access))
+	assert.Equal(t, map[string]bool{"mine": true, "theirs": false, "missing": false}, access)
+	assert.NotContains(t, w.Body.String(), "secret title")
+}
+
+func TestPostSessionsAccessLimits(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: true},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+
+	tooMany := make([]string, MaxSessionAccessIds+1)
+	for i := range tooMany {
+		tooMany[i] = fmt.Sprintf("s%d", i)
+	}
+	body, _ := json.Marshal(model.SessionAccessRequest{SessionIds: tooMany})
+
+	for _, reqBody := range []string{`{"sessionIds":[]}`, `{"sessionIds":["", " "]}`, string(body), `not json`} {
+		w := httptest.NewRecorder()
+		handler.PostSessionsAccess(w, newSessionsAccessRequest(reqBody))
+		assert.Equal(t, http.StatusBadRequest, w.Code, reqBody)
+	}
+}
+
+func TestPostSessionsAccessUnauthorized(t *testing.T) {
+	srv := &Server{
+		Authorizer: &rbac.FakeAuthorizer{Authorized: false},
+	}
+	ctrl := gomock.NewController(t)
+	mockAssistantStore := mock.NewMockAssistantstore(ctrl)
+	defer ctrl.Finish()
+
+	srv.Assistantstore = mockAssistantStore
+	handler := NewAssistantHandler(srv)
+	w := httptest.NewRecorder()
+
+	handler.PostSessionsAccess(w, newSessionsAccessRequest(`{"sessionIds":["mine"]}`))
+
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
@@ -5010,7 +5163,7 @@ func TestCloneSession_Created(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(&model.AssistantSession{SessionId: "clone-1", Title: "Triage"}, nil)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "", "").Return(&model.AssistantSession{SessionId: "clone-1", Title: "Triage"}, nil)
 
 	w := httptest.NewRecorder()
 	handler.CloneSession(w, cloneSessionRequest("src-1"))
@@ -5026,7 +5179,7 @@ func TestCloneSession_NotFound(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "missing").Return(nil, ErrSessionNotFound)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "missing", "", "").Return(nil, ErrSessionNotFound)
 
 	w := httptest.NewRecorder()
 	handler.CloneSession(w, cloneSessionRequest("missing"))
@@ -5038,7 +5191,7 @@ func TestCloneSession_NotRoot(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "child").Return(nil, ErrSessionNotRoot)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "child", "", "").Return(nil, ErrSessionNotRoot)
 
 	w := httptest.NewRecorder()
 	handler.CloneSession(w, cloneSessionRequest("child"))
@@ -5060,7 +5213,7 @@ func TestCloneSession_StoreUnauthorized(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(nil, model.NewUnauthorized("test-user", "read_all", "assistant"))
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "", "").Return(nil, model.NewUnauthorized("test-user", "read_all", "assistant"))
 
 	w := httptest.NewRecorder()
 	handler.CloneSession(w, cloneSessionRequest("src-1"))
@@ -5084,7 +5237,7 @@ func TestCloneSession_StoreError(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1").Return(nil, errors.New("es down"))
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "", "").Return(nil, errors.New("es down"))
 
 	w := httptest.NewRecorder()
 	handler.CloneSession(w, cloneSessionRequest("src-1"))
@@ -5092,12 +5245,152 @@ func TestCloneSession_StoreError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+// triageStore adds alert-triage recording to the mock store.
+type triageStore struct {
+	*mock.MockAssistantstore
+}
+
+func (s triageStore) AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
+	return nil, nil
+}
+
+func (s triageStore) AlertTriageSchemaPrefix() string { return "so_" }
+
+func cloneOntoAlertRequest(sessionId string, query string) *http.Request {
+	req := cloneSessionRequest(sessionId)
+	req.URL.RawQuery = query
+	return req
+}
+
+func cloneOntoAlertServer(t *testing.T, alerts []*model.EventRecord) (*Server, *mock.MockAssistantstore, *MockElasticEventstore) {
+	t.Helper()
+	srv, _, mockStore := newAssistantTestServer(t, true)
+	srv.Assistantstore = triageStore{mockStore}
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	events := &MockElasticEventstore{
+		MockEventstore: mock.NewMockEventstore(ctrl),
+		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+			return &model.EventUpdateResults{UpdatedCount: 1}, nil
+		},
+	}
+	if alerts != nil {
+		events.MockEventstore.EXPECT().Search(gomock.Any(), gomock.Any()).Return(&model.EventSearchResults{TotalEvents: len(alerts), Events: alerts}, nil)
+	}
+	srv.Eventstore = events
+
+	return srv, mockStore, events
+}
+
+const cloneOntoAlertQuery = "entityType=alert_investigation&entityId=alert-1"
+
+func TestCloneSession_OntoAlertFromManualInvestigation(t *testing.T) {
+	srv, mockStore, events := cloneOntoAlertServer(t, []*model.EventRecord{{
+		Id:      "alert-1",
+		Payload: map[string]interface{}{"event.investigation_session_id": []interface{}{"other", "src-1"}},
+	}})
+	handler := NewAssistantHandler(srv)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "alert_investigation", "alert-1").Return(&model.AssistantSession{SessionId: "clone-1"}, nil)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneOntoAlertRequest("src-1", cloneOntoAlertQuery))
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.True(t, events.addInvestigationUpdateScriptsCalled, "the copy is recorded on the alert")
+}
+
+func TestCloneSession_OntoAlertFromTriage(t *testing.T) {
+	srv, mockStore, events := cloneOntoAlertServer(t, []*model.EventRecord{{
+		Id:      "alert-1",
+		Payload: map[string]interface{}{"event.so_alerttriage.session_id": "src-1"},
+	}})
+	handler := NewAssistantHandler(srv)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "alert_investigation", "alert-1").Return(&model.AssistantSession{SessionId: "clone-1"}, nil)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneOntoAlertRequest("src-1", cloneOntoAlertQuery))
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.True(t, events.addInvestigationUpdateScriptsCalled)
+}
+
+func TestCloneSession_OntoAlertRefused(t *testing.T) {
+	tests := []struct {
+		name   string
+		query  string
+		alerts []*model.EventRecord
+	}{
+		{name: "the alert does not reference the session", query: cloneOntoAlertQuery, alerts: []*model.EventRecord{{
+			Id: "alert-1", Payload: map[string]interface{}{"event.investigation_session_id": "someone-else"},
+		}}},
+		{name: "no such alert", query: cloneOntoAlertQuery, alerts: []*model.EventRecord{}},
+		{name: "the lookup matched another event by its uid", query: cloneOntoAlertQuery, alerts: []*model.EventRecord{{
+			Id: "other-doc", Payload: map[string]interface{}{"event.investigation_session_id": "src-1"},
+		}}},
+		{name: "an id that could alter the lookup query", query: `entityType=alert_investigation&entityId=x"%20OR%20_id:*`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			srv, _, events := cloneOntoAlertServer(t, test.alerts)
+			handler := NewAssistantHandler(srv)
+
+			w := httptest.NewRecorder()
+			handler.CloneSession(w, cloneOntoAlertRequest("src-1", test.query))
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "ERROR_SESSION_NOT_ON_ALERT")
+			assert.False(t, events.addInvestigationUpdateScriptsCalled)
+		})
+	}
+}
+
+func TestCloneSession_OntoAlertNeedsBothParameters(t *testing.T) {
+	for _, query := range []string{"entityId=alert-1", "entityType=alert_investigation", "entityType=case&entityId=alert-1"} {
+		srv, _, _ := cloneOntoAlertServer(t, nil)
+		handler := NewAssistantHandler(srv)
+
+		w := httptest.NewRecorder()
+		handler.CloneSession(w, cloneOntoAlertRequest("src-1", query))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code, query)
+	}
+}
+
+func TestCloneSession_OntoAlertRequiresEventsWrite(t *testing.T) {
+	srv, _, _ := cloneOntoAlertServer(t, nil)
+	srv.Authorizer = &recordingAuthorizer{authorized: true, denied: "write"}
+	handler := NewAssistantHandler(srv)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneOntoAlertRequest("src-1", cloneOntoAlertQuery))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestCloneSession_OntoAlertStampFailureKeepsTheCopy(t *testing.T) {
+	srv, mockStore, events := cloneOntoAlertServer(t, []*model.EventRecord{{
+		Id: "alert-1", Payload: map[string]interface{}{"event.investigation_session_id": "src-1"},
+	}})
+	events.updateFunc = func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+		return nil, errors.New("es down")
+	}
+	handler := NewAssistantHandler(srv)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "src-1", "alert_investigation", "alert-1").Return(&model.AssistantSession{SessionId: "clone-1"}, nil)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneOntoAlertRequest("src-1", cloneOntoAlertQuery))
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
 func TestCloneSession_Route(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	r := chi.NewRouter()
 	RegisterAssistantRoutes(srv, r, "/assistant")
 
-	mockStore.EXPECT().CloneSession(gomock.Any(), "abc").Return(&model.AssistantSession{SessionId: "new"}, nil)
+	mockStore.EXPECT().CloneSession(gomock.Any(), "abc", "", "").Return(&model.AssistantSession{SessionId: "new"}, nil)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, withAssistantContext(httptest.NewRequest("POST", "/assistant/sessions/abc/clone", nil)))
