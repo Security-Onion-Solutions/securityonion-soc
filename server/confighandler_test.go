@@ -33,6 +33,14 @@ func (f *FakeConfigstore) GetSetting(ctx context.Context, id string) (*model.Set
 	return nil, nil
 }
 
+func (f *FakeConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return nil, nil
+}
+
+func (f *FakeConfigstore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
+	return nil, nil
+}
+
 func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -162,10 +163,15 @@ func (c *OnionConfig) GetSettings(ctx context.Context, advanced bool) ([]*model.
 }
 
 func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
-	if err := c.waitReady(ctx); err != nil {
+	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		return nil, err
 	}
-	if err := c.server.CheckAuthorized(ctx, "read", "config"); err != nil {
+
+	return c.LookupSetting(ctx, id)
+}
+
+func (c *OnionConfig) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	if err := c.waitReady(ctx); err != nil {
 		return nil, err
 	}
 
@@ -193,6 +199,21 @@ func (c *OnionConfig) GetSetting(ctx context.Context, id string) (*model.Setting
 	}
 
 	return nil, nil
+}
+
+func (c *OnionConfig) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
+	if err := c.waitReady(ctx); err != nil {
+		return nil, err
+	}
+
+	settings, err := c.loadAllSettings(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return Sort(slices.DeleteFunc(settings, func(s *model.Setting) bool {
+		return !strings.HasPrefix(s.Id, prefix)
+	})), nil
 }
 
 func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {

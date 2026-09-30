@@ -861,50 +861,35 @@ func TestAutomationPathsRequireAConfigstore(t *testing.T) {
 	}
 }
 
-// systemOnlyConfigstore refuses every requestor but the server, like the real one without config/read.
-type systemOnlyConfigstore struct {
+// configReadRefusingConfigstore refuses the config/read-checked reads, as the real one does for an analyst.
+type configReadRefusingConfigstore struct {
 	automationConfigstore
 }
 
-func (s *systemOnlyConfigstore) refuseNonSystem(ctx context.Context) error {
-	if id, _ := ctx.Value(web.ContextKeyRequestorId).(string); id != server.SYSTEM_ID {
-		return model.NewUnauthorized(id, "read", "config")
-	}
-
-	return nil
+func (c *configReadRefusingConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
+	return nil, model.NewUnauthorized("analyst-1", "read", "config")
 }
 
-func (s *systemOnlyConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
-	if err := s.refuseNonSystem(ctx); err != nil {
-		return nil, err
-	}
-
-	return s.automationConfigstore.GetSettings(ctx, includeDefault)
+func (c *configReadRefusingConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return nil, model.NewUnauthorized("analyst-1", "read", "config")
 }
 
-func (s *systemOnlyConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
-	if err := s.refuseNonSystem(ctx); err != nil {
-		return nil, err
-	}
-
-	return s.automationConfigstore.GetSetting(ctx, id)
-}
-
-// An analyst holds automations/read but not config/read, so the settings are read as the server.
-func TestListAndGetAutomationReadTheSettingsAsTheServer(t *testing.T) {
-	cfg := &systemOnlyConfigstore{}
+// Analysts hold automations/read but not config/read.
+func TestListAndGetAutomationNeedOnlyAutomationsRead(t *testing.T) {
+	cfg := &configReadRefusingConfigstore{}
 	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
 
 	ac := automationCoordinator(&cfg.automationConfigstore)
 	ac.srv.Configstore = cfg
-	ac.srv.Context = context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
 
-	automations, err := ac.ListAutomations(automationSaveCtx())
+	analyst := context.WithValue(context.Background(), web.ContextKeyRequestorId, "analyst-1")
+
+	automations, err := ac.ListAutomations(analyst)
 	require.NoError(t, err)
 	require.Len(t, automations, 1)
 	assert.Equal(t, "Nightly", automations[0].DisplayName)
 
-	automation, err := ac.GetAutomation(automationSaveCtx(), automationTestId)
+	automation, err := ac.GetAutomation(analyst, automationTestId)
 	require.NoError(t, err)
 	assert.Equal(t, "Nightly", automation.DisplayName)
 }
@@ -914,13 +899,13 @@ type unreadyConfigstore struct {
 	automationConfigstore
 }
 
-func (u *unreadyConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
+func (u *unreadyConfigstore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
 	<-ctx.Done()
 
 	return nil, ctx.Err()
 }
 
-func (u *unreadyConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+func (u *unreadyConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
 	<-ctx.Done()
 
 	return nil, ctx.Err()

@@ -363,7 +363,6 @@ func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
 	return automation, nil
 }
 
-// Callers need only automations/read, so the settings are read as the server.
 func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return nil, ErrConfigstoreUnavailable
@@ -373,10 +372,7 @@ func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.A
 		return nil, err
 	}
 
-	readCtx, cancel := web.MergeCancel(ac.srv.Context, ctx)
-	defer cancel()
-
-	automations, _, err := ac.scanAutomations(readCtx)
+	automations, _, err := ac.scanAutomations(ctx)
 
 	return automations, err
 }
@@ -388,7 +384,7 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 		return nil, 0, ErrConfigstoreUnavailable
 	}
 
-	settings, err := ac.srv.Configstore.GetSettings(ctx, true)
+	settings, err := ac.srv.Configstore.GetSettingsByPrefix(ctx, ConfigSettingAutomationsPrefix)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -431,7 +427,6 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 	return automations, unreadable, nil
 }
 
-// Callers need only automations/read, so the setting is read as the server.
 func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return nil, ErrConfigstoreUnavailable
@@ -441,10 +436,7 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 		return nil, err
 	}
 
-	readCtx, cancel := web.MergeCancel(ac.srv.Context, ctx)
-	defer cancel()
-
-	stored, err := ac.getStoredAutomation(readCtx, id)
+	stored, err := ac.getStoredAutomation(ctx, id)
 
 	if !ac.isBuiltinAutomation(id) {
 		return stored, err
@@ -471,7 +463,7 @@ func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id stri
 		return nil, ErrAutomationNotFound
 	}
 
-	setting, err := ac.srv.Configstore.GetSetting(ctx, automationSettingId(id))
+	setting, err := ac.srv.Configstore.LookupSetting(ctx, automationSettingId(id))
 	if err != nil {
 		return nil, err
 	}

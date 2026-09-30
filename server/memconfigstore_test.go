@@ -116,3 +116,23 @@ func TestMemConfigStoreSync(t *testing.T) {
 	err := mCfgStore.SyncSettings(context.Background())
 	assert.NoError(t, err)
 }
+
+func TestMemConfigStoreGetSettingsByPrefix(t *testing.T) {
+	mCfgStore := NewMemConfigStore([]*model.Setting{
+		{Id: "a.one", Value: "1"},
+		{Id: "b.two", Value: "2"},
+		{Id: "a.three", Value: "3"},
+	})
+
+	settings, err := mCfgStore.GetSettingsByPrefix(context.Background(), "a.")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"a.one", "a.three"}, lo.Map(settings, func(s *model.Setting, _ int) string { return s.Id }))
+}
+
+func TestMemConfigStoreLookupSetting(t *testing.T) {
+	mCfgStore := NewMemConfigStore([]*model.Setting{{Id: "a.one", Value: "1"}})
+
+	setting, err := mCfgStore.LookupSetting(context.Background(), "a.one")
+	assert.NoError(t, err)
+	assert.Equal(t, "1", setting.Value)
+}

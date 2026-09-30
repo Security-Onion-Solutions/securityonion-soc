@@ -60,13 +60,13 @@ type countingConfigstore struct {
 	reads atomic.Int64
 }
 
-func (c *countingConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
+func (c *countingConfigstore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
 	c.reads.Add(1)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.automationConfigstore.GetSettings(ctx, includeDefault)
+	return c.automationConfigstore.GetSettingsByPrefix(ctx, prefix)
 }
 
 // replace swaps the stored set the way a pillar edit does: nothing is woken, so the lock is

@@ -2091,7 +2091,7 @@ func (h *AssistantHandler) GetAutomationRuns(w http.ResponseWriter, r *http.Requ
 }
 
 // @Summary      Get an Automation Run
-// @Description  Retrieve everything one run left behind: its work items, every session those items drove with the tools it used and a preview of its thinking, and the alerts the run recorded on. Open a session with GET /connect/assistant/sessions/{sessionId}; while a session is still running its turns also stream on the assistant:stream broadcast as model.AgentStreamEvent. Reading the alerts also requires events/read.
+// @Description  Retrieve everything one run left behind: its work items, every session those items drove with the tools it used and a preview of its thinking, and the alerts the run recorded on. Open a session with GET /connect/assistant/sessions/{sessionId}; while a session is still running its turns also stream on the assistant:stream broadcast as model.AgentStreamEvent.
 // @Tags         Assistant
 // @Security     bearer[automations/read, events/read]
 // @Param        id          path   string  true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)

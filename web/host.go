@@ -54,20 +54,6 @@ func DetachContext(ctx context.Context, timeout time.Duration) (context.Context,
 	return context.WithTimeout(log.NewContext(detached, log.FromContext(ctx)), timeout)
 }
 
-// MergeCancel returns a context carrying ctx's values that also ends, with its cause,
-// when cancelCtx does: work as another identity for only as long as a request lasts.
-func MergeCancel(ctx, cancelCtx context.Context) (context.Context, context.CancelFunc) {
-	merged, cancel := context.WithCancelCause(ctx)
-	stop := context.AfterFunc(cancelCtx, func() {
-		cancel(context.Cause(cancelCtx))
-	})
-
-	return merged, func() {
-		stop()
-		cancel(context.Canceled)
-	}
-}
-
 type HostHandler interface {
 	Handle(responseWriter http.ResponseWriter, request *http.Request)
 }
