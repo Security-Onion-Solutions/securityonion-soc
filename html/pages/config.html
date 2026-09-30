@@ -85,13 +85,29 @@
 								<span id="elastic-quick-links-label" role="heading" aria-level="4">{{i18n.configQLElasticsearchHeader}}</span>
 								<ul aria-labelledby="elastic-quick-links-label">
 									<li>
-										<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age', x: 1}}">{{i18n.configQLElasticsearchWarm}}</router-link>
+										<span id="elastic-ilm-quick-links-label" role="heading" aria-level="5">{{i18n.configQLElasticsearchIlmHeader}}</span>
+										<ul aria-labelledby="elastic-ilm-quick-links-label">
+											<li>
+												<router-link data-aid="config_quicklink_es_hot" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.hot.actions.rollover.max_age'}}">{{i18n.configQLElasticsearchHot}}</router-link>
+											</li>
+											<li>
+												<router-link data-aid="config_quicklink_es_warm" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.warm.min_age'}}">{{i18n.configQLElasticsearchWarm}}</router-link>
+											</li>
+											<li>
+												<router-link data-aid="config_quicklink_es_cold" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.cold.min_age'}}">{{i18n.configQLElasticsearchCold}}</router-link>
+											</li>
+											<li>
+												<router-link data-aid="config_quicklink_es_delete" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.delete.min_age'}}">{{i18n.configQLElasticsearchDelete}}</router-link>
+											</li>
+										</ul>
 									</li>
 									<li>
-										<router-link data-aid="config_quicklink_es_cold" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.cold.min_age', x: 1}}">{{i18n.configQLElasticsearchCold}}</router-link>
-									</li>
-									<li>
-										<router-link data-aid="config_quicklink_es_delete" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.policy.phases.delete.min_age', x: 1}}">{{i18n.configQLElasticsearchDelete}}</router-link>
+										<span id="elastic-dlm-quick-links-label" role="heading" aria-level="5">{{i18n.configQLElasticsearchDlmHeader}}</span>
+										<ul aria-labelledby="elastic-dlm-quick-links-label">
+											<li>
+												<router-link data-aid="config_quicklink_es_dlm_retention" :to="{ name: 'config', query: {s: 'elasticsearch.index_settings.global_overrides.data_stream_lifecycle.data_retention'}}">{{i18n.configQLElasticsearchDlmRetention}}</router-link>
+											</li>
+										</ul>
 									</li>
 								</ul>
 							</li>
