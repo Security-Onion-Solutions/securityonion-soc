@@ -362,3 +362,50 @@ func TestAlarmHandler_PostEvaluate(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, fakeStore.Evaluated)
 }
+
+func TestRegisterAlarmRoutes_StoreNil(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Alarmstore = nil
+
+	r := chi.NewRouter()
+	RegisterAlarmRoutes(srv, r, "/api/alarms")
+
+	// GET /states should succeed with 200 OK and empty array when Alarmstore is nil
+	req := httptest.NewRequest("GET", "/api/alarms/states", nil)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var states []*model.AlarmState
+	err := json.Unmarshal(w.Body.Bytes(), &states)
+	assert.NoError(t, err)
+	assert.Empty(t, states)
+
+	// Other routes should return 405 Method Not Allowed
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/alarms"},
+		{"GET", "/api/alarms/metrics"},
+		{"GET", "/api/alarms/alarm-1"},
+		{"POST", "/api/alarms"},
+		{"PUT", "/api/alarms/alarm-1"},
+		{"DELETE", "/api/alarms/alarm-1"},
+		{"POST", "/api/alarms/evaluate"},
+	}
+
+	for _, rt := range routes {
+		req := httptest.NewRequest(rt.method, rt.path, nil)
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code, "expected 405 for %s %s", rt.method, rt.path)
+	}
+}
