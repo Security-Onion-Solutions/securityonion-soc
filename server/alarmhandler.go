@@ -32,16 +32,19 @@ func RegisterAlarmRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewAlarmHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
-		r.Use(h.alarmsEnabled)
-
-		r.Get("/", h.GetAlarms)
-		r.Get("/metrics", h.GetMetrics)
 		r.Get("/states", h.GetStates)
-		r.Get("/{id}", h.GetAlarm)
-		r.Post("/", h.PostAlarm)
-		r.Put("/{id}", h.PutAlarm)
-		r.Delete("/{id}", h.DeleteAlarm)
-		r.Post("/evaluate", h.PostEvaluate)
+
+		r.Group(func(r chi.Router) {
+			r.Use(h.alarmsEnabled)
+
+			r.Get("/", h.GetAlarms)
+			r.Get("/metrics", h.GetMetrics)
+			r.Get("/{id}", h.GetAlarm)
+			r.Post("/", h.PostAlarm)
+			r.Put("/{id}", h.PutAlarm)
+			r.Delete("/{id}", h.DeleteAlarm)
+			r.Post("/evaluate", h.PostEvaluate)
+		})
 	})
 }
 
@@ -101,11 +104,6 @@ func (h *AlarmHandler) GetAlarms(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
-
 	alarms, err := h.server.Alarmstore.GetAlarms(ctx)
 	if err != nil {
 		logger.WithError(err).Error("failed to load alarms")
@@ -136,11 +134,6 @@ func (h *AlarmHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
-
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
 
 	metrics, err := h.server.Alarmstore.GetAlarmMetrics(ctx)
 	if err != nil {
@@ -211,11 +204,6 @@ func (h *AlarmHandler) GetAlarm(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
 
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
-
 	alarm, err := h.server.Alarmstore.GetAlarm(ctx, id)
 	if err != nil {
 		logger.WithError(err).Error("failed to load alarm")
@@ -248,11 +236,6 @@ func (h *AlarmHandler) PostAlarm(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
-
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
 
 	var req model.Alarm
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -297,11 +280,6 @@ func (h *AlarmHandler) PutAlarm(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
 
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
-
 	var req model.Alarm
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.WithError(err).Error("failed to decode request body")
@@ -343,11 +321,6 @@ func (h *AlarmHandler) DeleteAlarm(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
 
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
-
 	if err := h.server.Alarmstore.DeleteAlarm(ctx, id); err != nil {
 		logger.WithError(err).Error("failed to delete alarm")
 		h.respondError(w, r, err)
@@ -377,11 +350,6 @@ func (h *AlarmHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
-
-	if h.server == nil || h.server.Alarmstore == nil {
-		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Alarm module not enabled"))
-		return
-	}
 
 	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
 		logger.WithError(err).Error("unauthorized to evaluate alarms")
