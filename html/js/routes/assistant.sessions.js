@@ -20,6 +20,16 @@ globalThis.AssistantSessions = (function() {
       if (!this.agentic) return;
       this.initAssistant((this.$root.parameters || {}).assistant || {}, false);
     },
+    defaultAgentKey() {
+      const orchestrators = this.availableModels.filter(a => a.isOrchestrator);
+      const agent = orchestrators.find(a => a.isSystem) || orchestrators[0] || this.availableModels[0];
+      return agent ? agent.key : '';
+    },
+    // ?agent= from a link; ignored unless it names an enabled agent.
+    requestedAgentKey() {
+      const requested = ((this.$route || {}).query || {}).agent;
+      return this.agentic && requested && this.modelsMap.has(requested) ? requested : '';
+    },
     async initAssistant(params, loadSession = true) {
       this.assistantEnabled = params["enabled"] && this.$root.isLicensed('oai');
       this.investigationMsg = params["investigationPrompt"];
@@ -53,12 +63,9 @@ globalThis.AssistantSessions = (function() {
           };
         });
         this.modelsMap = new Map(this.availableModels.map(a => [a.key, a]));
-        // When the stored selector isn't a known agent (or none was stored),
-        // default to the orchestrator the user talks to first, not just the
-        // first agent in the list.
+        // Selection isn't persisted, so visits start on the orchestrator; later pushes keep the pick.
         if (!this.currentModel || !this.modelsMap.has(this.currentModel)) {
-          const orchestrator = this.availableModels.find(a => a.isOrchestrator);
-          this.currentModel = (orchestrator || this.availableModels[0])?.key || '';
+          this.currentModel = this.defaultAgentKey();
         }
         this.groupedModels = this.buildGroupedModels();
       } else {
@@ -87,6 +94,7 @@ globalThis.AssistantSessions = (function() {
       this.$root.showDisclaimer(this.i18n.assistantDisclaimerMessage, this.i18n.assistantDisclaimerTitle, this.i18n.getStarted, 'settings.disclaimer.acknowledged.onionai');
 
       this.paramsLoaded = true;
+      this.loadAutomatedAgents();
 
       if (this.assistantEnabled) {
         if (!this.$root.disclaimer) {
@@ -237,8 +245,9 @@ globalThis.AssistantSessions = (function() {
           await this.loadChatFromBackend(urlSessionId);
         } catch (error) {
           const isInvestigation = this.$route.query.investigation === 'true';
+          const failure = this.sessionLoadFailure(error);
 
-          if (isInvestigation) {
+          if (isInvestigation && failure !== 'denied') {
             // Investigation sessions are allowed to create new sessions with the URL session ID
             this.currentChatId = urlSessionId;
             this.saveCurrentChatId();
@@ -251,13 +260,25 @@ globalThis.AssistantSessions = (function() {
               this.$root.showError(this.i18n.assistantUnableToParseInvestigation + ': ' + error.message);
             }
           } else if (urlSessionId !== this.currentChatId) {
-            // Session ID doesn't exist, not an investigation, and not our own navigation — redirect to base assistant page
+            // Start fresh rather than drop the user into an unrelated old chat.
+            this.$root.showError({
+              denied: this.i18n.assistantSessionAccessDenied,
+              missing: this.i18n.assistantSessionNotFound,
+            }[failure] || this.i18n.assistantSessionUnavailable);
+            this.currentChatId = null;
+            this.saveCurrentChatId();
+            this.loadNewChatScreen();
             await this.$router.replace({ name: 'assistant' });
             return;
           }
         } finally {
           this.$root.stopLoading();
         }
+      } else if (this.requestedAgentKey()) {
+        // Always a new session, even when the last chat would be restored.
+        this.currentModel = this.requestedAgentKey();
+        this.updateModelParams();
+        await this.startNewChat();
       } else {
         await this.restoreLastActiveChat();
       }
@@ -415,43 +436,39 @@ globalThis.AssistantSessions = (function() {
       return 'New Chat - ' + new Date().toLocaleDateString();
     },
 
+    // Throws on failure; missing is routine for new chats, so the caller decides.
     async loadChatFromBackend(sessionId) {
-      try {
-        const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
-        if (response.data && Array.isArray(response.data.history) && response.data.history.length > 0) {
-          this.currentChatId = sessionId;
-          // Index delegated sub-sessions so delegate tool blocks can rebuild their
-          // nested childSession from stored history (see reconstructChildSession).
-          this._loadSubSessions = this.indexSubSessions(response.data.subSessions);
-          try {
-            this.messages = this.convertBackendMessagesToFrontend(response.data.history);
-          } finally {
-            this._loadSubSessions = null;
-          }
-          // Derive credits from stored history, independent of the render tree.
-          this.recomputeCreditsFromHistory(response.data);
-          this.saveCurrentChatId();
-
-          await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
-
-          // Blocks user from sending messages in deleted chats
-          this.checkIfDeleted(response.data.session);
-
-          this.chatHistoryById[sessionId] = response.data.session;
-        } else {
-          throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
+      const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
+      if (response.data && Array.isArray(response.data.history) && response.data.history.length > 0) {
+        this.currentChatId = sessionId;
+        // Index delegated sub-sessions so delegate tool blocks can rebuild their
+        // nested childSession from stored history (see reconstructChildSession).
+        this._loadSubSessions = this.indexSubSessions(response.data.subSessions);
+        try {
+          this.messages = this.convertBackendMessagesToFrontend(response.data.history);
+        } finally {
+          this._loadSubSessions = null;
         }
-      } catch (error) {
-        if (error.response && error.response.status === 404) {
-          this.loadNewChatScreen();
-          this.currentChatId = sessionId;
-          this.saveCurrentChatId();
+        // Derive credits from stored history, independent of the render tree.
+        this.recomputeCreditsFromHistory(response.data);
+        this.saveCurrentChatId();
 
-          await this.scrollToBottomSettled();
-        } else {
-          throw error;
-        }
+        await this.scrollToBottomSettled({ maxWait: 6000, settleDelay: 200 });
+
+        // Blocks user from sending messages in deleted chats
+        this.checkIfDeleted(response.data.session);
+
+        this.chatHistoryById[sessionId] = response.data.session;
+      } else {
+        throw new Error(this.i18n.assistantNoHistoryFound + ' ' + sessionId);
       }
+    },
+    // 'denied', 'missing', or 'unavailable' when the server doesn't say which.
+    sessionLoadFailure(error) {
+      const status = error && error.response && error.response.status;
+      if (status === 403) return 'denied';
+      if (status === 404) return 'missing';
+      return 'unavailable';
     },
     
     // New-format (tagged) tool result messages.

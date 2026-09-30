@@ -17,6 +17,7 @@ const FILTER_DRILLDOWN = 'DRILLDOWN';
 const QUESTION_STATUS_RUNNING = 'running';
 const QUESTION_STATUS_DONE = 'done';
 const QUESTION_STATUS_ERROR = 'error';
+const ALERT_TRIAGE_PREFIX = 'event.so_alerttriage.';
 
 loadPageTemplate('page-hunt', 'pages/hunt.html');
 
@@ -123,6 +124,7 @@ const huntComponent = {
       filterRouteGreaterThanEqual: "",
       groupByRoute: "",
       groupByNewRoute: "",
+      investigationMenu: { visible: false, target: null, items: [], newLink: null },
       quickActionVisible: false,
       quickActionTarget: null,
       quickActionEvent: null,
@@ -3135,6 +3137,31 @@ const huntComponent = {
         this.loadPlaybook(item.newest, item._row_idx_);
       }
       this.$nextTick(() => this.checkAllFieldTruncation());
+
+      if (this.investigateEnabled) await this.fetchNewestTriagedEvent(item, parts);
+    },
+    // Triage stamps land late, so a group's newest alert often has none; find its newest triaged one.
+    async fetchNewestTriagedEvent(item, parts) {
+      if (item.newestTriaged || this.automatedInvestigationId(item.newest)) return;
+
+      const params = {
+        query: parts.concat(['_exists_:' + ALERT_TRIAGE_PREFIX + 'session_id']).join(' AND ') + ' | sortby @timestamp',
+        range: this.dateRange,
+        format: this.i18n.timePickerSample,
+        zone: this.zone,
+        metricLimit: 0,
+        eventLimit: 1
+      };
+      if (this.gridId && this.gridId.length > 0) {
+        params.gridId = this.gridId;
+      }
+
+      try {
+        const response = await this.$root.papi.get('events/', { params });
+        if (response.data.events.length) item.newestTriaged = this.extractSocValues(response.data.events[0]);
+      } catch (error) {
+        // Falls back to the newest alert.
+      }
     },
     extractSocValues(event) {
       var record = event.payload;
@@ -3217,6 +3244,8 @@ const huntComponent = {
       if (event && event.button !== 0 && event.button !== 1) {
         return;
       }
+      // Read before any await: the browser clears currentTarget once dispatch finishes.
+      const anchor = event ? event.currentTarget : null;
 
       let targetItem = item;
 
@@ -3226,7 +3255,7 @@ const huntComponent = {
         try {
           await this.fetchNewestEvent(item);
           if (item.newest) {
-            targetItem = item.newest;
+            targetItem = this.investigationSubject(item);
           } else {
             this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest);
             return;
@@ -3243,48 +3272,40 @@ const huntComponent = {
         return;
       }
 
-      // Check if investigation already exists for this specific soc_id
-      if (targetItem['event.investigated'] && targetItem['event.investigation_session_id']) {
-        // Check for middle-click (button === 1) to open in new tab
-        if (event && event.button === 1) {
-          // Middle-click: open in new tab
-          const url = this.$router.resolve({
-            name: 'assistant',
-            params: { sessionId: targetItem['event.investigation_session_id'] }
-          }).href;
-          window.open(url, '_blank');
-        } else {
-          // Left-click: navigate in current tab
-          this.$router.push({
-            name: 'assistant',
-            params: { sessionId: targetItem['event.investigation_session_id'] }
-          });
-        }
+      const items = this.investigationMenuItems(targetItem);
+      this.investigationMenu = {
+        visible: true,
+        target: anchor,
+        items: items,
+        newLink: this.$root.canStartInvestigations() ? this.newInvestigationLink(targetItem) : null,
+      };
+      await this.blockPrivateInvestigations(items);
+    },
+    // Only a definite no blocks; a slow or failed check leaves sessions open.
+    async blockPrivateInvestigations(items) {
+      const others = items.filter(i => i.manual && !i.mine);
+      if (!others.length) return;
+      let access;
+      try {
+        access = await fetchSessionAccess(this.$root.papi, others.map(i => i.sessionId));
+      } catch (error) {
         return;
       }
-
-      const chatSessionId = this.generateChatId();
-
-      // Create the investigation prompt with alert data
-      const queryList = this.generateQueryList(targetItem);
-
-      // Check for middle-click (button === 1) to open in new tab
-      if (event && event.button === 1) {
-        // Middle-click: open in new tab
-        const url = this.$router.resolve({
-          name: 'assistant',
-          params: { sessionId: chatSessionId },
-          query: queryList
-        }).href;
-        window.open(url, '_blank');
-      } else {
-        // Left-click: navigate in current tab
-        this.$router.push({
-          name: 'assistant',
-          params: { sessionId: chatSessionId },
-          query: queryList
-        });
+      // The menu may have moved to another alert meanwhile.
+      if (this.investigationMenu.items !== items) return;
+      for (const item of this.investigationMenu.items) {
+        if (item.manual && !item.mine && access[item.sessionId] === false) {
+          item.blocked = true;
+          item.subtitle = [item.subtitle, this.i18n.aiInvestigationPrivate].filter(s => s).join(' · ');
+        }
       }
+    },
+    newInvestigationLink(targetItem) {
+      return {
+        name: 'assistant',
+        params: { sessionId: this.generateChatId() },
+        query: this.generateQueryList(targetItem),
+      };
     },
 
     generateQueryList(item) {
@@ -3314,29 +3335,71 @@ const huntComponent = {
       return queryList;
     },
 
+    investigationMenuItems(item) {
+      const items = [];
+      const automatedId = this.automatedInvestigationId(item);
+      if (automatedId) {
+        items.push({
+          icon: 'fa-robot', title: this.i18n.aiInvestigateViewAutomated,
+          subtitle: this.formatInvestigationTime(item[ALERT_TRIAGE_PREFIX + 'timestamp']),
+          to: this.investigationLink(automatedId, item.soc_id),
+        });
+      }
+      const me = (this.$root.user || {}).id;
+      for (const inv of alertManualInvestigations(item).reverse()) {
+        const mine = !!me && inv.by === me;
+        const user = inv.by && !mine ? this.$root.getUserByIdViaCache(inv.by) : null;
+        const who = mine ? this.i18n.aiInvestigationYou : (user ? this.$root.getUserDisplayName(user) : inv.by);
+        items.push({
+          icon: 'fa-user', title: this.i18n.aiInvestigateViewManual,
+          subtitle: [who, this.formatInvestigationTime(inv.time)].filter(s => s).join(' · '),
+          to: this.investigationLink(inv.sessionId),
+          sessionId: inv.sessionId, manual: true, mine: mine, blocked: false,
+        });
+      }
+      return items;
+    },
+    formatInvestigationTime(time) {
+      return time ? this.$root.formatDateTime(time) : '';
+    },
+    automatedInvestigationId(item) {
+      return (item && item[ALERT_TRIAGE_PREFIX + 'session_id']) || '';
+    },
+    // Groups use their newest triaged alert (where continued copies attach), else their newest.
+    investigationSubject(item) {
+      return item.count ? (item.newestTriaged || item.newest) : item;
+    },
+
     getAIInvestigationButtonColor(item) {
-      // Grouped alerts
-      if (item.count) {
-        return '';
-      }
-      // Individual alerts
-      if (item['event.investigated']) {
-        return 'icon';
-      }
-      // Not investigated
+      const subject = this.investigationSubject(item);
+      if (!subject) return '';
+      if (subject['event.investigated'] || alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
+      if (subject[ALERT_TRIAGE_PREFIX + 'failed_count']) return 'warning';
       return '';
     },
 
     getAIInvestigationTooltip(item) {
-      // Grouped alerts
-      if (item.count) {
-        return this.i18n.aiInvestigateMostRecent;
-      }
-      // Individual alerts
-      if (item['event.investigation_session_id']) {
-        return this.i18n.aiInvestigateView;
-      }
-      return this.i18n.aiInvestigate;
+      const subject = this.investigationSubject(item);
+      if (!subject) return this.i18n.aiInvestigateMostRecent;
+      const manualCount = alertManualInvestigations(subject).length;
+      const automatedId = this.automatedInvestigationId(subject);
+      if (manualCount + (automatedId ? 1 : 0) > 1) return this.i18n.aiInvestigateViewBoth;
+      if (manualCount) return this.i18n.aiInvestigateView;
+      if (automatedId) return this.i18n.aiInvestigateViewAutomated + ' · ' + moment(subject[ALERT_TRIAGE_PREFIX + 'timestamp']).fromNow();
+      const failed = subject[ALERT_TRIAGE_PREFIX + 'failed_count'];
+      if (failed) return this.i18n.aiInvestigationFailedAttempts.replace('{count}', failed);
+      return item.count ? this.i18n.aiInvestigateMostRecent : this.i18n.aiInvestigate;
+    },
+    // alertId is where continuing the session attaches its copy.
+    investigationLink(sessionId, alertId) {
+      const link = { name: 'assistant', params: { sessionId: sessionId } };
+      if (alertId) link.query = { alert: alertId };
+      return link;
+    },
+    routeForQuery(query) {
+      const route = this.buildCurrentRoute();
+      route.query.q = query;
+      return route;
     },
 
     generateChatId() {

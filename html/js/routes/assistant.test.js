@@ -626,13 +626,92 @@ test('initAssistant defaults a stale stored selector to the orchestrator agent',
   expect(comp.currentModel).toBe('Orchestrator');
 });
 
-test('initAssistant keeps a valid stored agent selector', async () => {
+test('initAssistant keeps an agent the user picked during the visit', async () => {
   stubInitDeps();
   comp.currentModel = 'Hunter';
 
   await comp.initAssistant(agenticParams());
 
   expect(comp.currentModel).toBe('Hunter');
+});
+
+test('the last-selected agent is not restored, so every visit starts on the orchestrator', async () => {
+  const storageData = { 'settings.assistant.currentModel': 'Hunter' };
+  const original = global.localStorage;
+  global.localStorage = new Proxy({}, { get: (_, key) => storageData[key] });
+  try {
+    comp.currentModel = '';
+    comp.loadLocalSettings();
+    expect(comp.currentModel).toBe('');
+
+    stubInitDeps();
+    await comp.initAssistant(agenticParams());
+    expect(comp.currentModel).toBe('Orchestrator');
+  } finally {
+    global.localStorage = original;
+  }
+});
+
+test('the default prefers the built-in orchestrator over a custom one', () => {
+  comp.availableModels = [
+    { key: 'Alpha', isOrchestrator: true },
+    { key: 'Orchestrator', isOrchestrator: true, isSystem: true },
+    { key: 'Hunter' },
+  ];
+  expect(comp.defaultAgentKey()).toBe('Orchestrator');
+
+  comp.availableModels = [{ key: 'Hunter' }, { key: 'Alpha', isOrchestrator: true }];
+  expect(comp.defaultAgentKey()).toBe('Alpha');
+  comp.availableModels = [{ key: 'Hunter' }];
+  expect(comp.defaultAgentKey()).toBe('Hunter');
+  comp.availableModels = [];
+  expect(comp.defaultAgentKey()).toBe('');
+});
+
+test('a link can ask for a specific enabled agent', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+
+  comp.$route.query = { agent: 'Hunter' };
+  expect(comp.requestedAgentKey()).toBe('Hunter');
+
+  comp.$route.query = { agent: 'No Such Agent' };
+  expect(comp.requestedAgentKey()).toBe('');
+  comp.$route.query = {};
+  expect(comp.requestedAgentKey()).toBe('');
+
+  comp.agentic = false;
+  comp.$route.query = { agent: 'Hunter' };
+  expect(comp.requestedAgentKey()).toBe('');
+});
+
+test('a link to an agent starts a new chat with it, even when the last chat is restored', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  // Undo stubInitDeps; getComponent again would reset this component's data.
+  comp.handleRouteSessionId = global.routes.find(r => r.name === 'assistant').component.methods.handleRouteSessionId;
+  // The harness $nextTick needs a callback; this path awaits it bare.
+  comp.$nextTick = jest.fn().mockResolvedValue();
+  comp.assistantEnabled = true;
+  comp.restoreLastActive = true;
+  comp.startNewChat = jest.fn().mockResolvedValue();
+  comp.restoreLastActiveChat = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+
+  comp.$route.params = {};
+  comp.$route.query = { agent: 'Hunter' };
+  await comp.handleRouteSessionId();
+
+  expect(comp.currentModel).toBe('Hunter');
+  expect(comp.updateModelParams).toHaveBeenCalled();
+  expect(comp.startNewChat).toHaveBeenCalled();
+  expect(comp.restoreLastActiveChat).not.toHaveBeenCalled();
+
+  comp.startNewChat.mockClear();
+  comp.$route.query = {};
+  await comp.handleRouteSessionId();
+  expect(comp.restoreLastActiveChat).toHaveBeenCalled();
+  expect(comp.startNewChat).not.toHaveBeenCalled();
 });
 
 test('initAssistant enriches agents with their mapped model context limits', async () => {
@@ -762,6 +841,74 @@ test('canSwitchModel is false while loading or a turn is active', () => {
   comp.$root.loading = false;
   comp.isStreaming = true;
   expect(comp.canSwitchModel()).toBe(false);
+});
+
+test('the automated agents pill is shown only to superusers on an agentic grid, once counted', () => {
+  const isAdmin = comp.$root.isUserAdmin;
+  try {
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
+    comp.agentic = true;
+    comp.automatedAgents = null;
+    expect(comp.showAutomatedAgentsPill()).toBe(false, 'nothing to show before the first count');
+
+    comp.automatedAgents = { running: 0, queued: 0 };
+    expect(comp.showAutomatedAgentsPill()).toBe(true);
+
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(false);
+    expect(comp.showAutomatedAgentsPill()).toBe(false);
+
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
+    comp.agentic = false;
+    expect(comp.showAutomatedAgentsPill()).toBe(false);
+  } finally {
+    comp.$root.isUserAdmin = isAdmin;
+  }
+});
+
+test('the automated agents pill summarizes running and queued work', () => {
+  comp.automatedAgents = { running: 4, queued: 1 };
+  expect(comp.automatedAgentsSummary()).toBe('4 running · 1 queued');
+
+  comp.automatedAgents = {};
+  expect(comp.automatedAgentsSummary()).toBe('0 running · 0 queued');
+});
+
+test('the pill counts automation work items, not the whole pool', () => {
+  const activity = {
+    pool: { running: 9, queued: 9 },
+    runs: [
+      { items: [{ state: 'running' }, { state: 'running', queued: true }, { state: 'pending' }] },
+      { items: [{ state: 'running' }, { state: 'applying' }] },
+      { items: null },
+    ],
+  };
+
+  expect(comp.countAutomatedAgents(activity)).toEqual({ running: 2, queued: 2 });
+  expect(comp.countAutomatedAgents({})).toEqual({ running: 0, queued: 0 });
+});
+
+test('the pill loads its count only for superusers on an agentic grid, keeping the last on failure', async () => {
+  const isAdmin = comp.$root.isUserAdmin;
+  try {
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(false);
+    comp.agentic = true;
+    const get = mockPapi('get', { data: { runs: [{ items: [{ state: 'running' }] }] } });
+    await comp.loadAutomatedAgents();
+    expect(get).not.toHaveBeenCalled();
+
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
+    await comp.loadAutomatedAgents();
+    expect(get).toHaveBeenCalledWith('assistant/automations/activity');
+    expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+
+    resetPapi();
+    mockPapi('get', null, new Error('down'));
+    await comp.loadAutomatedAgents();
+    expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+    expect(comp.$root.showError).not.toHaveBeenCalled();
+  } finally {
+    comp.$root.isUserAdmin = isAdmin;
+  }
 });
 
 test('selectModel is blocked while a turn is active', async () => {
@@ -4146,18 +4293,16 @@ test('loadChatFromBackend success', async () => {
   expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
-test('loadChatFromBackend handles 404 error', async () => {
+test('loadChatFromBackend leaves a 404 to its caller rather than resetting the chat', async () => {
   const error = new Error('Not found');
   error.response = { status: 404 };
   mockPapi("get", null, error);
   comp.loadNewChatScreen = jest.fn();
-  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
-  
-  await comp.loadChatFromBackend(fakeSessionId);
-  
-  expect(comp.loadNewChatScreen).toHaveBeenCalled();
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
+
+  await expect(comp.loadChatFromBackend(fakeSessionId)).rejects.toBe(error);
+
+  expect(comp.loadNewChatScreen).not.toHaveBeenCalled();
+  expect(comp.sessionLoadFailure(error)).toBe('missing');
 });
 
 test('loadChatFromBackend handles other errors', async () => {
@@ -4259,9 +4404,9 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
-  expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
   expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
-  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
+  expect(comp.saveSetting).not.toHaveBeenCalledWith('currentModel', expect.anything(), expect.anything());
+  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
@@ -5241,6 +5386,165 @@ test('checkIfDeleted sets canChat to false when session is deleted', () => {
 
   expect(comp.canChat).toBe(false);
   expect(comp.$root.showWarning).toHaveBeenCalled();
+});
+
+test('an automated session is read-only and shows the continue banner', () => {
+  comp.canChat = true;
+  comp.currentChatId = 'auto-1';
+  comp.chatHistoryById = { 'auto-1': { sessionId: 'auto-1', tags: ['automation', 'shared'] } };
+
+  comp.checkIfDeleted(comp.chatHistoryById['auto-1']);
+
+  expect(comp.canChat).toBe(false);
+  expect(comp.isAutomatedSession()).toBe(true);
+  comp.currentChatId = null;
+  expect(comp.isAutomatedSession()).toBe(false);
+});
+
+test('continuing a real session clones it through the server and opens the copy', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$router.push = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  const post = mockPapi('post', { data: { sessionId: 'copy-1' } });
+
+  await comp.continueSession();
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/real-1/clone', null, undefined);
+  expect(comp.loadStoredChats).toHaveBeenCalled();
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant', params: { sessionId: 'copy-1' } });
+});
+
+test('continuing from an alert asks the server to record the copy on that alert', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$route.query = { alert: 'alert-1' };
+  comp.$router.push = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  const post = mockPapi('post', { data: { sessionId: 'copy-1' } });
+
+  await comp.continueSession();
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/real-1/clone', null,
+    { params: { entityType: 'alert_investigation', entityId: 'alert-1' } });
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant', params: { sessionId: 'copy-1' } });
+});
+
+test('a failed clone reports it and stays put', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$root.showError = jest.fn();
+  comp.$router.push = jest.fn();
+  const error = new Error('ERROR_SESSION_NOT_FOUND');
+  mockPapi('post', null, error);
+
+  await comp.continueSession();
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('another user\'s session is read-only; your own and a new one are not', () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'theirs';
+  comp.chatHistoryById = {
+    theirs: { sessionId: 'theirs', userId: 'someone-else', tags: ['shared'] },
+    mine: { sessionId: 'mine', userId: 'me', tags: [] },
+  };
+
+  comp.checkIfDeleted(comp.chatHistoryById.theirs);
+  expect(comp.canChat).toBe(false);
+  expect(comp.isOthersSession()).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(true);
+  expect(comp.isOwnSession()).toBe(false);
+
+  comp.currentChatId = 'mine';
+  comp.checkIfDeleted(comp.chatHistoryById.mine);
+  expect(comp.canChat).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(false);
+  expect(comp.isOwnSession()).toBe(true);
+
+  comp.currentChatId = 'unsaved';
+  expect(comp.isOthersSession()).toBe(false);
+  expect(comp.isOwnSession()).toBe(false);
+});
+
+test('a link that cannot be opened says why, then starts a new chat', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn().mockResolvedValue();
+  comp.loadNewChatScreen = jest.fn();
+  comp.currentChatId = 'something-else';
+  comp.$route.params = { sessionId: 'theirs' };
+  comp.$route.query = {};
+
+  const denied = new Error('403');
+  denied.response = { status: 403 };
+  mockPapi('get', null, denied);
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionAccessDenied);
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
+  expect(comp.currentChatId).toBeNull();
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'assistant' });
+
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  comp.currentChatId = 'something-else';
+  mockPapi('get', null, missing);
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionNotFound);
+
+  comp.currentChatId = 'something-else';
+  resetPapi();
+  mockPapi('get', { data: {} });
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionUnavailable);
+});
+
+test('a new chat\'s own session id loading as missing is left alone', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  comp.currentChatId = 'new-1';
+  comp.$route.params = { sessionId: 'new-1' };
+  comp.$route.query = {};
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  mockPapi('get', null, missing);
+
+  await comp.handleRouteSessionId();
+
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).not.toHaveBeenCalled();
+  expect(comp.currentChatId).toBe('new-1');
+});
+
+test('a new investigation\'s missing session starts the investigation; a denied one does not', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  comp.generateInvestigationPrompt = jest.fn(() => 'Investigate Alert ID a1');
+  comp.startInvestigationSession = jest.fn();
+  comp.$nextTick = jest.fn(callback => { if (callback) callback(); return Promise.resolve(); });
+  comp.focusChatInput = jest.fn();
+  comp.currentChatId = null;
+  comp.$route.params = { sessionId: 'inv-1' };
+  comp.$route.query = { investigation: 'true', socId: 'a1' };
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  mockPapi('get', null, missing);
+
+  await comp.handleRouteSessionId();
+  expect(comp.startInvestigationSession).toHaveBeenCalledWith('Investigate Alert ID a1');
+
+  comp.startInvestigationSession.mockClear();
+  comp.currentChatId = null;
+  const denied = new Error('403');
+  denied.response = { status: 403 };
+  mockPapi('get', null, denied);
+
+  await comp.handleRouteSessionId();
+  expect(comp.startInvestigationSession).not.toHaveBeenCalled();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionAccessDenied);
 });
 
 // Auto-approval functionality tests
@@ -6544,7 +6848,7 @@ test('toggleSharedSession', async () => {
   comp.chatHistoryById = {
     'session_123': { tags: ["shared"], userId: 'me' },
   };
-  comp.$root.user = { id: 'me' };
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
 
   await comp.toggleSharedSession(comp.currentChatId);
 

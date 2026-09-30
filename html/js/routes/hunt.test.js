@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('../components/alert-investigation.js');
 require('./hunt.js');
 
 let comp;
@@ -14,6 +15,7 @@ beforeEach(() => {
   resetPapi();
   comp.$root.initializeCharts = () => { };
   comp.$el = { querySelectorAll: () => [] };
+  comp.$root.user = { id: 'analyst-1', roles: ['analyst'] };
   comp.created();
 });
 
@@ -2676,11 +2678,14 @@ test('startAIInvestigation - individual alert', async () => {
   };
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
-  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
+  comp.$router = { push: jest.fn() };
 
   await comp.startAIInvestigation(item);
-  
-  expect(comp.$router.push).toHaveBeenCalledWith({
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.items).toEqual([]);
+  expect(comp.investigationMenu.newLink).toEqual({
     name: 'assistant',
     params: { sessionId: expect.any(String) },
     query: { investigation: true, socId: 'alert123' }
@@ -2702,58 +2707,36 @@ test('startAIInvestigation - grouped alert', async () => {
   };
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert456' });
-  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
 
   await comp.startAIInvestigation(item);
 
   expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
-  expect(comp.$router.push).toHaveBeenCalledWith({
-    name: 'assistant',
-    params: { sessionId: expect.any(String) },
-    query: { investigation: true, socId: 'alert456' }
-  });
+  expect(comp.investigationMenu.newLink.query).toEqual({ investigation: true, socId: 'alert456' });
 });
 
-test('startAIInvestigation - existing investigation', async () => {
+test('startAIInvestigation - an existing investigation is offered, not opened', async () => {
   const item = {
     soc_id: 'alert123',
     'rule.uuid': 'rule-uuid-123',
     'event.investigated': true,
     'event.investigation_session_id': 'existing_session_123'
   };
-
   comp.$router = { push: jest.fn() };
 
-  await comp.startAIInvestigation(item);
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: {} });
 
-  expect(comp.$router.push).toHaveBeenCalledWith({
-    name: 'assistant',
-    params: { sessionId: 'existing_session_123' }
-  });
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'existing_session_123' } }]);
 });
 
-test('startAIInvestigation - middle click opens new tab', async () => {
-  const item = {
-    soc_id: 'alert123',
-    'rule.uuid': 'rule-uuid-123',
-    'event.investigated': true,
-    'event.investigation_session_id': 'existing_session_123'
-  };
+test('startAIInvestigation - middle click opens the menu too', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'rule-uuid-123' };
+  const button = {};
 
-  comp.$router = { resolve: jest.fn().mockReturnValue({ href: '/assistant/existing_session_123' }) };
-  
-  // Mock window.open
-  const mockOpen = jest.fn();
-  Object.defineProperty(window, 'open', {
-    value: mockOpen,
-    writable: true
-  });
+  await comp.startAIInvestigation(item, { button: 1, currentTarget: button });
 
-  const event = { button: 1 }; // Middle click
-
-  await comp.startAIInvestigation(item, event);
-
-  expect(mockOpen).toHaveBeenCalledWith('/assistant/existing_session_123', '_blank');
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.target).toBe(button);
 });
 
 test('startAIInvestigation - right click ignored', async () => {
@@ -2845,6 +2828,147 @@ test('getAIInvestigationTooltip - grouped alert', () => {
 
   const tooltip = comp.getAIInvestigationTooltip(item);
   expect(tooltip).toBe(comp.i18n.aiInvestigateMostRecent);
+});
+
+test('startAIInvestigation - an automated investigation carries its alert', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_alerttriage.session_id': 'triage_1' };
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'alert123' } }]);
+});
+
+test('the menu blocks other users\' private sessions, and never your own', async () => {
+  const item = {
+    soc_id: 'alert123', 'rule.uuid': 'r',
+    'event.investigation_session_id': ['mine_1', 'shared_1', 'private_1'],
+    'event.investigated_by': ['analyst-1', 'u2', 'u3'],
+  };
+  comp.$root.formatDateTime = t => t;
+  const post = mockPapi('post', { data: { shared_1: true, private_1: false } });
+
+  await comp.startAIInvestigation(item);
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/access', { sessionIds: ['private_1', 'shared_1'] });
+  const byId = Object.fromEntries(comp.investigationMenu.items.map(i => [i.sessionId, i]));
+  expect(byId.private_1.blocked).toBe(true);
+  expect(byId.private_1.subtitle).toBe('u3 · ' + comp.i18n.aiInvestigationPrivate);
+  expect(byId.shared_1.blocked).toBe(false);
+  expect(byId.mine_1).toMatchObject({ mine: true, blocked: false, subtitle: comp.i18n.aiInvestigationYou });
+});
+
+test('a failed access check leaves the menu open', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.investigation_session_id': ['private_1'], 'event.investigated_by': ['u3'] };
+  mockPapi('post', null, new Error('down'));
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.items[0].blocked).toBe(false);
+});
+
+test('a role that cannot start investigations gets a menu without Start New Investigation', async () => {
+  comp.$root.user = { id: 'auditor-1', roles: ['auditor'] };
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r' };
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.newLink).toBeNull();
+  expect(comp.$root.canReadInvestigations()).toBe(true);
+
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  expect(comp.$root.canReadInvestigations()).toBe(false);
+  expect(comp.$root.canStartInvestigations()).toBe(false);
+});
+
+test('startAIInvestigation - several investigations offer a choice, automated first', async () => {
+  const item = {
+    soc_id: 'alert123', 'rule.uuid': 'r',
+    'event.investigated': true,
+    'event.investigation_session_id': ['manual_1', 'manual_2'],
+    'event.investigated_by': ['u1', 'u2'],
+    'event.investigated_timestamp': ['t1', 't2'],
+    'event.so_alerttriage.session_id': 'triage_1',
+  };
+  comp.$router = { push: jest.fn() };
+  comp.$root.formatDateTime = t => t;
+  comp.$root.getUserByIdViaCache = id => (id === 'u2' ? { email: 'two@example.com' } : null);
+  const button = {};
+
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: button });
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.target).toBe(button);
+  expect(comp.investigationMenu.items.map(i => [i.to, i.subtitle])).toEqual([
+    [{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'alert123' } }, ''],
+    [{ name: 'assistant', params: { sessionId: 'manual_2' } }, 'two@example.com · t2'],
+    [{ name: 'assistant', params: { sessionId: 'manual_1' } }, 'u1 · t1'],
+  ]);
+});
+
+test('a new investigation always gets a fresh session, even beside existing ones', () => {
+  const item = { soc_id: 'alert123', 'event.investigation_session_id': ['manual_1'] };
+  comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
+
+  const first = comp.newInvestigationLink(item);
+  const second = comp.newInvestigationLink(item);
+
+  expect(first.query).toEqual({ investigation: true, socId: 'alert123' });
+  expect(first.params.sessionId).not.toBe('manual_1');
+  expect(first.params.sessionId).not.toBe(second.params.sessionId);
+});
+
+test('startAIInvestigation - a group reads its investigations from its newest triaged alert', async () => {
+  const item = { count: 5, 'rule.uuid': 'r' };
+  comp.fetchNewestEvent = jest.fn(async () => {
+    item.newest = { soc_id: 'newest', 'event.investigated': true, 'event.investigation_session_id': 'manual_1' };
+    item.newestTriaged = { soc_id: 'older', 'event.so_alerttriage.session_id': 'triage_1' };
+  });
+  comp.generateQueryList = jest.fn(alert => ({ investigation: true, socId: alert.soc_id }));
+
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: {} });
+
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'older' } }]);
+  expect(comp.investigationMenu.newLink.query.socId).toBe('older');
+});
+
+test('fetchNewestTriagedEvent looks past an untriaged newest alert', async () => {
+  const item = { count: 5, newest: { soc_id: 'newest' } };
+  const get = mockPapi('get', { data: { events: [{ id: 'older', payload: { 'event.so_alerttriage.session_id': 'triage_1' } }] } });
+
+  await comp.fetchNewestTriagedEvent(item, ['rule.name:"X"']);
+
+  expect(get.mock.calls[0][1].params.query).toBe('rule.name:"X" AND _exists_:event.so_alerttriage.session_id | sortby @timestamp');
+  expect(item.newestTriaged.soc_id).toBe('older');
+
+  const triaged = { count: 5, newest: { 'event.so_alerttriage.session_id': 'triage_2' } };
+  await comp.fetchNewestTriagedEvent(triaged, []);
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(triaged.newestTriaged).toBeUndefined();
+});
+
+test('the microchip reflects automated investigations', () => {
+  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': new Date().toISOString() };
+  expect(comp.getAIInvestigationButtonColor(automated)).toBe('icon');
+  expect(comp.getAIInvestigationTooltip(automated)).toContain(comp.i18n.aiInvestigateViewAutomated);
+
+  const both = Object.assign({ 'event.investigated': true, 'event.investigation_session_id': 'manual_1' }, automated);
+  expect(comp.getAIInvestigationTooltip(both)).toBe(comp.i18n.aiInvestigateViewBoth);
+
+  const failed = { soc_id: 'a', 'event.so_alerttriage.failed_count': 2 };
+  expect(comp.getAIInvestigationButtonColor(failed)).toBe('warning');
+  expect(comp.getAIInvestigationTooltip(failed)).toBe('Automated investigation failed after 2 attempts');
+
+  expect(comp.getAIInvestigationButtonColor({ count: 5, newest: automated })).toBe('icon');
+  expect(comp.getAIInvestigationTooltip({ count: 5, newest: { soc_id: 'n' }, newestTriaged: automated })).toContain(comp.i18n.aiInvestigateViewAutomated);
+});
+
+test('routeForQuery swaps only the query', () => {
+  comp.query = '* | groupby rule.name';
+  const route = comp.routeForQuery('rule.name:"X"');
+  expect(route.query.q).toBe('rule.name:"X"');
+  expect(route.path).toBe(comp.category);
 });
 
 test('generateChatId creates unique ID', () => {

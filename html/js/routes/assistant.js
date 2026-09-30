@@ -6,6 +6,9 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
+// Polled, since the backend pushes no activity updates.
+const AUTOMATED_AGENTS_REFRESH_MS = 30000;
+
 // Methods are split by concern across sibling files that load first (see index.html)
 // and publish method objects on globalThis, merged into `methods` below.
 
@@ -54,6 +57,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 0,
     agentic: false,
+    automatedAgents: null,
+    automatedAgentsTimer: null,
     availableAgents: [],
     agentMapping: {},
     availableModels: [],
@@ -81,10 +86,12 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
     this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
+    clearInterval(this.automatedAgentsTimer);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
     this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
+    this.automatedAgentsTimer = setInterval(this.loadAutomatedAgents, AUTOMATED_AGENTS_REFRESH_MS);
   },
   watch: {
     '$route'(to, from) {
@@ -96,7 +103,6 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
-    'currentModel': 'saveLocalSettings',
     'showModelThinking': 'saveLocalSettings'
   },
   computed: {
