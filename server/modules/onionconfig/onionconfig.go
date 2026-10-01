@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -175,45 +174,38 @@ func (c *OnionConfig) LookupSetting(ctx context.Context, id string) (*model.Sett
 		return nil, err
 	}
 
+	var s *model.Setting
+
 	if c.store != nil {
 		row, err := c.store.GetSetting(ctx, id, "")
 		if err == nil && row != nil {
-			s := dbRowToSetting(*row)
+			s = dbRowToSetting(*row)
 			if ann, ok := c.annotations[s.Id]; ok {
 				ApplyAnnotations(s, ann, nil)
 			}
 			ApplySensitiveMask(s)
-			return s, nil
 		}
 	}
 
-	settings, err := c.loadAllSettings(ctx, id)
-	if err != nil {
-		return nil, err
-	}
+	if s == nil {
+		settings, err := c.loadAllSettings(ctx, id)
+		if err != nil {
+			return nil, err
+		}
 
-	for _, s := range settings {
-		if s.Id == id && s.NodeId == "" {
-			return s, nil
+		for i, setting := range settings {
+			if setting.Id == id && setting.NodeId == "" {
+				s = settings[i]
+				break
+			}
 		}
 	}
 
-	return nil, nil
-}
-
-func (c *OnionConfig) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
-	if err := c.waitReady(ctx); err != nil {
-		return nil, err
+	if s != nil {
+		PostProcess([]*model.Setting{s})
 	}
 
-	settings, err := c.loadAllSettings(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-
-	return Sort(slices.DeleteFunc(settings, func(s *model.Setting) bool {
-		return !strings.HasPrefix(s.Id, prefix)
-	})), nil
+	return s, nil
 }
 
 func (c *OnionConfig) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) (err error) {

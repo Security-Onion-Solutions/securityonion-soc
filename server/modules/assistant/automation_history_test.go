@@ -143,7 +143,7 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 		chats:  &historyAssistantstore{historySessionstore{histories: map[string][]*model.StoredMessage{}}},
 		events: server.NewFakeEventstore(),
 	}
-	f.cfg.settings = []*model.Setting{historyAutomationSetting(t, automationTestId, "Nightly", `{"groupBy":["rule.name"],"maxFailures":2}`)}
+	f.cfg.settings = []*model.Setting{automationsSetting(t, historyAutomation(automationTestId, "Nightly", `{"groupBy":["rule.name"],"maxFailures":2}`))}
 	f.ac = automationCoordinator(f.cfg)
 	f.ac.srv.Assistantstore = f.chats
 	f.ac.srv.Eventstore = f.events
@@ -151,20 +151,15 @@ func newHistoryFixture(t *testing.T) *historyFixture {
 	return f
 }
 
-func historyAutomationSetting(t *testing.T, id, displayName, params string) *model.Setting {
-	t.Helper()
-
-	raw, err := json.Marshal(&model.Automation{
+func historyAutomation(id, displayName, params string) *model.Automation {
+	return &model.Automation{
 		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
 		DisplayName:     displayName,
 		AutomationKind:  alertTriageKindName,
 		Agent:           automationTestAgent,
 		IntervalSeconds: 300,
 		Params:          json.RawMessage(params),
-	})
-	require.NoError(t, err)
-
-	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
+	}
 }
 
 func historyRun(id string, state model.AutomationRunState) *model.AutomationRunRecord {

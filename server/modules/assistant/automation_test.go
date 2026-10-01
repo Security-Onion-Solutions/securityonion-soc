@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -67,13 +66,12 @@ func schemaWithProperty(name string) model.JSONSchema {
 	}
 }
 
-// automationConfigstore records whole settings rather than just values, so a test can assert
-// on DuplicatedFromID, and counts callback registrations.
+// automationConfigstore records whole settings rather than just values, and counts callback
+// registrations.
 type automationConfigstore struct {
 	fakeConfigstore
 
 	updates    []*model.Setting
-	removals   []string
 	updateErr  error
 	registered []string
 	// Lets an ordering test see where the write falls among the steps around it.
@@ -85,11 +83,7 @@ func (f *automationConfigstore) UpdateSetting(ctx context.Context, setting *mode
 		return f.updateErr
 	}
 
-	if remove {
-		f.removals = append(f.removals, setting.Id)
-	} else {
-		f.updates = append(f.updates, setting)
-	}
+	f.updates = append(f.updates, setting)
 
 	if f.onUpdate != nil {
 		f.onUpdate()
@@ -157,19 +151,51 @@ func validAutomation() *model.Automation {
 	}
 }
 
-func storedAutomation(t *testing.T, id, displayName string) *model.Setting {
-	t.Helper()
-
-	raw, err := json.Marshal(&model.Automation{
+func storedAutomation(id, displayName string) *model.Automation {
+	return &model.Automation{
 		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
 		DisplayName:     displayName,
 		AutomationKind:  "alert_triage",
 		Agent:           automationTestAgent,
 		IntervalSeconds: 300,
-	})
+	}
+}
+
+// automationsSetting is the stored list holding these automations, in order.
+func automationsSetting(t *testing.T, automations ...*model.Automation) *model.Setting {
+	t.Helper()
+
+	raw, err := json.Marshal(append([]*model.Automation{}, automations...))
 	require.NoError(t, err)
 
-	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
+	return &model.Setting{Id: ConfigSettingAutomations, Value: string(raw)}
+}
+
+// rawAutomationsSetting is the stored list holding these elements verbatim, so a test can
+// store one that does not decode.
+func rawAutomationsSetting(elements ...string) *model.Setting {
+	return &model.Setting{Id: ConfigSettingAutomations, Value: "[" + strings.Join(elements, ",") + "]"}
+}
+
+func automationJSON(t *testing.T, automation *model.Automation) string {
+	t.Helper()
+
+	raw, err := json.Marshal(automation)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// writtenAutomations decodes a write of the stored list.
+func writtenAutomations(t *testing.T, setting *model.Setting) []*model.Automation {
+	t.Helper()
+
+	require.Equal(t, ConfigSettingAutomations, setting.Id)
+
+	automations := []*model.Automation{}
+	require.NoError(t, json.Unmarshal([]byte(setting.Value), &automations))
+
+	return automations
 }
 
 func automationTestStore(mDB *mockdb.MockDB) *database.Store {
@@ -363,69 +389,112 @@ func TestExposeAgentsPublishesAutomationKinds(t *testing.T) {
 	assert.Contains(t, published[0].ParamSchema.Json.Properties, "sample_size")
 }
 
-func TestListAutomationsFiltersByPrefix(t *testing.T) {
+func TestListAutomationsReadsTheStoredList(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{
-		storedAutomation(t, automationTestId, "Nightly"),
-		// The template is an annotation anchor, not an automation.
-		{Id: ConfigSettingAutomationTemplate, Value: ""},
+		automationsSetting(t, storedAutomation(automationTestId, "Nightly"), storedAutomation(otherAutomationTestId, "Hourly")),
 		// Engine settings live in a sibling object whose name starts the same way.
 		{Id: ConfigSettingAutomationTickInterval, Value: "60"},
 		{Id: ConfigSettingAlertTriageEpoch, Value: "2026-09-24T00:00:00Z"},
-		// A neighbouring setting that merely shares the module prefix.
-		{Id: ConfigSettingAgents, Value: `{"name":"Hunter"}`},
 	}
 
 	ac := automationCoordinator(cfg)
 
 	automations, unreadable, err := ac.scanAutomations(context.Background())
 	require.NoError(t, err)
-	require.Len(t, automations, 1)
-	assert.Zero(t, unreadable, "no neighbouring setting counts as an unreadable automation")
+	assert.Zero(t, unreadable)
+	require.Len(t, automations, 2)
 	assert.Equal(t, automationTestId, automations[0].Id)
 	assert.Equal(t, "Nightly", automations[0].DisplayName)
+	assert.Equal(t, "automation", automations[0].Kind)
+	assert.Equal(t, otherAutomationTestId, automations[1].Id)
 }
 
 func TestListAutomationsSkipsUnreadableEntries(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{
-		{Id: automationSettingId(otherAutomationTestId), Value: "{not json"},
-		storedAutomation(t, automationTestId, "Good"),
-	}
+	cfg.settings = []*model.Setting{rawAutomationsSetting(
+		`"not an automation"`,
+		automationJSON(t, storedAutomation(automationTestId, "Good")),
+	)}
 
-	automations, err := automationCoordinator(cfg).ListAutomations(context.Background())
+	ac := automationCoordinator(cfg)
+
+	automations, unreadable, err := ac.scanAutomations(context.Background())
 
 	require.NoError(t, err)
+	assert.Equal(t, 1, unreadable)
 	require.Len(t, automations, 1)
 	assert.Equal(t, automationTestId, automations[0].Id)
 }
 
-// A hand-edited pillar entry can name anything, and everything durable keys on the id, so
-// one that no uuid column would accept is skipped rather than handed to the store.
+// A hand-edited entry can name anything, and everything durable keys on the id, so one that
+// no uuid column would accept is skipped rather than handed to the store.
 func TestListAutomationsSkipsANonUuidId(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{
-		storedAutomation(t, "nightly", "Hand Edited"),
-		storedAutomation(t, automationTestId, "Good"),
-	}
+	cfg.settings = []*model.Setting{automationsSetting(t,
+		storedAutomation("nightly", "Hand Edited"),
+		storedAutomation("", "No Id"),
+		storedAutomation(automationTestId, "Good"),
+	)}
 
-	automations, err := automationCoordinator(cfg).ListAutomations(context.Background())
+	ac := automationCoordinator(cfg)
+
+	automations, unreadable, err := ac.scanAutomations(context.Background())
 
 	require.NoError(t, err)
+	assert.Equal(t, 2, unreadable)
 	require.Len(t, automations, 1)
 	assert.Equal(t, automationTestId, automations[0].Id)
 }
 
-func TestUnmarshalAutomationPrefersTheSettingId(t *testing.T) {
-	automation, err := unmarshalAutomation(
-		automationSettingId(automationTestId),
-		`{"id":"`+otherAutomationTestId+`","displayName":"Nightly","automationKind":"alert_triage"}`)
+func TestListAutomationsListsARepeatedIdOnce(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{automationsSetting(t,
+		storedAutomation(automationTestId, "First"),
+		storedAutomation(automationTestId, "Second"),
+	)}
+
+	ac := automationCoordinator(cfg)
+
+	automations, unreadable, err := ac.scanAutomations(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, automationTestId, automation.Id)
+	assert.Equal(t, 1, unreadable, "a repeat is not trusted as a deletion baseline")
+	require.Len(t, automations, 1)
+	assert.Equal(t, "First", automations[0].DisplayName)
 }
 
-func TestSaveAutomationAssignsIdAndDuplicatesTemplate(t *testing.T) {
+func TestListAutomationsTreatsABlankSettingAsEmpty(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{{Id: ConfigSettingAutomations, Value: "  "}}
+
+	automations, unreadable, err := automationCoordinator(cfg).scanAutomations(context.Background())
+
+	require.NoError(t, err)
+	assert.Zero(t, unreadable)
+	assert.Empty(t, automations)
+}
+
+// Every automation is unknown when the list itself cannot be read, so nothing may act on it.
+func TestAStoredListThatIsNotAnArrayRefusesEveryPath(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{{Id: ConfigSettingAutomations, Value: `{"not":"a list"}`}}
+
+	ac := automationCoordinator(cfg)
+
+	_, err := ac.ListAutomations(context.Background())
+	assert.Error(t, err)
+
+	_, err = ac.GetAutomation(context.Background(), automationTestId)
+	assert.Error(t, err)
+	assert.NotErrorIs(t, err, ErrAutomationNotFound)
+
+	assert.Error(t, ac.SaveAutomation(automationSaveCtx(), validAutomation()))
+	assert.Error(t, ac.DeleteAutomation(context.Background(), automationTestId))
+	assert.Empty(t, cfg.updates, "a corrupt list is never overwritten")
+}
+
+func TestSaveAutomationAssignsIdAndWritesTheList(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 
@@ -435,22 +504,70 @@ func TestSaveAutomationAssignsIdAndDuplicatesTemplate(t *testing.T) {
 
 	assert.NotEmpty(t, automation.Id, "the server assigns identity")
 
-	// A read stamps this from the setting id, so a save has to agree or the two paths
-	// hand the UI different shapes.
+	// A read stamps this, so a save has to agree or the two paths hand the UI different shapes.
 	assert.Equal(t, "automation", automation.Kind)
 
 	require.Len(t, cfg.updates, 1)
-	assert.Equal(t, automationSettingId(automation.Id), cfg.updates[0].Id)
-
-	// Without this the setting resolves no definition, loses its forced type, and the
-	// value is expanded into a nested YAML mapping.
-	assert.Equal(t, ConfigSettingAutomationTemplate, cfg.updates[0].DuplicatedFromID)
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
+	assert.Equal(t, automation.Id, written[0].Id)
 }
 
-// The metadata is resolved on every write, not remembered from the first one.
-func TestSaveAutomationKeepsDuplicatedFromIdOnUpdate(t *testing.T) {
+func TestSaveAutomationAppendsAndKeepsTheOthers(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{rawAutomationsSetting(
+		automationJSON(t, storedAutomation(automationTestId, "Nightly")),
+		`"not an automation"`,
+	)}
+
+	ac := automationCoordinator(cfg)
+
+	automation := validAutomation()
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	require.Len(t, cfg.updates, 1)
+
+	stored := []json.RawMessage{}
+	require.NoError(t, json.Unmarshal([]byte(cfg.updates[0].Value), &stored))
+	require.Len(t, stored, 3)
+	assert.Contains(t, string(stored[0]), automationTestId)
+	assert.JSONEq(t, `"not an automation"`, string(stored[1]), "an unreadable entry survives someone else's save")
+	assert.Contains(t, string(stored[2]), automation.Id)
+}
+
+func TestSaveAutomationUpdatesInPlace(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{automationsSetting(t,
+		storedAutomation(automationTestId, "Nightly"),
+		storedAutomation(otherAutomationTestId, "Hourly"),
+	)}
+
+	ac := automationCoordinator(cfg)
+
+	automation := validAutomation()
+	automation.Id = automationTestId
+	automation.DisplayName = "Renamed"
+
+	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+
+	assert.Equal(t, automationTestId, automation.Id, "an existing id is not reassigned")
+
+	require.Len(t, cfg.updates, 1)
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 2)
+	assert.Equal(t, automationTestId, written[0].Id)
+	assert.Equal(t, "Renamed", written[0].DisplayName)
+	assert.Equal(t, otherAutomationTestId, written[1].Id)
+	assert.Equal(t, "Hourly", written[1].DisplayName)
+}
+
+func TestSaveAutomationDropsARepeatOfItsId(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{automationsSetting(t,
+		storedAutomation(automationTestId, "First"),
+		storedAutomation(otherAutomationTestId, "Hourly"),
+		storedAutomation(automationTestId, "Second"),
+	)}
 
 	ac := automationCoordinator(cfg)
 
@@ -460,8 +577,11 @@ func TestSaveAutomationKeepsDuplicatedFromIdOnUpdate(t *testing.T) {
 	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
 
 	require.Len(t, cfg.updates, 1)
-	assert.Equal(t, automationTestId, automation.Id, "an existing id is not reassigned")
-	assert.Equal(t, ConfigSettingAutomationTemplate, cfg.updates[0].DuplicatedFromID)
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 2)
+	assert.Equal(t, automationTestId, written[0].Id)
+	assert.Equal(t, "Nightly", written[0].DisplayName)
+	assert.Equal(t, otherAutomationTestId, written[1].Id)
 }
 
 // The handler puts the path id here, so a body carrying an unknown id is a PUT to something
@@ -586,7 +706,7 @@ func TestSaveAutomationDisabledKeepsALostAgent(t *testing.T) {
 
 	t.Run("edit and disable after the agent went away", func(t *testing.T) {
 		cfg := &automationConfigstore{}
-		cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+		cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 		ac := automationCoordinator(cfg)
 		ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
 
@@ -600,7 +720,7 @@ func TestSaveAutomationDisabledKeepsALostAgent(t *testing.T) {
 
 	t.Run("enabling still needs the agent", func(t *testing.T) {
 		cfg := &automationConfigstore{}
-		cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+		cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 		ac := automationCoordinator(cfg)
 		ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
 
@@ -615,7 +735,7 @@ func TestSaveAutomationDisabledKeepsALostAgent(t *testing.T) {
 
 func TestSaveAutomationRejectsAKindChange(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 	ac.AutomationKindLibrary["other_kind"] = &fakeAutomationKind{name: "other_kind"}
@@ -646,7 +766,7 @@ func TestSaveAutomationStampsCreatorAndCreateTime(t *testing.T) {
 
 func TestSaveAutomationKeepsTheOriginalCreatorOnUpdate(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -700,25 +820,10 @@ func TestSaveAutomationRejectsUnknownKind(t *testing.T) {
 	assert.Empty(t, cfg.updates)
 }
 
-func TestSaveAutomationRegistersEachSettingOnce(t *testing.T) {
-	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
-
-	ac := automationCoordinator(cfg)
-
-	automation := validAutomation()
-	automation.Id = automationTestId
-
-	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
-	require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
-
-	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
-}
-
 // Delete must not be blocked by the run, and must leave it whatever it has already claimed.
 func TestDeleteAutomationProceedsWhileARunIsInFlight(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -733,7 +838,8 @@ func TestDeleteAutomationProceedsWhileARunIsInFlight(t *testing.T) {
 
 	require.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
 
-	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.removals)
+	require.Len(t, cfg.updates, 1)
+	assert.Empty(t, writtenAutomations(t, cfg.updates[0]))
 	assert.False(t, cancelled, "an in-flight run is often the reason for the delete")
 	mDB.AssertExpectations(t)
 }
@@ -741,7 +847,7 @@ func TestDeleteAutomationProceedsWhileARunIsInFlight(t *testing.T) {
 // Work nothing will ever claim, because the automation that would have claimed it is gone.
 func TestDeleteAutomationDropsPendingWork(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -759,7 +865,7 @@ func TestDeleteAutomationDropsPendingWork(t *testing.T) {
 // stranded: the next Start reaches it, because the automation is gone.
 func TestDeleteAutomationReportsASweepFailureAfterRemoving(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -770,14 +876,36 @@ func TestDeleteAutomationReportsASweepFailureAfterRemoving(t *testing.T) {
 		Return((*mockdb.MockRows)(nil), errors.New("postgres is down"))
 
 	assert.Error(t, ac.DeleteAutomation(context.Background(), automationTestId))
-	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.removals)
+	require.Len(t, cfg.updates, 1)
+	assert.Empty(t, writtenAutomations(t, cfg.updates[0]))
+}
+
+func TestDeleteAutomationRemovesOnlyItsId(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{rawAutomationsSetting(
+		automationJSON(t, storedAutomation(otherAutomationTestId, "Hourly")),
+		automationJSON(t, storedAutomation(automationTestId, "Nightly")),
+		`"not an automation"`,
+	)}
+
+	ac := automationCoordinator(cfg)
+
+	require.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
+
+	require.Len(t, cfg.updates, 1)
+
+	stored := []json.RawMessage{}
+	require.NoError(t, json.Unmarshal([]byte(cfg.updates[0].Value), &stored))
+	require.Len(t, stored, 2)
+	assert.Contains(t, string(stored[0]), otherAutomationTestId)
+	assert.JSONEq(t, `"not an automation"`, string(stored[1]))
 }
 
 // The permission check comes before the existence probe, so an unauthorized requestor cannot
 // tell a stored id from one that was never there.
 func TestDeleteAutomationRefusesAnUnknownIdWithoutRevealingIt(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinatorAs(cfg, false)
 
@@ -789,7 +917,7 @@ func TestDeleteAutomationRefusesAnUnknownIdWithoutRevealingIt(t *testing.T) {
 // must not reach either.
 func TestDeleteAutomationRefusesBeforeSweepingWhenConfigWriteIsDenied(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinatorAs(cfg, false)
 
@@ -798,54 +926,31 @@ func TestDeleteAutomationRefusesBeforeSweepingWhenConfigWriteIsDenied(t *testing
 
 	var unauthorized *model.Unauthorized
 	assert.ErrorAs(t, ac.DeleteAutomation(context.Background(), automationTestId), &unauthorized)
-	assert.Empty(t, cfg.removals)
+	assert.Empty(t, cfg.updates)
 
 	for _, call := range mDB.Calls {
 		assert.Equal(t, "Migrate", call.Method, "a denied delete must not touch work items")
 	}
 }
 
-func TestDeleteAutomationTreatsMissingPillarAsAlreadyGone(t *testing.T) {
-	cfg := &automationConfigstore{updateErr: os.ErrNotExist}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
-
-	ac := automationCoordinator(cfg)
-
-	assert.NoError(t, ac.DeleteAutomation(context.Background(), automationTestId))
-}
-
-// automationSettingId("template") is the template setting itself, so an unguarded delete
-// removes the annotation anchor every automation inherits its forced type from.
-func TestDeleteAutomationRefusesTheTemplate(t *testing.T) {
-	cfg := &automationConfigstore{}
-
-	err := automationCoordinator(cfg).DeleteAutomation(context.Background(), "template")
-
-	assert.ErrorIs(t, err, ErrAutomationNotFound)
-	assert.Empty(t, cfg.removals)
-}
-
-func TestGetAutomationRefusesTheTemplate(t *testing.T) {
-	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{{Id: ConfigSettingAutomationTemplate, Value: ""}}
-
-	_, err := automationCoordinator(cfg).GetAutomation(context.Background(), "template")
-
-	assert.ErrorIs(t, err, ErrAutomationNotFound)
-}
-
-// Automation setting ids are generated, so the switch in OnConfigSettingUpdated cannot name
-// them; without its own branch an automation change falls through to the agent reload.
 func TestOnConfigSettingUpdatedHandlesAutomationSettings(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 	ac.isAgentic = true
 	ac.agents = map[string]model.Agent{"Hunter": {}}
 
-	ac.OnConfigSettingUpdated(context.Background(),
-		&model.Setting{Id: automationSettingId(automationTestId)}, false)
+	ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: ConfigSettingAutomations}, false)
 
+	assert.True(t, ac.automationsDirty.Load())
 	assert.Len(t, ac.agents, 1, "an automation change must not rebuild the agent library")
+}
+
+func TestRegisterConfigCallbacksWatchesTheAutomations(t *testing.T) {
+	cfg := &automationConfigstore{}
+
+	automationCoordinator(cfg).registerConfigCallbacks()
+
+	assert.Contains(t, cfg.registered, ConfigSettingAutomations)
 }
 
 func TestAutomationPathsRequireAConfigstore(t *testing.T) {
@@ -877,7 +982,7 @@ func (c *configReadRefusingConfigstore) GetSetting(ctx context.Context, id strin
 // Analysts hold automations/read but not config/read.
 func TestListAndGetAutomationNeedOnlyAutomationsRead(t *testing.T) {
 	cfg := &configReadRefusingConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(&cfg.automationConfigstore)
 	ac.srv.Configstore = cfg
@@ -897,12 +1002,6 @@ func TestListAndGetAutomationNeedOnlyAutomationsRead(t *testing.T) {
 // unreadyConfigstore waits on its context like the real one before its first load.
 type unreadyConfigstore struct {
 	automationConfigstore
-}
-
-func (u *unreadyConfigstore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
-	<-ctx.Done()
-
-	return nil, ctx.Err()
 }
 
 func (u *unreadyConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
@@ -930,7 +1029,7 @@ func TestListAndGetAutomationStopWithTheRequest(t *testing.T) {
 
 func TestListAndGetAutomationRequireAutomationsRead(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinatorAs(cfg, false)
 
@@ -962,20 +1061,11 @@ func TestReconcileAutomationRunsLogsRatherThanFailing(t *testing.T) {
 var _ AutomationStore = (*database.Store)(nil)
 
 // storedAutomationWithParams seeds an automation whose params a save can then change.
-func storedAutomationWithParams(t *testing.T, id, params string) *model.Setting {
-	t.Helper()
+func storedAutomationWithParams(id, params string) *model.Automation {
+	automation := storedAutomation(id, "Nightly")
+	automation.Params = json.RawMessage(params)
 
-	raw, err := json.Marshal(&model.Automation{
-		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
-		DisplayName:     "Nightly",
-		AutomationKind:  "alert_triage",
-		Agent:           automationTestAgent,
-		IntervalSeconds: 300,
-		Params:          json.RawMessage(params),
-	})
-	require.NoError(t, err)
-
-	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
+	return automation
 }
 
 // sqlLike matches a statement carrying every fragment.
@@ -1021,7 +1111,7 @@ func paramsChangeCoordinator(t *testing.T, storedParams string) (*AssistantCoord
 	t.Helper()
 
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, storedParams)}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomationWithParams(automationTestId, storedParams))}
 
 	ac := automationCoordinator(cfg)
 
@@ -1112,7 +1202,7 @@ func TestSaveAutomationSweepsNothingOnCreate(t *testing.T) {
 // Postgres is optional, and an automation must still be editable without it.
 func TestSaveAutomationSurvivesWithoutAStore(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, `{"limit":10}`)}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomationWithParams(automationTestId, `{"limit":10}`))}
 
 	ac := automationCoordinator(cfg)
 
@@ -1136,7 +1226,7 @@ func TestSaveAutomationReportsASweepFailureAfterWriting(t *testing.T) {
 
 func TestSaveAutomationRefusesBeforeSweepingWhenConfigWriteIsDenied(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomationWithParams(t, automationTestId, `{"limit":10}`)}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomationWithParams(automationTestId, `{"limit":10}`))}
 
 	ac := automationCoordinatorAs(cfg, false)
 
@@ -1175,7 +1265,7 @@ func TestDeleteAutomationRejectsAnUnknownId(t *testing.T) {
 	ac.store = automationTestStore(mDB)
 
 	assert.ErrorIs(t, ac.DeleteAutomation(context.Background(), automationTestId), ErrAutomationNotFound)
-	assert.Empty(t, cfg.removals)
+	assert.Empty(t, cfg.updates)
 
 	for _, call := range mDB.Calls {
 		assert.Equal(t, "Migrate", call.Method, "an id that was never stored must not touch work items")
@@ -1196,9 +1286,9 @@ func expectOrphanSweep(mDB *mockdb.MockDB, failed int) *[]string {
 	return live
 }
 
-func TestWatchStoredAutomationsDropsOrphanedWork(t *testing.T) {
+func TestSweepOrphanedAutomationWorkDropsOrphanedWork(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -1207,16 +1297,15 @@ func TestWatchStoredAutomationsDropsOrphanedWork(t *testing.T) {
 
 	live := expectOrphanSweep(mDB, 3)
 
-	ac.watchStoredAutomations(context.Background())
+	ac.sweepOrphanedAutomationWork(context.Background())
 
 	assert.Equal(t, []string{automationTestId}, *live, "a stored automation's work is not orphaned")
-	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
 	mDB.AssertExpectations(t)
 }
 
 // Deleting the last automation is the likeliest way to strand work, so an empty grid still
 // sweeps rather than treating "nothing live" as "nothing to do".
-func TestWatchStoredAutomationsSweepsWhenNoAutomationIsDefined(t *testing.T) {
+func TestSweepOrphanedAutomationWorkSweepsWhenNoAutomationIsDefined(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 
@@ -1225,7 +1314,7 @@ func TestWatchStoredAutomationsSweepsWhenNoAutomationIsDefined(t *testing.T) {
 
 	live := expectOrphanSweep(mDB, 1)
 
-	ac.watchStoredAutomations(context.Background())
+	ac.sweepOrphanedAutomationWork(context.Background())
 
 	assert.Empty(t, *live)
 	mDB.AssertExpectations(t)
@@ -1233,36 +1322,37 @@ func TestWatchStoredAutomationsSweepsWhenNoAutomationIsDefined(t *testing.T) {
 
 // An unreadable automation is indistinguishable from a deleted one, so the sweep would drop
 // a live automation's queue.
-func TestWatchStoredAutomationsSkipsTheSweepWhenAnAutomationIsUnreadable(t *testing.T) {
-	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{
-		storedAutomation(t, automationTestId, "Nightly"),
-		{Id: automationSettingId(otherAutomationTestId), Value: "{not json"},
-	}
+func TestSweepOrphanedAutomationWorkSkipsTheSweepWhenAnAutomationIsUnreadable(t *testing.T) {
+	for name, setting := range map[string]*model.Setting{
+		"one entry": rawAutomationsSetting(automationJSON(t, storedAutomation(automationTestId, "Nightly")), `"not an automation"`),
+		"the list":  {Id: ConfigSettingAutomations, Value: "{not json"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			cfg.settings = []*model.Setting{setting}
 
-	ac := automationCoordinator(cfg)
+			ac := automationCoordinator(cfg)
 
-	mDB := &mockdb.MockDB{}
-	ac.store = automationTestStore(mDB)
+			mDB := &mockdb.MockDB{}
+			ac.store = automationTestStore(mDB)
 
-	ac.watchStoredAutomations(context.Background())
+			ac.sweepOrphanedAutomationWork(context.Background())
 
-	for _, call := range mDB.Calls {
-		assert.Equal(t, "Migrate", call.Method, "partial knowledge must not drop work")
+			for _, call := range mDB.Calls {
+				assert.Equal(t, "Migrate", call.Method, "partial knowledge must not drop work")
+			}
+		})
 	}
 }
 
-// Without Postgres there are no work items, and without a readable Configstore there is no
-// list to judge them against.
-func TestWatchStoredAutomationsSurvivesWithoutAStore(t *testing.T) {
+// Without Postgres there are no work items to sweep.
+func TestSweepOrphanedAutomationWorkSurvivesWithoutAStore(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
-	ac.watchStoredAutomations(context.Background())
-
-	assert.Equal(t, []string{automationSettingId(automationTestId)}, cfg.registered)
+	assert.NotPanics(t, func() { ac.sweepOrphanedAutomationWork(context.Background()) })
 }
 
 // seedBuiltinAutomation gives a bare coordinator the shipped automations, as Init would.
@@ -1274,12 +1364,10 @@ func seedBuiltinAutomation(ac *AssistantCoordinator) *model.Automation {
 
 // storedBuiltinAutomation is a stored copy of the builtin with every fixed field altered, so a
 // test can tell what the overlay kept from what it restored.
-func storedBuiltinAutomation(t *testing.T, enabled bool, agent string) *model.Setting {
-	t.Helper()
-
+func storedBuiltinAutomation(enabled bool, agent string) *model.Automation {
 	created := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
-	raw, err := json.Marshal(&model.Automation{
+	return &model.Automation{
 		Auditable:       model.Auditable{Id: BuiltinAlertTriageAutomationId, UserId: "user-1", CreateTime: &created},
 		DisplayName:     "Renamed",
 		AutomationKind:  "other_kind",
@@ -1287,10 +1375,7 @@ func storedBuiltinAutomation(t *testing.T, enabled bool, agent string) *model.Se
 		Enabled:         enabled,
 		IntervalSeconds: 7,
 		Params:          json.RawMessage(`{"groupBy":["x"]}`),
-	})
-	require.NoError(t, err)
-
-	return &model.Setting{Id: automationSettingId(BuiltinAlertTriageAutomationId), Value: string(raw)}
+	}
 }
 
 func assertBuiltinFixedFields(t *testing.T, builtin, automation *model.Automation) {
@@ -1324,10 +1409,10 @@ func TestListAutomationsIncludesTheBuiltinAsShipped(t *testing.T) {
 
 func TestListAutomationsOverlaysOnlyWhatAStoredBuiltinMayChange(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{
-		storedAutomation(t, automationTestId, "Nightly"),
-		storedBuiltinAutomation(t, true, "Hunter"),
-	}
+	cfg.settings = []*model.Setting{automationsSetting(t,
+		storedAutomation(automationTestId, "Nightly"),
+		storedBuiltinAutomation(true, "Hunter"),
+	)}
 
 	ac := automationCoordinator(cfg)
 	builtin := seedBuiltinAutomation(ac)
@@ -1352,7 +1437,7 @@ func TestListAutomationsOverlaysOnlyWhatAStoredBuiltinMayChange(t *testing.T) {
 func TestListAutomationsRestoresAnUnreadableBuiltin(t *testing.T) {
 	cfg := &automationConfigstore{}
 	cfg.settings = []*model.Setting{
-		{Id: automationSettingId(BuiltinAlertTriageAutomationId), Value: "{not json"},
+		rawAutomationsSetting(`{"id":"` + BuiltinAlertTriageAutomationId + `","intervalSeconds":"not a number"}`),
 	}
 
 	ac := automationCoordinator(cfg)
@@ -1369,8 +1454,8 @@ func TestListAutomationsRestoresAnUnreadableBuiltin(t *testing.T) {
 
 // The flag is what a UI locks fields and hides delete on, so a hand-edited entry cannot claim it.
 func TestUnmarshalAutomationIgnoresAStoredIsSystem(t *testing.T) {
-	automation, err := unmarshalAutomation(automationSettingId(automationTestId),
-		`{"displayName":"Nightly","automationKind":"alert_triage","isSystem":true}`)
+	automation, err := unmarshalAutomation(json.RawMessage(
+		`{"id":"` + automationTestId + `","displayName":"Nightly","automationKind":"alert_triage","isSystem":true}`))
 
 	require.NoError(t, err)
 	assert.False(t, automation.IsSystem)
@@ -1394,7 +1479,7 @@ func TestGetAutomationReturnsTheBuiltinAsShippedWithoutAStoredCopy(t *testing.T)
 
 func TestGetAutomationOverlaysAStoredBuiltin(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, "Hunter")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedBuiltinAutomation(true, "Hunter"))}
 
 	ac := automationCoordinator(cfg)
 	builtin := seedBuiltinAutomation(ac)
@@ -1410,7 +1495,7 @@ func TestGetAutomationOverlaysAStoredBuiltin(t *testing.T) {
 
 func TestGetAutomationFallsBackToTheShippedAgentWhenTheStoredOneIsBlank(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, " ")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedBuiltinAutomation(true, " "))}
 
 	ac := automationCoordinator(cfg)
 	builtin := seedBuiltinAutomation(ac)
@@ -1459,18 +1544,16 @@ func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
 	assert.NotNil(t, automation.CreateTime)
 
 	require.Len(t, cfg.updates, 1)
-	assert.Equal(t, automationSettingId(BuiltinAlertTriageAutomationId), cfg.updates[0].Id)
-	assert.Equal(t, ConfigSettingAutomationTemplate, cfg.updates[0].DuplicatedFromID)
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
 
 	// The stored copy is complete, so a build without the overlay still reads a valid automation.
-	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
-	require.NoError(t, err)
+	stored := written[0]
+	assert.Equal(t, BuiltinAlertTriageAutomationId, stored.Id)
 	assert.Equal(t, builtin.DisplayName, stored.DisplayName)
 	assert.Equal(t, builtin.IntervalSeconds, stored.IntervalSeconds)
 	assert.JSONEq(t, string(builtin.Params), string(stored.Params))
 	assert.True(t, stored.Enabled)
-
-	assert.Equal(t, []string{automationSettingId(BuiltinAlertTriageAutomationId)}, cfg.registered)
 }
 
 // The creator is settled by the builtin's first save; no later edit, enabling included, moves it.
@@ -1490,7 +1573,7 @@ func TestSaveAutomationBuiltinCreatorIsSettledAtFirstSave(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := &automationConfigstore{}
-			cfg.settings = []*model.Setting{storedBuiltinAutomation(t, c.storedEnabled, "Hunter")}
+			cfg.settings = []*model.Setting{automationsSetting(t, storedBuiltinAutomation(c.storedEnabled, "Hunter"))}
 
 			ac := automationCoordinator(cfg)
 			seedBuiltinAutomation(ac)
@@ -1517,7 +1600,7 @@ func TestSaveAutomationBuiltinCreatorIsSettledAtFirstSave(t *testing.T) {
 
 func TestSaveAutomationEnablingAStoredAutomationKeepsItsCreator(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 
@@ -1544,9 +1627,9 @@ func TestSaveAutomationFirstSaveOfADisabledBuiltinSettlesItsCreator(t *testing.T
 	assert.Equal(t, "user-1", automation.UserId)
 	assert.NotNil(t, automation.CreateTime)
 
-	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
-	require.NoError(t, err)
-	assert.Equal(t, "user-1", stored.UserId)
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
+	assert.Equal(t, "user-1", written[0].UserId)
 }
 
 // Enabling with nothing but the flag is a complete definition: what the tick and the kind read
@@ -1608,7 +1691,7 @@ func TestSaveAutomationRejectsAnIsSystemThatDisagreesWithTheId(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := &automationConfigstore{}
-			cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+			cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 			ac := automationCoordinator(cfg)
 			seedBuiltinAutomation(ac)
@@ -1642,7 +1725,7 @@ func TestSaveAutomationRequiresAnAvailableAgentForTheBuiltin(t *testing.T) {
 // the stored copy predates a build that changed them.
 func TestSaveAutomationKeepsTheBuiltinWorkWhenItsParamsChangedBetweenBuilds(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, automationTestAgent)}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedBuiltinAutomation(true, automationTestAgent))}
 
 	ac := automationCoordinator(cfg)
 	seedBuiltinAutomation(ac)
@@ -1670,9 +1753,9 @@ func TestSaveAutomationKeepsTheBuiltinWorkWhenItsParamsChangedBetweenBuilds(t *t
 	}
 
 	// The stored copy catches up to the shipped params.
-	stored, err := unmarshalAutomation(cfg.updates[0].Id, cfg.updates[0].Value)
-	require.NoError(t, err)
-	assert.JSONEq(t, string(ac.builtinAutomations[BuiltinAlertTriageAutomationId].Params), string(stored.Params))
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
+	assert.JSONEq(t, string(ac.builtinAutomations[BuiltinAlertTriageAutomationId].Params), string(written[0].Params))
 }
 
 func TestSaveAutomationKeepsTheBuiltinWorkWhenOnlyEnabledChanges(t *testing.T) {
@@ -1704,7 +1787,7 @@ func TestSaveAutomationKeepsTheBuiltinWorkWhenOnlyEnabledChanges(t *testing.T) {
 
 func TestDeleteAutomationRefusesTheBuiltin(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedBuiltinAutomation(t, true, automationTestAgent)}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedBuiltinAutomation(true, automationTestAgent))}
 
 	ac := automationCoordinator(cfg)
 	seedBuiltinAutomation(ac)
@@ -1713,7 +1796,7 @@ func TestDeleteAutomationRefusesTheBuiltin(t *testing.T) {
 	ac.store = automationTestStore(mDB)
 
 	assert.ErrorIs(t, ac.DeleteAutomation(context.Background(), BuiltinAlertTriageAutomationId), ErrSystemAutomationUndeletable)
-	assert.Empty(t, cfg.removals)
+	assert.Empty(t, cfg.updates)
 
 	for _, call := range mDB.Calls {
 		assert.Equal(t, "Migrate", call.Method, "a refused delete must not touch work items")
@@ -1729,9 +1812,8 @@ func TestDeleteAutomationChecksAuthorizationBeforeRefusingTheBuiltin(t *testing.
 	assert.ErrorAs(t, ac.DeleteAutomation(context.Background(), BuiltinAlertTriageAutomationId), &unauthorized)
 }
 
-// The builtin is live from the first start, so its setting is watched before any save and its
-// queue is never orphaned.
-func TestWatchStoredAutomationsRegistersTheBuiltinBeforeItsFirstSave(t *testing.T) {
+// The builtin is live from the first start, so its queue is never orphaned.
+func TestSweepOrphanedAutomationWorkKeepsTheBuiltinBeforeItsFirstSave(t *testing.T) {
 	cfg := &automationConfigstore{}
 	ac := automationCoordinator(cfg)
 	seedBuiltinAutomation(ac)
@@ -1741,9 +1823,8 @@ func TestWatchStoredAutomationsRegistersTheBuiltinBeforeItsFirstSave(t *testing.
 
 	live := expectOrphanSweep(mDB, 0)
 
-	ac.watchStoredAutomations(context.Background())
+	ac.sweepOrphanedAutomationWork(context.Background())
 
 	assert.Equal(t, []string{BuiltinAlertTriageAutomationId}, *live)
-	assert.Equal(t, []string{automationSettingId(BuiltinAlertTriageAutomationId)}, cfg.registered)
 	mDB.AssertExpectations(t)
 }

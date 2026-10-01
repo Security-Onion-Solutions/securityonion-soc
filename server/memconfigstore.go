@@ -7,7 +7,6 @@ package server
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -39,12 +38,6 @@ func (m *MemConfigStore) GetSetting(ctx context.Context, id string) (*model.Sett
 
 func (m *MemConfigStore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
 	return m.GetSetting(ctx, id)
-}
-
-func (m *MemConfigStore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
-	return lo.Filter(m.settings, func(s *model.Setting, _ int) bool {
-		return strings.HasPrefix(s.Id, prefix)
-	}), nil
 }
 
 func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {

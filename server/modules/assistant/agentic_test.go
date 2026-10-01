@@ -858,22 +858,6 @@ func (f *fakeConfigstore) LookupSetting(ctx context.Context, id string) (*model.
 	return f.GetSetting(ctx, id)
 }
 
-func (f *fakeConfigstore) GetSettingsByPrefix(ctx context.Context, prefix string) ([]*model.Setting, error) {
-	settings, err := f.GetSettings(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-
-	matched := []*model.Setting{}
-	for _, s := range settings {
-		if strings.HasPrefix(s.Id, prefix) {
-			matched = append(matched, s)
-		}
-	}
-
-	return matched, nil
-}
-
 func (f *fakeConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

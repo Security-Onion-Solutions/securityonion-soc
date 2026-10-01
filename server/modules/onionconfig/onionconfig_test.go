@@ -768,7 +768,7 @@ func TestUpdateSetting_DuplicatedSetting(t *testing.T) {
 	})
 }
 
-func TestGetSettingsByPrefixAndLookupSetting(t *testing.T) {
+func TestLookupSettingSkipsTheConfigReadCheck(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(dir+"/local/pillar/myapp", 0755))
 
@@ -783,18 +783,11 @@ func TestGetSettingsByPrefixAndLookupSetting(t *testing.T) {
 
 	ctx := context.Background()
 	require.NoError(t, oc.UpdateSetting(ctx, &model.Setting{Id: "myapp.keep.a", Value: "kept"}, false))
-	require.NoError(t, oc.UpdateSetting(ctx, &model.Setting{Id: "myapp.other", Value: "dropped"}, false))
 
 	oc.server = server.NewFakeUnauthorizedServer()
 
 	_, err := oc.GetSettings(ctx, true)
 	assert.Error(t, err)
-
-	settings, err := oc.GetSettingsByPrefix(ctx, "myapp.keep.")
-	require.NoError(t, err)
-	require.Len(t, settings, 1)
-	assert.Equal(t, "myapp.keep.a", settings[0].Id)
-	assert.Equal(t, "kept", settings[0].Value)
 
 	_, err = oc.GetSetting(ctx, "myapp.keep.a")
 	assert.Error(t, err)
