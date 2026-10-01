@@ -89,20 +89,30 @@ test('reads which investigations an alert has', () => {
   expect(comp.acknowledged()).toBe(true);
 });
 
-test('manual investigations are read from parallel arrays, newest first', () => {
+test('manual investigations are read from the alert\'s entries, newest first', () => {
   comp.alert = {
-    'event.investigation_session_id': ['s1', 's2'],
-    'event.investigated_by': ['u1', 'u2'],
-    'event.investigated_timestamp': ['2026-09-28T10:00:00Z', '2026-09-28T11:00:00Z'],
+    'event.so_investigations': [
+      { session_id: 's1', user_id: 'u1', timestamp: '2026-09-28T10:00:00.000Z' },
+      { session_id: 's2', user_id: 'u2' },
+      { user_id: 'no-session' },
+      'junk',
+    ],
   };
 
   expect(comp.manualInvestigations()).toEqual([
-    { sessionId: 's2', by: 'u2', time: '2026-09-28T11:00:00Z' },
-    { sessionId: 's1', by: 'u1', time: '2026-09-28T10:00:00Z' },
+    { sessionId: 's2', by: 'u2', time: '' },
+    { sessionId: 's1', by: 'u1', time: '2026-09-28T10:00:00.000Z' },
   ]);
-
-  expect(alertManualInvestigations({ 'event.investigation_session_id': 'only' })).toEqual([{ sessionId: 'only', by: '', time: '' }]);
   expect(alertManualInvestigations(null)).toEqual([]);
+});
+
+test('an older alert\'s single values still count, before any entries and without duplicates', () => {
+  expect(alertManualInvestigations({ 'event.investigation_session_id': 'only' })).toEqual([{ sessionId: 'only', by: '', time: '' }]);
+
+  expect(alertManualInvestigations({
+    'event.investigation_session_id': 'old', 'event.investigated_by': 'u0',
+    'event.so_investigations': [{ session_id: 'old', user_id: 'u0' }, { session_id: 'new', user_id: 'u1' }],
+  }).map(inv => inv.sessionId)).toEqual(['old', 'new']);
 });
 
 test('the start link is built once per alert, so re-renders keep one session id', () => {
