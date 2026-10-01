@@ -67,6 +67,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     adaptersMap: new Map(),
     groupedModels: [],
     currentModel: '',
+    savedModel: '',
     activeStreamingSessionId: null,
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
@@ -103,6 +104,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     'restoreLastActive': 'saveLocalSettings',
     'alwaysApproveReadRequests': 'saveLocalSettings',
     'showChatHistory': 'saveLocalSettings',
+    'currentModel': 'saveLocalSettings',
     'showModelThinking': 'saveLocalSettings'
   },
   computed: {

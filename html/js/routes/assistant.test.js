@@ -551,6 +551,37 @@ test('initAssistant defaults an unknown currentModel to the first model', async 
   expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
+test('without agentic, the saved model is restored and a stale one falls back to the first', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'gemini-2.5-pro', displayName: 'Gemini', enabled: true, adapter: 'Gemini' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  mockLocalStorage['settings.assistant.currentModel'] = 'gemini-2.5-pro@Gemini';
+  comp.currentModel = '';
+  comp.loadLocalSettings();
+  expect(comp.currentModel).toBe('');
+  await comp.initAssistant(mockParams);
+  expect(comp.currentModel).toBe('gemini-2.5-pro@Gemini');
+
+  comp.currentModel = '';
+  comp.savedModel = 'gone-model@Nowhere';
+  await comp.initAssistant(mockParams);
+  expect(comp.currentModel).toBe('model-1@SOAI');
+  delete mockLocalStorage['settings.assistant.currentModel'];
+});
+
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {
   const mockParams = {
     enabled: true,
@@ -635,7 +666,7 @@ test('initAssistant keeps an agent the user picked during the visit', async () =
   expect(comp.currentModel).toBe('Hunter');
 });
 
-test('the last-selected agent is not restored, so every visit starts on the orchestrator', async () => {
+test('in agentic mode the saved selection is ignored, so every visit starts on the orchestrator', async () => {
   const storageData = { 'settings.assistant.currentModel': 'Hunter' };
   const original = global.localStorage;
   global.localStorage = new Proxy({}, { get: (_, key) => storageData[key] });
@@ -4405,6 +4436,13 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
   expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
+  expect(comp.saveSetting).toHaveBeenCalledTimes(6);
+
+  // Agentic visits start on the orchestrator, so the agent isn't saved.
+  comp.saveSetting.mockClear();
+  comp.agentic = true;
+  comp.saveLocalSettings();
   expect(comp.saveSetting).not.toHaveBeenCalledWith('currentModel', expect.anything(), expect.anything());
   expect(comp.saveSetting).toHaveBeenCalledTimes(5);
 });

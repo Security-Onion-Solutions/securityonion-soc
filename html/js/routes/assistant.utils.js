@@ -254,6 +254,8 @@ globalThis.AssistantUtils = (function() {
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
+      // Agentic visits start on the orchestrator.
+      if (!this.agentic) this.saveSetting('currentModel', this.currentModel, '');
       this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
@@ -263,7 +265,8 @@ globalThis.AssistantUtils = (function() {
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
-      // currentModel is deliberately not restored; visits start on the orchestrator.
+      // Applied by initAssistant, and only when agentic is off.
+      if (localStorage[prefix + '.currentModel']) this.savedModel = localStorage[prefix + '.currentModel'];
       if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
       if (localStorage[prefix + '.showModelThinking']) this.showModelThinking = localStorage[prefix + '.showModelThinking'] == 'true';
 

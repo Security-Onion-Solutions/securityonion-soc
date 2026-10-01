@@ -82,7 +82,9 @@ globalThis.AssistantSessions = (function() {
           for (let val of this.modelsMap.values()) {
             if (val.contextLimitLarge < val.contextLimitSmall) val.contextLimitLarge = val.contextLimitSmall;
           }
-          if (!this.currentModel || !this.modelsMap.has(this.currentModel)) this.currentModel = this.availableModels[0].key;
+          if (!this.currentModel || !this.modelsMap.has(this.currentModel)) {
+            this.currentModel = this.modelsMap.has(this.savedModel) ? this.savedModel : this.availableModels[0].key;
+          }
           this.groupedModels = this.buildGroupedModels();
         }
       }
