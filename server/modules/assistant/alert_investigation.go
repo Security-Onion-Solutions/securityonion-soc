@@ -172,16 +172,31 @@ func (ac *AssistantCoordinator) validateCloneAlert(ctx context.Context, socId st
 		return server.ErrSessionNotOnAlert
 	}
 
-	fields := []string{"event.investigation_session_id"}
+	// Older alerts hold the single-value field until their next investigation write.
+	sessionIds := payloadStrings(alert.Payload, "event.investigation_session_id")
 	if updater, ok := ac.srv.Assistantstore.(server.AlertTriageUpdater); ok {
-		fields = append(fields, model.AlertTriageFieldSessionId(updater.AlertTriageSchemaPrefix()))
+		prefix := updater.AlertTriageSchemaPrefix()
+		sessionIds = append(sessionIds, payloadStrings(alert.Payload, model.AlertTriageFieldSessionId(prefix))...)
+		sessionIds = append(sessionIds, investigationSessionIds(alert.Payload, model.AlertInvestigationsField(prefix))...)
 	}
 
-	for _, field := range fields {
-		if slices.Contains(payloadStrings(alert.Payload, field), sessionId) {
-			return nil
-		}
+	if slices.Contains(sessionIds, sessionId) {
+		return nil
 	}
 
 	return server.ErrSessionNotOnAlert
+}
+
+func investigationSessionIds(payload map[string]any, key string) []string {
+	entries, _ := payload[key].([]any)
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if fields, ok := entry.(map[string]any); ok {
+			if id, ok := fields["session_id"].(string); ok {
+				ids = append(ids, id)
+			}
+		}
+	}
+
+	return ids
 }

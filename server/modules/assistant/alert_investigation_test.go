@@ -218,8 +218,11 @@ func TestDetachSessionInvestigationRefusesOthersSessions(t *testing.T) {
 
 func TestCloneSessionOntoAlertFromManualInvestigation(t *testing.T) {
 	ac, store, events := newInvestigationCoordinator(t, &model.EventRecord{
-		Id:      "alert-1",
-		Payload: map[string]interface{}{"event.investigation_session_id": []interface{}{"other", "src-1"}},
+		Id: "alert-1",
+		Payload: map[string]interface{}{"event.so_investigations": []interface{}{
+			map[string]interface{}{"session_id": "other", "user_id": "u1"},
+			map[string]interface{}{"session_id": "src-1", "user_id": "u2"},
+		}},
 	})
 	store.EXPECT().CloneSession(gomock.Any(), "src-1", "alert_investigation", "alert-1").Return(&model.AssistantSession{SessionId: "clone-1"}, nil)
 
@@ -228,6 +231,18 @@ func TestCloneSessionOntoAlertFromManualInvestigation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "clone-1", clone.SessionId)
 	assert.Equal(t, []bool{false}, events.scripts, "the copy is recorded on the alert")
+}
+
+func TestCloneSessionOntoAlertFromAnOlderAlertsSingleValue(t *testing.T) {
+	ac, store, _ := newInvestigationCoordinator(t, &model.EventRecord{
+		Id:      "alert-1",
+		Payload: map[string]interface{}{"event.investigation_session_id": "src-1"},
+	})
+	store.EXPECT().CloneSession(gomock.Any(), "src-1", "alert_investigation", "alert-1").Return(&model.AssistantSession{SessionId: "clone-1"}, nil)
+
+	_, err := ac.CloneSessionOntoAlert(investigationContext(), "src-1", "alert-1")
+
+	assert.NoError(t, err)
 }
 
 func TestCloneSessionOntoAlertFromTriage(t *testing.T) {
