@@ -190,12 +190,6 @@ type AssistantCoordinator struct {
 	adapters              map[string]server.AssistantAdapter
 	isAgentic             bool
 
-	// watchedAutomations records which automation settings already have a callback
-	// registered, because registering one twice delivers every update twice and there is
-	// no way to unregister.
-	watchedAutomations map[string]bool
-	watchMu            sync.Mutex
-
 	// automationRunMu guards the AutomationRun cancels. An entry exists only while a run is executing.
 	automationRunMu sync.Mutex
 	automationRuns  map[string]context.CancelCauseFunc
@@ -833,10 +827,7 @@ func (ac *AssistantCoordinator) Start() error {
 
 	ac.registerConfigCallbacks()
 
-	// Automation settings carry a generated id apiece, so they cannot be subscribed from a
-	// fixed list the way every other setting is; each one has to be picked up as it is
-	// found.
-	ac.watchStoredAutomations(ac.srv.Context)
+	ac.sweepOrphanedAutomationWork(ac.srv.Context)
 
 	if ac.isAgentic {
 		ac.reloadAgentConfiguration(ac.srv.Context)
@@ -906,6 +897,7 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 		ConfigSettingSkills,
 		ConfigSettingMaxDelegationDepth,
 		ConfigSettingMaxSubSessionTokens,
+		ConfigSettingAutomations,
 		ConfigSettingAutomationTickInterval,
 		ConfigSettingAlertTriageEpoch,
 	}
@@ -944,11 +936,8 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 		return
 	}
 
-	if automationId := automationIdFromSetting(setting.Id); automationId != "" {
-		log.FromContext(ctx).WithFields(log.Fields{
-			"automationId": automationId,
-			"removed":      removed,
-		}).Info("automation configuration changed")
+	if setting.Id == ConfigSettingAutomations {
+		log.FromContext(ctx).WithField("removed", removed).Info("automation configuration changed")
 
 		ac.invalidateAutomations()
 

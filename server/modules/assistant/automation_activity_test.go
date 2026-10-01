@@ -55,7 +55,7 @@ func newActivityCoordinator(t *testing.T) *AssistantCoordinator {
 	t.Helper()
 
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{historyAutomationSetting(t, automationTestId, "Nightly", `{"groupBy":["rule.name"]}`)}
+	cfg.settings = []*model.Setting{automationsSetting(t, historyAutomation(automationTestId, "Nightly", `{"groupBy":["rule.name"]}`))}
 
 	return automationCoordinator(cfg)
 }

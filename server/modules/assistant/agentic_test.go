@@ -854,6 +854,10 @@ func (f *fakeConfigstore) GetSettings(ctx context.Context, includeDefault bool) 
 	return []*model.Setting{{Id: ConfigSettingAgents, Value: f.value}, {Id: ConfigSettingSkills, Value: f.value}}, nil
 }
 
+func (f *fakeConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return f.GetSetting(ctx, id)
+}
+
 func (f *fakeConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

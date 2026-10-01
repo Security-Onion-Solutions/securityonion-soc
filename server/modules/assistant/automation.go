@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -29,12 +28,8 @@ import (
 )
 
 const (
-	// One setting per automation, so config history and rollback are per automation.
-	ConfigSettingAutomationsPrefix = "soc.config.server.modules.assistant.automations."
-
-	// An annotation anchor that never holds a value; instances duplicate it to inherit
-	// its syntax, forced type and description.
-	ConfigSettingAutomationTemplate = ConfigSettingAutomationsPrefix + "template"
+	// A JSON array of every stored automation.
+	ConfigSettingAutomations = "soc.config.server.modules.assistant.automations"
 
 	// A label for one row in a list, so it is capped well below what the setting could
 	// hold.
@@ -305,10 +300,6 @@ func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKin
 	return kind, nil
 }
 
-func automationSettingId(id string) string {
-	return ConfigSettingAutomationsPrefix + id
-}
-
 // isAutomationId reports whether id can address an automation.
 func isAutomationId(id string) bool {
 	_, err := uuid.Parse(id)
@@ -316,46 +307,19 @@ func isAutomationId(id string) bool {
 	return err == nil
 }
 
-// automationIdFromSetting returns the automation id a setting holds, or "" when the setting
-// is not an automation. The template is excluded: it is an annotation anchor.
-func automationIdFromSetting(settingId string) string {
-	if settingId == ConfigSettingAutomationTemplate {
-		return ""
-	}
-
-	id := strings.TrimPrefix(settingId, ConfigSettingAutomationsPrefix)
-	if id == settingId || id == "" || strings.Contains(id, ".") {
-		return ""
-	}
-
-	return id
-}
-
-// unmarshalAutomation decodes one stored automation. The setting id is authoritative for Id:
-// it is where the value actually lives, and everything durable keys on it.
-func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
-	id := automationIdFromSetting(settingId)
-	if id == "" {
-		return nil, fmt.Errorf("setting %s is not an automation", settingId)
-	}
-
-	// A hand-edited pillar entry can name anything; only a UUID survives the store's
-	// uuid columns, so reject it here rather than at the first query.
-	if !isAutomationId(id) {
-		return nil, fmt.Errorf("automation id %s is not a UUID", id)
-	}
-
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, fmt.Errorf("automation %s has no value", id)
-	}
-
+// unmarshalAutomation decodes one element of the stored list.
+func unmarshalAutomation(raw json.RawMessage) (*model.Automation, error) {
 	automation := &model.Automation{}
-	if err := json.Unmarshal([]byte(value), automation); err != nil {
-		return nil, fmt.Errorf("automation %s is not valid JSON: %w", id, err)
+	if err := json.Unmarshal(raw, automation); err != nil {
+		return nil, fmt.Errorf("automation is not valid JSON: %w", err)
 	}
 
-	automation.Id = id
+	// A hand-edited entry can name anything; only a UUID survives the store's uuid columns,
+	// so reject it here rather than at the first query.
+	if !isAutomationId(automation.Id) {
+		return nil, fmt.Errorf("automation id %q is not a UUID", automation.Id)
+	}
+
 	automation.Kind = "automation"
 	// Only the overlay may claim this.
 	automation.IsSystem = false
@@ -363,20 +327,98 @@ func unmarshalAutomation(settingId, value string) (*model.Automation, error) {
 	return automation, nil
 }
 
+// readStoredAutomations returns the stored list with each element as written, so a rewrite
+// carries the ones it cannot read through untouched.
+func (ac *AssistantCoordinator) readStoredAutomations(ctx context.Context) ([]json.RawMessage, error) {
+	setting, err := ac.srv.Configstore.LookupSetting(ctx, ConfigSettingAutomations)
+	if err != nil {
+		return nil, err
+	}
+
+	if setting == nil || strings.TrimSpace(setting.Value) == "" {
+		return []json.RawMessage{}, nil
+	}
+
+	stored := []json.RawMessage{}
+	if err := json.Unmarshal([]byte(setting.Value), &stored); err != nil {
+		return nil, fmt.Errorf("setting %s is not a JSON array: %w", ConfigSettingAutomations, err)
+	}
+
+	return stored, nil
+}
+
+func (ac *AssistantCoordinator) writeStoredAutomations(ctx context.Context, stored []json.RawMessage) error {
+	encoded, err := json.Marshal(stored)
+	if err != nil {
+		return err
+	}
+
+	return ac.srv.Configstore.UpdateSetting(ctx, &model.Setting{
+		Id:    ConfigSettingAutomations,
+		Value: string(encoded),
+	}, false)
+}
+
+// findStoredAutomation returns the first readable element with this id, or nil.
+func findStoredAutomation(stored []json.RawMessage, id string) *model.Automation {
+	for _, raw := range stored {
+		automation, err := unmarshalAutomation(raw)
+		if err == nil && automation.Id == id {
+			return automation
+		}
+	}
+
+	return nil
+}
+
+// replaceStoredAutomation puts replacement where the first element with this id was, or at
+// the end, dropping any repeats. A nil replacement removes the id.
+func replaceStoredAutomation(stored []json.RawMessage, id string, replacement json.RawMessage) []json.RawMessage {
+	replaced := make([]json.RawMessage, 0, len(stored)+1)
+
+	for _, raw := range stored {
+		automation, err := unmarshalAutomation(raw)
+		if err != nil || automation.Id != id {
+			replaced = append(replaced, raw)
+
+			continue
+		}
+
+		if replacement != nil {
+			replaced = append(replaced, replacement)
+			replacement = nil
+		}
+	}
+
+	if replacement != nil {
+		replaced = append(replaced, replacement)
+	}
+
+	return replaced
+}
+
 func (ac *AssistantCoordinator) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return nil, ErrConfigstoreUnavailable
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
 	automations, _, err := ac.scanAutomations(ctx)
 
 	return automations, err
 }
 
-// scanAutomations returns every readable automation and how many settings could not be read,
-// so a caller that acts on an automation's absence can refuse to act on partial knowledge.
+// scanAutomations returns every readable automation and how many stored entries could not be
+// read, so a caller that acts on an automation's absence can refuse to act on partial knowledge.
 func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.Automation, int, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return nil, 0, ErrConfigstoreUnavailable
 	}
 
-	settings, err := ac.srv.Configstore.GetSettings(ctx, true)
+	stored, err := ac.readStoredAutomations(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -385,15 +427,15 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 	unreadable := 0
 	seen := map[string]bool{}
 
-	for _, setting := range settings {
-		if automationIdFromSetting(setting.Id) == "" {
-			continue
+	for index, raw := range stored {
+		automation, err := unmarshalAutomation(raw)
+		if err == nil && seen[automation.Id] {
+			err = fmt.Errorf("automation %s is stored more than once", automation.Id)
 		}
 
-		automation, err := unmarshalAutomation(setting.Id, setting.Value)
 		if err != nil {
 			// One malformed automation must not hide the rest.
-			log.FromContext(ctx).WithError(err).WithField("settingId", setting.Id).
+			log.FromContext(ctx).WithError(err).WithField("index", index).
 				Warn("skipping unreadable automation")
 
 			unreadable++
@@ -401,9 +443,10 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 			continue
 		}
 
+		seen[automation.Id] = true
+
 		if ac.isBuiltinAutomation(automation.Id) {
 			automation = ac.overlayBuiltinAutomation(automation.Id, automation)
-			seen[automation.Id] = true
 		}
 
 		automations = append(automations, automation)
@@ -420,6 +463,14 @@ func (ac *AssistantCoordinator) scanAutomations(ctx context.Context) ([]*model.A
 }
 
 func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return nil, ErrConfigstoreUnavailable
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
 	stored, err := ac.getStoredAutomation(ctx, id)
 
 	if !ac.isBuiltinAutomation(id) {
@@ -437,7 +488,7 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 	return ac.overlayBuiltinAutomation(id, stored), nil
 }
 
-// getStoredAutomation reads the setting as written, without the builtin overlay.
+// getStoredAutomation reads the automation as written, without the builtin overlay.
 func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id string) (*model.Automation, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return nil, ErrConfigstoreUnavailable
@@ -447,16 +498,17 @@ func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id stri
 		return nil, ErrAutomationNotFound
 	}
 
-	setting, err := ac.srv.Configstore.GetSetting(ctx, automationSettingId(id))
+	stored, err := ac.readStoredAutomations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if setting == nil || strings.TrimSpace(setting.Value) == "" {
+	automation := findStoredAutomation(stored, id)
+	if automation == nil {
 		return nil, ErrAutomationNotFound
 	}
 
-	return unmarshalAutomation(setting.Id, setting.Value)
+	return automation, nil
 }
 
 func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *model.Automation) error {
@@ -508,7 +560,12 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	ac.configWriteMu.Lock()
 	defer ac.configWriteMu.Unlock()
 
-	existing, err := ac.stampAutomation(ctx, automation)
+	stored, err := ac.readStoredAutomations(ctx)
+	if err != nil {
+		return err
+	}
+
+	existing, err := ac.stampAutomation(ctx, automation, stored)
 	if err != nil {
 		return err
 	}
@@ -518,18 +575,9 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
-	// Without DuplicatedFromID, UpdateSetting resolves no definition and blanks the
-	// inherited forced type, expanding this value into a nested YAML mapping.
-	err = ac.srv.Configstore.UpdateSetting(ctx, &model.Setting{
-		Id:               automationSettingId(automation.Id),
-		Value:            string(encoded),
-		DuplicatedFromID: ConfigSettingAutomationTemplate,
-	}, false)
-	if err != nil {
+	if err := ac.writeStoredAutomations(ctx, replaceStoredAutomation(stored, automation.Id, encoded)); err != nil {
 		return err
 	}
-
-	ac.watchAutomationSetting(automation.Id)
 
 	// The new definition is stored, so the work the old params derived is now stale. Cancel
 	// first so the run stops claiming, then finalize what it was holding. A failed sweep
@@ -579,11 +627,11 @@ func validateAutomation(automation *model.Automation) error {
 }
 
 // stampAutomation settles the fields an automation does not set for itself: identity, creator
-// and timestamps, returning the stored copy it read so the caller can see what changed.
-// Caller holds configWriteMu, which is what makes that read and the write that follows it one
-// edit rather than two. Nothing is written back to automation until every check has passed,
-// so a rejected save leaves it as SaveAutomation handed it over.
-func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation *model.Automation) (*model.Automation, error) {
+// and timestamps, returning the stored copy it found so the caller can see what changed.
+// The caller read stored under configWriteMu, which is what makes that read and the write that
+// follows it one edit rather than two. Nothing is written back to automation until every check
+// has passed, so a rejected save leaves it as SaveAutomation handed it over.
+func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation *model.Automation, stored []json.RawMessage) (*model.Automation, error) {
 	id := automation.Id
 	// The handler puts the path id here, so an absent id is the only thing that means create.
 	create := id == ""
@@ -595,10 +643,7 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 	}
 
 	// The stored copy, not the overlay: only it says whether a builtin was ever saved.
-	existing, err := ac.getStoredAutomation(ctx, id)
-	if err != nil && !errors.Is(err, ErrAutomationNotFound) {
-		return nil, err
-	}
+	existing := findStoredAutomation(stored, id)
 
 	// A builtin's first save creates its stored copy under the fixed id.
 	if existing == nil && ac.isBuiltinAutomation(id) {
@@ -714,17 +759,17 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 	ac.configWriteMu.Lock()
 	defer ac.configWriteMu.Unlock()
 
-	if _, err := ac.getStoredAutomation(ctx, id); err != nil {
+	stored, err := ac.readStoredAutomations(ctx)
+	if err != nil {
 		return err
 	}
 
-	setting := model.NewSetting(automationSettingId(id))
+	if findStoredAutomation(stored, id) == nil {
+		return ErrAutomationNotFound
+	}
 
-	if err := ac.srv.Configstore.UpdateSetting(ctx, setting, true); err != nil {
-		// Removing from a pillar file that was never created reports the missing file.
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
+	if err := ac.writeStoredAutomations(ctx, replaceStoredAutomation(stored, id, nil)); err != nil {
+		return err
 	}
 
 	if ac.store != nil {
@@ -740,50 +785,23 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 	return nil
 }
 
-// watchAutomationSetting subscribes to one automation's setting. Registration appends and
-// cannot be undone, so watchedAutomations is what keeps a second one from doubling every
-// update.
-func (ac *AssistantCoordinator) watchAutomationSetting(id string) {
-	registrar, ok := ac.srv.Configstore.(server.ConfigSettingCallbackRegistrar)
-	if !ok {
+// sweepOrphanedAutomationWork drops the work items left behind by automations that no longer
+// exist.
+func (ac *AssistantCoordinator) sweepOrphanedAutomationWork(ctx context.Context) {
+	if ac.store == nil {
 		return
 	}
 
-	ac.watchMu.Lock()
-	defer ac.watchMu.Unlock()
-
-	if ac.watchedAutomations == nil {
-		ac.watchedAutomations = map[string]bool{}
-	}
-
-	if ac.watchedAutomations[id] {
-		return
-	}
-
-	ac.watchedAutomations[id] = true
-
-	registrar.RegisterConfigSettingCallback(automationSettingId(id), ac)
-}
-
-// watchStoredAutomations subscribes to every stored automation and drops the work items left
-// behind by automations that no longer exist.
-func (ac *AssistantCoordinator) watchStoredAutomations(ctx context.Context) {
 	automations, unreadable, err := ac.scanAutomations(ctx)
 	if err != nil {
-		log.FromContext(ctx).WithError(err).Warn("unable to list automations; config changes will not hot-reload")
+		log.FromContext(ctx).WithError(err).Warn("unable to list automations; orphaned automation work was not swept")
 
 		return
 	}
 
-	for _, automation := range automations {
-		ac.watchAutomationSetting(automation.Id)
-	}
-
-	if ac.store != nil {
-		// After reconcileAutomationRuns: reconcile resets running items to pending, so
-		// sweeping first would let it resurrect them.
-		_ = ac.failOrphanedWorkItems(ctx, ac.store.FailOrphanedAutomationWorkItems, automations, unreadable)
-	}
+	// After reconcileAutomationRuns: reconcile resets running items to pending, so sweeping
+	// first would let it resurrect them.
+	_ = ac.failOrphanedWorkItems(ctx, ac.store.FailOrphanedAutomationWorkItems, automations, unreadable)
 }
 
 type orphanSweep func(ctx context.Context, liveIds []string, cause string) (int, error)

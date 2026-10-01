@@ -767,3 +767,33 @@ func TestUpdateSetting_DuplicatedSetting(t *testing.T) {
 		assert.Equal(t, "myapp.valid_template", setting.DuplicatedFromID)
 	})
 }
+
+func TestLookupSettingSkipsTheConfigReadCheck(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(dir+"/local/pillar/myapp", 0755))
+
+	ready := make(chan struct{})
+	close(ready)
+	oc := &OnionConfig{
+		server:       server.NewFakeAuthorizedServer(nil),
+		saltstackDir: dir,
+		ready:        ready,
+		annotations:  map[string]map[string]interface{}{},
+	}
+
+	ctx := context.Background()
+	require.NoError(t, oc.UpdateSetting(ctx, &model.Setting{Id: "myapp.keep.a", Value: "kept"}, false))
+
+	oc.server = server.NewFakeUnauthorizedServer()
+
+	_, err := oc.GetSettings(ctx, true)
+	assert.Error(t, err)
+
+	_, err = oc.GetSetting(ctx, "myapp.keep.a")
+	assert.Error(t, err)
+
+	setting, err := oc.LookupSetting(ctx, "myapp.keep.a")
+	require.NoError(t, err)
+	require.NotNil(t, setting)
+	assert.Equal(t, "kept", setting.Value)
+}

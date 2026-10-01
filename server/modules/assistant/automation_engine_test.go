@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -60,13 +59,15 @@ type countingConfigstore struct {
 	reads atomic.Int64
 }
 
-func (c *countingConfigstore) GetSettings(ctx context.Context, includeDefault bool) ([]*model.Setting, error) {
-	c.reads.Add(1)
+func (c *countingConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	if id == ConfigSettingAutomations {
+		c.reads.Add(1)
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.automationConfigstore.GetSettings(ctx, includeDefault)
+	return c.automationConfigstore.LookupSetting(ctx, id)
 }
 
 // replace swaps the stored set the way a pillar edit does: nothing is woken, so the lock is
@@ -95,7 +96,7 @@ type engineFixture struct {
 	sweeps [][]string
 }
 
-func newBareEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture {
+func newBareEngineFixture(t *testing.T, stored ...*model.Automation) *engineFixture {
 	t.Helper()
 
 	f := &engineFixture{
@@ -103,7 +104,7 @@ func newBareEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture
 		mDB:  &mockdb.MockDB{},
 		kind: &fakeAutomationKind{name: "alert_triage"},
 	}
-	f.cfg.settings = append([]*model.Setting{}, stored...)
+	f.cfg.settings = []*model.Setting{automationsSetting(t, stored...)}
 
 	f.ac = &AssistantCoordinator{
 		srv: &server.Server{
@@ -126,7 +127,7 @@ func newBareEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture
 	return f
 }
 
-func newEngineFixture(t *testing.T, stored ...*model.Setting) *engineFixture {
+func newEngineFixture(t *testing.T, stored ...*model.Automation) *engineFixture {
 	t.Helper()
 
 	f := newBareEngineFixture(t, stored...)
@@ -241,21 +242,11 @@ func (f *engineFixture) startAndWake() {
 	synctest.Wait()
 }
 
-func storedEnabledAutomation(t *testing.T, id, params string) *model.Setting {
-	t.Helper()
+func storedEnabledAutomation(id, params string) *model.Automation {
+	automation := storedAutomationWithParams(id, params)
+	automation.Enabled = true
 
-	raw, err := json.Marshal(&model.Automation{
-		Auditable:       model.Auditable{Id: id, UserId: "user-1"},
-		DisplayName:     "Nightly",
-		AutomationKind:  "alert_triage",
-		Agent:           automationTestAgent,
-		Enabled:         true,
-		IntervalSeconds: 300,
-		Params:          json.RawMessage(params),
-	})
-	require.NoError(t, err)
-
-	return &model.Setting{Id: automationSettingId(id), Value: string(raw)}
+	return automation
 }
 
 func enabledAutomation(id, kind string) *model.Automation {
@@ -272,7 +263,7 @@ func enabledAutomation(id, kind string) *model.Automation {
 // registered, and the row records why the run stopped.
 func TestSaveAutomationInterruptsTheRunningRun(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{"limit":10}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{"limit":10}`))
 
 		var mu sync.Mutex
 		var causes []error
@@ -329,7 +320,7 @@ func TestStartDueAutomationRunsRequiresAStore(t *testing.T) {
 
 func TestAutomationRunsAreNotPooled(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		var pool atomic.Pointer[execpool.Pool]
 
@@ -420,7 +411,7 @@ func TestStartDueAutomationRunsSkipsQuietly(t *testing.T) {
 
 func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		epoch := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 		f.ac.alertTriageEpoch.Store(epoch.UnixNano())
 
@@ -452,7 +443,7 @@ func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
 
 func TestAutomationRunPanicClosesFailedAndWorkerSurvives(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		f.kind.executeFunc = func(context.Context, *AutomationRun) error { panic("boom") }
 
@@ -476,7 +467,7 @@ func TestAutomationRunPanicClosesFailedAndWorkerSurvives(t *testing.T) {
 
 func TestAutomationRunClosesWithADetachedContext(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
 			<-ctx.Done()
@@ -506,7 +497,7 @@ func TestAutomationConfigChangeWakes(t *testing.T) {
 		_, ticks, _ := f.snapshot()
 		assert.Zero(t, ticks, "the first tick waits an interval")
 
-		f.ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: automationSettingId(automationTestId)}, false)
+		f.ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: ConfigSettingAutomations}, false)
 		synctest.Wait()
 
 		_, ticks, _ = f.snapshot()
@@ -524,8 +515,7 @@ func TestAutomationConfigChangeWakes(t *testing.T) {
 	})
 }
 
-// A definition added straight in pillar raises no callback; the next tick's read is what
-// finds it.
+// A definition added outside SOC raises no callback; the next tick's read is what finds it.
 func TestEveryTickReadsTheStoredAutomations(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t)
@@ -533,7 +523,7 @@ func TestEveryTickReadsTheStoredAutomations(t *testing.T) {
 		f.ac.startAutomationScheduler()
 		synctest.Wait()
 
-		f.cfg.replace(storedEnabledAutomation(t, automationTestId, `{}`))
+		f.cfg.replace(automationsSetting(t, storedEnabledAutomation(automationTestId, `{}`)))
 
 		time.Sleep(time.Hour)
 		synctest.Wait()
@@ -548,7 +538,7 @@ func TestEveryTickReadsTheStoredAutomations(t *testing.T) {
 // read before it; the tick leaves the open to the tick the save woke.
 func TestASaveDuringTheTickReadDefersTheOpen(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newBareEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{"limit":10}`))
+		f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{"limit":10}`))
 
 		release := make(chan struct{})
 
@@ -592,7 +582,7 @@ func TestASaveDuringTheTickReadDefersTheOpen(t *testing.T) {
 // a close could not end; failing it is what lets the automation run again before a restart.
 func TestAnAbandonedRunIsFailedSoTheNextTickCanOpen(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newBareEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.scriptTicks()
 		f.scriptOpenRunInFlight().Once()
 		f.scriptOpenRun()
@@ -686,7 +676,7 @@ func TestAutomationTickIntervalHotReload(t *testing.T) {
 
 func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
 			<-ctx.Done()
@@ -713,7 +703,7 @@ func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
 // A kind that ignores its context holds Stop for the budget and no longer.
 func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		release := make(chan struct{})
 		f.kind.executeFunc = func(context.Context, *AutomationRun) error {
@@ -742,7 +732,7 @@ func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
 // Pool work queued or submitted at stop fails without starting, and nothing is requeued.
 func TestStopFailsQueuedWorkWithoutWriting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.ac.automationMaxConcurrentItems = 1
 		f.ac.execPool = f.ac.newExecPool()
 
@@ -857,11 +847,10 @@ func TestAgentConcurrencyLimit(t *testing.T) {
 	assert.Zero(t, ac.agentConcurrencyLimit("Unknown"))
 }
 
-// The create path registers its config watch after the write, so the save itself has to
-// wake the scheduler; edits and deletes wake it too rather than relying on the callback.
+// A save or delete wakes the scheduler itself rather than relying on the config callback.
 func TestSaveAndDeleteAutomationWakeTheScheduler(t *testing.T) {
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{storedAutomation(t, automationTestId, "Nightly")}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
 
 	ac := automationCoordinator(cfg)
 	ac.automationScheduler = &automationScheduler{wake: make(chan struct{}, 1)}
@@ -963,32 +952,32 @@ func TestAutomationTickIsBoundedByTheInterval(t *testing.T) {
 	})
 }
 
-// A definition removed from pillar never passes through DeleteAutomation, so the tick's sweep
+// A definition removed outside SOC never passes through DeleteAutomation, so the tick's sweep
 // of work outside the live set is what drops its queued work.
 func TestTickSweepsAutomationsRemovedFromConfig(t *testing.T) {
-	remove := func(f *engineFixture) {
-		f.cfg.settings = []*model.Setting{storedEnabledAutomation(t, otherAutomationTestId, `{}`)}
-		f.ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: automationSettingId(automationTestId)}, true)
+	remove := func(t *testing.T, f *engineFixture) {
+		f.cfg.replace(automationsSetting(t, storedEnabledAutomation(otherAutomationTestId, `{}`)))
+		f.ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: ConfigSettingAutomations}, false)
 		synctest.Wait()
 	}
 
-	stored := func(t *testing.T) []*model.Setting {
-		return []*model.Setting{
-			storedEnabledAutomation(t, automationTestId, `{}`),
-			storedEnabledAutomation(t, otherAutomationTestId, `{}`),
+	stored := func() []*model.Automation {
+		return []*model.Automation{
+			storedEnabledAutomation(automationTestId, `{}`),
+			storedEnabledAutomation(otherAutomationTestId, `{}`),
 		}
 	}
 
 	t.Run("the removed automation leaves the live set", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t, stored(t)...)
+			f := newEngineFixture(t, stored()...)
 			f.startAndWake()
 
 			sweeps := f.sweepsSeen()
 			require.Len(t, sweeps, 1)
 			assert.ElementsMatch(t, []string{automationTestId, otherAutomationTestId}, sweeps[0])
 
-			remove(f)
+			remove(t, f)
 
 			sweeps = f.sweepsSeen()
 			require.Len(t, sweeps, 2)
@@ -1004,7 +993,7 @@ func TestTickSweepsAutomationsRemovedFromConfig(t *testing.T) {
 
 	t.Run("a failed sweep skips the tick and retries", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			f := newBareEngineFixture(t, stored(t)...)
+			f := newBareEngineFixture(t, stored()...)
 
 			afterRemoval := mock.MatchedBy(func(ids []string) bool { return len(ids) == 1 })
 			f.mDB.On("Query", mock.Anything, orphanSweepSQL, afterRemoval, ErrAutomationDeleted.Error()).
@@ -1020,7 +1009,7 @@ func TestTickSweepsAutomationsRemovedFromConfig(t *testing.T) {
 			opens, _, _ := f.snapshot()
 			require.Equal(t, 2, opens)
 
-			remove(f)
+			remove(t, f)
 
 			opens, _, _ = f.snapshot()
 			assert.Equal(t, 2, opens, "the tick that could not sweep starts nothing")
@@ -1035,14 +1024,15 @@ func TestTickSweepsAutomationsRemovedFromConfig(t *testing.T) {
 		})
 	})
 
-	// A malformed value is indistinguishable from a removed one, so the sweep waits for it to
+	// A malformed entry is indistinguishable from a removed one, so the sweep waits for it to
 	// be readable again rather than dropping its work as deleted.
 	t.Run("an unreadable automation holds the sweep", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t,
-				storedEnabledAutomation(t, automationTestId, `{}`),
-				&model.Setting{Id: automationSettingId(otherAutomationTestId), Value: "not json"},
-			)
+			f := newEngineFixture(t)
+			f.cfg.replace(rawAutomationsSetting(
+				automationJSON(t, storedEnabledAutomation(automationTestId, `{}`)),
+				`{"id":"`+otherAutomationTestId+`","intervalSeconds":"not a number"}`,
+			))
 			f.startAndWake()
 
 			assert.Empty(t, f.sweepsSeen())
@@ -1253,7 +1243,7 @@ func lastLoggedFields(h *memory.Handler) log.Fields {
 
 func TestAutomationRunContextCarriesItsLogger(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		ctx, h := capturedLogger()
 		f.ac.srv.Context = ctx
 
@@ -1281,7 +1271,7 @@ func TestAutomationRunContextCarriesItsLogger(t *testing.T) {
 // A run executes under the server context, whatever the automation's creator.
 func TestAutomationRunContextCarriesTheServerRequestor(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.ac.srv.Context = context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
 
 		var seen any
@@ -1350,7 +1340,7 @@ func TestAwaitJoinsEveryJobError(t *testing.T) {
 
 func TestAutomationEngineStatus(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedEnabledAutomation(t, automationTestId, `{}`))
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
 		status := f.ac.getAutomationEngineStatus()
 		assert.False(t, status.Running)
@@ -1449,9 +1439,8 @@ func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
 // The creator is a record, not the identity a run needs, so an automation without one runs.
 func TestTickRunsAnAutomationWithNoCreator(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		stored := storedEnabledAutomation(t, automationTestId, `{}`)
-		stored.Value = strings.Replace(stored.Value, `"userId":"user-1"`, `"userId":""`, 1)
-		require.Contains(t, stored.Value, `"userId":""`)
+		stored := storedEnabledAutomation(automationTestId, `{}`)
+		stored.UserId = ""
 
 		f := newEngineFixture(t, stored)
 
@@ -1481,7 +1470,7 @@ func TestTickListsTheBuiltinAndRunsItOnceEnabled(t *testing.T) {
 
 	t.Run("stored enabled copy: runs", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t, storedEnabledAutomation(t, BuiltinAlertTriageAutomationId, `{}`))
+			f := newEngineFixture(t, storedEnabledAutomation(BuiltinAlertTriageAutomationId, `{}`))
 			seedBuiltinAutomation(f.ac)
 
 			f.startAndWake()

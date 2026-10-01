@@ -267,7 +267,7 @@ func (ac *AssistantCoordinator) automationWorker(s *automationScheduler) {
 }
 
 // automationTick re-reads the stored set, drops work queued for automations that left it, and
-// starts what is due. Pillar edits raise no callback, so the set is read every tick.
+// starts what is due. Edits made outside SOC raise no callback, so the set is read every tick.
 func (ac *AssistantCoordinator) automationTick(s *automationScheduler) {
 	if s.ctx.Err() != nil {
 		return
