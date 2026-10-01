@@ -271,7 +271,6 @@ const i18n = {
       aiInvestigationGroupNewestTriaged: 'Showing the newest investigated alert in this group.',
       aiInvestigationManuals: 'Manual Investigations',
       aiInvestigationNoSessions: 'No investigations yet.',
-      aiInvestigationPrivate: 'private',
       aiInvestigationPrivateTo: 'Private to {name}. Ask them to share it.',
       aiInvestigationYou: 'You',
       aiInvestigationInvestigator: 'Investigator',

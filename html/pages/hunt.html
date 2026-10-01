@@ -912,7 +912,7 @@
 	</v-row>
 	<v-menu v-model="investigationMenu.visible" :target="investigationMenu.target" data-aid="alerts_investigation_menu">
 		<v-list density="compact">
-			<v-list-item v-for="(session, idx) in investigationMenu.items" :key="idx" :to="session.blocked ? null : session.to" :disabled="session.blocked" :prepend-icon="session.icon" :append-icon="session.blocked ? 'fa-lock' : undefined" :title="session.title" :subtitle="session.subtitle" :data-aid="'alerts_investigation_menu_session_' + idx"></v-list-item>
+			<v-list-item v-for="(session, idx) in investigationMenu.items" :key="idx" :to="session.to" :prepend-icon="session.icon" :title="session.title" :subtitle="session.subtitle" :data-aid="'alerts_investigation_menu_session_' + idx"></v-list-item>
 			<v-divider v-if="investigationMenu.items.length && investigationMenu.newLink"></v-divider>
 			<v-list-item v-if="investigationMenu.newLink" :to="investigationMenu.newLink" prepend-icon="fa-plus" :title="i18n.aiInvestigationStarting" data-aid="alerts_investigation_menu_new"></v-list-item>
 			<v-list-item v-if="!investigationMenu.items.length && !investigationMenu.newLink" :title="i18n.aiInvestigationNoSessions" disabled data-aid="alerts_investigation_menu_none"></v-list-item>

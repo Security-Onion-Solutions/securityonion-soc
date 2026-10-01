@@ -3272,32 +3272,23 @@ const huntComponent = {
         return;
       }
 
-      const items = this.investigationMenuItems(targetItem);
+      const items = await this.withoutPrivateInvestigations(this.investigationMenuItems(targetItem));
       this.investigationMenu = {
         visible: true,
         target: anchor,
         items: items,
         newLink: this.$root.canStartInvestigations() ? this.newInvestigationLink(targetItem) : null,
       };
-      await this.blockPrivateInvestigations(items);
     },
-    // Only a definite no blocks; a slow or failed check leaves sessions open.
-    async blockPrivateInvestigations(items) {
+    // Only a definite no hides a session; a failed check leaves them all listed.
+    async withoutPrivateInvestigations(items) {
       const others = items.filter(i => i.manual && !i.mine);
-      if (!others.length) return;
-      let access;
+      if (!others.length) return items;
       try {
-        access = await fetchSessionAccess(this.$root.papi, others.map(i => i.sessionId));
+        const access = await fetchSessionAccess(this.$root.papi, others.map(i => i.sessionId));
+        return items.filter(i => !i.manual || i.mine || access[i.sessionId] !== false);
       } catch (error) {
-        return;
-      }
-      // The menu may have moved to another alert meanwhile.
-      if (this.investigationMenu.items !== items) return;
-      for (const item of this.investigationMenu.items) {
-        if (item.manual && !item.mine && access[item.sessionId] === false) {
-          item.blocked = true;
-          item.subtitle = [item.subtitle, this.i18n.aiInvestigationPrivate].filter(s => s).join(' · ');
-        }
+        return items;
       }
     },
     newInvestigationLink(targetItem) {
@@ -3354,7 +3345,7 @@ const huntComponent = {
           icon: 'fa-user', title: this.i18n.aiInvestigateViewManual,
           subtitle: [who, this.formatInvestigationTime(inv.time)].filter(s => s).join(' · '),
           to: this.investigationLink(inv.sessionId),
-          sessionId: inv.sessionId, manual: true, mine: mine, blocked: false,
+          sessionId: inv.sessionId, manual: true, mine: mine,
         });
       }
       return items;

@@ -2838,32 +2838,39 @@ test('startAIInvestigation - an automated investigation carries its alert', asyn
   expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'alert123' } }]);
 });
 
-test('the menu blocks other users\' private sessions, and never your own', async () => {
+test('the menu leaves out other users\' private sessions, and never your own', async () => {
   const item = {
     soc_id: 'alert123', 'rule.uuid': 'r',
-    'event.investigation_session_id': ['mine_1', 'shared_1', 'private_1'],
-    'event.investigated_by': ['analyst-1', 'u2', 'u3'],
+    'event.investigation_session_id': ['mine_1', 'shared_1', 'private_1', 'unknown_1'],
+    'event.investigated_by': ['analyst-1', 'u2', 'u3', 'u4'],
   };
   comp.$root.formatDateTime = t => t;
   const post = mockPapi('post', { data: { shared_1: true, private_1: false } });
 
   await comp.startAIInvestigation(item);
 
-  expect(post).toHaveBeenCalledWith('/assistant/sessions/access', { sessionIds: ['private_1', 'shared_1'] });
-  const byId = Object.fromEntries(comp.investigationMenu.items.map(i => [i.sessionId, i]));
-  expect(byId.private_1.blocked).toBe(true);
-  expect(byId.private_1.subtitle).toBe('u3 · ' + comp.i18n.aiInvestigationPrivate);
-  expect(byId.shared_1.blocked).toBe(false);
-  expect(byId.mine_1).toMatchObject({ mine: true, blocked: false, subtitle: comp.i18n.aiInvestigationYou });
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/access', { sessionIds: ['unknown_1', 'private_1', 'shared_1'] });
+  expect(comp.investigationMenu.items.map(i => i.sessionId)).toEqual(['unknown_1', 'shared_1', 'mine_1']);
+  expect(comp.investigationMenu.items[2]).toMatchObject({ mine: true, subtitle: comp.i18n.aiInvestigationYou });
 });
 
-test('a failed access check leaves the menu open', async () => {
+test('a failed access check lists every session', async () => {
   const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.investigation_session_id': ['private_1'], 'event.investigated_by': ['u3'] };
   mockPapi('post', null, new Error('down'));
 
   await comp.startAIInvestigation(item);
 
-  expect(comp.investigationMenu.items[0].blocked).toBe(false);
+  expect(comp.investigationMenu.items.map(i => i.sessionId)).toEqual(['private_1']);
+});
+
+test('your own sessions open the menu without an access check', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.investigation_session_id': ['mine_1'], 'event.investigated_by': ['analyst-1'] };
+  const post = mockPapi('post', {});
+
+  await comp.startAIInvestigation(item);
+
+  expect(post).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.items).toHaveLength(1);
 });
 
 test('a role that cannot start investigations gets a menu without Start New Investigation', async () => {
