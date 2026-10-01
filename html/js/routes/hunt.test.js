@@ -2719,7 +2719,7 @@ test('startAIInvestigation - an existing investigation is offered, not opened', 
     soc_id: 'alert123',
     'rule.uuid': 'rule-uuid-123',
     'event.investigated': true,
-    'event.investigation_session_id': 'existing_session_123'
+    'event.so_investigations': [{ session_id: 'existing_session_123' }],
   };
   comp.$router = { push: jest.fn() };
 
@@ -2816,7 +2816,7 @@ test('getAIInvestigationTooltip - individual alert not investigated', () => {
 test('getAIInvestigationTooltip - individual alert investigated', () => {
   const item = {
     soc_id: 'alert123',
-    'event.investigation_session_id': 'session_123456'
+    'event.so_investigations': [{ session_id: 'session_123456' }],
   };
 
   const tooltip = comp.getAIInvestigationTooltip(item);
@@ -2841,8 +2841,12 @@ test('startAIInvestigation - an automated investigation carries its alert', asyn
 test('the menu leaves out other users\' private sessions, and never your own', async () => {
   const item = {
     soc_id: 'alert123', 'rule.uuid': 'r',
-    'event.investigation_session_id': ['mine_1', 'shared_1', 'private_1', 'unknown_1'],
-    'event.investigated_by': ['analyst-1', 'u2', 'u3', 'u4'],
+    'event.so_investigations': [
+      { session_id: 'mine_1', user_id: 'analyst-1' },
+      { session_id: 'shared_1', user_id: 'u2' },
+      { session_id: 'private_1', user_id: 'u3' },
+      { session_id: 'unknown_1', user_id: 'u4' },
+    ],
   };
   comp.$root.formatDateTime = t => t;
   const post = mockPapi('post', { data: { shared_1: true, private_1: false } });
@@ -2855,7 +2859,7 @@ test('the menu leaves out other users\' private sessions, and never your own', a
 });
 
 test('a failed access check lists every session', async () => {
-  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.investigation_session_id': ['private_1'], 'event.investigated_by': ['u3'] };
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_investigations': [{ session_id: 'private_1', user_id: 'u3' }] };
   mockPapi('post', null, new Error('down'));
 
   await comp.startAIInvestigation(item);
@@ -2864,7 +2868,7 @@ test('a failed access check lists every session', async () => {
 });
 
 test('your own sessions open the menu without an access check', async () => {
-  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.investigation_session_id': ['mine_1'], 'event.investigated_by': ['analyst-1'] };
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_investigations': [{ session_id: 'mine_1', user_id: 'analyst-1' }] };
   const post = mockPapi('post', {});
 
   await comp.startAIInvestigation(item);
@@ -2892,9 +2896,10 @@ test('startAIInvestigation - several investigations offer a choice, automated fi
   const item = {
     soc_id: 'alert123', 'rule.uuid': 'r',
     'event.investigated': true,
-    'event.investigation_session_id': ['manual_1', 'manual_2'],
-    'event.investigated_by': ['u1', 'u2'],
-    'event.investigated_timestamp': ['t1', 't2'],
+    'event.so_investigations': [
+      { session_id: 'manual_1', user_id: 'u1', timestamp: 't1' },
+      { session_id: 'manual_2', user_id: 'u2', timestamp: 't2' },
+    ],
     'event.so_alerttriage.session_id': 'triage_1',
   };
   comp.$router = { push: jest.fn() };
@@ -2915,7 +2920,7 @@ test('startAIInvestigation - several investigations offer a choice, automated fi
 });
 
 test('a new investigation always gets a fresh session, even beside existing ones', () => {
-  const item = { soc_id: 'alert123', 'event.investigation_session_id': ['manual_1'] };
+  const item = { soc_id: 'alert123', 'event.so_investigations': [{ session_id: 'manual_1' }] };
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
 
   const first = comp.newInvestigationLink(item);
@@ -2929,7 +2934,7 @@ test('a new investigation always gets a fresh session, even beside existing ones
 test('startAIInvestigation - a group reads its investigations from its newest triaged alert', async () => {
   const item = { count: 5, 'rule.uuid': 'r' };
   comp.fetchNewestEvent = jest.fn(async () => {
-    item.newest = { soc_id: 'newest', 'event.investigated': true, 'event.investigation_session_id': 'manual_1' };
+    item.newest = { soc_id: 'newest', 'event.investigated': true, 'event.so_investigations': [{ session_id: 'manual_1' }] };
     item.newestTriaged = { soc_id: 'older', 'event.so_alerttriage.session_id': 'triage_1' };
   });
   comp.generateQueryList = jest.fn(alert => ({ investigation: true, socId: alert.soc_id }));
@@ -2960,7 +2965,7 @@ test('the microchip reflects automated investigations', () => {
   expect(comp.getAIInvestigationButtonColor(automated)).toBe('icon');
   expect(comp.getAIInvestigationTooltip(automated)).toContain(comp.i18n.aiInvestigateViewAutomated);
 
-  const both = Object.assign({ 'event.investigated': true, 'event.investigation_session_id': 'manual_1' }, automated);
+  const both = Object.assign({ 'event.investigated': true, 'event.so_investigations': [{ session_id: 'manual_1' }] }, automated);
   expect(comp.getAIInvestigationTooltip(both)).toBe(comp.i18n.aiInvestigateViewBoth);
 
   const failed = { soc_id: 'a', 'event.so_alerttriage.failed_count': 2 };

@@ -131,8 +131,12 @@ test('the start link is built once per alert, so re-renders keep one session id'
 test('only other users\' sessions are checked, and only a definite no blocks', async () => {
   comp.$root.user = { id: 'me', roles: ['analyst'] };
   comp.alert = {
-    'event.investigation_session_id': ['mine_1', 'shared_1', 'private_1', 'unknown_1'],
-    'event.investigated_by': ['me', 'u2', 'u3', 'u4'],
+    'event.so_investigations': [
+      { session_id: 'mine_1', user_id: 'me' },
+      { session_id: 'shared_1', user_id: 'u2' },
+      { session_id: 'private_1', user_id: 'u3' },
+      { session_id: 'unknown_1', user_id: 'u4' },
+    ],
   };
   const post = mockPapi('post', { data: { shared_1: true, private_1: false } });
 
@@ -150,7 +154,7 @@ test('only other users\' sessions are checked, and only a definite no blocks', a
 
 test('a failed access check blocks nothing, and all-mine skips the check', async () => {
   comp.$root.user = { id: 'me', roles: ['analyst'] };
-  comp.alert = { 'event.investigation_session_id': ['private_1'], 'event.investigated_by': ['u3'] };
+  comp.alert = { 'event.so_investigations': [{ session_id: 'private_1', user_id: 'u3' }] };
   mockPapi('post', null, new Error('down'));
 
   await comp.loadAccess();
@@ -158,7 +162,7 @@ test('a failed access check blocks nothing, and all-mine skips the check', async
 
   resetPapi();
   const post = mockPapi('post', {});
-  comp.alert = { 'event.investigation_session_id': ['mine_1'], 'event.investigated_by': ['me'] };
+  comp.alert = { 'event.so_investigations': [{ session_id: 'mine_1', user_id: 'me' }] };
   await comp.loadAccess();
   expect(post).not.toHaveBeenCalled();
 });
@@ -182,11 +186,11 @@ test('investigators are shown by name once resolved, else by id', async () => {
 });
 
 test('a group describes its newest triaged alert when it has one', () => {
-  comp.alert = { soc_id: 'newest', 'event.investigated': true, 'event.investigation_session_id': ['manual_newest'] };
+  comp.alert = { soc_id: 'newest', 'event.investigated': true, 'event.so_investigations': [{ session_id: 'manual_newest' }] };
   expect(comp.manualInvestigations().map(i => i.sessionId)).toEqual(['manual_newest']);
   expect(comp.groupNote()).toBe(comp.i18n.aiInvestigationGroupNewest);
 
-  comp.triagedAlert = { soc_id: 'older', 'event.so_alerttriage.session_id': 'triage_1', 'event.investigated': true, 'event.investigation_session_id': ['copy_1'] };
+  comp.triagedAlert = { soc_id: 'older', 'event.so_alerttriage.session_id': 'triage_1', 'event.investigated': true, 'event.so_investigations': [{ session_id: 'copy_1' }] };
   expect(comp.automatedId()).toBe('triage_1');
   expect(comp.manualInvestigations().map(i => i.sessionId)).toEqual(['copy_1']);
   expect(comp.groupNote()).toBe(comp.i18n.aiInvestigationGroupNewestTriaged);
