@@ -81,6 +81,12 @@ type AssistantManager interface {
 	SaveMemory(ctx context.Context, mem *model.Memory) error
 	RemoveMemory(ctx context.Context, id string) error
 	FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any
+	AttachInvestigation(ctx context.Context, socId string, sessionId string) error
+	DetachInvestigation(ctx context.Context, socId string, sessionId string) error
+	// DetachSessionInvestigation unlinks the caller's own session from its alert, ahead of deleting it.
+	DetachSessionInvestigation(ctx context.Context, sessionId string) error
+	// CloneSessionOntoAlert copies a session the alert already references and records the copy on it.
+	CloneSessionOntoAlert(ctx context.Context, sessionId string, socId string) (*model.AssistantSession, error)
 }
 
 type AssistantAdapter interface {
