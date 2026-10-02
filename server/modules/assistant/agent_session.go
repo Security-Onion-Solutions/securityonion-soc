@@ -580,8 +580,12 @@ func withoutThoughtSignatures(msg *model.Message) *model.Message {
 	return &out
 }
 
+// Defers run last-first, so the lock is released before the notify.
 func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, phase string) {
+	defer ac.notifyAutomationActivity()
+
 	ac.agentPhaseMu.Lock()
+	defer ac.agentPhaseMu.Unlock()
 
 	if ac.agentPhases == nil {
 		ac.agentPhases = map[string]model.AgentSessionPhase{}
@@ -594,17 +598,15 @@ func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, p
 		Phase:         phase,
 		Since:         time.Now(),
 	}
-
-	ac.agentPhaseMu.Unlock()
-	ac.notifyAutomationActivity()
 }
 
 func (ac *AssistantCoordinator) clearAgentPhase(sessionId string) {
-	ac.agentPhaseMu.Lock()
-	delete(ac.agentPhases, sessionId)
-	ac.agentPhaseMu.Unlock()
+	defer ac.notifyAutomationActivity()
 
-	ac.notifyAutomationActivity()
+	ac.agentPhaseMu.Lock()
+	defer ac.agentPhaseMu.Unlock()
+
+	delete(ac.agentPhases, sessionId)
 }
 
 // AgentSessionPhases reports every headless session currently running.

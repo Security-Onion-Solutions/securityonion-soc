@@ -21,6 +21,10 @@ type activityNotifier struct {
 	send    func()
 	timer   *time.Timer
 	stopped bool
+	// Only one send runs at a time: a Broadcast stuck on a slow client would otherwise
+	// gather another goroutine every window.
+	sending bool
+	pending bool
 }
 
 func newActivityNotifier(window time.Duration, send func()) *activityNotifier {
@@ -31,22 +35,36 @@ func (n *activityNotifier) notify() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if n.stopped || n.timer != nil {
-		return
+	switch {
+	case n.stopped || n.timer != nil:
+	case n.sending:
+		n.pending = true
+	default:
+		n.timer = time.AfterFunc(n.window, n.fire)
 	}
-
-	n.timer = time.AfterFunc(n.window, n.fire)
 }
 
-// fire sends after clearing the timer, so a change it races with is already visible to the refetch.
+// A change that races the send lands either before it, so the refetch sees it, or after,
+// as pending for the next window.
 func (n *activityNotifier) fire() {
 	n.mu.Lock()
 	n.timer = nil
-	stopped := n.stopped
+	if n.stopped {
+		n.mu.Unlock()
+		return
+	}
+	n.sending = true
 	n.mu.Unlock()
 
-	if !stopped {
-		n.send()
+	n.send()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.sending = false
+	if n.pending && !n.stopped {
+		n.pending = false
+		n.timer = time.AfterFunc(n.window, n.fire)
 	}
 }
 
@@ -55,6 +73,7 @@ func (n *activityNotifier) stop() {
 	defer n.mu.Unlock()
 
 	n.stopped = true
+	n.pending = false
 	if n.timer != nil {
 		n.timer.Stop()
 		n.timer = nil

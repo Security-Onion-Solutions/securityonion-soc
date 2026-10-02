@@ -40,6 +40,62 @@ func TestActivityNotifierSendsOncePerWindow(t *testing.T) {
 	})
 }
 
+// A Broadcast stuck on a slow client must not gather a goroutine per window.
+func TestActivityNotifierKeepsOneSendAtATime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		var calls, inFlight, maxInFlight atomic.Int32
+		n := newActivityNotifier(time.Second, func() {
+			calls.Add(1)
+			if c := inFlight.Add(1); c > maxInFlight.Load() {
+				maxInFlight.Store(c)
+			}
+			<-release
+			inFlight.Add(-1)
+		})
+
+		n.notify()
+		for range 10 {
+			time.Sleep(time.Second)
+			synctest.Wait()
+			n.notify()
+		}
+
+		assert.Equal(t, int32(1), calls.Load(), "the stuck send is the only one")
+
+		close(release)
+		synctest.Wait()
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		assert.Equal(t, int32(2), calls.Load(), "the changes made meanwhile go out once, a window later")
+		assert.Equal(t, int32(1), maxInFlight.Load())
+	})
+}
+
+func TestActivityNotifierStopDropsChangesPendingBehindASend(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		var calls atomic.Int32
+		n := newActivityNotifier(time.Second, func() {
+			calls.Add(1)
+			<-release
+		})
+
+		n.notify()
+		time.Sleep(time.Second)
+		synctest.Wait()
+		n.notify()
+		n.stop()
+
+		close(release)
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+
+		assert.Equal(t, int32(1), calls.Load())
+	})
+}
+
 func TestActivityNotifierStops(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var sends atomic.Int32
@@ -61,6 +117,7 @@ func TestAgentPhaseChangesReachTheNotifier(t *testing.T) {
 		ac := &AssistantCoordinator{activityEvents: newActivityNotifier(time.Second, func() { sends.Add(1) })}
 
 		ac.setAgentPhase("s-1", "s-1", "Investigator", "waiting_llm")
+		assert.Len(t, ac.AgentSessionPhases(), 1, "the phase lock is free again")
 		time.Sleep(time.Second)
 		synctest.Wait()
 		assert.Equal(t, int32(1), sends.Load())
