@@ -1,0 +1,79 @@
+<div class="pa-4" data-aid="alert_investigation">
+  <div v-if="grouped" class="text-medium-emphasis mb-4" data-aid="alert_investigation_group_note">{{ groupNote() }}</div>
+  <div v-if="!alert" class="text-medium-emphasis">{{ i18n.loading }}</div>
+  <template v-else>
+    <section class="mb-6" data-aid="alert_investigation_automated">
+      <div class="d-flex align-center flex-wrap mb-3">
+        <v-icon class="mr-2" size="small">fa-robot</v-icon>
+        <h4 class="my-0 mr-4">{{ i18n.aiInvestigationAutomated }}</h4>
+        <template v-if="automatedId() && summary(automatedId()).time">
+          <span class="text-medium-emphasis mr-4">{{ $root.formatDateTime(summary(automatedId()).time) }}</span>
+          <span v-if="summary(automatedId()).agent" class="text-medium-emphasis mr-4">{{ summary(automatedId()).agent }}</span>
+          <router-link :to="bucketLink()" data-aid="alert_investigation_bucket">{{ i18n.aiInvestigationCovers }}</router-link>
+        </template>
+      </div>
+
+      <template v-if="automatedId()">
+        <div v-if="summary(automatedId()).loading" class="text-medium-emphasis">{{ i18n.loading }}</div>
+        <v-alert v-else-if="summary(automatedId()).error" type="error" variant="tonal" density="compact">{{ summary(automatedId()).error }}</v-alert>
+        <template v-else>
+          <v-alert v-for="(notification, idx) in summary(automatedId()).notifications" :key="idx"
+            :type="notification.failed ? 'warning' : 'info'" variant="tonal" density="compact" :icon="notification.failed ? 'fa-triangle-exclamation' : 'fa-bell'" class="mb-3"
+            :data-aid="'alert_investigation_notification_' + idx">
+            <strong>{{ notification.failed ? i18n.aiInvestigationNotificationFailed : i18n.aiInvestigationNotificationSent }}</strong>
+            <span class="text-caption ml-2" :class="$root.getSeverityColorClass(notification.severity, true)">{{ severityLabel(notification.severity) }}</span>
+            <div>{{ notification.title }}</div>
+            <div v-if="notification.summary">{{ notification.summary }}</div>
+            <div v-if="notification.failed && notification.error" class="mt-1">{{ notification.error }}</div>
+          </v-alert>
+          <div class="text-body-2 alert-investigation-report" v-html="formatMarkdown(summary(automatedId()).report)" data-aid="alert_investigation_automated_report"></div>
+          <v-btn variant="text" color="primary" class="mt-2" :to="automatedLink()" data-aid="alert_investigation_automated_open">
+            <v-icon class="mr-2" size="small">fa-microchip</v-icon>{{ i18n.openInOnionAi }}
+          </v-btn>
+        </template>
+      </template>
+      <v-alert v-else-if="failedCount()" type="warning" variant="tonal" density="compact" icon="fa-info" data-aid="alert_investigation_failed">{{ failedLabel() }}</v-alert>
+      <div v-else class="text-medium-emphasis" data-aid="alert_investigation_none">{{ acknowledged() ? i18n.aiInvestigationAcknowledged : i18n.aiInvestigationNotTriaged }}</div>
+    </section>
+
+    <template v-if="manualInvestigations().length || $root.canStartInvestigations()">
+    <v-divider class="mb-6"></v-divider>
+
+    <section data-aid="alert_investigation_manual">
+      <div class="d-flex align-center flex-wrap mb-3">
+        <v-icon class="mr-2" size="small">fa-user</v-icon>
+        <h4 class="my-0 mr-3">{{ i18n.aiInvestigationManuals }}</h4>
+        <v-chip v-if="manualInvestigations().length" size="x-small" variant="tonal">{{ manualInvestigations().length }}</v-chip>
+        <v-spacer></v-spacer>
+        <v-btn v-if="$root.canStartInvestigations()" variant="text" color="primary" :to="startLink()" :disabled="!startLink()" data-aid="alert_investigation_start">
+          <v-icon class="mr-2" size="small">fa-plus</v-icon>{{ i18n.aiInvestigationStarting }}
+        </v-btn>
+      </div>
+      <!-- Rows go through the slot; raw table tags break page templates. -->
+      <v-data-table v-if="manualInvestigations().length" :headers="manualHeaders" :items="manualInvestigations()" item-value="sessionId" density="compact" hide-default-footer items-per-page="-1" data-aid="alert_investigation_manual_table">
+        <template #item="{ item: inv }">
+          <tr class="main-row" :data-aid="'alert_investigation_manual_' + inv.sessionId">
+            <td>
+              {{ inv.sessionId }}
+              <v-icon v-if="blocked(inv)" size="small" class="ml-2 text-disabled" :title="privateLabel(inv)" :data-aid="'alert_investigation_manual_locked_' + inv.sessionId">fa-lock</v-icon>
+            </td>
+            <td>
+              {{ userName(inv.by) || i18n.unknown }}
+              <v-chip v-if="isMine(inv)" size="x-small" variant="tonal" class="ml-2" data-aid="alert_investigation_manual_you">{{ i18n.aiInvestigationYou }}</v-chip>
+            </td>
+            <td>{{ inv.time ? $root.formatDateTime(inv.time) : '' }}</td>
+            <td class="text-right">
+              <!-- A disabled button shows no tooltip, so the span carries it. -->
+              <span :title="blocked(inv) ? privateLabel(inv) : ''">
+                <v-btn variant="text" color="primary" :to="manualLink(inv)" :disabled="blocked(inv)" :data-aid="'alert_investigation_manual_open_' + inv.sessionId">
+                  <v-icon class="mr-2" size="small">fa-microchip</v-icon>{{ i18n.openInOnionAi }}
+                </v-btn>
+              </span>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
+    </section>
+    </template>
+  </template>
+</div>

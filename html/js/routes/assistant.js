@@ -54,6 +54,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 0,
     agentic: false,
+    automatedAgents: null,
+    automatedAgentsLoading: false,
+    // generatedAt of the counts shown, in ms; anything older is dropped.
+    automatedAgentsGeneratedAt: 0,
     availableAgents: [],
     agentMapping: {},
     availableModels: [],
@@ -62,6 +66,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     adaptersMap: new Map(),
     groupedModels: [],
     currentModel: '',
+    savedModel: '',
     activeStreamingSessionId: null,
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
@@ -81,12 +86,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
     this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
+    this.$root.unsubscribe('assistant:automation', this.onAutomationActivity);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
     this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
+    this.$root.subscribe('assistant:automation', this.onAutomationActivity);
   },
   watch: {
+    // Activity pushed while disconnected was missed.
+    '$root.connected'(connected) {
+      if (connected) this.loadAutomatedAgents();
+    },
     '$route'(to, from) {
       if (to.params.sessionId !== from.params.sessionId) {
         this.handleRouteSessionId();

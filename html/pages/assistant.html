@@ -123,6 +123,19 @@
 				</v-list>
 			</v-menu>
 		</v-col>
+		<v-col v-if="showAutomatedAgentsPill()">
+			<router-link :to="{ name: 'agentmonitor' }" class="so-stat-pill so-stat-pill-clickable" data-aid="assistant_automated_agents"
+				:aria-label="i18n.agentMonitorAutomatedAgents + ' - ' + automatedAgentsSummary()">
+				<div class="so-stat-text">
+					<div id="stat-label-automated-agents" class="so-stat-label">{{ i18n.agentMonitorAutomatedAgents }}</div>
+					<div class="so-stat-value" aria-labelledby="stat-label-automated-agents">
+						{{ automatedAgentsSummary() }}
+						<v-icon size="x-small" class="ml-1 so-stat-caret">fa-angle-right</v-icon>
+					</div>
+				</div>
+				<v-icon class="so-stat-icon">fa-display</v-icon>
+			</router-link>
+		</v-col>
 		<v-col style="flex: 0 0 auto;">
 			<div class="so-stat-pill no-print" style="gap: 16px;">
 				<v-btn variant="flat" icon id="chat-new-button" @click="startNewChat" :title="i18n.chatNewChat" data-aid="assistant_banner_create_chat" class="circle-button" :aria-label="i18n.chatNewChat">
@@ -147,7 +160,7 @@
 					<v-icon class="mr-2" @click="toggleIncognito" @keydown.enter.space.stop="toggleIncognito" data-aid="assistant_banner_incognito_toggle" :disabled="isIncognitoLocked()" :title="i18n.assistantIncognitoTitle" :aria-label="isIncognito() ? i18n.ariaIncognitoOn : i18n.ariaIncognitoOff" role="button" tabindex="0">
 						{{ isIncognito() ? 'fa-mask' : 'fa-eye' }}
 					</v-icon>
-					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" @keydown.enter.space.stop="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="$root.isMyUser(chatHistoryById?.[currentChatId]?.userId)" :title="i18n.assistantLinkTitle" :aria-label="(chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? i18n.ariaLinkToCase : i18n.ariaUnlinkFromCase" role="button" tabindex="0">
+					<v-icon v-if="currentChatId" class="mr-2" @click="toggleSharedSession(currentChatId)" @keydown.enter.space.stop="toggleSharedSession(currentChatId)" data-aid="assistant_banner_share_toggle" :disabled="!isOwnSession()" :title="i18n.assistantLinkTitle" :aria-label="(chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? i18n.ariaLinkToCase : i18n.ariaUnlinkFromCase" role="button" tabindex="0">
 						{{ (chatHistoryById?.[currentChatId]?.tags?.includes('shared')) ? 'fa-link' : 'fa-link-slash' }}
 					</v-icon>
 					<v-icon v-if="currentChatId" class="mr-2" @click.stop="exportSession" @keydown.enter.space.stop="exportSession" data-aid="assistant_banner_export_session" :disabled="checkForActivity() || !messages.some(m => m.role === 'user')" :title="i18n.exportSessionHelp" :aria-label="i18n.ariaExportSession" role="button" tabindex="0">
@@ -287,7 +300,14 @@
 					</div>
 				</v-card-text>
 				<v-divider></v-divider>
-				<v-card-actions class="pa-4 d-flex align-center">
+				<v-card-actions v-if="isReadOnlySession()" class="pa-4 d-flex align-center" data-aid="assistant_readonly_banner">
+					<v-icon class="mr-3">{{ isAutomatedSession() ? 'fa-robot' : 'fa-user' }}</v-icon>
+					<span class="flex-grow-1">{{ isAutomatedSession() ? i18n.aiInvestigationReadOnly : i18n.assistantSessionOthersReadOnly }}</span>
+					<v-btn v-if="$root.canStartInvestigations()" variant="text" color="primary" @click="continueSession()" data-aid="assistant_readonly_continue">
+						<v-icon class="mr-2" size="small">fa-code-branch</v-icon>{{ i18n.aiInvestigationContinue }}
+					</v-btn>
+				</v-card-actions>
+				<v-card-actions v-else class="pa-4 d-flex align-center">
 					<v-textarea
 						id="chat-input-field"
 						ref="chatInputField"

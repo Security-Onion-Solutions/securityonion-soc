@@ -190,6 +190,12 @@ html, body, * {
   opacity: var(--v-focus-opacity, 0.12);
 }
 
+/* Linked pills: don't pick up the global link colour. */
+.v-application a.so-stat-pill {
+  color: inherit;
+  text-decoration: none;
+}
+
 .so-stat-text {
   flex: 1;
   min-width: 0;

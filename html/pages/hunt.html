@@ -380,8 +380,8 @@
 														<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate"
 															:color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 													</v-btn>
-													<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" size="x-small" icon
-														@mousedown="startAIInvestigation(item, $event)"
+													<v-btn id="aiInvestigateButton" v-if="investigateEnabled && $root.canReadInvestigations() && item['rule.uuid']" variant="text" size="x-small" icon
+														@click="startAIInvestigation(item, $event)" @auxclick="startAIInvestigation(item, $event)"
 														:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'">
 														<v-icon :title="getAIInvestigationTooltip(item)"
 															:color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
@@ -420,6 +420,10 @@
 																<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" data-aid="alerts_agg_playbookTab">
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+																</v-tab>
+																<v-tab v-if="investigateEnabled" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_agg_investigationTab">
+																	<v-icon class="tab-icon">fa-microchip</v-icon>
+																	<div class="d-none d-lg-block">{{i18n.aiInvestigation}}</div>
 																</v-tab>
 															</v-tabs>
 															<v-spacer></v-spacer>
@@ -561,6 +565,9 @@
 																	<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px'}" data-aid="playbook_grouped_loading_circle"></v-progress-circular>
 																</template>
 															</v-tabs-window-item>
+															<v-tabs-window-item v-if="investigateEnabled" value="investigation">
+																<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item.newest" :triaged-alert="item.newestTriaged" grouped :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
+															</v-tabs-window-item>
 														</v-tabs-window>
 													</div>
 												</td>
@@ -672,8 +679,8 @@
 												:aria-label="i18n.escalate">
 												<v-icon :title="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? i18n.alertEscalated : i18n.escalate" :color="isFilterToggleEnabled('escalated') || item['event.escalated'] == true ? 'icon' : 'primary'">fa-exclamation-triangle</v-icon>
 											</v-btn>
-											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && item['rule.uuid']" variant="text" icon size="x-small"
-												@mousedown="startAIInvestigation(item, $event)"
+											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && $root.canReadInvestigations() && item['rule.uuid']" variant="text" icon size="x-small"
+												@click="startAIInvestigation(item, $event)" @auxclick="startAIInvestigation(item, $event)"
 												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'">
 												<v-icon :title="getAIInvestigationTooltip(item)" :color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
 											</v-btn>
@@ -714,6 +721,10 @@
 														<v-tab id="alerts_playbookTab" value="playbook" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'playbook' }" data-aid="alerts_playbookTab">
 															<v-icon class="tab-icon">fa-book</v-icon>
 															<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
+														</v-tab>
+														<v-tab v-if="investigateEnabled" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_investigationTab">
+															<v-icon class="tab-icon">fa-microchip</v-icon>
+															<div class="d-none d-lg-block">{{i18n.aiInvestigation}}</div>
 														</v-tab>
 													</v-tabs>
 													<v-spacer></v-spacer>
@@ -855,6 +866,9 @@
 															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px' }" data-aid="playbook_loading_circle"></v-progress-circular>
 														</template>
 													</v-tabs-window-item>
+													<v-tabs-window-item v-if="investigateEnabled" value="investigation">
+														<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item" :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
+													</v-tabs-window-item>
 												</v-tabs-window>
 											</div>
 										</td>
@@ -896,6 +910,14 @@
 			</v-expansion-panels>
 		</v-col>
 	</v-row>
+	<v-menu v-model="investigationMenu.visible" :target="investigationMenu.target" data-aid="alerts_investigation_menu">
+		<v-list density="compact">
+			<v-list-item v-for="(session, idx) in investigationMenu.items" :key="idx" :to="session.to" :prepend-icon="session.icon" :title="session.title" :subtitle="session.subtitle" :data-aid="'alerts_investigation_menu_session_' + idx"></v-list-item>
+			<v-divider v-if="investigationMenu.items.length && investigationMenu.newLink"></v-divider>
+			<v-list-item v-if="investigationMenu.newLink" :to="investigationMenu.newLink" prepend-icon="fa-plus" :title="i18n.aiInvestigationStarting" data-aid="alerts_investigation_menu_new"></v-list-item>
+			<v-list-item v-if="!investigationMenu.items.length && !investigationMenu.newLink" :title="i18n.aiInvestigationNoSessions" disabled data-aid="alerts_investigation_menu_none"></v-list-item>
+		</v-list>
+	</v-menu>
 	<v-menu v-model="quickActionVisible" :target="quickActionTarget" :data-aid="'context_menu_' + category">
 		<div class="d-flex">
 			<v-list id="hunt-quick-action" v-model:opened="quickActionsOpen" v-fix-group-role>

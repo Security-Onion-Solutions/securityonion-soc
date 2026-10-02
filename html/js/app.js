@@ -1672,6 +1672,13 @@ $(document).ready(function () {
         canReadAutomations(user = null) {
           return ["analyst", "auditor", "superuser"].some(role => this.userHasRole(role, user));
         },
+        // Mirrors the built-in rbac/roles grants for investigations; the server still enforces them.
+        canStartInvestigations(user = null) {
+          return this.userHasRole("analyst", user) || this.userHasRole("superuser", user);
+        },
+        canReadInvestigations(user = null) {
+          return this.canStartInvestigations(user) || this.userHasRole("auditor", user);
+        },
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },

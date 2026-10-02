@@ -9,6 +9,7 @@
 globalThis.AssistantUtils = (function() {
   const SESTAG_SHARED = 'shared';
   const SESTAG_INCOGNITO = 'incognito';
+  const SESTAG_AUTOMATION = 'automation';
   const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
 
   return {
@@ -253,7 +254,8 @@ globalThis.AssistantUtils = (function() {
       this.saveSetting('restoreLastActive', this.restoreLastActive, false);
       this.saveSetting('alwaysApproveReadRequests', this.alwaysApproveReadRequests, false);
       this.saveSetting('showChatHistory', this.showChatHistory, true);
-      this.saveSetting('currentModel', this.currentModel, '');
+      // Agentic visits start on the orchestrator.
+      if (!this.agentic) this.saveSetting('currentModel', this.currentModel, '');
       this.saveSetting('showModelThinking', this.showModelThinking, false);
     },
 
@@ -263,7 +265,8 @@ globalThis.AssistantUtils = (function() {
       if (localStorage[prefix + '.restoreLastActive']) this.restoreLastActive = localStorage[prefix + '.restoreLastActive'] == 'true';
       if (localStorage[prefix + '.alwaysApproveReadRequests']) this.alwaysApproveReadRequests = localStorage[prefix + '.alwaysApproveReadRequests'] == 'true';
       if (localStorage[prefix + '.showChatHistory']) this.showChatHistory = localStorage[prefix + '.showChatHistory'] == 'true';
-      if (localStorage[prefix + '.currentModel']) this.currentModel = localStorage[prefix + '.currentModel'];
+      // Applied by initAssistant, and only when agentic is off.
+      if (localStorage[prefix + '.currentModel']) this.savedModel = localStorage[prefix + '.currentModel'];
       if (localStorage[prefix + '.perMessageStatsEnabled']) this.perMessageStatsEnabled = localStorage[prefix + '.perMessageStatsEnabled'] == 'true';
       if (localStorage[prefix + '.showModelThinking']) this.showModelThinking = localStorage[prefix + '.showModelThinking'] == 'true';
 
@@ -310,7 +313,7 @@ globalThis.AssistantUtils = (function() {
         this.canChat = false;
         this.$root.showWarning(this.i18n.assistantChatNoResume);
       } else {
-        this.canChat = true;
+        this.canChat = !(session?.tags || []).includes(SESTAG_AUTOMATION) && !this.isOthersSession(session);
       }
     },
 
@@ -337,6 +340,53 @@ globalThis.AssistantUtils = (function() {
 
     canSwitchModel() {
       return !this.$root.loading && !this.checkForActivity();
+    },
+
+    canSeeAutomatedAgents() {
+      return !!this.agentic && this.$root.canReadAutomations();
+    },
+    showAutomatedAgentsPill() {
+      return this.canSeeAutomatedAgents() && !!this.automatedAgents;
+    },
+    // Fetched on open and after a reconnect; pushes keep it current in between.
+    async loadAutomatedAgents() {
+      if (!this.canSeeAutomatedAgents() || this.automatedAgentsLoading) return;
+      this.automatedAgentsLoading = true;
+      try {
+        const response = await this.$root.papi.get('assistant/automations/activity');
+        this.applyAutomatedAgents(response.data || {});
+      } catch (error) {
+        console.error('Failed to load automation activity:', error);
+      } finally {
+        this.automatedAgentsLoading = false;
+      }
+    },
+    onAutomationActivity(activity) {
+      if (activity && this.canSeeAutomatedAgents()) this.applyAutomatedAgents(activity);
+    },
+    // A slow fetch can land after a newer push.
+    applyAutomatedAgents(activity) {
+      const generatedAt = Date.parse(activity.generatedAt) || 0;
+      if (generatedAt && generatedAt < this.automatedAgentsGeneratedAt) return;
+      if (generatedAt) this.automatedAgentsGeneratedAt = generatedAt;
+      this.automatedAgents = this.countAutomatedAgents(activity);
+    },
+    // Not the pool's counts, which include people's chats. Pending runs count as queued.
+    countAutomatedAgents(activity) {
+      const counts = { running: 0, queued: 0 };
+      for (const run of activity.runs || []) {
+        for (const item of run.items || []) {
+          if (item.queued || item.state === 'pending') counts.queued++;
+          else if (item.state === 'running') counts.running++;
+        }
+      }
+      return counts;
+    },
+    automatedAgentsSummary() {
+      const counts = this.automatedAgents || {};
+      return this.$root.replaceActionVar(
+        this.$root.replaceActionVar(this.i18n.agentMonitorRunningSummary, 'running', counts.running || 0),
+        'queued', counts.queued || 0);
     },
 
     selectModel(key) {
@@ -413,6 +463,32 @@ globalThis.AssistantUtils = (function() {
       const session = this.chatHistoryById?.[this.currentChatId];
       if (session) return (session.tags || []).includes(SESTAG_INCOGNITO);
       return this.incognito;
+    },
+    isAutomatedSession() {
+      const session = this.chatHistoryById?.[this.currentChatId];
+      return !!session && (session.tags || []).includes(SESTAG_AUTOMATION);
+    },
+    isOwnSession(session = this.chatHistoryById?.[this.currentChatId]) {
+      return !!session && !!this.$root.user && session.userId === this.$root.user.id;
+    },
+    isOthersSession(session = this.chatHistoryById?.[this.currentChatId]) {
+      return !!session && !!session.userId && !this.isOwnSession(session) && !(session.tags || []).includes(SESTAG_AUTOMATION);
+    },
+    isReadOnlySession() {
+      return this.isAutomatedSession() || this.isOthersSession();
+    },
+    // With ?alert=, the copy is also recorded on that alert; the server allows this only
+    // when the alert already references the source session.
+    async continueSession() {
+      const alertId = ((this.$route || {}).query || {}).alert;
+      try {
+        const config = alertId ? { params: { entityType: 'alert_investigation', entityId: alertId } } : undefined;
+        const response = await this.$root.papi.post(`/assistant/sessions/${this.currentChatId}/clone`, null, config);
+        await this.loadStoredChats(false);
+        this.$router.push({ name: 'assistant', params: { sessionId: response.data.sessionId } });
+      } catch (error) {
+        this.$root.showError(error);
+      }
     },
     toggleIncognito() {
       if (this.isIncognitoLocked()) return;
