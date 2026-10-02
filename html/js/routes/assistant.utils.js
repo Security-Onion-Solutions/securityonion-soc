@@ -343,31 +343,33 @@ globalThis.AssistantUtils = (function() {
     },
 
     canSeeAutomatedAgents() {
-      return !!this.agentic && this.$root.isUserAdmin();
+      return !!this.agentic && this.$root.canReadAutomations();
     },
     showAutomatedAgentsPill() {
       return this.canSeeAutomatedAgents() && !!this.automatedAgents;
     },
+    // Fetched on open and after a reconnect; pushes keep it current in between.
     async loadAutomatedAgents() {
-      if (!this.canSeeAutomatedAgents()) return;
-      if (this.automatedAgentsLoading) {
-        this.automatedAgentsReloadPending = true;
-        return;
-      }
+      if (!this.canSeeAutomatedAgents() || this.automatedAgentsLoading) return;
       this.automatedAgentsLoading = true;
       try {
         const response = await this.$root.papi.get('assistant/automations/activity');
-        this.automatedAgents = this.countAutomatedAgents(response.data || {});
+        this.applyAutomatedAgents(response.data || {});
       } catch (error) {
         console.error('Failed to load automation activity:', error);
       } finally {
         this.automatedAgentsLoading = false;
       }
-      // A change announced mid-load may postdate it.
-      if (this.automatedAgentsReloadPending) {
-        this.automatedAgentsReloadPending = false;
-        await this.loadAutomatedAgents();
-      }
+    },
+    onAutomationActivity(activity) {
+      if (activity && this.canSeeAutomatedAgents()) this.applyAutomatedAgents(activity);
+    },
+    // A slow fetch can land after a newer push.
+    applyAutomatedAgents(activity) {
+      const generatedAt = Date.parse(activity.generatedAt) || 0;
+      if (generatedAt && generatedAt < this.automatedAgentsGeneratedAt) return;
+      if (generatedAt) this.automatedAgentsGeneratedAt = generatedAt;
+      this.automatedAgents = this.countAutomatedAgents(activity);
     },
     // Not the pool's counts, which include people's chats. Pending runs count as queued.
     countAutomatedAgents(activity) {

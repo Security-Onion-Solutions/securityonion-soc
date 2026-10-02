@@ -874,26 +874,21 @@ test('canSwitchModel is false while loading or a turn is active', () => {
   expect(comp.canSwitchModel()).toBe(false);
 });
 
-test('the automated agents pill is shown only to superusers on an agentic grid, once counted', () => {
-  const isAdmin = comp.$root.isUserAdmin;
-  try {
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
-    comp.agentic = true;
-    comp.automatedAgents = null;
-    expect(comp.showAutomatedAgentsPill()).toBe(false, 'nothing to show before the first count');
+test('the automated agents pill is shown to automations/read holders on an agentic grid, once counted', () => {
+  comp.$root.user = { id: 'u', roles: ['auditor'] };
+  comp.agentic = true;
+  comp.automatedAgents = null;
+  expect(comp.showAutomatedAgentsPill()).toBe(false, 'nothing to show before the first count');
 
-    comp.automatedAgents = { running: 0, queued: 0 };
-    expect(comp.showAutomatedAgentsPill()).toBe(true);
+  comp.automatedAgents = { running: 0, queued: 0 };
+  expect(comp.showAutomatedAgentsPill()).toBe(true);
 
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(false);
-    expect(comp.showAutomatedAgentsPill()).toBe(false);
+  comp.$root.user = { id: 'u', roles: ['limited-analyst'] };
+  expect(comp.showAutomatedAgentsPill()).toBe(false);
 
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
-    comp.agentic = false;
-    expect(comp.showAutomatedAgentsPill()).toBe(false);
-  } finally {
-    comp.$root.isUserAdmin = isAdmin;
-  }
+  comp.$root.user = { id: 'u', roles: ['auditor'] };
+  comp.agentic = false;
+  expect(comp.showAutomatedAgentsPill()).toBe(false);
 });
 
 test('the automated agents pill summarizes running and queued work', () => {
@@ -918,37 +913,43 @@ test('the pill counts automation work items, not the whole pool', () => {
   expect(comp.countAutomatedAgents({})).toEqual({ running: 0, queued: 0 });
 });
 
-test('the pill loads its count only for superusers on an agentic grid, keeping the last on failure', async () => {
-  const isAdmin = comp.$root.isUserAdmin;
-  try {
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(false);
-    comp.agentic = true;
-    const get = mockPapi('get', { data: { runs: [{ items: [{ state: 'running' }] }] } });
-    await comp.loadAutomatedAgents();
-    expect(get).not.toHaveBeenCalled();
+test('the pill loads for anyone with automations/read on an agentic grid, keeping the last on failure', async () => {
+  comp.agentic = true;
+  const get = mockPapi('get', { data: { runs: [{ items: [{ state: 'running' }] }] } });
 
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
-    await comp.loadAutomatedAgents();
-    expect(get).toHaveBeenCalledWith('assistant/automations/activity');
-    expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+  comp.$root.user = { id: 'u', roles: ['limited-analyst'] };
+  await comp.loadAutomatedAgents();
+  expect(get).not.toHaveBeenCalled();
 
-    resetPapi();
-    mockPapi('get', null, new Error('down'));
-    await comp.loadAutomatedAgents();
-    expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
-    expect(comp.$root.showError).not.toHaveBeenCalled();
-  } finally {
-    comp.$root.isUserAdmin = isAdmin;
+  for (const role of ['analyst', 'auditor', 'superuser']) {
+    comp.$root.user = { id: 'u', roles: [role] };
+    expect(comp.canSeeAutomatedAgents()).toBe(true, role);
   }
+  await comp.loadAutomatedAgents();
+  expect(get).toHaveBeenCalledWith('assistant/automations/activity');
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+
+  resetPapi();
+  mockPapi('get', null, new Error('down'));
+  await comp.loadAutomatedAgents();
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+  expect(comp.$root.showError).not.toHaveBeenCalled();
 });
 
-test('the pill is pushed, not polled, and catches up after a reconnect', () => {
+test('the pill counts pushed activity as it arrives, and fetches after a reconnect', () => {
   const subscribe = comp.$root.subscribe;
   try {
     comp.$root.subscribe = jest.fn();
     comp.$root.loadParameters = jest.fn();
     comp.mounted();
-    expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.loadAutomatedAgents);
+    expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.onAutomationActivity);
+
+    comp.agentic = true;
+    comp.$root.user = { id: 'u', roles: ['analyst'] };
+    const get = mockPapi('get', {});
+    comp.onAutomationActivity({ generatedAt: '2026-10-02T12:00:00Z', runs: [{ items: [{ state: 'running' }, { state: 'pending' }] }] });
+    expect(comp.automatedAgents).toEqual({ running: 1, queued: 1 });
+    expect(get).not.toHaveBeenCalled();
 
     const onConnected = routes.find(r => r.name === 'assistant').component.watch['$root.connected'];
     comp.loadAutomatedAgents = jest.fn();
@@ -961,30 +962,14 @@ test('the pill is pushed, not polled, and catches up after a reconnect', () => {
   }
 });
 
-test('a change announced while the pill loads is loaded once that load finishes', async () => {
-  const isAdmin = comp.$root.isUserAdmin;
-  try {
-    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
-    comp.agentic = true;
-    let finishFirst;
-    const get = jest.fn()
-      .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
-      .mockResolvedValue({ data: { runs: [{ items: [{ state: 'running' }, { state: 'pending' }] }] } });
-    comp.$root.papi.get = get;
+test('the pill ignores counts older than what it shows', () => {
+  comp.agentic = true;
+  comp.$root.user = { id: 'u', roles: ['analyst'] };
 
-    const first = comp.loadAutomatedAgents();
-    comp.loadAutomatedAgents();
-    comp.loadAutomatedAgents();
-    expect(get).toHaveBeenCalledTimes(1);
+  comp.onAutomationActivity({ generatedAt: '2026-10-02T12:00:02Z', runs: [{ items: [{ state: 'running' }] }] });
+  comp.applyAutomatedAgents({ generatedAt: '2026-10-02T12:00:01Z', runs: [] });
 
-    finishFirst({ data: { runs: [] } });
-    await first;
-
-    expect(get).toHaveBeenCalledTimes(2);
-    expect(comp.automatedAgents).toEqual({ running: 1, queued: 1 }, 'the later load wins');
-  } finally {
-    comp.$root.isUserAdmin = isAdmin;
-  }
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 }, 'a slow fetch does not undo a newer push');
 });
 
 test('selectModel is blocked while a turn is active', async () => {
