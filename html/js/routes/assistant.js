@@ -6,9 +6,6 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
-// Polled, since the backend pushes no activity updates.
-const AUTOMATED_AGENTS_REFRESH_MS = 30000;
-
 // Methods are split by concern across sibling files that load first (see index.html)
 // and publish method objects on globalThis, merged into `methods` below.
 
@@ -58,7 +55,8 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     lowBalanceColorAlert: 0,
     agentic: false,
     automatedAgents: null,
-    automatedAgentsTimer: null,
+    automatedAgentsLoading: false,
+    automatedAgentsReloadPending: false,
     availableAgents: [],
     agentMapping: {},
     availableModels: [],
@@ -87,14 +85,18 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
     this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
-    clearInterval(this.automatedAgentsTimer);
+    this.$root.unsubscribe('assistant:automation', this.loadAutomatedAgents);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
     this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
-    this.automatedAgentsTimer = setInterval(this.loadAutomatedAgents, AUTOMATED_AGENTS_REFRESH_MS);
+    this.$root.subscribe('assistant:automation', this.loadAutomatedAgents);
   },
   watch: {
+    // Activity pushed while disconnected was missed.
+    '$root.connected'(connected) {
+      if (connected) this.loadAutomatedAgents();
+    },
     '$route'(to, from) {
       if (to.params.sessionId !== from.params.sessionId) {
         this.handleRouteSessionId();

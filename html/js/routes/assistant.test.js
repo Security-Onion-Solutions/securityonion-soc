@@ -942,6 +942,51 @@ test('the pill loads its count only for superusers on an agentic grid, keeping t
   }
 });
 
+test('the pill is pushed, not polled, and catches up after a reconnect', () => {
+  const subscribe = comp.$root.subscribe;
+  try {
+    comp.$root.subscribe = jest.fn();
+    comp.$root.loadParameters = jest.fn();
+    comp.mounted();
+    expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.loadAutomatedAgents);
+
+    const onConnected = routes.find(r => r.name === 'assistant').component.watch['$root.connected'];
+    comp.loadAutomatedAgents = jest.fn();
+    onConnected.call(comp, false);
+    expect(comp.loadAutomatedAgents).not.toHaveBeenCalled();
+    onConnected.call(comp, true);
+    expect(comp.loadAutomatedAgents).toHaveBeenCalled();
+  } finally {
+    comp.$root.subscribe = subscribe;
+  }
+});
+
+test('a change announced while the pill loads is loaded once that load finishes', async () => {
+  const isAdmin = comp.$root.isUserAdmin;
+  try {
+    comp.$root.isUserAdmin = jest.fn().mockReturnValue(true);
+    comp.agentic = true;
+    let finishFirst;
+    const get = jest.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
+      .mockResolvedValue({ data: { runs: [{ items: [{ state: 'running' }, { state: 'pending' }] }] } });
+    comp.$root.papi.get = get;
+
+    const first = comp.loadAutomatedAgents();
+    comp.loadAutomatedAgents();
+    comp.loadAutomatedAgents();
+    expect(get).toHaveBeenCalledTimes(1);
+
+    finishFirst({ data: { runs: [] } });
+    await first;
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(comp.automatedAgents).toEqual({ running: 1, queued: 1 }, 'the later load wins');
+  } finally {
+    comp.$root.isUserAdmin = isAdmin;
+  }
+});
+
 test('selectModel is blocked while a turn is active', async () => {
   stubInitDeps();
   await comp.initAssistant(agenticParams());

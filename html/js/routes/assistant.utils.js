@@ -350,11 +350,23 @@ globalThis.AssistantUtils = (function() {
     },
     async loadAutomatedAgents() {
       if (!this.canSeeAutomatedAgents()) return;
+      if (this.automatedAgentsLoading) {
+        this.automatedAgentsReloadPending = true;
+        return;
+      }
+      this.automatedAgentsLoading = true;
       try {
         const response = await this.$root.papi.get('assistant/automations/activity');
         this.automatedAgents = this.countAutomatedAgents(response.data || {});
       } catch (error) {
         console.error('Failed to load automation activity:', error);
+      } finally {
+        this.automatedAgentsLoading = false;
+      }
+      // A change announced mid-load may postdate it.
+      if (this.automatedAgentsReloadPending) {
+        this.automatedAgentsReloadPending = false;
+        await this.loadAutomatedAgents();
       }
     },
     // Not the pool's counts, which include people's chats. Pending runs count as queued.
