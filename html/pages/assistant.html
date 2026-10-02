@@ -124,16 +124,16 @@
 			</v-menu>
 		</v-col>
 		<v-col v-if="showAutomatedAgentsPill()">
-			<router-link :to="{ name: 'agentspy' }" class="so-stat-pill so-stat-pill-clickable" data-aid="assistant_automated_agents"
-				:aria-label="i18n.agentSpyAutomatedAgents + ' - ' + automatedAgentsSummary()">
+			<router-link :to="{ name: 'agentmonitor' }" class="so-stat-pill so-stat-pill-clickable" data-aid="assistant_automated_agents"
+				:aria-label="i18n.agentMonitorAutomatedAgents + ' - ' + automatedAgentsSummary()">
 				<div class="so-stat-text">
-					<div id="stat-label-automated-agents" class="so-stat-label">{{ i18n.agentSpyAutomatedAgents }}</div>
+					<div id="stat-label-automated-agents" class="so-stat-label">{{ i18n.agentMonitorAutomatedAgents }}</div>
 					<div class="so-stat-value" aria-labelledby="stat-label-automated-agents">
 						{{ automatedAgentsSummary() }}
 						<v-icon size="x-small" class="ml-1 so-stat-caret">fa-angle-right</v-icon>
 					</div>
 				</div>
-				<v-icon class="so-stat-icon">fa-user-secret</v-icon>
+				<v-icon class="so-stat-icon">fa-display</v-icon>
 			</router-link>
 		</v-col>
 		<v-col style="flex: 0 0 auto;">

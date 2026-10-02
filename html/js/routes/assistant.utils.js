@@ -371,7 +371,7 @@ globalThis.AssistantUtils = (function() {
     automatedAgentsSummary() {
       const counts = this.automatedAgents || {};
       return this.$root.replaceActionVar(
-        this.$root.replaceActionVar(this.i18n.agentSpyRunningSummary, 'running', counts.running || 0),
+        this.$root.replaceActionVar(this.i18n.agentMonitorRunningSummary, 'running', counts.running || 0),
         'queued', counts.queued || 0);
     },
 
