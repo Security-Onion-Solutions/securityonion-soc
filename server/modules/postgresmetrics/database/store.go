@@ -7,7 +7,9 @@
 package database
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	"github.com/apex/log"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,6 +22,19 @@ type Store struct {
 
 func New(database db.DB) *Store {
 	return &Store{db: database}
+}
+
+func (s *Store) TableExists(ctx context.Context, schema, table string) bool {
+	if s.db == nil {
+		return false
+	}
+	var exists bool
+	target := fmt.Sprintf("%s.%s", schema, table)
+	row := s.db.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", target)
+	if err := row.Scan(&exists); err != nil {
+		return false
+	}
+	return exists
 }
 
 func (s *Store) handleQueryError(err error, operation string) {

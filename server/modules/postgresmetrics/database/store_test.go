@@ -134,6 +134,49 @@ func TestStore_IsMissingRelationError(t *testing.T) {
 	})))
 }
 
+func TestStore_TableExists(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("nil db returns false", func(t *testing.T) {
+		s := &Store{}
+		assert.False(t, s.TableExists(ctx, "telegraf", "raid"))
+	})
+
+	t.Run("table exists", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) db.Row {
+				assert.Contains(t, sql, "to_regclass")
+				assert.Equal(t, "telegraf.raid", args[0])
+				return &MockRow{values: []interface{}{true}}
+			},
+		}
+		s := New(mockDb)
+		assert.True(t, s.TableExists(ctx, "telegraf", "raid"))
+	})
+
+	t.Run("table does not exist", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) db.Row {
+				assert.Contains(t, sql, "to_regclass")
+				assert.Equal(t, "telegraf.raid", args[0])
+				return &MockRow{values: []interface{}{false}}
+			},
+		}
+		s := New(mockDb)
+		assert.False(t, s.TableExists(ctx, "telegraf", "raid"))
+	})
+
+	t.Run("scan error returns false", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) db.Row {
+				return &MockRow{err: errors.New("db error")}
+			},
+		}
+		s := New(mockDb)
+		assert.False(t, s.TableExists(ctx, "telegraf", "raid"))
+	})
+}
+
 type MockRow struct {
 	values []interface{}
 	err    error
@@ -154,6 +197,8 @@ func (m *MockRow) Scan(dest ...interface{}) error {
 			*d = val.(int)
 		case *float64:
 			*d = val.(float64)
+		case *bool:
+			*d = val.(bool)
 		case *time.Time:
 			*d = val.(time.Time)
 		default:
@@ -188,6 +233,8 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 			*d = val.(int)
 		case *float64:
 			*d = val.(float64)
+		case *bool:
+			*d = val.(bool)
 		case *time.Time:
 			*d = val.(time.Time)
 		default:
@@ -198,11 +245,17 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 }
 
 type MockDB struct {
-	QueryFunc func(ctx context.Context, sql string, args ...any) (db.Rows, error)
+	QueryFunc    func(ctx context.Context, sql string, args ...any) (db.Rows, error)
+	QueryRowFunc func(ctx context.Context, sql string, args ...any) db.Row
 }
 
 func (m *MockDB) Exec(ctx context.Context, sql string, args ...any) error { return nil }
-func (m *MockDB) QueryRow(ctx context.Context, sql string, args ...any) db.Row { return nil }
+func (m *MockDB) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
+	if m.QueryRowFunc != nil {
+		return m.QueryRowFunc(ctx, sql, args...)
+	}
+	return &MockRow{}
+}
 func (m *MockDB) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 	if m.QueryFunc != nil {
 		return m.QueryFunc(ctx, sql, args...)
