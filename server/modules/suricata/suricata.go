@@ -158,6 +158,7 @@ type SuricataEngine struct {
 	configChangeSyncDelaySeconds   int
 	isRunning                      bool
 	interm                         sync.Mutex
+	syncMu                         sync.Mutex
 	notify                         bool
 	migrations                     map[string]func(string) error
 	rulesetSources                 []*RulesetSource
@@ -425,6 +426,9 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 
 // RegenerateRuleFiles regenerates all rule files from current Elasticsearch state.
 func (e *SuricataEngine) RegenerateRuleFiles(ctx context.Context, changedDetections []*model.Detection) (errMap map[string]string, err error) {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
 	logger := e.logger().WithFields(log.Fields{
 		"changedCount": len(changedDetections),
 		"operation":    "regenerateRuleFiles",
@@ -539,6 +543,48 @@ func (e *SuricataEngine) RegenerateRuleFiles(ctx context.Context, changedDetecti
 		"operation":  "regenerateRuleFiles",
 	}).Info("successfully regenerated rule files")
 	return nil, nil
+}
+
+// serialized with RegenerateRuleFiles, which writes the same files
+func (e *SuricataEngine) writeRuleFiles(allDetections []*model.Detection, logger *log.Entry) error {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	// Apply user state from Elasticsearch (enable/disable, overrides)
+	if err := e.applyUserState(e.srv.Context, allDetections); err != nil {
+		return e.handleSyncError(err, "failed to apply user state", logger)
+	}
+
+	// Resolve flowbit dependencies
+	// This identifies disabled rules that need to be active for flowbits
+	// IMPORTANT: Does NOT modify det.IsEnabled - that preserves user intent
+	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
+
+	if len(e.flowbitRequired) > 0 {
+		sampleSIDs := make([]string, 0, min(10, len(e.flowbitRequired)))
+		for sid := range e.flowbitRequired {
+			if len(sampleSIDs) >= 10 {
+				break
+			}
+			sampleSIDs = append(sampleSIDs, sid)
+		}
+		logger.WithFields(log.Fields{
+			"requiredCount": len(e.flowbitRequired),
+			"sampleSIDs":    sampleSIDs,
+		}).Info("identified disabled rules needed for flowbit dependencies")
+	}
+
+	// Write rules directly to Suricata format
+	if err := e.writeAllRulesFile(allDetections); err != nil {
+		return e.handleSyncError(err, "failed to write all-rulesets.rules file", logger)
+	}
+
+	// Write threshold configuration
+	if err := e.writeThresholdFile(allDetections); err != nil {
+		return e.handleSyncError(err, "failed to write threshold file", logger)
+	}
+
+	return nil
 }
 
 // Rule processing
@@ -709,38 +755,8 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	allDetections := mergeResult.Detections
 
-	// Apply user state from Elasticsearch (enable/disable, overrides)
-	if err := e.applyUserState(e.srv.Context, allDetections); err != nil {
-		return e.handleSyncError(err, "failed to apply user state", logger)
-	}
-
-	// Resolve flowbit dependencies
-	// This identifies disabled rules that need to be active for flowbits
-	// IMPORTANT: Does NOT modify det.IsEnabled - that preserves user intent
-	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
-
-	if len(e.flowbitRequired) > 0 {
-		sampleSIDs := make([]string, 0, min(10, len(e.flowbitRequired)))
-		for sid := range e.flowbitRequired {
-			if len(sampleSIDs) >= 10 {
-				break
-			}
-			sampleSIDs = append(sampleSIDs, sid)
-		}
-		logger.WithFields(log.Fields{
-			"requiredCount": len(e.flowbitRequired),
-			"sampleSIDs":    sampleSIDs,
-		}).Info("identified disabled rules needed for flowbit dependencies")
-	}
-
-	// Write rules directly to Suricata format
-	if err := e.writeAllRulesFile(allDetections); err != nil {
-		return e.handleSyncError(err, "failed to write all-rulesets.rules file", logger)
-	}
-
-	// Write threshold configuration
-	if err := e.writeThresholdFile(allDetections); err != nil {
-		return e.handleSyncError(err, "failed to write threshold file", logger)
+	if err := e.writeRuleFiles(allDetections, logger); err != nil {
+		return err
 	}
 
 	// Update detection store with bulk indexer

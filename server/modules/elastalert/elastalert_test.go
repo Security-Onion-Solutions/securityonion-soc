@@ -1543,6 +1543,76 @@ falsepositives:
 level: critical`
 )
 
+func TestSyncSerialized(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	mod := NewElastAlertEngine(&server.Server{
+		DetectionEngines: sync.Map{},
+	})
+	mod.IOManager = iom
+
+	eventsMu := sync.Mutex{}
+	events := []string{}
+	record := func(ev string) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
+		events = append(events, ev)
+	}
+
+	const syncs = 8
+	firstDeleting := make(chan struct{})
+	release := make(chan struct{})
+	started := make(chan struct{}, syncs)
+	blockFirst := sync.Once{}
+
+	iom.EXPECT().ReadDir(mod.elastAlertRulesFolder).DoAndReturn(func(string) ([]fs.DirEntry, error) {
+		record("read")
+		return nil, nil
+	}).Times(syncs)
+	iom.EXPECT().DeleteFile("123.yml").DoAndReturn(func(string) error {
+		record("delete-start")
+		blockFirst.Do(func() {
+			close(firstDeleting)
+			<-release
+		})
+		record("delete-end")
+		return nil
+	}).Times(syncs)
+
+	wg := sync.WaitGroup{}
+	runSync := func() {
+		defer wg.Done()
+		started <- struct{}{}
+		_, err := mod.SyncLocalDetections(context.Background(), []*model.Detection{{PublicID: "123"}})
+		assert.NoError(t, err)
+	}
+
+	wg.Add(1)
+	go runSync()
+	<-started
+	<-firstDeleting
+
+	// the rest start while the first is still deleting
+	for range syncs - 1 {
+		wg.Add(1)
+		go runSync()
+		<-started
+	}
+	close(release)
+	wg.Wait()
+
+	expected := []string{}
+	for range syncs {
+		expected = append(expected, "read", "delete-start", "delete-end")
+	}
+	assert.Equal(t, expected, events)
+}
+
 func TestSyncElastAlert(t *testing.T) {
 	t.Parallel()
 

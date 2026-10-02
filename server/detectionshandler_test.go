@@ -748,7 +748,10 @@ func TestHandlerCreateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
-				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					return nil, nil
+				})
 			},
 			Code: 200,
 			Response: &model.Detection{
@@ -1278,14 +1281,24 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 	}
 }
 
+func assertDetachedCtx(t *testing.T, ctx context.Context) {
+	t.Helper()
+	assert.NoError(t, ctx.Err())
+	_, hasDeadline := ctx.Deadline()
+	assert.True(t, hasDeadline)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", ctx.Value(web.ContextKeyRequestId))
+	assert.Equal(t, "11111111-1111-1111-1111-111111111111", ctx.Value(web.ContextKeyRequestorId))
+}
+
 func TestHandlerUpdateDetection(t *testing.T) {
 	tests := []struct {
-		Name     string
-		ReqBody  []byte
-		InitMock func(*testing.T, *Server, *gomock.Controller)
-		Code     int
-		Response any
-		Logs     []EntryMatcher
+		Name          string
+		ReqBody       []byte
+		InitMock      func(*testing.T, *Server, *gomock.Controller)
+		CancelRequest bool
+		Code          int
+		Response      any
+		Logs          []EntryMatcher
 	}{
 		{
 			Name:    "Sunny Day",
@@ -1603,6 +1616,50 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			},
 		},
 		{
+			Name:    "Sync Survives Client Disconnect",
+			ReqBody: []byte(`{"id":"12345","publicId":"publicID","language":"sigma","engine":"elastalert","content":"test"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "publicID").Return(nil, nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.True(t, dets[0].PersistChange)
+
+					return nil, nil
+				})
+
+				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
+			},
+			CancelRequest: true,
+			Code:          200,
+			Response: &model.Detection{
+				Auditable: model.Auditable{
+					Id: "12345",
+				},
+				PublicID: "publicID",
+				Content:  "test",
+				Language: "sigma",
+				Engine:   model.EngineNameElastAlert,
+			},
+			Logs: []EntryMatcher{handled},
+		},
+		{
 			Name:    "UpdateDetection - Successful Disable After Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
@@ -1626,18 +1683,26 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
-				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					return nil, errors.New("something went wrong")
+				})
 
 				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					assertDetachedCtx(t, ctx)
 					assert.False(t, det.IsEnabled)
 					return det, nil
 				})
 
-				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					return nil, nil
+				})
 
 				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
 			},
-			Code: 206,
+			CancelRequest: true,
+			Code:          206,
 			Response: &model.Detection{
 				Auditable: model.Auditable{
 					Id: "12345",
@@ -1786,6 +1851,12 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			mem, l := NewInMemoryLogger()
 
 			ctx = log.NewContext(ctx, l)
+
+			if test.CancelRequest {
+				cancelled, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = cancelled
+			}
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequestWithContext(ctx, "PUT", "/detection", bytes.NewReader(test.ReqBody))
@@ -1991,6 +2062,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mAuth.Authorized = true
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
 					assert.True(t, dets[0].PendingDelete)
 
 					return nil, nil
@@ -2265,18 +2337,24 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				auditIndexer.EXPECT().Close(gomock.Any()).Return(nil)
 
 				engElastAlert.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
 					return nil, nil
 				})
 				engSuricata.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
 					return nil, nil
 				})
 				engStrelka.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
@@ -2425,18 +2503,24 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				auditIndexer.EXPECT().Close(gomock.Any()).Return(nil)
 
 				engElastAlert.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
 					return nil, nil
 				})
 				engSuricata.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
 					return nil, nil
 				})
 				engStrelka.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assertDetachedCtx(t, ctx)
+					assert.Equal(t, "test", ctx.Value(web.ContextKeyRunAsUsername))
 					assert.True(t, dets[0].IsEnabled)
 					assert.True(t, dets[0].PersistChange)
 
@@ -2633,11 +2717,13 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 			ctx = log.NewContext(ctx, l)
 
 			ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "test")
+			ctx, cancel := context.WithCancel(ctx)
 
 			w := httptest.NewRecorder()
 			r := httptest.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("/detection/bulk/%s", test.NewStatus), bytes.NewReader(test.ReqBody))
 
 			h.BulkUpdateDetection(w, r)
+			cancel()
 			nonAsyncWG.Done()
 
 			if asyncWG != nil {

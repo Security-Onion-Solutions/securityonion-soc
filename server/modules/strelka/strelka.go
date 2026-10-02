@@ -66,6 +66,7 @@ type StrelkaEngine struct {
 	srv                            *server.Server
 	isRunning                      bool
 	interm                         sync.Mutex
+	syncMu                         sync.Mutex
 	failAfterConsecutiveErrorCount int
 	yaraRulesFolder                string
 	reposFolder                    string
@@ -1089,6 +1090,9 @@ func buildImportChecker(pkg string) *regexp.Regexp {
 }
 
 func (e *StrelkaEngine) syncDetections(ctx context.Context) (err error) {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
 	logger := log.FromContext(ctx)
 
 	results, err := e.srv.Detectionstore.GetAllDetections(ctx, model.WithEngine(model.EngineNameStrelka), model.WithEnabled(true))

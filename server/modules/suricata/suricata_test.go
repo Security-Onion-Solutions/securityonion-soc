@@ -1546,6 +1546,85 @@ func TestApplyStatusRegexes(t *testing.T) {
 // New Methods Tests (from refactor)
 // ==========================
 
+func TestSyncSerialized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	logger := &nidsLogger{log.WithField("test", "SyncSerialized")}
+
+	eng := &SuricataEngine{
+		srv: &server.Server{
+			Detectionstore: detStore,
+			Context:        context.Background(),
+		},
+		IOManager:       iom,
+		allRulesFile:    "/opt/rules/all.rules",
+		thresholdFile:   "/opt/sensoroni/nids/threshold.conf",
+		isRunning:       true,
+		flowbitResolver: NewFlowbitResolver(logger),
+		flowbitRequired: make(map[string]*FlowbitDependency),
+	}
+
+	eventsMu := sync.Mutex{}
+	events := []string{}
+	record := func(ev string) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
+		events = append(events, ev)
+	}
+
+	const syncs = 8
+	firstWriting := make(chan struct{})
+	release := make(chan struct{})
+	started := make(chan struct{}, syncs)
+	blockFirst := sync.Once{}
+
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil).Times(syncs)
+	iom.EXPECT().WriteFile(eng.allRulesFile, gomock.Nil(), fs.FileMode(0644)).DoAndReturn(func(string, []byte, fs.FileMode) error {
+		record("rules-start")
+		blockFirst.Do(func() {
+			close(firstWriting)
+			<-release
+		})
+		record("rules-end")
+		return nil
+	}).Times(syncs)
+	iom.EXPECT().WriteFile(eng.thresholdFile, gomock.Any(), fs.FileMode(0644)).DoAndReturn(func(string, []byte, fs.FileMode) error {
+		record("threshold")
+		return nil
+	}).Times(syncs)
+
+	wg := sync.WaitGroup{}
+	runSync := func() {
+		defer wg.Done()
+		started <- struct{}{}
+		_, err := eng.SyncLocalDetections(context.Background(), nil)
+		assert.NoError(t, err)
+	}
+
+	wg.Add(1)
+	go runSync()
+	<-started
+	<-firstWriting
+
+	// the rest start while the first is still writing
+	for range syncs - 1 {
+		wg.Add(1)
+		go runSync()
+		<-started
+	}
+	close(release)
+	wg.Wait()
+
+	expected := []string{}
+	for range syncs {
+		expected = append(expected, "rules-start", "rules-end", "threshold")
+	}
+	assert.Equal(t, expected, events)
+}
+
 // Test RegenerateRuleFiles method
 func TestRegenerateRuleFiles(t *testing.T) {
 	ctrl := gomock.NewController(t)

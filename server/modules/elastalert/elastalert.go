@@ -123,6 +123,7 @@ type ElastAlertEngine struct {
 	reposFolder                        string
 	isRunning                          bool
 	interm                             sync.Mutex
+	syncMu                             sync.Mutex
 	airgapEnabled                      bool
 	notify                             bool
 	writeNoRead                        *string
@@ -553,6 +554,9 @@ func (e *ElastAlertEngine) parseSigmaPackages(pkgs []string) {
 }
 
 func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
 	errMap = map[string]string{} // map[publicID]error
 	defer func() {
 		if len(errMap) == 0 {
