@@ -101,6 +101,7 @@ func (store *ElasticAssistantstore) AlertTriageUpdate(ctx context.Context, updat
 
 	store.addAlertTriageScript(criteria, now, update)
 	criteria.Asynchronous = update.Count > store.eventstore.asyncThreshold
+	criteria.IgnoreUnavailable = true
 
 	log.FromContext(ctx).WithFields(log.Fields{
 		"automationRunId":       update.RunId,

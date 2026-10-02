@@ -74,6 +74,7 @@ func (ac *AssistantCoordinator) updateAlertInvestigation(ctx context.Context, so
 	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
+	updateCriteria.IgnoreUnavailable = true
 
 	results, err := ac.srv.Eventstore.Update(ctx, updateCriteria)
 	if err != nil {

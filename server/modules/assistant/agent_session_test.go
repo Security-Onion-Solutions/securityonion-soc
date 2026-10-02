@@ -762,6 +762,33 @@ func TestBroadcastAgentStream_WithoutHost(t *testing.T) {
 	})
 }
 
+// broadcastAuthorizer records the permission a broadcast checks and denies it, so
+// nothing is written to the connection's nil socket.
+type broadcastAuthorizer struct {
+	operation, target string
+}
+
+func (a *broadcastAuthorizer) CheckContextOperationAuthorized(context.Context, string, string) error {
+	return nil
+}
+
+func (a *broadcastAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	a.operation, a.target = operation, target
+	return model.NewUnauthorized(userId, operation, target)
+}
+
+func TestBroadcastAgentStream_RequiresAutomationsRead(t *testing.T) {
+	auth := &broadcastAuthorizer{}
+	host := &web.Host{Authorizer: auth}
+	host.AddConnection("viewer", nil, "")
+	ac := &AssistantCoordinator{srv: &server.Server{Host: host}}
+
+	ac.broadcastAgentStream(model.AgentStreamEvent{SessionId: "s", MessageId: "m", Seq: 1, Message: &model.Message{Role: "assistant"}})
+
+	assert.Equal(t, "read", auth.operation)
+	assert.Equal(t, "automations", auth.target)
+}
+
 // A viewer that is not reading holds the broadcast, not the turn: publish returns at
 // once, intermediate events are replaced, and the last one still goes out.
 func TestAgentStreamPublisher_LatestWinsWithoutBlocking(t *testing.T) {

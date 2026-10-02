@@ -106,6 +106,7 @@ func TestAlertInvestigationQuotesSocId(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, `_id:"abc\" OR soc_id:\"*"`, events.InputUpdateCriterias[0].ParsedQuery.String())
+		assert.True(t, events.InputUpdateCriterias[0].IgnoreUnavailable)
 	}
 }
 

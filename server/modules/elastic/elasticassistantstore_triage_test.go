@@ -154,6 +154,7 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 	require.Len(t, reqs, 1)
 	assert.Equal(t, "/myIndex/_update_by_query", reqs[0].URL.Path)
 	assert.Equal(t, "true", reqs[0].URL.Query().Get("wait_for_completion"))
+	assert.Equal(t, "true", reqs[0].URL.Query().Get("ignore_unavailable"))
 
 	body := requestBody(t, reqs[0])
 	assert.Equal(t, `(NOT _exists_:event.so_alerttriage.session_id) AND (rule.name:"Foo")`, gjson.Get(body, "query.bool.must.0.query_string.query").String())

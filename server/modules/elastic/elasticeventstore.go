@@ -493,7 +493,7 @@ func (store *ElasticEventstore) runUpdate(ctx context.Context, criteria *model.E
 	var response string
 	for idx, client := range store.esAllClients {
 		logger.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
-		response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
+		response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous, criteria.IgnoreUnavailable)
 		if err == nil {
 			if !criteria.Asynchronous {
 				currentResults := model.NewEventUpdateResults()
@@ -717,7 +717,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool) (string, error) {
+func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool, ignoreUnavailable bool) (string, error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
@@ -725,15 +725,18 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Updating documents in Elasticsearch")
 	var jsonStr string
-	res, err := client.UpdateByQuery(
-		indexes,
+	opts := []func(*esapi.UpdateByQueryRequest){
 		client.UpdateByQuery.WithContext(ctx),
 		client.UpdateByQuery.WithPretty(),
 		client.UpdateByQuery.WithConflicts("proceed"),
 		client.UpdateByQuery.WithBody(strings.NewReader(query)),
 		client.UpdateByQuery.WithRefresh(true),
 		client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
-	)
+	}
+	if ignoreUnavailable {
+		opts = append(opts, client.UpdateByQuery.WithIgnoreUnavailable(true))
+	}
+	res, err := client.UpdateByQuery(indexes, opts...)
 	if err == nil {
 		defer res.Body.Close()
 		jsonStr, err = readJsonFromResponse(res)
@@ -1540,6 +1543,7 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}
 
 			updateCriteria.Asynchronous = false
+			updateCriteria.IgnoreUnavailable = true
 			updateCriteria.RequiredPermissionGroup = ACK_BROADCAST_PERMISSION
 			updateCriteria.BroadcastKind = UNACK_BROADCAST_KIND
 			if ackCriteria.Acknowledge {
