@@ -34,6 +34,14 @@ const MEMORY_SETTING_IDS = {
   dontScanBefore: 'soc.config.server.modules.assistant.dontScanBefore',
 };
 
+// Custom automations are unsupported for now; the API still accepts them.
+const AUTOMATIONS_READ_ONLY = true;
+
+// Matches the server's limit.
+const AUTOMATION_NAME_MAX_LENGTH = 100;
+
+const AUTOMATION_RUNS_PAGE = 20;
+
 routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   template: '#page-agentstudio',
   data() { return {
@@ -47,10 +55,26 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     createAgentDialog: false,
     createSkillDialog: false,
     createMemoryDialog: false,
+    createAutomationDialog: false,
     scanHistoricalDialog: false,
     newAgent: {},
     newSkill: {},
     newMemory: {},
+    newAutomation: {},
+
+    automationsReadOnly: AUTOMATIONS_READ_ONLY,
+    automations: [],
+    expandedAutomations: [],
+
+    confirmDeleteDialog: false,
+    // { kind: 'agent' | 'automation', item }
+    deleteTarget: null,
+    creatorNames: {},
+    // id -> { runs, backlog, hasMore, loading }
+    automationRuns: {},
+    automationTabs: {},
+    automationDrafts: {},
+    sortByAutomations: [{ key: 'displayName', order: 'asc' }],
 
     memoryEnabled: false,
     memories: [],
@@ -59,6 +83,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     memorySearch: '',
     memoryPage: 1,
     memoryItemsPerPage: 10,
+    runItemsPerPage: 10,
     memoryDrafts: {},
     expandedMemories: [],
     // Memories awaiting re-embedding; pushed by the server as the pass progresses.
@@ -115,6 +140,23 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       { title: this.$root.i18n.dateModified, value: 'updateTime', sortable: false, width: '180px' },
     ],
 
+    automationHeaders: [
+      { title: '', value: 'expand', sortable: false, width: '48px' },
+      { title: this.$root.i18n.agentStudioName, value: 'displayName' },
+      { title: this.$root.i18n.kind, value: 'automationKind', width: '160px' },
+      { title: this.$root.i18n.agentStudioAutomationInterval, value: 'intervalSeconds', width: '130px' },
+      { title: this.$root.i18n.agentStudioAutomationAgent, value: 'agent' },
+      { title: this.$root.i18n.status, value: 'status', sortable: false, width: '200px' },
+      { title: this.$root.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
+    ],
+    runHeaders: [
+      { title: this.$root.i18n.startTime, value: 'startTime', key: 'startTime', sortable: false },
+      { title: this.$root.i18n.stateDone, value: 'done', key: 'done', sortable: false },
+      { title: this.$root.i18n.stateFailed, value: 'failed', key: 'failed', sortable: false },
+      { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', key: 'state', sortable: false },
+    ],
+    automationKinds: [],
+
     roleItems: [
       { title: this.$root.i18n.agentStudioOrchestrator, value: true },
       { title: this.$root.i18n.agentStudioSpecialist, value: false },
@@ -146,10 +188,16 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   },
   watch: {
     '$route': 'reload',
+    // Lazy: automations need config/read.
+    tab(value) {
+      if (value === 'automations') this.loadAutomations();
+    },
     'sortByAgents': 'saveLocalSettings',
     'sortBySkills': 'saveLocalSettings',
+    'sortByAutomations': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'memoryItemsPerPage': 'saveLocalSettings',
+    'runItemsPerPage': 'saveLocalSettings',
   },
   mounted() {
     this.reload();
@@ -172,8 +220,26 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.applyParams(params);
         this.loadLocalSettings();
         if (!this.agentic) this.tab = 'memories';
+        this.applyRouteQuery();
       }
       this.$root.stopLoading();
+    },
+    // ?tab=automations&automation=<id> deep-links an automation's editor (used by Agent Spy).
+    applyRouteQuery() {
+      const query = (this.$route || {}).query || {};
+      if (query.tab && this.agentic) this.tab = query.tab;
+    },
+    openRouteAutomation() {
+      const query = (this.$route || {}).query || {};
+      if (!query.automation) return;
+      const row = this.automations.find(a => a.id === query.automation);
+      if (!row) return;
+      this.tab = 'automations';
+      if (!this.expandedAutomations.includes(row.id)) {
+        // Same draft snapshot as the chevron, so edits don't touch the committed row.
+        this.automationDrafts[row.id] = JSON.parse(JSON.stringify(row));
+        this.expandedAutomations = this.expandedAutomations.concat([row.id]);
+      }
     },
     applyParams(params) {
       this.models = (params.availableModels || []).map(m => ({
@@ -190,6 +256,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.setSkills(this.skillsFromParams(params));
       this.setAgents(this.agentsFromParams(params));
       this.applyLimits(params);
+      this.automationKinds = params.availableAutomationKinds || [];
     },
     // Only adopt server values while the dialog is closed, so a push mid-edit does
     // not overwrite what the admin is typing.
@@ -222,8 +289,11 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.saveSetting('sortDescAgents', this.sortByAgents[0].order, 'asc');
       this.saveSetting('sortBySkills', this.sortBySkills[0].key, 'name');
       this.saveSetting('sortDescSkills', this.sortBySkills[0].order, 'asc');
+      this.saveSetting('sortByAutomations', this.sortByAutomations[0].key, 'displayName');
+      this.saveSetting('sortDescAutomations', this.sortByAutomations[0].order, 'asc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
       this.saveSetting('memoryItemsPerPage', this.memoryItemsPerPage, 10);
+      this.saveSetting('runItemsPerPage', this.runItemsPerPage, 10);
     },
     loadLocalSettings() {
       if (localStorage['settings.agentstudio.sortByAgents']) this.sortByAgents[0].key = localStorage['settings.agentstudio.sortByAgents'];
@@ -232,8 +302,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (localStorage['settings.agentstudio.sortBySkills']) this.sortBySkills[0].key = localStorage['settings.agentstudio.sortBySkills'];
       if (localStorage['settings.agentstudio.sortDescSkills']) this.sortBySkills[0].order = localStorage['settings.agentstudio.sortDescSkills'];
 
+      if (localStorage['settings.agentstudio.sortByAutomations']) this.sortByAutomations[0].key = localStorage['settings.agentstudio.sortByAutomations'];
+      if (localStorage['settings.agentstudio.sortDescAutomations']) this.sortByAutomations[0].order = localStorage['settings.agentstudio.sortDescAutomations'];
+
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
       if (localStorage['settings.agentstudio.memoryItemsPerPage']) this.memoryItemsPerPage = parseInt(localStorage['settings.agentstudio.memoryItemsPerPage']);
+      if (localStorage['settings.agentstudio.runItemsPerPage']) this.runItemsPerPage = parseInt(localStorage['settings.agentstudio.runItemsPerPage']);
     },
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};
@@ -287,6 +361,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     setSkills(skills) {
       this.skills = skills.map(s => Object.assign({}, s, { id: s.name }));
       this.skills.forEach(s => { if (!this.skillTabs[s.id]) this.skillTabs[s.id] = 'tools'; });
+    },
+    chatWithAgentLink(agent) {
+      return { name: 'assistant', query: { agent: agent.name } };
     },
     roleLabel(agent) {
       return agent.isOrchestrator ? this.i18n.agentStudioOrchestrator : this.i18n.agentStudioSpecialist;
@@ -534,21 +611,27 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     },
     async removeAgent(agent) {
       if (agent.isSystem) return;
-      const next = this.agents.filter(a => a.id !== agent.id);
       if (await this.deleteRow('agents', agent.name)) {
-        this.setAgents(next);
         this.expandedAgents = this.expandedAgents.filter(id => id !== agent.id);
         delete this.agentDrafts[agent.id];
+        // Mirrors the server's delegate-list cleanup.
+        const kept = this.agents.filter(a => a.id !== agent.id);
+        this.setAgents(this.withoutReference(kept, 'canDelegateTo', agent.name));
       }
     },
     async removeSkill(skill) {
       if (skill.isSystem) return;
-      const next = this.skills.filter(s => s.id !== skill.id);
       if (await this.deleteRow('skills', skill.name)) {
-        this.setSkills(next);
+        this.setSkills(this.skills.filter(s => s.id !== skill.id));
         this.expandedSkills = this.expandedSkills.filter(id => id !== skill.id);
         delete this.skillDrafts[skill.id];
+        this.setAgents(this.withoutReference(this.agents, 'allowedSkills', skill.name));
       }
+    },
+    // Drafts too, so an open editor can't save the deleted reference back.
+    withoutReference(agents, field, name) {
+      Object.values(this.agentDrafts).forEach(d => { d[field] = d[field].filter(n => n !== name); });
+      return agents.map(a => Object.assign({}, a, { [field]: a[field].filter(n => n !== name) }));
     },
 
     // copyName returns an unused "X (copy)" / "X (copy) 2" name.
@@ -781,6 +864,320 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
     },
+    setAutomations(automations) {
+      this.automations = automations.slice();
+      this.automations.forEach(a => { if (!this.automationTabs[a.id]) this.automationTabs[a.id] = 'general'; });
+    },
+    async loadAutomations() {
+      if (!this.agentic) return;
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.get('assistant/automations');
+        this.setAutomations(response.data || []);
+        this.openRouteAutomation();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+      this.automations.forEach(a => this.loadAutomationRuns(a));
+    },
+    async loadAutomationRuns(automation, more = false) {
+      const current = this.automationRuns[automation.id];
+      if (current && current.loading) return;
+      const loaded = current ? current.runs : [];
+      this.automationRuns[automation.id] = Object.assign({ runs: [] }, current, { loading: true });
+      try {
+        const response = await this.$root.papi.get('assistant/automations/' + encodeURIComponent(automation.id) + '/runs', {
+          params: { limit: AUTOMATION_RUNS_PAGE, offset: more ? loaded.length : 0 },
+        });
+        const history = response.data || {};
+        this.automationRuns[automation.id] = {
+          runs: (more ? loaded : []).concat(history.runs || []),
+          backlog: history.backlog || {},
+          hasMore: !!history.hasMore,
+        };
+      } catch (error) {
+        if (current) this.automationRuns[automation.id] = current;
+        else delete this.automationRuns[automation.id];
+        this.$root.showError(error);
+      }
+    },
+    automationHistory(automation) {
+      return this.automationRuns[automation.id] || { runs: [] };
+    },
+    latestAutomationRun(automation) {
+      return this.automationHistory(automation).runs[0] || null;
+    },
+    runItemCount(run, state) {
+      return (run.itemCounts || {})[state] || 0;
+    },
+    automationStatus(automation) {
+      const history = this.automationRuns[automation.id];
+      if (!history || (history.loading && !history.runs.length)) return '';
+      const run = this.latestAutomationRun(automation);
+      return run && ['queued', 'running', 'failed'].includes(run.state) ? run.state : 'idle';
+    },
+    automationBacklog(automation) {
+      const backlog = this.automationHistory(automation).backlog || {};
+      return ['pending', 'running', 'applying'].filter(state => backlog[state]).map(state => ({ state, count: backlog[state] }));
+    },
+    automationAgentItems() {
+      return this.agents.filter(a => a.enabled).map(a => a.name);
+    },
+    // Keeps a stale agent listed so the field doesn't read blank.
+    automationAgentChoices(automation) {
+      const items = this.automationAgentItems();
+      if (automation.agent && !items.includes(automation.agent)) items.push(automation.agent);
+      return items;
+    },
+    automationCreatorLabel(automation) {
+      const id = automation.userId;
+      if (!id) return '';
+      if (this.creatorNames[id] === undefined) {
+        this.creatorNames[id] = id;
+        Promise.resolve(this.$root.getUserById(id))
+          .then(user => { if (user) this.creatorNames[id] = this.$root.getUserDisplayName(user); })
+          .catch(() => {});
+      }
+      return this.creatorNames[id];
+    },
+    automationKind(name) {
+      return this.automationKinds.find(k => k.name === name) || null;
+    },
+    automationKindItems() {
+      return this.automationKinds.map(k => ({ title: k.displayName, value: k.name }));
+    },
+    automationKindLabel(name) {
+      const kind = this.automationKind(name);
+      return kind ? kind.displayName : name;
+    },
+    automationKindFields(name) {
+      const schema = ((this.automationKind(name) || {}).paramSchema || {}).json || {};
+      const required = schema.required || [];
+      const fields = Object.keys(schema.properties || {}).map(key => ({
+        key: key,
+        label: this.automationParamLabel(key),
+        type: schema.properties[key].type,
+        hint: schema.properties[key].description || '',
+        default: schema.properties[key].default,
+        required: required.includes(key),
+      }));
+      return fields.filter(f => f.required).concat(fields.filter(f => !f.required));
+    },
+    automationParamLabel(key) {
+      const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+      return words.charAt(0).toUpperCase() + words.slice(1);
+    },
+    automationParamDefaults(name) {
+      const params = {};
+      for (const field of this.automationKindFields(name)) {
+        if (field.default !== undefined) params[field.key] = field.default;
+        else params[field.key] = field.type === 'array' ? [] : '';
+      }
+      return params;
+    },
+    // Shaped for the server's strict decoder; blanks are dropped so the kind's defaults apply.
+    automationParams(a) {
+      const params = a.params || {};
+      if (!this.automationKind(a.automationKind)) return Object.assign({}, params);
+      const result = {};
+      for (const field of this.automationKindFields(a.automationKind)) {
+        let value = params[field.key];
+        if (field.type === 'integer' || field.type === 'number') {
+          if (value === '' || value === null || value === undefined) continue;
+          value = Number(value);
+        } else if (field.type === 'array') {
+          value = (value || []).map(v => String(v).trim()).filter(v => v);
+          if (!value.length) continue;
+        } else if (typeof value === 'string') {
+          value = value.trim();
+          if (!value) continue;
+        } else if (value === undefined) {
+          continue;
+        }
+        result[field.key] = value;
+      }
+      return result;
+    },
+    // Mirrors the server's validation.
+    automationValid(a) {
+      const name = String(a.displayName || '').trim();
+      if (!name || [...name].length > AUTOMATION_NAME_MAX_LENGTH) return false;
+      if (!(Number(a.intervalSeconds) > 0) || !this.automationKind(a.automationKind)) return false;
+      const agent = String(a.agent || '').trim();
+      // A built-in's blank agent means its shipped one.
+      if (!agent && !a.isSystem) return false;
+      if (a.enabled && agent && !this.automationAgentItems().includes(agent)) return false;
+      const params = this.automationParams(a);
+      return this.automationKindFields(a.automationKind).every(f => !f.required || params[f.key] !== undefined);
+    },
+    formatInterval(seconds) {
+      seconds = Number(seconds) || 0;
+      if (seconds >= 3600 && seconds % 3600 === 0) return (seconds / 3600) + ' ' + this.i18n.hours;
+      if (seconds >= 60 && seconds % 60 === 0) return (seconds / 60) + ' ' + this.i18n.minutes;
+      return seconds + ' ' + this.i18n.seconds;
+    },
+    // Estimate only; the scheduler tick and in-progress runs shift it.
+    automationNextRun(automation) {
+      const run = this.latestAutomationRun(automation);
+      if (!automation.enabled || !run || !run.startTime) return '';
+      return this.$root.formatDateTime(new Date(new Date(run.startTime).getTime() + automation.intervalSeconds * 1000).toISOString());
+    },
+    automationLastRun(automation) {
+      const run = this.latestAutomationRun(automation);
+      return run && run.startTime ? this.$root.formatDateTime(run.startTime) : this.i18n.never;
+    },
+    automationStatusLabel(status) {
+      return ({
+        idle: this.i18n.stateIdle,
+        pending: this.i18n.statePending,
+        queued: this.i18n.stateQueued,
+        running: this.i18n.stateRunning,
+        applying: this.i18n.stateApplying,
+        succeeded: this.i18n.completed,
+        failed: this.i18n.stateFailed,
+      })[status] || status;
+    },
+    automationStatusColor(status) {
+      return ({ queued: 'warning', running: 'primary', failed: 'error' })[status] || '';
+    },
+    // isSystem must match the stored automation or the server refuses the save.
+    automationPayload(a) {
+      return {
+        displayName: String(a.displayName || '').trim(),
+        automationKind: a.automationKind,
+        agent: a.agent || '',
+        enabled: !!a.enabled,
+        intervalSeconds: Number(a.intervalSeconds) || 0,
+        params: this.automationParams(a),
+        isSystem: !!a.isSystem,
+      };
+    },
+    // Reloads after writing: a params change cancels queued work, and edits aren't pushed.
+    async updateAutomation(updated) {
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.put('assistant/automations/' + encodeURIComponent(updated.id), this.automationPayload(updated));
+        await this.loadAutomations();
+        return true;
+      } catch (error) {
+        this.$root.showError(error);
+        return false;
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    async createAutomation(automation) {
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.post('assistant/automations', this.automationPayload(automation));
+        await this.loadAutomations();
+        return true;
+      } catch (error) {
+        this.$root.showError(error);
+        return false;
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    draftForAutomation(automation) {
+      return this.automationDrafts[automation.id] || automation;
+    },
+    onToggleAutomation(automation, toggleExpand, internalItem) {
+      if (this.expandedAutomations.includes(automation.id)) {
+        delete this.automationDrafts[automation.id];
+      } else {
+        this.automationDrafts[automation.id] = JSON.parse(JSON.stringify(automation));
+        this.loadAutomationRuns(automation);
+      }
+      toggleExpand(internalItem);
+    },
+    automationDirty(item) {
+      const draft = this.automationDrafts[item.id];
+      if (!draft) return false;
+      return JSON.stringify(this.automationPayload(draft)) !== JSON.stringify(this.automationPayload(item));
+    },
+    async saveAutomation(automation) {
+      const draft = this.automationDrafts[automation.id];
+      if (!draft || !this.automationValid(draft)) return;
+      if (!(await this.updateAutomation(draft))) return;
+      this.expandedAutomations = this.expandedAutomations.filter(id => id !== automation.id);
+      delete this.automationDrafts[automation.id];
+    },
+    async toggleAutomationEnabled(automation) {
+      // The server refuses saves for a kind it doesn't provide.
+      if (!this.automationKind(automation.automationKind)) return;
+      const updated = Object.assign({}, automation, { enabled: !automation.enabled });
+      if (!this.automationValid(updated)) {
+        this.$root.showError(this.i18n.agentStudioAutomationAgentUnavailable);
+        return;
+      }
+      await this.updateAutomation(updated);
+    },
+    async removeAutomation(automation) {
+      if (automation.isSystem) return;
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.delete('assistant/automations/' + encodeURIComponent(automation.id));
+        this.expandedAutomations = this.expandedAutomations.filter(id => id !== automation.id);
+        delete this.automationDrafts[automation.id];
+        delete this.automationRuns[automation.id];
+        await this.loadAutomations();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    async duplicateAutomation(automation) {
+      await this.createAutomation({
+        displayName: this.copyName(automation.displayName, this.automations.map(a => a.displayName)),
+        automationKind: automation.automationKind, isSystem: false, enabled: false,
+        agent: automation.agent || '', intervalSeconds: automation.intervalSeconds || 0,
+        params: JSON.parse(JSON.stringify(automation.params || {})),
+      });
+    },
+
+    confirmDelete(kind, item) {
+      this.deleteTarget = { kind, item };
+      this.confirmDeleteDialog = true;
+    },
+    cancelDelete() {
+      this.confirmDeleteDialog = false;
+      this.deleteTarget = null;
+    },
+    async performDelete() {
+      const target = this.deleteTarget;
+      this.cancelDelete();
+      if (!target) return;
+      if (target.kind === 'agent') await this.removeAgent(target.item);
+      else if (target.kind === 'automation') await this.removeAutomation(target.item);
+    },
+    showAddAutomation() {
+      const kind = (this.automationKinds[0] || {}).name || '';
+      this.newAutomation = {
+        displayName: '',
+        automationKind: kind,
+        isSystem: false,
+        enabled: false,
+        agent: this.automationAgentItems()[0] || '',
+        intervalSeconds: 300,
+        params: this.automationParamDefaults(kind),
+      };
+      this.createAutomationDialog = true;
+    },
+    onNewAutomationKind(kind) {
+      this.newAutomation.automationKind = kind;
+      this.newAutomation.params = this.automationParamDefaults(kind);
+    },
+    async saveNewAutomation() {
+      if (!this.automationValid(this.newAutomation)) return;
+      if (!(await this.createAutomation(this.newAutomation))) return;
+      this.createAutomationDialog = false;
+      this.tab = 'automations';
+    },
+
     onChangeUseMemoryScanner(newValue) {
       if (newValue) {
         this.scanHistoricalDialog = true;

@@ -1352,12 +1352,14 @@ dfn {
   overflow-x: auto;
 }
 
-/* Agent Studio inline editor card (inside an expanded data-table row). */
+/* Agent Studio inline editor card (inside an expanded data-table row).
+   white-space undoes app.css's td nowrap. */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
   border-radius: var(--so-radius-panel);
   background-color: rgba(var(--v-theme-background-lighten-1));
   overflow: hidden;
+  white-space: normal;
 }
 
 /* The .section-panel tab styling bleeds into these nested editor tabs; reset it
@@ -1380,6 +1382,13 @@ dfn {
   padding-top: 20px;
 }
 
+/* Vuetify's 12px hint line-height and app.css's 36px cap clip long wrapped hints. */
+.agentstudio-editor .v-messages__message,
+.agentstudio-dialog-body .v-messages__message {
+  line-height: 16px;
+  max-height: none;
+}
+
 .agentstudio-notice {
   min-height: 50vh;
 }
@@ -1390,8 +1399,18 @@ dfn {
 }
 
 #agentstudio-agents .expanded-row-wrapper .v-window-item,
-#agentstudio-skills .expanded-row-wrapper .v-window-item {
+#agentstudio-skills .expanded-row-wrapper .v-window-item,
+#agentstudio-automations .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
+}
+
+.agentstudio-query textarea {
+  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+}
+
+.agentstudio-runs {
+  background-color: transparent !important;
 }
 
 /* A disabled agent/skill still lists, but reads as inactive. */

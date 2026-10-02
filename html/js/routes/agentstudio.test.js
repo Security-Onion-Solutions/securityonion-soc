@@ -532,6 +532,31 @@ test('deleting is refused for system rows and calls the delete endpoint for cust
   expect(comp.agents.map(a => a.name)).toEqual(['Coordinator']);
 });
 
+test('deleting an agent drops it from other rows and open editors', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('delete', {});
+  const coordinator = comp.agents[0];
+  comp.agentDrafts[coordinator.id] = JSON.parse(JSON.stringify(coordinator));
+
+  await comp.removeAgent(comp.agents[1]);
+
+  expect(comp.agents[0].canDelegateTo).toEqual([]);
+  expect(comp.agentDrafts[coordinator.id].canDelegateTo).toEqual([]);
+});
+
+test('deleting a skill drops it from agents and open editors', async () => {
+  comp.initAssistant(agenticParams());
+  mockPapi('delete', {});
+  const hunter = comp.agents[1];
+  comp.agentDrafts[hunter.id] = JSON.parse(JSON.stringify(hunter));
+
+  await comp.removeSkill(comp.skills.find(s => s.name === 'cases'));
+
+  expect(comp.skills.map(s => s.name)).toEqual(['hunt']);
+  expect(comp.agents[1].allowedSkills).toEqual(['hunt']);
+  expect(comp.agentDrafts[hunter.id].allowedSkills).toEqual(['hunt']);
+});
+
 test('creating an agent rejects a blank or duplicate name', async () => {
   comp.initAssistant(agenticParams());
   const put = mockPapi('put', {});
@@ -1618,4 +1643,566 @@ test('changing the agent page size leaves the memory table alone', async () => {
 
   expect(comp.memoryItemsPerPage).toBe(10, 'the two page sizes are independent');
   expect(get).not.toHaveBeenCalled();
+});
+
+test('the run history page size persists on its own', () => {
+  comp.initAssistant(memoryParams());
+  comp.saveSetting = jest.fn();
+
+  comp.itemsPerPage = 50;
+  comp.runItemsPerPage = 250;
+  comp.saveLocalSettings();
+
+  expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
+  expect(comp.saveSetting).toHaveBeenCalledWith('runItemsPerPage', 250, 10);
+
+  mockLocalStorage['settings.agentstudio.runItemsPerPage'] = '50';
+  comp.loadLocalSettings();
+  expect(comp.runItemsPerPage).toBe(50);
+  delete mockLocalStorage['settings.agentstudio.runItemsPerPage'];
+});
+
+const TRIAGE_ID = 'a1d3f5b7-9c2e-4e68-8b4a-6f0c2d9e7b13';
+const CLOUDFLARE_ID = '7a3d8e41-2b5c-4f90-8d1e-6c2a9b4f3e08';
+const CRITICAL_ID = 'd29f4c61-8a37-4b0e-9c52-3e1f7a6b8d04';
+
+const alertTriageKind = () => ({
+  name: 'alert_triage',
+  displayName: 'Alert Triage',
+  paramSchema: { json: {
+    type: 'object',
+    properties: {
+      filter: { type: 'string', description: 'OQL search' },
+      groupBy: { type: 'array', description: 'Group fields' },
+      maxGroupsPerScan: { type: 'integer', description: 'Groups per scan', default: 25 },
+      maxFailures: { type: 'integer', description: 'Failed runs', default: 3 },
+      floor: { type: 'string', description: 'RFC3339 time' },
+    },
+    required: ['groupBy'],
+  } },
+});
+
+const automationParams = () => Object.assign(agenticParams(), { availableAutomationKinds: [alertTriageKind()] });
+
+const storedAutomations = () => [
+  {
+    id: TRIAGE_ID, displayName: 'Alert Triage', automationKind: 'alert_triage', isSystem: true, enabled: false,
+    agent: 'Investigator', intervalSeconds: 300, userId: '',
+    params: { groupBy: ['source.ip', 'rule.uuid', 'destination.ip'] },
+  },
+  {
+    // Unknown kind.
+    id: CLOUDFLARE_ID, displayName: 'Cloudflare Audit Logs', automationKind: 'cloudflare_audit', isSystem: false, enabled: true,
+    agent: 'Orchestrator', intervalSeconds: 3600, userId: 'jsmith', params: {},
+  },
+  {
+    id: CRITICAL_ID, displayName: 'Critical Alert Investigation', automationKind: 'alert_triage', isSystem: false, enabled: true,
+    agent: 'Orchestrator', intervalSeconds: 900, userId: 'akhan',
+    params: { filter: 'event.severity_label:critical', groupBy: ['rule.name'], maxGroupsPerScan: 10, maxFailures: 3 },
+  },
+];
+
+const runHistory = (runs, extra = {}) => ({ data: Object.assign({ backlog: { pending: 0, running: 0, applying: 0 }, runs, hasMore: false }, extra) });
+
+const seedAutomations = () => {
+  comp.initAssistant(automationParams());
+  comp.setAutomations(storedAutomations());
+};
+
+const mockReload = (automations) => {
+  mockPapi('get', { data: automations });
+  automations.forEach(() => mockPapi('get', runHistory([])));
+};
+
+test('automations load from the server, then each row\'s run history', async () => {
+  comp.initAssistant(automationParams());
+  const get = mockPapi('get', { data: storedAutomations() });
+  mockPapi('get', runHistory([]));
+  mockPapi('get', runHistory([]));
+  mockPapi('get', runHistory([{ id: 'r1', state: 'running', startTime: '2026-09-30T10:00:00Z' }]));
+
+  await comp.loadAutomations();
+  await Promise.resolve();
+
+  expect(get).toHaveBeenCalledWith('assistant/automations');
+  expect(get).toHaveBeenCalledWith('assistant/automations/' + CRITICAL_ID + '/runs', { params: { limit: 20, offset: 0 } });
+  expect(comp.automations.map(a => a.id)).toEqual([TRIAGE_ID, CLOUDFLARE_ID, CRITICAL_ID]);
+  expect(comp.automationTabs[TRIAGE_ID]).toBe('general');
+  expect(comp.automationStatus(comp.automations[0])).toBe('idle');
+  expect(comp.automationStatus(comp.automations[2])).toBe('running');
+});
+
+test('a failed automation list is reported', async () => {
+  comp.initAssistant(automationParams());
+  mockPapi('get', null, new Error('boom'));
+
+  await comp.loadAutomations();
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.automations).toEqual([]);
+});
+
+test('a failed history load is reported, and keeps what was already loaded', async () => {
+  seedAutomations();
+  const row = comp.automations[2];
+  mockPapi('get', null, new Error('down'));
+
+  await comp.loadAutomationRuns(row);
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.automationRuns[row.id]).toBeUndefined();
+  expect(comp.automationStatus(row)).toBe('', 'no status rather than a guess');
+
+  const loaded = { runs: [{ id: 'r1', state: 'running' }], backlog: {}, hasMore: true };
+  comp.automationRuns[row.id] = loaded;
+  await comp.loadAutomationRuns(row, true);
+  expect(comp.automationRuns[row.id]).toBe(loaded);
+  expect(comp.automationStatus(row)).toBe('running');
+});
+
+test('a row\'s status is its latest run while in flight or failed, else idle', () => {
+  seedAutomations();
+  const row = comp.automations[2];
+  expect(comp.automationStatus(row)).toBe('', 'blank until the history loads');
+
+  const status = (state) => {
+    comp.automationRuns[row.id] = { runs: [{ id: 'r', state, startTime: '2026-09-30T10:00:00Z' }] };
+    return comp.automationStatus(row);
+  };
+  expect(status('queued')).toBe('queued');
+  expect(status('running')).toBe('running');
+  expect(status('failed')).toBe('failed');
+  expect(status('succeeded')).toBe('idle');
+
+  comp.automationRuns[row.id] = { runs: [] };
+  expect(comp.automationStatus(row)).toBe('idle', 'never run');
+  expect(comp.automationStatusLabel('succeeded')).toBe(comp.i18n.completed);
+  expect(comp.automationStatusColor('failed')).toBe('error');
+});
+
+test('more runs append the next page, and the backlog lists only open states', async () => {
+  seedAutomations();
+  const row = comp.automations[2];
+  const get = mockPapi('get', runHistory([{ id: 'r2' }, { id: 'r1' }], { hasMore: true, backlog: { pending: 3, running: 1, applying: 0 } }));
+  mockPapi('get', runHistory([{ id: 'r0' }]));
+
+  await comp.loadAutomationRuns(row);
+  expect(comp.automationHistory(row).hasMore).toBe(true);
+  expect(comp.automationBacklog(row)).toEqual([{ state: 'pending', count: 3 }, { state: 'running', count: 1 }]);
+
+  await comp.loadAutomationRuns(row, true);
+  expect(get).toHaveBeenLastCalledWith('assistant/automations/' + CRITICAL_ID + '/runs', { params: { limit: 20, offset: 2 } });
+  expect(comp.automationHistory(row).runs.map(r => r.id)).toEqual(['r2', 'r1', 'r0']);
+  expect(comp.automationHistory(row).hasMore).toBe(false);
+});
+
+test('run rows count their done and failed items', () => {
+  const run = { itemCounts: { done: 4, failed: 1 } };
+
+  expect(comp.runItemCount(run, 'done')).toBe(4);
+  expect(comp.runItemCount(run, 'failed')).toBe(1);
+  expect(comp.runItemCount({}, 'failed')).toBe(0);
+});
+
+test('an agent can be opened in Onion AI on a new session', () => {
+  comp.initAssistant(agenticParams());
+
+  expect(comp.agentHeaders.map(h => h.value)).not.toContain('actions');
+  expect(comp.chatWithAgentLink(comp.agents[1])).toEqual({ name: 'assistant', query: { agent: 'Hunter' } });
+});
+
+test('a link can open a specific automation, as Agent Spy does, once the list loads', async () => {
+  comp.$route.query = { tab: 'automations', automation: TRIAGE_ID };
+  comp.initAssistant(automationParams());
+  expect(comp.tab).toBe('automations');
+
+  mockPapi('get', { data: storedAutomations() });
+  await comp.loadAutomations();
+
+  expect(comp.expandedAutomations).toEqual([TRIAGE_ID]);
+  expect(comp.automationDrafts[TRIAGE_ID]).toEqual(comp.automations[0]);
+  expect(comp.automationDrafts[TRIAGE_ID]).not.toBe(comp.automations[0]);
+
+  comp.openRouteAutomation();
+  expect(comp.expandedAutomations).toEqual([TRIAGE_ID]);
+});
+
+test('an unknown automation in the link is ignored, but the tab still applies', () => {
+  comp.$route.query = { tab: 'automations', automation: 'no-such-automation' };
+  seedAutomations();
+  comp.openRouteAutomation();
+
+  expect(comp.tab).toBe('automations');
+  expect(comp.expandedAutomations).toEqual([]);
+
+  comp.$route.query = {};
+  comp.tab = 'agents';
+  comp.applyRouteQuery();
+  expect(comp.tab).toBe('agents', 'no query leaves the page where it was');
+});
+
+test('custom automations are hidden behind the read-only flag', () => {
+  expect(comp.automationsReadOnly).toBe(true);
+});
+
+test('the payload is the body the automation routes take, with server-stamped fields left out', () => {
+  seedAutomations();
+
+  expect(comp.automationPayload(comp.automations[0])).toEqual({
+    displayName: 'Alert Triage',
+    automationKind: 'alert_triage',
+    agent: 'Investigator',
+    enabled: false,
+    intervalSeconds: 300,
+    params: { groupBy: ['source.ip', 'rule.uuid', 'destination.ip'] },
+    isSystem: true,
+  });
+  expect(comp.automationPayload(comp.automations[2]).isSystem).toBe(false);
+});
+
+test('an agent is always named, but only needs to be usable while enabled', () => {
+  comp.initAssistant(automationParams());
+  const base = { displayName: 'x', automationKind: 'alert_triage', intervalSeconds: 60, params: { groupBy: ['rule.name'] } };
+
+  expect(comp.automationValid({ ...base, agent: '' })).toBe(false, 'a custom automation must name one');
+  expect(comp.automationValid({ ...base, agent: '', isSystem: true })).toBe(true, 'a built-in\'s blank agent is its shipped one');
+  // Investigator isn't among the fixture agents.
+  expect(comp.automationValid({ ...base, agent: 'Investigator', enabled: false })).toBe(true);
+  expect(comp.automationValid({ ...base, agent: 'Investigator', enabled: true })).toBe(false);
+  expect(comp.automationValid({ ...base, agent: 'Hunter', enabled: true })).toBe(true);
+});
+
+test('a stale agent stays listed for its automation', () => {
+  seedAutomations();
+
+  expect(comp.automationAgentChoices(comp.automations[0])).toEqual(['Coordinator', 'Hunter', 'Investigator']);
+  expect(comp.automationAgentChoices({ agent: 'Hunter' })).toEqual(['Coordinator', 'Hunter']);
+});
+
+test('enabling with an agent that cannot run is refused before any save', async () => {
+  seedAutomations();
+  const put = mockPapi('put', {});
+
+  await comp.toggleAutomationEnabled(comp.automations[0]);
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(comp.i18n.agentStudioAutomationAgentUnavailable);
+  expect(put).not.toHaveBeenCalled();
+  expect(comp.automations[0].enabled).toBe(false);
+});
+
+test('toggling saves the automation, then reloads the list', async () => {
+  seedAutomations();
+  const row = Object.assign({}, comp.automations[0], { agent: 'Hunter' });
+  comp.setAutomations([row].concat(comp.automations.slice(1)));
+  const put = mockPapi('put', {});
+  const stored = storedAutomations();
+  Object.assign(stored[0], { agent: 'Hunter', enabled: true, userId: 'me' });
+  mockReload(stored);
+
+  await comp.toggleAutomationEnabled(comp.automations[0]);
+
+  expect(put).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID, expect.objectContaining({ enabled: true, agent: 'Hunter', isSystem: true }));
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('assistant/automations');
+  expect(comp.automations[0]).toMatchObject({ enabled: true, userId: 'me' });
+});
+
+test('a refused toggle leaves the row as it was', async () => {
+  seedAutomations();
+  mockPapi('put', null, new Error('ERROR_AUTOMATION_PARAMS_INVALID'));
+
+  await comp.toggleAutomationEnabled(comp.automations[2]);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.automations[2].enabled).toBe(true);
+});
+
+test('creators are shown by name once resolved', async () => {
+  seedAutomations();
+  comp.$root.getUserById = jest.fn(async () => ({ id: 'akhan', email: 'akhan@example.com' }));
+
+  expect(comp.automationCreatorLabel(comp.automations[0])).toBe('', 'a built-in never saved has no creator');
+  expect(comp.automationCreatorLabel(comp.automations[2])).toBe('akhan');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(comp.automationCreatorLabel(comp.automations[2])).toBe('akhan@example.com');
+  expect(comp.$root.getUserById).toHaveBeenCalledTimes(1);
+});
+
+test('params are shaped for the server\'s strict decoder', () => {
+  comp.initAssistant(automationParams());
+  const a = {
+    automationKind: 'alert_triage',
+    params: { filter: '  ', groupBy: [' rule.name ', ''], maxGroupsPerScan: '', maxFailures: '5', floor: '2026-09-25T00:00:00Z', stray: 'x' },
+  };
+
+  expect(comp.automationParams(a)).toEqual({ groupBy: ['rule.name'], maxFailures: 5, floor: '2026-09-25T00:00:00Z' });
+
+  expect(comp.automationParams({ automationKind: 'nope', params: { anything: 1 } })).toEqual({ anything: 1 });
+});
+
+test('kinds come from the server', () => {
+  comp.initAssistant(automationParams());
+  expect(comp.automationKindItems()).toEqual([{ title: 'Alert Triage', value: 'alert_triage' }]);
+
+  const params = agenticParams();
+  params.availableAutomationKinds = [{ name: 'k', displayName: 'K', paramSchema: { json: { type: 'object', properties: {} } } }];
+  comp.initAssistant(params);
+  expect(comp.automationKindItems()).toEqual([{ title: 'K', value: 'k' }]);
+  expect(comp.automationKindLabel('alert_triage')).toBe('alert_triage', 'an unknown kind shows its name');
+
+  comp.initAssistant(agenticParams());
+  expect(comp.automationKindItems()).toEqual([], 'none published, none offered');
+});
+
+test('the settings form is built from the kind\'s paramSchema, required fields first', () => {
+  comp.initAssistant(automationParams());
+  const fields = comp.automationKindFields('alert_triage');
+
+  expect(fields.map(f => f.key)).toEqual(['groupBy', 'filter', 'maxGroupsPerScan', 'maxFailures', 'floor']);
+  expect(fields[0]).toMatchObject({ label: 'Group By', type: 'array', required: true });
+  expect(fields[2]).toMatchObject({ label: 'Max Groups Per Scan', type: 'integer', default: 25, required: false });
+  expect(comp.automationKindFields('nope')).toEqual([]);
+  expect(comp.automationParamDefaults('alert_triage')).toEqual({ groupBy: [], filter: '', maxGroupsPerScan: 25, maxFailures: 3, floor: '' });
+});
+
+test('an automation is only valid when the server would accept it', () => {
+  comp.initAssistant(automationParams());
+  const valid = { displayName: 'x', automationKind: 'alert_triage', agent: 'Hunter', intervalSeconds: 60, params: { groupBy: ['rule.name'] } };
+  expect(comp.automationValid(valid)).toBe(true);
+
+  expect(comp.automationValid({ ...valid, displayName: '  ' })).toBe(false);
+  expect(comp.automationValid({ ...valid, displayName: 'x'.repeat(101) })).toBe(false);
+  expect(comp.automationValid({ ...valid, intervalSeconds: 0 })).toBe(false);
+  expect(comp.automationValid({ ...valid, agent: '' })).toBe(false);
+  expect(comp.automationValid({ ...valid, params: { groupBy: [] } })).toBe(false, 'groupBy is required');
+  expect(comp.automationValid({ ...valid, automationKind: 'nope' })).toBe(false, 'the server looks the kind up on every save');
+});
+
+test('an automation of an unknown kind cannot be toggled', async () => {
+  seedAutomations();
+  const put = mockPapi('put', {});
+
+  await comp.toggleAutomationEnabled(comp.automations[1]);
+
+  expect(put).not.toHaveBeenCalled();
+  expect(comp.automations[1].enabled).toBe(true);
+});
+
+test('a system automation cannot be deleted, directly or through the confirmation', async () => {
+  seedAutomations();
+  const del = mockPapi('delete', {});
+
+  await comp.removeAutomation(comp.automations[0]);
+  comp.confirmDelete('automation', comp.automations[0]);
+  await comp.performDelete();
+
+  expect(del).not.toHaveBeenCalled();
+  expect(comp.automations.length).toBe(3);
+});
+
+test('deleting a custom automation asks first and only proceeds on confirm', async () => {
+  seedAutomations();
+  const custom = comp.automations[2];
+  comp.automationRuns[custom.id] = { runs: [] };
+  const del = mockPapi('delete', {});
+  mockReload(storedAutomations().slice(0, 2));
+
+  comp.confirmDelete('automation', custom);
+  expect(comp.confirmDeleteDialog).toBe(true);
+  expect(comp.deleteTarget).toEqual({ kind: 'automation', item: custom });
+
+  comp.cancelDelete();
+  expect(comp.confirmDeleteDialog).toBe(false);
+  expect(comp.deleteTarget).toBeNull();
+  expect(del).not.toHaveBeenCalled();
+
+  comp.confirmDelete('automation', custom);
+  await comp.performDelete();
+  expect(del).toHaveBeenCalledWith('assistant/automations/' + CRITICAL_ID);
+  expect(comp.confirmDeleteDialog).toBe(false);
+  expect(comp.automations.map(a => a.id)).not.toContain(CRITICAL_ID);
+  expect(comp.automationRuns[CRITICAL_ID]).toBeUndefined();
+});
+
+test('a failed delete keeps the automation', async () => {
+  seedAutomations();
+  mockPapi('delete', null, new Error('boom'));
+
+  await comp.removeAutomation(comp.automations[2]);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.automations.length).toBe(3);
+});
+
+test('deleting an agent goes through the same confirmation', async () => {
+  comp.initAssistant(agenticParams());
+  const del = mockPapi('delete', {});
+
+  comp.confirmDelete('agent', comp.agents[1]);
+  expect(del).not.toHaveBeenCalled();
+
+  await comp.performDelete();
+  expect(del).toHaveBeenCalledWith('assistant/agents/Hunter');
+  expect(comp.agents.map(a => a.name)).toEqual(['Coordinator']);
+});
+
+test('performDelete with nothing pending is a no-op', async () => {
+  seedAutomations();
+  const del = mockPapi('delete', {});
+
+  await comp.performDelete();
+
+  expect(del).not.toHaveBeenCalled();
+  expect(comp.automations.length).toBe(3);
+});
+
+test('formatInterval picks the largest whole unit', () => {
+  expect(comp.formatInterval(45)).toBe('45 seconds');
+  expect(comp.formatInterval(300)).toBe('5 minutes');
+  expect(comp.formatInterval(3600)).toBe('1 hours');
+  expect(comp.formatInterval(90)).toBe('90 seconds');
+});
+
+test('only enabled agents can handle an automation', () => {
+  const params = agenticParams();
+  params.availableAgents[1].enabled = false;
+  comp.initAssistant(params);
+
+  expect(comp.automationAgentItems()).toEqual(['Coordinator']);
+});
+
+test('editing an automation goes through a draft and commits on save', async () => {
+  seedAutomations();
+  const row = comp.automations[2];
+  const toggleExpand = jest.fn();
+  const get = mockPapi('get', runHistory([]));
+
+  comp.onToggleAutomation(row, toggleExpand, {});
+  expect(toggleExpand).toHaveBeenCalled();
+  expect(get).toHaveBeenCalledWith('assistant/automations/' + CRITICAL_ID + '/runs', { params: { limit: 20, offset: 0 } });
+  expect(comp.automationDirty(row)).toBe(false);
+
+  comp.automationDrafts[row.id].intervalSeconds = 600;
+  comp.automationDrafts[row.id].params.maxGroupsPerScan = 5;
+  // Enabled, so it needs a known agent to stay valid.
+  comp.automationDrafts[row.id].agent = 'Hunter';
+  expect(comp.automationDirty(row)).toBe(true);
+  expect(comp.automations[2].intervalSeconds).toBe(900, 'the table shows the committed value until saved');
+  expect(comp.automations[2].params.maxGroupsPerScan).toBe(10, 'params are drafted too');
+
+  const saved = JSON.parse(JSON.stringify(comp.automationDrafts[row.id]));
+  const put = mockPapi('put', {});
+  mockReload([comp.automations[0], comp.automations[1], saved]);
+  comp.expandedAutomations = [row.id];
+  await comp.saveAutomation(row);
+
+  expect(put).toHaveBeenCalledWith('assistant/automations/' + CRITICAL_ID, comp.automationPayload(saved));
+  expect(comp.automations[2].intervalSeconds).toBe(600);
+  expect(comp.automations[2].params.maxGroupsPerScan).toBe(5);
+  expect(comp.expandedAutomations).toEqual([]);
+  expect(comp.automationDrafts[row.id]).toBeUndefined();
+});
+
+test('a refused save keeps the editor open with its draft', async () => {
+  seedAutomations();
+  const row = comp.automations[2];
+  comp.automationDrafts[row.id] = Object.assign(JSON.parse(JSON.stringify(row)), { agent: 'Hunter', intervalSeconds: 600 });
+  comp.expandedAutomations = [row.id];
+  mockPapi('put', null, new Error('ERROR_AUTOMATION_PARAMS_INVALID'));
+
+  await comp.saveAutomation(row);
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.expandedAutomations).toEqual([row.id]);
+  expect(comp.automationDrafts[row.id].intervalSeconds).toBe(600);
+  expect(comp.automations[2].intervalSeconds).toBe(900);
+});
+
+test('an invalid draft is not saved', async () => {
+  seedAutomations();
+  const row = comp.automations[0];
+  comp.automationDrafts[row.id] = JSON.parse(JSON.stringify(row));
+  comp.automationDrafts[row.id].intervalSeconds = 0;
+  const put = mockPapi('put', {});
+
+  await comp.saveAutomation(row);
+
+  expect(put).not.toHaveBeenCalled();
+  expect(comp.automations[0].intervalSeconds).toBe(300);
+  expect(comp.automationDrafts[row.id]).toBeDefined();
+});
+
+test('duplicating an automation creates a disabled custom copy', async () => {
+  seedAutomations();
+  const post = mockPapi('post', {});
+  const copy = { id: 'new-id', displayName: 'Alert Triage (copy)', automationKind: 'alert_triage', isSystem: false, enabled: false };
+  mockReload(storedAutomations().concat([copy]));
+
+  await comp.duplicateAutomation(comp.automations[0]);
+
+  const body = post.mock.calls[0][1];
+  expect(post.mock.calls[0][0]).toBe('assistant/automations');
+  expect(body).toMatchObject({ displayName: 'Alert Triage (copy)', isSystem: false, enabled: false, agent: 'Investigator' });
+  expect(body.params).toEqual(comp.automations[0].params);
+  expect(comp.automations[3].id).toBe('new-id');
+});
+
+test('creating an automation starts from the kind\'s defaults and needs what the server requires', async () => {
+  seedAutomations();
+  comp.showAddAutomation();
+  expect(comp.createAutomationDialog).toBe(true);
+  expect(comp.newAutomation).toMatchObject({ automationKind: 'alert_triage', agent: 'Coordinator', enabled: false });
+  expect(comp.newAutomation.params.maxGroupsPerScan).toBe(25);
+
+  const post = mockPapi('post', {});
+  comp.newAutomation.displayName = ' Suricata Sweep ';
+  await comp.saveNewAutomation();
+  expect(post).not.toHaveBeenCalled();
+
+  mockReload(storedAutomations().concat([{ id: 'new-id', displayName: 'Suricata Sweep' }]));
+  comp.newAutomation.params.groupBy = ['rule.name'];
+  comp.newAutomation.params.filter = 'event.module:suricata';
+  await comp.saveNewAutomation();
+  expect(post).toHaveBeenCalledWith('assistant/automations', expect.objectContaining({
+    displayName: 'Suricata Sweep', isSystem: false, params: { groupBy: ['rule.name'], filter: 'event.module:suricata', maxGroupsPerScan: 25, maxFailures: 3 },
+  }));
+  expect(comp.createAutomationDialog).toBe(false);
+  expect(comp.tab).toBe('automations');
+  expect(comp.automations[3].id).toBe('new-id');
+});
+
+test('a refused create keeps the dialog open', async () => {
+  seedAutomations();
+  comp.showAddAutomation();
+  comp.newAutomation.displayName = 'x';
+  comp.newAutomation.params.groupBy = ['rule.name'];
+  mockPapi('post', null, new Error('boom'));
+
+  await comp.saveNewAutomation();
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.createAutomationDialog).toBe(true);
+  expect(comp.automations.length).toBe(3);
+});
+
+test('choosing another kind starts its settings over', () => {
+  comp.initAssistant(automationParams());
+  comp.showAddAutomation();
+  comp.newAutomation.params.filter = 'x';
+
+  comp.onNewAutomationKind('alert_triage');
+
+  expect(comp.newAutomation.params.filter).toBe('');
+});
+
+test('last and next run come from the latest run, and next only while enabled', () => {
+  seedAutomations();
+  comp.$root.formatDateTime = jest.fn(d => d);
+
+  const row = comp.automations[1];
+  comp.automationRuns[row.id] = { runs: [{ id: 'r1', state: 'succeeded', startTime: '2026-09-30T10:00:00.000Z' }] };
+  expect(comp.automationLastRun(row)).toBe('2026-09-30T10:00:00.000Z');
+  expect(comp.automationNextRun(row)).toBe('2026-09-30T11:00:00.000Z');
+
+  expect(comp.automationNextRun(comp.automations[0])).toBe('', 'disabled and never run');
+  expect(comp.automationLastRun(comp.automations[0])).toBe(comp.i18n.never);
 });
