@@ -141,6 +141,33 @@ func TestDisableCrossClusterIndexing(tester *testing.T) {
 	assert.Equal(tester, "my-*", newIndexes[1])
 }
 
+func TestUpdateDocumentsIgnoresUnavailableIndices(t *testing.T) {
+	ctx := context.Background()
+
+	client, transport := modmock.NewMockClient(t)
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"took":1,"timed_out":false,"total":1,"updated":1,"failures":[]}`)),
+	}, nil)
+
+	store := &ElasticEventstore{
+		maxLogLength: math.MaxInt,
+	}
+
+	_, err := store.updateDocuments(ctx, client, `{"query":{}}`, []string{"so-*", "logs-*"}, true)
+	assert.Nil(t, err)
+
+	reqs := transport.GetRequests()
+	assert.Equal(t, 1, len(reqs))
+	assert.Equal(t, "POST", reqs[0].Method)
+	assert.Equal(t, "/so-*,logs-*/_update_by_query", reqs[0].URL.Path)
+	assert.Contains(t, reqs[0].URL.RawQuery, "ignore_unavailable=true")
+}
+
 func TestScrollSunnyDay(t *testing.T) {
 	ctx := context.Background()
 

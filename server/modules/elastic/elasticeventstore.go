@@ -725,6 +725,7 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 		client.UpdateByQuery.WithContext(ctx),
 		client.UpdateByQuery.WithPretty(),
 		client.UpdateByQuery.WithConflicts("proceed"),
+		client.UpdateByQuery.WithIgnoreUnavailable(true),
 		client.UpdateByQuery.WithBody(strings.NewReader(query)),
 		client.UpdateByQuery.WithRefresh(true),
 		client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
