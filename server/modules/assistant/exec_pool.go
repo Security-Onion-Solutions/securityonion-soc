@@ -22,6 +22,7 @@ func (ac *AssistantCoordinator) newExecPool() *execpool.Pool {
 		MaxQueueDepth: ac.automationMaxQueuedItems,
 		MaxConcurrent: ac.automationMaxConcurrentItems,
 		KeyLimitFunc:  ac.agentConcurrencyLimit,
+		OnChange:      ac.notifyAutomationActivity,
 	})
 }
 

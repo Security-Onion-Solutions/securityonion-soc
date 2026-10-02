@@ -66,6 +66,10 @@ type Config struct {
 	// the next Submit or completion rather than instantly -- the pool has no way to
 	// observe the change itself.
 	KeyLimitFunc func(key string) int
+
+	// OnChange runs after anything Stats reports changes. It runs without the pool lock but
+	// on the caller's goroutine, so it must not block.
+	OnChange func()
 }
 
 type KeyStats struct {
@@ -196,6 +200,7 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 		p.deduped++
 
 		p.mu.Unlock()
+		p.changed()
 
 		p.logger().WithFields(log.Fields{
 			"key":       job.Key,
@@ -214,6 +219,7 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 		depth := len(p.queue)
 
 		p.mu.Unlock()
+		p.changed()
 
 		p.logger().WithFields(log.Fields{
 			"key":           job.Key,
@@ -246,6 +252,7 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 	p.mu.Unlock()
 
 	p.emit(batch)
+	p.changed()
 
 	return e.handle, nil
 }
@@ -257,6 +264,7 @@ func (p *Pool) submitImmediateLocked(job Job) (*Handle, error) {
 		p.busy++
 
 		p.mu.Unlock()
+		p.changed()
 
 		p.logger().WithField("key", job.Key).Debug("refused immediate job, key is at its limit")
 
@@ -276,6 +284,7 @@ func (p *Pool) submitImmediateLocked(job Job) (*Handle, error) {
 	p.startLocked(e)
 
 	p.mu.Unlock()
+	p.changed()
 
 	return e.handle, nil
 }
@@ -565,6 +574,13 @@ func (p *Pool) complete(e *entry) {
 	close(e.handle.done)
 
 	p.emit(batch)
+	p.changed()
+}
+
+func (p *Pool) changed() {
+	if p.cfg.OnChange != nil {
+		p.cfg.OnChange()
+	}
 }
 
 func (p *Pool) releaseDedupeLocked(job Job) {

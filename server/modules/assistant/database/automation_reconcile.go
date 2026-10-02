@@ -68,5 +68,9 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 		return nil, err
 	}
 
+	if failedRuns > 0 || resetItems > 0 {
+		s.automationChanged()
+	}
+
 	return &AutomationRunReconcileResult{FailedRuns: failedRuns, ResetItems: resetItems}, nil
 }

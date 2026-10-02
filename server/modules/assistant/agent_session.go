@@ -580,7 +580,10 @@ func withoutThoughtSignatures(msg *model.Message) *model.Message {
 	return &out
 }
 
+// Defers run last-first, so the lock is released before the notify.
 func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, phase string) {
+	defer ac.notifyAutomationActivity()
+
 	ac.agentPhaseMu.Lock()
 	defer ac.agentPhaseMu.Unlock()
 
@@ -598,6 +601,8 @@ func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, p
 }
 
 func (ac *AssistantCoordinator) clearAgentPhase(sessionId string) {
+	defer ac.notifyAutomationActivity()
+
 	ac.agentPhaseMu.Lock()
 	defer ac.agentPhaseMu.Unlock()
 

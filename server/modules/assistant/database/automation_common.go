@@ -68,3 +68,12 @@ func countAffected(ctx context.Context, q rowQuerier, stmt string, args ...any) 
 
 	return count, rows.Err()
 }
+
+// countAutomationChanges passes countAffected's result through, reporting a change when rows moved.
+func (s *Store) countAutomationChanges(count int, err error) (int, error) {
+	if err == nil && count > 0 {
+		s.automationChanged()
+	}
+
+	return count, err
+}

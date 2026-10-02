@@ -244,6 +244,8 @@ type AutomationActivity struct {
 	Pool AgentPoolActivity `json:"pool"`
 	// Runs queued or running, newest first.
 	Runs []*AutomationRunActivity `json:"runs"`
+	// When this view was built, so a client can drop one older than what it shows.
+	GeneratedAt time.Time `json:"generatedAt" example:"2026-10-02T16:00:02Z"`
 }
 
 // @Description Load on the pool that runs agent work, interactive turns included.

@@ -31,6 +31,20 @@ var (
 // Store encapsulates all Postgres operations for assistant memories.
 type Store struct {
 	db db.DB
+
+	// Called after any write that changes automation runs or work items.
+	onAutomationChange func()
+}
+
+// OnAutomationChange sets the callback for automation writes; it must not block.
+func (s *Store) OnAutomationChange(fn func()) {
+	s.onAutomationChange = fn
+}
+
+func (s *Store) automationChanged() {
+	if s.onAutomationChange != nil {
+		s.onAutomationChange()
+	}
 }
 
 // New wraps an existing DB connection and runs pending migrations.

@@ -934,3 +934,35 @@ func TestFailAbandonedAutomationRunCounts(t *testing.T) {
 	assert.Equal(t, 1, failed)
 	mDB.AssertExpectations(t)
 }
+
+func TestAutomationWritesReportOnlyRealChanges(t *testing.T) {
+	ctx := context.Background()
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+	changes := 0
+	s.OnAutomationChange(func() { changes++ })
+
+	mDB.On("Query", mock.Anything, mock.Anything, "item-1").Return(rowsYielding(1), nil).Once()
+	require.NoError(t, s.CompleteAutomationWorkItem(ctx, "item-1"))
+	assert.Equal(t, 1, changes)
+
+	mDB.On("Query", mock.Anything, mock.Anything, "gone").Return(emptyRows(), nil).Once()
+	assert.ErrorIs(t, s.CompleteAutomationWorkItem(ctx, "gone"), ErrAutomationWorkItemNotFound)
+	assert.Equal(t, 1, changes, "a write that matched nothing changed nothing")
+
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, "stale").Return(rowsYielding(0), nil).Once()
+	_, err := s.FailStaleAutomationWorkItems(ctx, testAutomationId, "stale")
+	require.NoError(t, err)
+	assert.Equal(t, 1, changes)
+
+	mDB.On("Query", mock.Anything, mock.Anything, otherAutomationId, "stale").Return(rowsYielding(2), nil).Once()
+	_, err = s.FailStaleAutomationWorkItems(ctx, otherAutomationId, "stale")
+	require.NoError(t, err)
+	assert.Equal(t, 2, changes)
+
+	mDB.On("Query", mock.Anything, mock.Anything, testAutomationId, testRunId, 3).Return(emptyRows(), nil).Once()
+	item, err := s.ClaimNextAutomationWorkItem(ctx, testAutomationId, testRunId, 3)
+	require.NoError(t, err)
+	assert.Nil(t, item)
+	assert.Equal(t, 2, changes, "nothing to claim")
+}

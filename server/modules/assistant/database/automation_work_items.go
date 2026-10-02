@@ -105,7 +105,12 @@ func (s *Store) EnsureAutomationWorkItems(ctx context.Context, runId string, ite
 
 	defer rows.Close()
 
-	return collectWorkItems(rows)
+	inserted, err := collectWorkItems(rows)
+	if err == nil && len(inserted) > 0 {
+		s.automationChanged()
+	}
+
+	return inserted, err
 }
 
 // ClaimNextAutomationWorkItem takes the oldest pending item for one automation and counts
@@ -145,7 +150,12 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, r
 		return nil, rows.Err()
 	}
 
-	return scanAutomationWorkItemRow(rows)
+	item, err := scanAutomationWorkItemRow(rows)
+	if err == nil {
+		s.automationChanged()
+	}
+
+	return item, err
 }
 
 // EnsureAutomationWorkItemSession appends the session analyzing a claimed item rather than
@@ -266,11 +276,11 @@ func (s *Store) failWorkItems(ctx context.Context, automationId, cause, states s
 		return 0, fmt.Errorf("cannot fail work items without an automation id")
 	}
 
-	return countAffected(ctx, s.db, `
+	return s.countAutomationChanges(countAffected(ctx, s.db, `
 		UPDATE automation_work_items
 		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
 		WHERE automation_id = $1 AND state IN `+states+`
-		RETURNING id`, automationId, cause)
+		RETURNING id`, automationId, cause))
 }
 
 // FailStaleAutomationWorkItems terminalizes work whose payload was derived from params that
@@ -302,12 +312,12 @@ func (s *Store) FailOrphanedPendingAutomationWorkItems(ctx context.Context, live
 
 func (s *Store) failOrphanedWorkItems(ctx context.Context, liveIds []string, cause, states string) (int, error) {
 	// pgx sends []string as text[]; automation_id is uuid.
-	return countAffected(ctx, s.db, `
+	return s.countAutomationChanges(countAffected(ctx, s.db, `
 		UPDATE automation_work_items
 		SET state = 'failed', error = NULLIF($2, ''), updated_at = now()
 		WHERE state IN `+states+`
 		  AND NOT (automation_id = ANY($1::uuid[]))
-		RETURNING id`, liveIds, cause)
+		RETURNING id`, liveIds, cause))
 }
 
 // transitionWorkItem runs a statement that returns the id it changed, because db.DB.Exec
@@ -334,6 +344,8 @@ func (s *Store) transitionWorkItem(ctx context.Context, stmt, itemId string, arg
 		return ErrAutomationWorkItemNotFound
 	}
 
+	s.automationChanged()
+
 	return nil
 }
 
@@ -355,7 +367,12 @@ func (s *Store) queryWorkItem(ctx context.Context, stmt string, args ...any) (*m
 		return nil, ErrAutomationWorkItemNotFound
 	}
 
-	return scanAutomationWorkItemRow(rows)
+	item, err := scanAutomationWorkItemRow(rows)
+	if err == nil {
+		s.automationChanged()
+	}
+
+	return item, err
 }
 
 // ListOpenAutomationWorkItems returns every unfinished item for one automation, oldest

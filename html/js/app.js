@@ -1668,6 +1668,10 @@ $(document).ready(function () {
         isUserAdmin(user = null) {
           return this.userHasRole("superuser", user);
         },
+        // Mirrors the built-in rbac/roles grants of automations/read; the server still enforces it.
+        canReadAutomations(user = null) {
+          return ["analyst", "auditor", "superuser"].some(role => this.userHasRole(role, user));
+        },
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },
