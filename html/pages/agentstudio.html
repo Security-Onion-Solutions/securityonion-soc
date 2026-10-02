@@ -825,7 +825,7 @@
                                   <v-chip v-for="entry in automationBacklog(item)" :key="entry.state" size="small" variant="tonal">{{ automationStatusLabel(entry.state) }}: {{ entry.count }}</v-chip>
                                 </div>
                                 <!-- Slots, not raw <tr>/<td>, which would close the enclosing expanded-row cell. -->
-                                <v-data-table v-if="automationHistory(item).runs.length" :headers="runHeaders" :items="automationHistory(item).runs" item-value="id" density="compact" hide-default-footer items-per-page="-1" class="agentstudio-runs" :data-aid="'agentstudio_automation_runs_' + item.id">
+                                <v-data-table v-if="automationHistory(item).runs.length" :headers="runHeaders" :items="automationHistory(item).runs" item-value="id" density="compact" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="runItemsPerPage" class="agentstudio-runs" :data-aid="'agentstudio_automation_runs_' + item.id">
                                   <template #item.startTime="{ value }">{{ value ? $root.formatDateTime(value) : '' }}</template>
                                   <template #item.done="{ item: run }">{{ runItemCount(run, 'done') }}</template>
                                   <template #item.failed="{ item: run }">{{ runItemCount(run, 'failed') }}</template>
@@ -834,7 +834,9 @@
                                   </template>
                                 </v-data-table>
                                 <div v-else-if="automationRuns[item.id] && !automationRuns[item.id].loading" class="text-body-small text-medium-emphasis">{{ i18n.agentStudioAutomationRunsEmpty }}</div>
-                                <v-btn v-if="automationHistory(item).hasMore" variant="text" color="primary" size="small" class="mt-2" :loading="automationHistory(item).loading" @click.stop="loadAutomationRuns(item, true)" :data-aid="'agentstudio_automation_runs_more_' + item.id">{{ i18n.loadMore }}</v-btn>
+                                <div v-if="automationHistory(item).hasMore" class="text-xs-center pt-2">
+                                  <v-btn v-text="i18n.loadMore" color="text_button" :loading="automationHistory(item).loading" @click.stop="loadAutomationRuns(item, true)" :data-aid="'agentstudio_automation_runs_more_' + item.id"></v-btn>
+                                </div>
                               </v-tabs-window-item>
                             </v-tabs-window>
                           </v-card-text>

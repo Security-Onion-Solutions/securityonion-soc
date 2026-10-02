@@ -83,6 +83,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     memorySearch: '',
     memoryPage: 1,
     memoryItemsPerPage: 10,
+    runItemsPerPage: 10,
     memoryDrafts: {},
     expandedMemories: [],
     // Memories awaiting re-embedding; pushed by the server as the pass progresses.
@@ -196,6 +197,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     'sortByAutomations': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'memoryItemsPerPage': 'saveLocalSettings',
+    'runItemsPerPage': 'saveLocalSettings',
   },
   mounted() {
     this.reload();
@@ -291,6 +293,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.saveSetting('sortDescAutomations', this.sortByAutomations[0].order, 'asc');
       this.saveSetting('itemsPerPage', this.itemsPerPage, 10);
       this.saveSetting('memoryItemsPerPage', this.memoryItemsPerPage, 10);
+      this.saveSetting('runItemsPerPage', this.runItemsPerPage, 10);
     },
     loadLocalSettings() {
       if (localStorage['settings.agentstudio.sortByAgents']) this.sortByAgents[0].key = localStorage['settings.agentstudio.sortByAgents'];
@@ -304,6 +307,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
 
       if (localStorage['settings.agentstudio.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentstudio.itemsPerPage']);
       if (localStorage['settings.agentstudio.memoryItemsPerPage']) this.memoryItemsPerPage = parseInt(localStorage['settings.agentstudio.memoryItemsPerPage']);
+      if (localStorage['settings.agentstudio.runItemsPerPage']) this.runItemsPerPage = parseInt(localStorage['settings.agentstudio.runItemsPerPage']);
     },
     agentsFromParams(params) {
       const mapping = params.agentMapping || {};

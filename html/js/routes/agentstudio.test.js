@@ -1645,6 +1645,23 @@ test('changing the agent page size leaves the memory table alone', async () => {
   expect(get).not.toHaveBeenCalled();
 });
 
+test('the run history page size persists on its own', () => {
+  comp.initAssistant(memoryParams());
+  comp.saveSetting = jest.fn();
+
+  comp.itemsPerPage = 50;
+  comp.runItemsPerPage = 250;
+  comp.saveLocalSettings();
+
+  expect(comp.saveSetting).toHaveBeenCalledWith('itemsPerPage', 50, 10);
+  expect(comp.saveSetting).toHaveBeenCalledWith('runItemsPerPage', 250, 10);
+
+  mockLocalStorage['settings.agentstudio.runItemsPerPage'] = '50';
+  comp.loadLocalSettings();
+  expect(comp.runItemsPerPage).toBe(50);
+  delete mockLocalStorage['settings.agentstudio.runItemsPerPage'];
+});
+
 const TRIAGE_ID = 'a1d3f5b7-9c2e-4e68-8b4a-6f0c2d9e7b13';
 const CLOUDFLARE_ID = '7a3d8e41-2b5c-4f90-8d1e-6c2a9b4f3e08';
 const CRITICAL_ID = 'd29f4c61-8a37-4b0e-9c52-3e1f7a6b8d04';
