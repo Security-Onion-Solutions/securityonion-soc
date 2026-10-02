@@ -1427,23 +1427,23 @@ dfn {
 }
 
 /* Tabular figures keep the ticking column from jittering. */
-.agentspy-elapsed {
+.agentmonitor-elapsed {
   font-variant-numeric: tabular-nums;
 }
 
 /* Grows to the viewport bottom, then scrolls; 328px is the surrounding chrome. */
-#agentspy-transcript {
+#agentmonitor-transcript {
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 328px);
 }
 
-.agentspy-stream {
+.agentmonitor-stream {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }
 
-.agentspy-message + .agentspy-message {
+.agentmonitor-message + .agentmonitor-message {
   margin-top: 12px;
 }

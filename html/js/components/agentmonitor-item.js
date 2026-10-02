@@ -3,13 +3,13 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-loadPageTemplate('component-agentspy-item', 'pages/agentspy-item.html');
+loadPageTemplate('component-agentmonitor-item', 'pages/agentmonitor-item.html');
 
-// Expanded work item detail, shared by both Agent Spy tables; `ctx` is the Agent Spy page.
+// Expanded work item detail, shared by both Agent Monitor tables; `ctx` is the Agent Monitor page.
 components.push({
-	name: "agentspy-item", component: {
+	name: "agentmonitor-item", component: {
 		props: { item: { type: Object, required: true } },
-		inject: { ctx: { from: 'agentSpyCtx' } },
-		template: '#component-agentspy-item',
+		inject: { ctx: { from: 'agentMonitorCtx' } },
+		template: '#component-agentmonitor-item',
 	}
 });

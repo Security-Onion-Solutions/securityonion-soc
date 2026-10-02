@@ -5,12 +5,12 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
-// agentspy.js picks from these globals, so they load first, as in index.html.
+// agentmonitor.js picks from these globals, so they load first, as in index.html.
 require('./assistant.sessions.js');
 require('./assistant.utils.js');
 require('./assistant.tools.js');
 require('./assistant.streaming.js');
-require('./agentspy.js');
+require('./agentmonitor.js');
 
 let comp;
 let originalConsole;
@@ -150,7 +150,7 @@ beforeEach(() => {
   console.error = jest.fn();
   console.warn = jest.fn();
 
-  comp = getComponent("agentspy");
+  comp = getComponent("agentmonitor");
   resetPapi();
   serve();
 
@@ -356,7 +356,7 @@ test('breadcrumbs name the item being watched', async () => {
 
   const crumbs = comp.breadcrumbs();
   expect(crumbs.length).toBe(2);
-  expect(crumbs[0].title).toBe(comp.i18n.agentSpy);
+  expect(crumbs[0].title).toBe(comp.i18n.agentMonitor);
   expect(crumbs[0].to).not.toBeNull();
   expect(crumbs[1].to).toBeNull();
   expect(crumbs[1].title).toBe('Alert Triage — rule.name:Suspicious PowerShell');
@@ -528,23 +528,23 @@ test('the details tab lists the work item as key/value rows', async () => {
   const item = itemById('item-ps');
 
   expect(comp.itemDetails(item).map(r => r.key)).toEqual([
-    comp.i18n.agentSpyItemId, comp.i18n.agentSpyRunId, comp.i18n.agentSpyAutomation,
-    comp.i18n.agentSpyGroup, comp.i18n.status, comp.i18n.attempt,
-    comp.i18n.dateCreated, comp.i18n.agentSpyLastChanged,
+    comp.i18n.agentMonitorItemId, comp.i18n.agentMonitorRunId, comp.i18n.agentMonitorAutomation,
+    comp.i18n.agentMonitorGroup, comp.i18n.status, comp.i18n.attempt,
+    comp.i18n.dateCreated, comp.i18n.agentMonitorLastChanged,
   ]);
 
   expect(comp.itemDetails(itemById('item-dns')).map(r => r.key)).toContain(comp.i18n.error);
 
   const rows = comp.itemDetails(Object.assign({}, item, { runId: '', groupKey: '' }));
-  expect(rows.find(r => r.key === comp.i18n.agentSpyRunId).value).toBe('—');
-  expect(rows.find(r => r.key === comp.i18n.agentSpyGroup).value).toBe('—');
+  expect(rows.find(r => r.key === comp.i18n.agentMonitorRunId).value).toBe('—');
+  expect(rows.find(r => r.key === comp.i18n.agentMonitorGroup).value).toBe('—');
 });
 
 test('the automation row links to that automation in Agent Studio', async () => {
   await load();
 
   for (const item of [itemById('item-ps'), itemById('item-mimi')]) {
-    const row = comp.itemDetails(item).find(r => r.key === comp.i18n.agentSpyAutomation);
+    const row = comp.itemDetails(item).find(r => r.key === comp.i18n.agentMonitorAutomation);
     expect(row.link).toEqual({ name: 'agentstudio', query: { tab: 'automations', automation: TRIAGE_ID } });
   }
   expect(comp.automationConfigLink({})).toBeNull();
@@ -588,14 +588,14 @@ test('the state vocabulary matches the work item model', () => {
 test('the activity line is what the item\'s sessions are doing now', async () => {
   await load();
 
-  expect(comp.activityFor(itemById('item-ps'))).toBe(comp.i18n.agentSpyWaitingOnModel);
-  expect(comp.activityFor(itemById('item-travel'))).toBe(comp.i18n.agentSpyInvoking + ' query_events');
-  expect(comp.activityFor(itemById('item-kerb'))).toBe(comp.i18n.agentSpyApplyingResults);
+  expect(comp.activityFor(itemById('item-ps'))).toBe(comp.i18n.agentMonitorWaitingOnModel);
+  expect(comp.activityFor(itemById('item-travel'))).toBe(comp.i18n.agentMonitorInvoking + ' query_events');
+  expect(comp.activityFor(itemById('item-kerb'))).toBe(comp.i18n.agentMonitorApplyingResults);
   expect(comp.activityFor(itemById('item-mimi'))).toBe('');
 
-  expect(comp.activityFor({ state: 'running', phases: [] })).toBe(comp.i18n.agentSpyPreparing);
+  expect(comp.activityFor({ state: 'running', phases: [] })).toBe(comp.i18n.agentMonitorPreparing);
   expect(comp.activityFor({ state: 'running', phases: [{ phase: 'invoking_tool:delegate_to_Hunter' }] }))
-    .toBe(comp.i18n.agentSpyDelegatingTo + ' Hunter');
+    .toBe(comp.i18n.agentMonitorDelegatingTo + ' Hunter');
   expect(comp.describePhase('something_new')).toBe('something_new', 'an unknown phase shows itself');
 });
 
@@ -603,7 +603,7 @@ test('a waiting item says what it waits on', async () => {
   await load();
 
   expect(comp.blockedBy(itemById('item-lsass'))).toBe('Investigator');
-  expect(comp.activityFor(itemById('item-lsass'))).toBe(comp.i18n.agentSpyWaitingOnAgent + ' Investigator');
+  expect(comp.activityFor(itemById('item-lsass'))).toBe(comp.i18n.agentMonitorWaitingOnAgent + ' Investigator');
 
   comp.pool.agents[0].running = 1;
   expect(comp.activityFor(itemById('item-lsass'))).toBe('');
@@ -641,7 +641,7 @@ test('the pool is reported whole, chats included, and an unlimited one says so',
   await load();
 
   expect(comp.poolLabel()).toBe('3 / 4');
-  expect(comp.queuedLabel()).toBe('1 / ' + comp.i18n.agentSpyNoLimit);
+  expect(comp.queuedLabel()).toBe('1 / ' + comp.i18n.agentMonitorNoLimit);
   expect(comp.pool.busy).toBe(1);
 
   comp.pool.running = 4;
@@ -650,7 +650,7 @@ test('the pool is reported whole, chats included, and an unlimited one says so',
   expect(comp.poolSaturated()).toBe(false, 'at capacity but nothing waiting is not a problem');
   comp.pool.queued = 1;
   comp.pool.maxConcurrent = 0;
-  expect(comp.poolLabel()).toBe('4 / ' + comp.i18n.agentSpyNoLimit);
+  expect(comp.poolLabel()).toBe('4 / ' + comp.i18n.agentMonitorNoLimit);
   expect(comp.poolSaturated()).toBe(false, 'an unlimited pool never saturates');
 });
 
@@ -769,20 +769,20 @@ test('no timer runs when the page is unavailable', () => {
 
 test('watching a session is a real URL, not page state', () => {
   expect(comp.buildSessionLink('item-ps', 'sess-9')).toEqual({
-    name: 'agentspy', params: { itemId: 'item-ps', sessionId: 'sess-9' },
+    name: 'agentmonitor', params: { itemId: 'item-ps', sessionId: 'sess-9' },
   });
 });
 
 test('sections collapse and the choice persists', () => {
-  expect(comp.isExpandedSection('agentspy-recent')).toBe(true);
+  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(true);
 
-  comp.toggleShowSection('agentspy-recent');
-  expect(comp.isExpandedSection('agentspy-recent')).toBe(false);
-  expect(comp.isExpandedSection('agentspy-inflight')).toBe(true, 'sections collapse independently');
+  comp.toggleShowSection('agentmonitor-recent');
+  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(false);
+  expect(comp.isExpandedSection('agentmonitor-inflight')).toBe(true, 'sections collapse independently');
 
   comp.collapsedSections = [];
   comp.loadLocalSettings();
-  expect(comp.isExpandedSection('agentspy-recent')).toBe(false);
+  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(false);
 });
 
 test('table and refresh settings persist to local storage', () => {

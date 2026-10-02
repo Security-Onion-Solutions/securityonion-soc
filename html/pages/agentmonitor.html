@@ -1,10 +1,10 @@
-<v-container v-if="!paramsLoaded" fluid data-aid="agentspy_loading_parameters"></v-container>
-<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentspy_screen">
-  <v-dialog v-model="showOptionsDialog" max-width="540" data-aid="agentspy_options_dialog">
+<v-container v-if="!paramsLoaded" fluid data-aid="agentmonitor_loading_parameters"></v-container>
+<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentmonitor_screen">
+  <v-dialog v-model="showOptionsDialog" max-width="540" data-aid="agentmonitor_options_dialog">
     <v-card class="options-dialog">
       <v-card-title role="heading" aria-level="2">{{ i18n.options }}</v-card-title>
-      <v-card-text data-aid="agentspy_options">
-        <v-select v-model="autoRefreshInterval" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half" data-aid="agentspy_autorefresh"></v-select>
+      <v-card-text data-aid="agentmonitor_options">
+        <v-select v-model="autoRefreshInterval" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half" data-aid="agentmonitor_autorefresh"></v-select>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -14,10 +14,10 @@
   </v-dialog>
 
   <v-row align="center" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
-    <v-col style="flex: 0 0 auto;" class="pa-0 align-self-end" id="agentspy-breadcrumbs">
+    <v-col style="flex: 0 0 auto;" class="pa-0 align-self-end" id="agentmonitor-breadcrumbs">
       <v-breadcrumbs :items="breadcrumbs()" density="compact" class="py-0">
         <template #item="{ item }">
-          <v-breadcrumbs-item :to="item.to" :disabled="item.disabled" :data-aid="'agentspy_breadcrumb_' + item.title">{{ item.title }}</v-breadcrumbs-item>
+          <v-breadcrumbs-item :to="item.to" :disabled="item.disabled" :data-aid="'agentmonitor_breadcrumb_' + item.title">{{ item.title }}</v-breadcrumbs-item>
         </template>
         <template #divider>
           <v-icon>fa-chevron-right</v-icon>
@@ -27,27 +27,27 @@
     <v-spacer></v-spacer>
     <v-col style="flex: 0 0 auto;" class="pa-0">
       <v-toolbar class="so-toolbar elevation-0" variant="flat">
-        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="togglePaused()" data-aid="agentspy_pause" :title="paused ? i18n.agentSpyResume : i18n.agentSpyPause" :aria-label="paused ? i18n.agentSpyResume : i18n.agentSpyPause">
+        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="togglePaused()" data-aid="agentmonitor_pause" :title="paused ? i18n.agentMonitorResume : i18n.agentMonitorPause" :aria-label="paused ? i18n.agentMonitorResume : i18n.agentMonitorPause">
           <v-icon>{{ paused ? 'fa-play' : 'fa-pause' }}</v-icon>
         </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadData()" data-aid="agentspy_refresh" :title="i18n.refresh" :aria-label="i18n.ariaReloadData">
+        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadData()" data-aid="agentmonitor_refresh" :title="i18n.refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
         </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptionsDialog = true" data-aid="agentspy_options_button" :title="i18n.options" :aria-label="i18n.options">
+        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptionsDialog = true" data-aid="agentmonitor_options_button" :title="i18n.options" :aria-label="i18n.options">
           <v-icon>fa-gear</v-icon>
         </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" data-aid="agentspy_docs" :title="i18n.contextualDocsBtn" :aria-label="i18n.contextualDocsBtn">
+        <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" data-aid="agentmonitor_docs" :title="i18n.contextualDocsBtn" :aria-label="i18n.contextualDocsBtn">
           <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
     </v-col>
   </v-row>
 
-  <v-row class="ga-3" data-aid="agentspy_pool_stats">
+  <v-row class="ga-3" data-aid="agentmonitor_pool_stats">
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_running" :title="i18n.agentSpyPoolHelp">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_running" :title="i18n.agentMonitorPoolHelp">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-running">{{ i18n.agentSpyPoolRunning }}</div>
+          <div class="so-stat-label" id="stat-label-pool-running">{{ i18n.agentMonitorPoolRunning }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-running">
             <span :class="poolSaturated() ? 'text-warning' : ''">{{ poolLabel() }}</span>
           </div>
@@ -56,9 +56,9 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_queued" :title="i18n.agentSpyPoolHelp">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_queued" :title="i18n.agentMonitorPoolHelp">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-queued">{{ i18n.agentSpyPoolQueued }}</div>
+          <div class="so-stat-label" id="stat-label-pool-queued">{{ i18n.agentMonitorPoolQueued }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-queued">
             <span :class="poolSaturated() ? 'text-warning' : ''">{{ queuedLabel() }}</span>
           </div>
@@ -67,27 +67,27 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_peak_running">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_running">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-peak-running">{{ i18n.agentSpyPeakRunning }}</div>
+          <div class="so-stat-label" id="stat-label-pool-peak-running">{{ i18n.agentMonitorPeakRunning }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-peak-running">{{ pool.peakRunning.toLocaleString() }}</div>
         </div>
         <v-icon class="so-stat-icon">fa-gauge-high</v-icon>
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_peak_queued">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_queued">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-peak-queued">{{ i18n.agentSpyPeakQueued }}</div>
+          <div class="so-stat-label" id="stat-label-pool-peak-queued">{{ i18n.agentMonitorPeakQueued }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-peak-queued">{{ pool.peakQueued.toLocaleString() }}</div>
         </div>
         <v-icon class="so-stat-icon">fa-layer-group</v-icon>
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_rejected">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_rejected">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-rejected">{{ i18n.agentSpyRejected }}</div>
+          <div class="so-stat-label" id="stat-label-pool-rejected">{{ i18n.agentMonitorRejected }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-rejected">
             <span :class="pool.rejected ? 'text-error' : ''">{{ pool.rejected.toLocaleString() }}</span>
           </div>
@@ -96,18 +96,18 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_deduped">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_deduped">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-deduped">{{ i18n.agentSpyDeduped }}</div>
+          <div class="so-stat-label" id="stat-label-pool-deduped">{{ i18n.agentMonitorDeduped }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-deduped">{{ pool.deduped.toLocaleString() }}</div>
         </div>
         <v-icon class="so-stat-icon">fa-clone</v-icon>
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentspy_pool_busy">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_busy">
         <div class="so-stat-text">
-          <div class="so-stat-label" id="stat-label-pool-busy">{{ i18n.agentSpyBusy }}</div>
+          <div class="so-stat-label" id="stat-label-pool-busy">{{ i18n.agentMonitorBusy }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-busy">{{ pool.busy.toLocaleString() }}</div>
         </div>
         <v-icon class="so-stat-icon">fa-user-clock</v-icon>
@@ -115,29 +115,29 @@
     </v-col>
   </v-row>
 
-  <v-alert v-if="!schedulerRunning" type="warning" variant="tonal" density="compact" icon="fa-triangle-exclamation" class="mt-3" data-aid="agentspy_scheduler_stopped">
-    {{ i18n.agentSpySchedulerStopped }}
+  <v-alert v-if="!schedulerRunning" type="warning" variant="tonal" density="compact" icon="fa-triangle-exclamation" class="mt-3" data-aid="agentmonitor_scheduler_stopped">
+    {{ i18n.agentMonitorSchedulerStopped }}
   </v-alert>
 
 
   <template v-if="level() === 1">
     <v-row>
-      <v-col id="agentspy-inflight" class="section-panel" data-aid="agentspy_inflight_section">
+      <v-col id="agentmonitor-inflight" class="section-panel" data-aid="agentmonitor_inflight_section">
         <v-toolbar density="compact" variant="flat">
-          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentSpyInFlight }}</v-toolbar-title>
+          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorInFlight }}</v-toolbar-title>
           <v-spacer></v-spacer>
-          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentspy-inflight')" data-aid="agentspy_inflight_toggle" :aria-expanded="isExpandedSection('agentspy-inflight')" :aria-label="i18n.agentSpyInFlight">
-            <v-icon v-if="!isExpandedSection('agentspy-inflight')" data-aid="agentspy_inflight_expand">fa-angle-down</v-icon>
-            <v-icon v-else data-aid="agentspy_inflight_collapse">fa-angle-up</v-icon>
+          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentmonitor-inflight')" data-aid="agentmonitor_inflight_toggle" :aria-expanded="isExpandedSection('agentmonitor-inflight')" :aria-label="i18n.agentMonitorInFlight">
+            <v-icon v-if="!isExpandedSection('agentmonitor-inflight')" data-aid="agentmonitor_inflight_expand">fa-angle-down</v-icon>
+            <v-icon v-else data-aid="agentmonitor_inflight_collapse">fa-angle-up</v-icon>
           </v-btn>
         </v-toolbar>
-        <v-data-table v-if="isExpandedSection('agentspy-inflight')" :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort
+        <v-data-table v-if="isExpandedSection('agentmonitor-inflight')" :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort
           :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
-          :headers="itemHeaders" :items="items" item-value="id" v-model:expanded="expandedItems" :no-data-text="i18n.agentSpyInFlightEmpty" data-aid="agentspy_inflight_table">
+          :headers="itemHeaders" :items="items" item-value="id" v-model:expanded="expandedItems" :no-data-text="i18n.agentMonitorInFlightEmpty" data-aid="agentmonitor_inflight_table">
           <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
             <tr>
               <template v-for="header in columns" :key="header.key">
-                <th :class="[{'is-sorted': isSorted(header)}, rightShiftedHeaders.includes(header?.value) ? 'text-right' : '']" :data-aid="'agentspy_inflight_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                <th :class="[{'is-sorted': isSorted(header)}, rightShiftedHeaders.includes(header?.value) ? 'text-right' : '']" :data-aid="'agentmonitor_inflight_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
                   <span @click="toggleSort(header)">{{ header.title }}</span>
                   <template v-if="isSorted(header)">
                     <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
@@ -149,7 +149,7 @@
           <template #item="{ item, isExpanded, toggleExpand, internalItem }">
             <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
               <td>
-                <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentSpyItemDetails" data-aid="agentspy_inflight_expand">
+                <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentMonitorItemDetails" data-aid="agentmonitor_inflight_expand">
                   <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
                   <v-icon v-else>fa-angle-right</v-icon>
                 </v-btn>
@@ -165,21 +165,21 @@
               <td>{{ activityFor(item) }}</td>
               <td>{{ agentChain(item).join(' → ') }}</td>
               <td class="text-right">{{ item.attempts }}</td>
-              <td class="text-right agentspy-elapsed" :title="i18n.agentSpyInStateHelp">{{ formatElapsed(inStateMs(item)) }}</td>
-              <td class="text-right agentspy-elapsed">{{ formatElapsed(elapsedMs(item)) }}</td>
+              <td class="text-right agentmonitor-elapsed" :title="i18n.agentMonitorInStateHelp">{{ formatElapsed(inStateMs(item)) }}</td>
+              <td class="text-right agentmonitor-elapsed">{{ formatElapsed(elapsedMs(item)) }}</td>
               <td>
-                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentspy_watch_item" :title="i18n.agentSpyWatch" :aria-label="i18n.agentSpyWatch + ' - ' + item.automationName">
+                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_watch_item" :title="i18n.agentMonitorWatch" :aria-label="i18n.agentMonitorWatch + ' - ' + item.automationName">
                   <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
                 </router-link>
-                <span v-else class="text-disabled" :title="i18n.agentSpyNotStarted">&mdash;</span>
+                <span v-else class="text-disabled" :title="i18n.agentMonitorNotStarted">&mdash;</span>
               </td>
             </tr>
           </template>
 
           <template #expanded-row="{ item }">
-            <tr class="expanded-row" data-aid="agentspy_inflight_expanded">
+            <tr class="expanded-row" data-aid="agentmonitor_inflight_expanded">
               <td :colspan="itemHeaders.length" class="px-0">
-                <agentspy-item :item="item"></agentspy-item>
+                <agentmonitor-item :item="item"></agentmonitor-item>
               </td>
             </tr>
           </template>
@@ -188,21 +188,21 @@
     </v-row>
 
     <v-row>
-      <v-col id="agentspy-recent" class="section-panel" data-aid="agentspy_recent_section">
+      <v-col id="agentmonitor-recent" class="section-panel" data-aid="agentmonitor_recent_section">
         <v-toolbar density="compact" variant="flat">
-          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentSpyRecent }}</v-toolbar-title>
+          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorRecent }}</v-toolbar-title>
           <v-spacer></v-spacer>
-          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentspy-recent')" data-aid="agentspy_recent_toggle" :aria-expanded="isExpandedSection('agentspy-recent')" :aria-label="i18n.agentSpyRecent">
-            <v-icon v-if="!isExpandedSection('agentspy-recent')" data-aid="agentspy_recent_expand">fa-angle-down</v-icon>
-            <v-icon v-else data-aid="agentspy_recent_collapse">fa-angle-up</v-icon>
+          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentmonitor-recent')" data-aid="agentmonitor_recent_toggle" :aria-expanded="isExpandedSection('agentmonitor-recent')" :aria-label="i18n.agentMonitorRecent">
+            <v-icon v-if="!isExpandedSection('agentmonitor-recent')" data-aid="agentmonitor_recent_expand">fa-angle-down</v-icon>
+            <v-icon v-else data-aid="agentmonitor_recent_collapse">fa-angle-up</v-icon>
           </v-btn>
         </v-toolbar>
-        <v-data-table v-if="isExpandedSection('agentspy-recent')" :headers="recentHeaders" :items="recent" item-value="id" v-model:expanded="expandedRecent"
-          :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" :no-data-text="i18n.agentSpyRecentEmpty" data-aid="agentspy_recent_table">
+        <v-data-table v-if="isExpandedSection('agentmonitor-recent')" :headers="recentHeaders" :items="recent" item-value="id" v-model:expanded="expandedRecent"
+          :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" :no-data-text="i18n.agentMonitorRecentEmpty" data-aid="agentmonitor_recent_table">
           <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
             <tr>
               <template v-for="header in columns" :key="header.key">
-                <th :class="[{'is-sorted': isSorted(header)}, rightShiftedHeaders.includes(header?.value) ? 'text-right' : '']" :data-aid="'agentspy_recent_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
+                <th :class="[{'is-sorted': isSorted(header)}, rightShiftedHeaders.includes(header?.value) ? 'text-right' : '']" :data-aid="'agentmonitor_recent_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
                   <span @click="toggleSort(header)">{{ header.title }}</span>
                   <template v-if="isSorted(header)">
                     <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
@@ -214,7 +214,7 @@
           <template #item="{ item, isExpanded, toggleExpand, internalItem }">
             <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
               <td>
-                <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentSpyItemDetails" data-aid="agentspy_recent_expand_row">
+                <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentMonitorItemDetails" data-aid="agentmonitor_recent_expand_row">
                   <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
                   <v-icon v-else>fa-angle-right</v-icon>
                 </v-btn>
@@ -235,7 +235,7 @@
               <td class="text-right">{{ $root.formatDateTime(item.updateTime) }}</td>
               <td class="text-right">{{ formatElapsed(elapsedMs(item)) }}</td>
               <td>
-                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentspy_open_recent_item" :title="i18n.agentSpyViewItem" :aria-label="i18n.agentSpyViewItem + ' - ' + item.automationName">
+                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_open_recent_item" :title="i18n.agentMonitorViewItem" :aria-label="i18n.agentMonitorViewItem + ' - ' + item.automationName">
                   <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
                 </router-link>
                 <span v-else class="text-disabled">&mdash;</span>
@@ -244,9 +244,9 @@
           </template>
 
           <template #expanded-row="{ item }">
-            <tr class="expanded-row" data-aid="agentspy_recent_expanded">
+            <tr class="expanded-row" data-aid="agentmonitor_recent_expanded">
               <td :colspan="recentHeaders.length" class="px-0">
-                <agentspy-item :item="item"></agentspy-item>
+                <agentmonitor-item :item="item"></agentmonitor-item>
               </td>
             </tr>
           </template>
@@ -257,29 +257,29 @@
 
   <template v-else>
     <v-row v-if="!watchedTranscript() && transcriptLoading">
-      <v-col class="section-panel" data-aid="agentspy_transcript_loading">
+      <v-col class="section-panel" data-aid="agentmonitor_transcript_loading">
         <div class="d-flex justify-center py-8">{{ i18n.loading }}</div>
       </v-col>
     </v-row>
     <v-row v-else-if="!watchedTranscript()">
-      <v-col class="section-panel" data-aid="agentspy_transcript_missing">
+      <v-col class="section-panel" data-aid="agentmonitor_transcript_missing">
         <div class="d-flex flex-column align-center justify-center ga-2 py-8">
-          <div>{{ i18n.agentSpyNoTranscript }}</div>
-          <v-btn variant="text" color="primary" :to="{ name: 'agentspy' }">{{ i18n.agentSpyBackToFlight }}</v-btn>
+          <div>{{ i18n.agentMonitorNoTranscript }}</div>
+          <v-btn variant="text" color="primary" :to="{ name: 'agentmonitor' }">{{ i18n.agentMonitorBackToFlight }}</v-btn>
         </div>
       </v-col>
     </v-row>
     <v-row v-else>
-      <v-col id="agentspy-transcript" class="section-panel" data-aid="agentspy_transcript_section">
+      <v-col id="agentmonitor-transcript" class="section-panel" data-aid="agentmonitor_transcript_section">
         <v-toolbar density="compact" variant="flat">
           <v-toolbar-title role="heading" aria-level="2">{{ watchedTranscript().agent }}</v-toolbar-title>
-          <v-chip v-if="watchedIsLive()" size="small" color="primary" variant="tonal" class="ml-3" data-aid="agentspy_transcript_live">{{ i18n.agentSpyLive }}</v-chip>
+          <v-chip v-if="watchedIsLive()" size="small" color="primary" variant="tonal" class="ml-3" data-aid="agentmonitor_transcript_live">{{ i18n.agentMonitorLive }}</v-chip>
           <v-spacer></v-spacer>
-          <span v-if="modelFor(watchedTranscript().agent)" class="text-body-small text-medium-emphasis mr-4" data-aid="agentspy_transcript_model">{{ modelFor(watchedTranscript().agent) }}</span>
+          <span v-if="modelFor(watchedTranscript().agent)" class="text-body-small text-medium-emphasis mr-4" data-aid="agentmonitor_transcript_model">{{ modelFor(watchedTranscript().agent) }}</span>
         </v-toolbar>
 
-        <div class="agentspy-stream px-4 pb-4">
-          <div v-for="(message, index) in watchedTranscript().messages" :key="index" class="agentspy-message" :data-aid="'agentspy_message_' + index">
+        <div class="agentmonitor-stream px-4 pb-4">
+          <div v-for="(message, index) in watchedTranscript().messages" :key="index" class="agentmonitor-message" :data-aid="'agentmonitor_message_' + index">
             <div v-if="message.content" class="text-body-2 mb-2" v-html="formatMarkdown(message.content)"></div>
             <template v-for="toolUse in message.toolUses" :key="toolUse.id">
               <tool-use-card :tool-use="toolUse"></tool-use-card>
@@ -290,21 +290,21 @@
     </v-row>
   </template>
 </v-container>
-<v-container v-else-if="$root.isLicensed('oai') && !assistantEnabled" fluid data-aid="agentspy_assistant_disabled">
+<v-container v-else-if="$root.isLicensed('oai') && !assistantEnabled" fluid data-aid="agentmonitor_assistant_disabled">
   <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
     <div class="my-8 d-flex align-center ga-2">
       <div>{{ i18n.assistantDisabled }}</div>
-      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print text-decoration-none" data-aid="agentspy_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.client.assistant.enabled'}}" class="no-print text-decoration-none" data-aid="agentmonitor_config_entry_enabled" :aria-label="i18n.ariaVisitConfigEntry">
         <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>
   </div>
 </v-container>
-<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentspy_agentic_disabled">
+<v-container v-else-if="$root.isLicensed('oai')" fluid data-aid="agentmonitor_agentic_disabled">
   <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
     <div class="my-8 d-flex align-center ga-2">
       <div>{{ i18n.agenticDisabled }}</div>
-      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.modules.assistant.agentic'}}" class="no-print text-decoration-none" data-aid="agentspy_config_entry_agentic" :aria-label="i18n.ariaVisitConfigEntry">
+      <router-link v-if="$root.isUserAdmin()" :to="{name: 'config', query: {s: 'soc.config.server.modules.assistant.agentic'}}" class="no-print text-decoration-none" data-aid="agentmonitor_config_entry_agentic" :aria-label="i18n.ariaVisitConfigEntry">
         <v-icon class="mr-2 theme-icon" :title="i18n.visitConfigEntry">fa-gear</v-icon>
       </router-link>
     </div>

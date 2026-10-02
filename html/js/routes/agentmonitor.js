@@ -4,19 +4,19 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-loadPageTemplate('page-agentspy', 'pages/agentspy.html');
+loadPageTemplate('page-agentmonitor', 'pages/agentmonitor.html');
 
-const SPY_TICK_MS = 1000;
+const MONITOR_TICK_MS = 1000;
 
 // One details request per run, so this caps the cost of a load.
-const SPY_RECENT_RUNS = 5;
+const MONITOR_RECENT_RUNS = 5;
 
 // Matches the backend's agentStreamFlushIntervalMs; refetching faster finds nothing new.
-const SPY_TRANSCRIPT_REFRESH_MS = 1000;
+const MONITOR_TRANSCRIPT_REFRESH_MS = 1000;
 
-const SPY_PHASE_WAITING_LLM = 'waiting_llm';
-const SPY_PHASE_INVOKING_TOOL = 'invoking_tool:';
-const SPY_DELEGATE_TOOL = 'delegate_to_';
+const MONITOR_PHASE_WAITING_LLM = 'waiting_llm';
+const MONITOR_PHASE_INVOKING_TOOL = 'invoking_tool:';
+const MONITOR_DELEGATE_TOOL = 'delegate_to_';
 
 const emptyPool = () => ({
   queued: 0, running: 0, maxConcurrent: 0, maxQueueDepth: 0,
@@ -24,7 +24,7 @@ const emptyPool = () => ({
 });
 
 // Assistant methods that tool-use-card, delegation-child and session conversion rely on.
-const spyDelegationCtx = () => Object.assign(
+const monitorDelegationCtx = () => Object.assign(
   {},
   pickMethods(globalThis.AssistantTools, ['displayStatus', 'hasPendingDescendantApproval', 'getToolStatusIcon', 'getToolStatusColor', 'getToolStatusTitle',
     'sessionTools', 'getSessionToolMap']),
@@ -45,9 +45,9 @@ function pickMethods(module, names) {
   return picked;
 }
 
-routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', component: {
-  template: '#page-agentspy',
-  provide() { return { delegationCtx: this, agentSpyCtx: this }; },
+routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', component: {
+  template: '#page-agentmonitor',
+  provide() { return { delegationCtx: this, agentMonitorCtx: this }; },
   data() { return {
     i18n: this.$root.i18n,
     paramsLoaded: false,
@@ -97,21 +97,21 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
 
     itemHeaders: [
       { title: '', value: 'expand', sortable: false, width: '48px' },
-      { title: this.$root.i18n.agentSpyAutomation, value: 'automationName' },
-      { title: this.$root.i18n.agentSpyGroup, value: 'groupKey', sortable: false },
+      { title: this.$root.i18n.agentMonitorAutomation, value: 'automationName' },
+      { title: this.$root.i18n.agentMonitorGroup, value: 'groupKey', sortable: false },
       { title: this.$root.i18n.status, value: 'status', width: '120px' },
-      { title: this.$root.i18n.agentSpyDoing, value: 'activity', sortable: false },
-      { title: this.$root.i18n.agentSpyAgent, value: 'agentChain', sortable: false },
+      { title: this.$root.i18n.agentMonitorDoing, value: 'activity', sortable: false },
+      { title: this.$root.i18n.agentMonitorAgent, value: 'agentChain', sortable: false },
       { title: this.$root.i18n.attempt, value: 'attempts', width: '100px' },
-      { title: this.$root.i18n.agentSpyInState, value: 'updateTime', width: '110px' },
-      { title: this.$root.i18n.agentSpyElapsed, value: 'createTime', width: '110px' },
+      { title: this.$root.i18n.agentMonitorInState, value: 'updateTime', width: '110px' },
+      { title: this.$root.i18n.agentMonitorElapsed, value: 'createTime', width: '110px' },
       { title: this.$root.i18n.actions, value: 'actions', sortable: false, width: '90px' },
     ],
     attemptHeaders: [
       { title: this.$root.i18n.attempt, value: 'attempt', sortable: false, width: '100px' },
-      { title: this.$root.i18n.agentSpySession, value: 'sessionId', sortable: false },
+      { title: this.$root.i18n.agentMonitorSession, value: 'sessionId', sortable: false },
       { title: this.$root.i18n.status, value: 'state', sortable: false, width: '120px' },
-      { title: this.$root.i18n.agentSpyStarted, value: 'startTime', sortable: false, width: '200px' },
+      { title: this.$root.i18n.agentMonitorStarted, value: 'startTime', sortable: false, width: '200px' },
       { title: this.$root.i18n.actions, value: 'actions', sortable: false, width: '90px' },
     ],
     expandedHeaders: [
@@ -121,12 +121,12 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
     rightShiftedHeaders: ['attempts', 'createTime', 'updateTime', 'attempt', 'duration'],
     recentHeaders: [
       { title: '', value: 'expand', sortable: false, width: '48px' },
-      { title: this.$root.i18n.agentSpyAutomation, value: 'automationName' },
-      { title: this.$root.i18n.agentSpyGroup, value: 'groupKey', sortable: false },
+      { title: this.$root.i18n.agentMonitorAutomation, value: 'automationName' },
+      { title: this.$root.i18n.agentMonitorGroup, value: 'groupKey', sortable: false },
       { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', width: '120px' },
       { title: this.$root.i18n.error, value: 'error', sortable: false },
       { title: this.$root.i18n.attempt, value: 'attempts', width: '100px' },
-      { title: this.$root.i18n.agentSpyFinished, value: 'updateTime', width: '200px' },
+      { title: this.$root.i18n.agentMonitorFinished, value: 'updateTime', width: '200px' },
       { title: this.$root.i18n.duration, value: 'duration', sortable: false, width: '110px' },
       { title: this.$root.i18n.actions, value: 'actions', sortable: false, width: '90px' },
     ],
@@ -200,18 +200,18 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
       if (this.selectedSessionId) this.loadTranscript(this.selectedSessionId);
     },
     saveLocalSettings() {
-      localStorage['settings.agentspy.sortBy'] = this.sortBy[0].key;
-      localStorage['settings.agentspy.sortDesc'] = this.sortBy[0].order;
-      localStorage['settings.agentspy.itemsPerPage'] = this.itemsPerPage;
-      localStorage['settings.agentspy.collapsedSections'] = JSON.stringify(this.collapsedSections);
-      localStorage['settings.agentspy.autoRefreshInterval'] = this.autoRefreshInterval;
+      localStorage['settings.agentmonitor.sortBy'] = this.sortBy[0].key;
+      localStorage['settings.agentmonitor.sortDesc'] = this.sortBy[0].order;
+      localStorage['settings.agentmonitor.itemsPerPage'] = this.itemsPerPage;
+      localStorage['settings.agentmonitor.collapsedSections'] = JSON.stringify(this.collapsedSections);
+      localStorage['settings.agentmonitor.autoRefreshInterval'] = this.autoRefreshInterval;
     },
     loadLocalSettings() {
-      if (localStorage['settings.agentspy.sortBy']) this.sortBy[0].key = localStorage['settings.agentspy.sortBy'];
-      if (localStorage['settings.agentspy.sortDesc']) this.sortBy[0].order = localStorage['settings.agentspy.sortDesc'];
-      if (localStorage['settings.agentspy.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentspy.itemsPerPage']);
-      if (localStorage['settings.agentspy.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.agentspy.collapsedSections']);
-      if (localStorage['settings.agentspy.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.agentspy.autoRefreshInterval']);
+      if (localStorage['settings.agentmonitor.sortBy']) this.sortBy[0].key = localStorage['settings.agentmonitor.sortBy'];
+      if (localStorage['settings.agentmonitor.sortDesc']) this.sortBy[0].order = localStorage['settings.agentmonitor.sortDesc'];
+      if (localStorage['settings.agentmonitor.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentmonitor.itemsPerPage']);
+      if (localStorage['settings.agentmonitor.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.agentmonitor.collapsedSections']);
+      if (localStorage['settings.agentmonitor.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.agentmonitor.autoRefreshInterval']);
     },
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
@@ -227,7 +227,7 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
 
     // Background refreshes only log, so a transient failure doesn't pop an error.
     reportLoadError(error, background) {
-      if (background) console.error('Failed to refresh Agent Spy:', error);
+      if (background) console.error('Failed to refresh Agent Monitor:', error);
       else this.$root.showError(error);
     },
     async loadData(background = false) {
@@ -283,12 +283,12 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
         this.automations = automations;
 
         const histories = await Promise.all(automations.map(a => this.$root.papi.get(
-          'assistant/automations/' + encodeURIComponent(a.id) + '/runs', { params: { limit: SPY_RECENT_RUNS } })));
+          'assistant/automations/' + encodeURIComponent(a.id) + '/runs', { params: { limit: MONITOR_RECENT_RUNS } })));
         const runs = histories
           .flatMap(response => (response.data || {}).runs || [])
           .filter(run => ['succeeded', 'failed'].includes(run.state) && this.runItemTotal(run) > 0)
           .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
-          .slice(0, SPY_RECENT_RUNS);
+          .slice(0, MONITOR_RECENT_RUNS);
 
         // Alerts aren't shown; 0 would fetch the server default of 500.
         const details = await Promise.all(runs.map(run => this.$root.papi.get(
@@ -399,7 +399,7 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
       this.transcriptRefreshTimer = setTimeout(() => {
         this.transcriptRefreshTimer = null;
         this.loadTranscript(this.selectedSessionId, true);
-      }, SPY_TRANSCRIPT_REFRESH_MS);
+      }, MONITOR_TRANSCRIPT_REFRESH_MS);
     },
     modelFor(agent) {
       return this.agentMapping[agent] || '';
@@ -432,19 +432,19 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
     breadcrumbs() {
       // A disabled crumb with a `to` still renders as a clickable-looking anchor.
       const atRoot = this.level() === 1;
-      const crumbs = [{ title: this.i18n.agentSpy, to: atRoot ? null : { name: 'agentspy' }, disabled: atRoot }];
+      const crumbs = [{ title: this.i18n.agentMonitor, to: atRoot ? null : { name: 'agentmonitor' }, disabled: atRoot }];
       if (this.level() === 2) {
         const item = this.selectedItem();
         const label = item
           ? item.automationName + (item.groupKey ? ' — ' + item.groupKey : '')
-          : this.i18n.agentSpySession;
+          : this.i18n.agentMonitorSession;
         crumbs.push({ title: label, to: null, disabled: true });
       }
       return crumbs;
     },
 
     buildSessionLink(itemId, sessionId) {
-      return { name: 'agentspy', params: { itemId: itemId, sessionId: sessionId } };
+      return { name: 'agentmonitor', params: { itemId: itemId, sessionId: sessionId } };
     },
     // One row per recorded session, newest first. Not keyed to the attempts counter:
     // a claim that died before recording its session leaves no gap in session_ids.
@@ -464,14 +464,14 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
     },
     itemDetails(item) {
       const rows = [
-        { key: this.i18n.agentSpyItemId, value: item.id },
-        { key: this.i18n.agentSpyRunId, value: item.runId || '—', help: this.i18n.agentSpyRunIdHelp },
-        { key: this.i18n.agentSpyAutomation, value: item.automationName, link: this.automationConfigLink(item) },
-        { key: this.i18n.agentSpyGroup, value: item.groupKey || '—' },
+        { key: this.i18n.agentMonitorItemId, value: item.id },
+        { key: this.i18n.agentMonitorRunId, value: item.runId || '—', help: this.i18n.agentMonitorRunIdHelp },
+        { key: this.i18n.agentMonitorAutomation, value: item.automationName, link: this.automationConfigLink(item) },
+        { key: this.i18n.agentMonitorGroup, value: item.groupKey || '—' },
         { key: this.i18n.status, value: this.stateLabel(this.displayState(item)) },
         { key: this.i18n.attempt, value: item.attempts },
         { key: this.i18n.dateCreated, value: this.$root.formatDateTime(item.createTime) },
-        { key: this.i18n.agentSpyLastChanged, value: this.$root.formatDateTime(item.updateTime), help: this.i18n.agentSpyInStateHelp },
+        { key: this.i18n.agentMonitorLastChanged, value: this.$root.formatDateTime(item.updateTime), help: this.i18n.agentMonitorInStateHelp },
       ];
       if (item.error) rows.push({ key: this.i18n.error, value: item.error });
       return rows;
@@ -540,27 +540,27 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
     },
     activityFor(item) {
       if (this.isTerminal(item.state)) return '';
-      if (item.state === 'applying') return this.i18n.agentSpyApplyingResults;
+      if (item.state === 'applying') return this.i18n.agentMonitorApplyingResults;
       // Dispatch skips jobs whose agent is at its limit, so there is no queue position.
       if (item.state === 'pending' || item.queued) {
         const blocked = this.blockedBy(item);
-        return blocked ? this.i18n.agentSpyWaitingOnAgent + ' ' + blocked : '';
+        return blocked ? this.i18n.agentMonitorWaitingOnAgent + ' ' + blocked : '';
       }
       // A delegating session just waits on its child; report the one doing the work.
       const phases = item.phases || [];
       const working = phases.filter(p => !this.isDelegating(p.phase));
       const phase = working[working.length - 1] || phases[phases.length - 1];
-      return phase ? this.describePhase(phase.phase) : this.i18n.agentSpyPreparing;
+      return phase ? this.describePhase(phase.phase) : this.i18n.agentMonitorPreparing;
     },
     isDelegating(phase) {
-      return !!phase && phase.startsWith(SPY_PHASE_INVOKING_TOOL + SPY_DELEGATE_TOOL);
+      return !!phase && phase.startsWith(MONITOR_PHASE_INVOKING_TOOL + MONITOR_DELEGATE_TOOL);
     },
     describePhase(phase) {
-      if (phase === SPY_PHASE_WAITING_LLM) return this.i18n.agentSpyWaitingOnModel;
-      if (phase && phase.startsWith(SPY_PHASE_INVOKING_TOOL)) {
-        const tool = phase.slice(SPY_PHASE_INVOKING_TOOL.length);
-        if (tool.startsWith(SPY_DELEGATE_TOOL)) return this.i18n.agentSpyDelegatingTo + ' ' + tool.slice(SPY_DELEGATE_TOOL.length);
-        return this.i18n.agentSpyInvoking + ' ' + tool;
+      if (phase === MONITOR_PHASE_WAITING_LLM) return this.i18n.agentMonitorWaitingOnModel;
+      if (phase && phase.startsWith(MONITOR_PHASE_INVOKING_TOOL)) {
+        const tool = phase.slice(MONITOR_PHASE_INVOKING_TOOL.length);
+        if (tool.startsWith(MONITOR_DELEGATE_TOOL)) return this.i18n.agentMonitorDelegatingTo + ' ' + tool.slice(MONITOR_DELEGATE_TOOL.length);
+        return this.i18n.agentMonitorInvoking + ' ' + tool;
       }
       return phase || '';
     },
@@ -581,7 +581,7 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
       return mins + ':' + String(secs).padStart(2, '0');
     },
     withLimit(count, limit) {
-      return count + ' / ' + (limit ? limit : this.i18n.agentSpyNoLimit);
+      return count + ' / ' + (limit ? limit : this.i18n.agentMonitorNoLimit);
     },
     // Whole pool, chats included: they share the slots automations wait for.
     poolLabel() {
@@ -596,7 +596,7 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
 
     startTick() {
       this.stopTick();
-      this.tickTimer = setInterval(this.tick, SPY_TICK_MS);
+      this.tickTimer = setInterval(this.tick, MONITOR_TICK_MS);
     },
     stopTick() {
       if (this.tickTimer) clearInterval(this.tickTimer);
@@ -613,5 +613,5 @@ routes.push({ path: '/agentspy/:itemId?/:sessionId?', name: 'agentspy', componen
         this.loadActivity(true);
       }
     },
-  }, spyDelegationCtx())
+  }, monitorDelegationCtx())
 }});

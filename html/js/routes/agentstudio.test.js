@@ -1810,7 +1810,7 @@ test('an agent can be opened in Onion AI on a new session', () => {
   expect(comp.chatWithAgentLink(comp.agents[1])).toEqual({ name: 'assistant', query: { agent: 'Hunter' } });
 });
 
-test('a link can open a specific automation, as Agent Spy does, once the list loads', async () => {
+test('a link can open a specific automation, as Agent Monitor does, once the list loads', async () => {
   comp.$route.query = { tab: 'automations', automation: TRIAGE_ID };
   comp.initAssistant(automationParams());
   expect(comp.tab).toBe('automations');

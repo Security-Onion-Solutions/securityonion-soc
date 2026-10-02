@@ -224,7 +224,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       }
       this.$root.stopLoading();
     },
-    // ?tab=automations&automation=<id> deep-links an automation's editor (used by Agent Spy).
+    // ?tab=automations&automation=<id> deep-links an automation's editor (used by Agent Monitor).
     applyRouteQuery() {
       const query = (this.$route || {}).query || {};
       if (query.tab && this.agentic) this.tab = query.tab;
