@@ -23,6 +23,14 @@ const (
 // AlertTriageObject is the event sub-object holding triage state, e.g. so_alerttriage.
 func AlertTriageObject(schemaPrefix string) string { return schemaPrefix + "alerttriage" }
 
+// AlertInvestigationsObject is the event list of manual investigations, e.g. so_investigations.
+// Each entry holds session_id, user_id and, when timing is licensed, timestamp.
+func AlertInvestigationsObject(schemaPrefix string) string { return schemaPrefix + "investigations" }
+
+func AlertInvestigationsField(schemaPrefix string) string {
+	return "event." + AlertInvestigationsObject(schemaPrefix)
+}
+
 func AlertTriageFieldSessionId(schemaPrefix string) string {
 	return alertTriageField(schemaPrefix, "session_id")
 }

@@ -307,7 +307,7 @@ func (f *fakeAssistantstore) DoesUserOwnSession(_ context.Context, _, sessionId 
 	_, exists := f.msgs[sessionId]
 	return exists, exists, false, "", nil
 }
-func (f *fakeAssistantstore) CloneSession(_ context.Context, _ string) (*model.AssistantSession, error) {
+func (f *fakeAssistantstore) CloneSession(_ context.Context, _, _, _ string) (*model.AssistantSession, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeAssistantstore) ToggleSessionsTag(_ context.Context, _ []string, _ string, _ bool) error {

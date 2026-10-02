@@ -2350,6 +2350,42 @@ func TestGetSessions_UserIdFilter(t *testing.T) {
 	assert.True(t, foundUserId, "userId filter should be in query")
 }
 
+func TestGetSessions_SessionIdsFilter(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
+	store.Init("chat-index", "session-index", "so_")
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+	transport.AddResponse(&http.Response{
+		StatusCode: 200,
+		Header: http.Header{
+			"X-Elastic-Product": []string{"Elasticsearch"},
+		},
+		Body: io.NopCloser(strings.NewReader(`{"hits":{"total":{"value":0},"hits":[]}}`)),
+	}, nil)
+
+	_, err := store.GetSessions(ctx, model.GetSessionsWithSessionIds([]string{"a", "b"}), model.GetSessionsWithMessageMeta(false))
+	assert.NoError(t, err)
+
+	reqs := transport.GetRequests()
+	assert.Len(t, reqs, 1)
+
+	var query map[string]any
+	assert.NoError(t, json.NewDecoder(reqs[0].Body).Decode(&query))
+
+	mustQuery := query["query"].(map[string]any)["bool"].(map[string]any)["must"].([]any)
+	found := false
+	for _, clause := range mustQuery {
+		if terms, ok := clause.(map[string]any)["terms"].(map[string]any); ok {
+			assert.Equal(t, []any{"a", "b"}, terms["so_session.sessionId"])
+			found = true
+		}
+	}
+	assert.True(t, found, "a terms filter on the session ids should be in the query")
+}
+
 func TestGetSessions_IncludeDeleted(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 
@@ -3676,7 +3712,7 @@ func TestCloneSession_CopiesRootAndMessages(t *testing.T) {
 	addJsonResponse(transport, 200, cloneBulkOk)
 	addJsonResponse(transport, 200, cloneBulkOk)
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, clone.SessionId)
 	assert.NotEqual(t, "src-1", clone.SessionId)
@@ -3752,7 +3788,7 @@ func TestCloneSession_DeepClonesDescendants(t *testing.T) {
 	addJsonResponse(transport, 200, cloneBulkOk)
 	addJsonResponse(transport, 200, cloneBulkOk)
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.NoError(t, err)
 	assert.Equal(t, 0, clone.Depth)
 	assert.Empty(t, clone.ParentSessionId)
@@ -3799,6 +3835,32 @@ func TestCloneSession_DeepClonesDescendants(t *testing.T) {
 	assert.NotContains(t, chatDocs[1], `"sessionId":"src-2"`)
 }
 
+func TestCloneSession_TiesRootToEntity(t *testing.T) {
+	mockEsClient, transport := modmock.NewMockClient(t)
+	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
+	store.Init("chat-index", "session-index", "so_")
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
+
+	addJsonResponse(transport, 200, cloneSessionHit(`"sessionId":"src-1","title":"Triage","model":"AgentX@SOAI","userId":"system","tags":["automation","shared"]`))
+	addJsonResponse(transport, 200, cloneSessionHit(`"sessionId":"src-2","title":"Child","type":"delegation","model":"Helper@SOAI","userId":"system","parentSessionId":"src-1","parentToolUseId":"tu-1","depth":1`))
+	addJsonResponse(transport, 200, cloneEmptyHits)
+	addJsonResponse(transport, 200, `{"responses":[{"hits":{"total":{"value":0},"hits":[]}},{"hits":{"total":{"value":0},"hits":[]}}]}`)
+	addJsonResponse(transport, 200, cloneBulkOk)
+	addJsonResponse(transport, 200, cloneBulkOk)
+
+	clone, err := store.CloneSession(ctx, "src-1", "alert_investigation", "alert-1")
+	assert.NoError(t, err)
+	assert.Equal(t, "alert_investigation", clone.Type)
+	assert.Equal(t, "alert-1", clone.EntityId)
+
+	sessionDocs := bulkDocs(t, transport.GetRequests()[4])
+	assert.Len(t, sessionDocs, 2)
+	assert.Contains(t, sessionDocs[0], `"type":"alert_investigation"`)
+	assert.Contains(t, sessionDocs[0], `"entityId":"alert-1"`)
+	assert.Contains(t, sessionDocs[1], `"type":"delegation"`)
+	assert.NotContains(t, sessionDocs[1], "alert-1")
+}
+
 func TestCloneSession_SubSessionNotRoot(t *testing.T) {
 	mockEsClient, transport := modmock.NewMockClient(t)
 	store := NewElasticAssistantstore(server.NewFakeAuthorizedServer(nil), mockEsClient, 1000, nil)
@@ -3807,7 +3869,7 @@ func TestCloneSession_SubSessionNotRoot(t *testing.T) {
 
 	addJsonResponse(transport, 200, cloneSessionHit(`"sessionId":"src-2","title":"Child","type":"delegation","userId":"cloner","parentSessionId":"src-1","parentToolUseId":"tu-1","depth":1`))
 
-	clone, err := store.CloneSession(ctx, "src-2")
+	clone, err := store.CloneSession(ctx, "src-2", "", "")
 	assert.ErrorIs(t, err, server.ErrSessionNotRoot)
 	assert.Nil(t, clone)
 	assert.Len(t, transport.GetRequests(), 1)
@@ -3830,7 +3892,7 @@ func TestCloneSession_DescendantsIgnoreSharedTag(t *testing.T) {
 	addJsonResponse(transport, 200, cloneBulkOk)
 	addJsonResponse(transport, 200, cloneBulkOk)
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.NoError(t, err)
 
 	reqs := transport.GetRequests()
@@ -3853,7 +3915,7 @@ func TestCloneSession_UnreadableRootNotFound(t *testing.T) {
 
 	addJsonResponse(transport, 200, cloneSessionHit(`"sessionId":"src-1","title":"Private","userId":"owner"`))
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.ErrorIs(t, err, server.ErrSessionNotFound)
 	assert.Nil(t, clone)
 	assert.Len(t, transport.GetRequests(), 1)
@@ -3869,7 +3931,7 @@ func TestCloneSession_MissingOrDeletedNotFound(t *testing.T) {
 
 	addJsonResponse(transport, 200, cloneEmptyHits)
 
-	clone, err := store.CloneSession(ctx, "missing")
+	clone, err := store.CloneSession(ctx, "missing", "", "")
 	assert.ErrorIs(t, err, server.ErrSessionNotFound)
 	assert.Nil(t, clone)
 
@@ -3884,7 +3946,7 @@ func TestCloneSession_Unauthorized(t *testing.T) {
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	var unauthorized *model.Unauthorized
 	assert.ErrorAs(t, err, &unauthorized)
 	assert.Nil(t, clone)
@@ -3900,7 +3962,7 @@ func TestCloneSession_RequiresDeleteAuthored(t *testing.T) {
 	store.Init("chat-index", "session-index", "so_")
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "cloner")
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.Error(t, err)
 	assert.Nil(t, clone)
 	assert.Empty(t, transport.GetRequests())
@@ -3916,7 +3978,7 @@ func TestCloneSession_HistoryErrorStopsBeforeAnyWrite(t *testing.T) {
 	addJsonResponse(transport, 200, cloneEmptyHits)
 	addJsonResponse(transport, 200, `{"responses":[{"error":{"type":"search_phase_execution_exception","reason":"shard down"}}]}`)
 
-	clone, err := store.CloneSession(ctx, "src-1")
+	clone, err := store.CloneSession(ctx, "src-1", "", "")
 	assert.ErrorContains(t, err, "shard down")
 	assert.Nil(t, clone)
 	assert.Len(t, transport.GetRequests(), 3)
@@ -3956,7 +4018,7 @@ func TestCloneSession_WriteFailureDeletesEveryCreatedClone(t *testing.T) {
 			addJsonResponse(transport, 200, `{"took":1,"updated":1,"version_conflicts":0,"failures":[]}`)
 			addJsonResponse(transport, 200, `{"took":1,"updated":1,"version_conflicts":0,"failures":[]}`)
 
-			clone, err := store.CloneSession(ctx, "src-1")
+			clone, err := store.CloneSession(ctx, "src-1", "", "")
 			assert.ErrorContains(t, err, "boom")
 			assert.Nil(t, clone)
 

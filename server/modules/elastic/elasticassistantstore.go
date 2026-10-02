@@ -1896,7 +1896,7 @@ func (store *ElasticAssistantstore) GetUsage(ctx context.Context, start time.Tim
 }
 
 // CloneSession copies a readable session and its delegated descendants into new sessions owned by the caller.
-func (store *ElasticAssistantstore) CloneSession(ctx context.Context, sessionId string) (*model.AssistantSession, error) {
+func (store *ElasticAssistantstore) CloneSession(ctx context.Context, sessionId, entityType, entityId string) (*model.AssistantSession, error) {
 	if err := store.server.CheckAuthorized(ctx, "write_authored", "assistant"); err != nil {
 		return nil, err
 	}
@@ -1949,6 +1949,10 @@ func (store *ElasticAssistantstore) CloneSession(ctx context.Context, sessionId 
 
 	for i, src := range sessions {
 		clone := cloneSessionRecord(src, ids)
+		if i == 0 && entityType != "" && entityId != "" {
+			clone.Type = entityType
+			clone.EntityId = entityId
+		}
 		messages := cloneMessages(histories[i], clone.SessionId)
 		clone.MessageCount = len(messages)
 		clone.LastMemoryScannedIndex = len(messages)

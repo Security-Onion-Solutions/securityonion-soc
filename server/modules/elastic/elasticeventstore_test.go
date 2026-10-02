@@ -1100,48 +1100,44 @@ func TestAddUpdateScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
+	investigateHeader := `
 			boolean track_timing = params.trackTiming;
 			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
-	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+			ctx._source.event.investigated = true;`
+	assert.Equal(t, investigateHeader, criteria.UpdateScripts[0])
 	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Nil(t, criteria.Params["sessionId"])
 
 	// Test investigation case with session ID
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
-			boolean track_timing = params.trackTiming;
-			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
-			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			ctx._source.event.investigation_session_id = params.sessionId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
+	expected = investigateHeader + investigationEntriesScript + `
+			boolean inv_found = false;
+			for (def inv_entry : inv_list) { if (inv_entry.session_id == params.sessionId) { inv_found = true; } }
+			if (!inv_found) {
+				Map inv_new = new HashMap();
+				inv_new.put('session_id', params.sessionId);
+				inv_new.put('user_id', params.userId);
+				if (track_timing) { inv_new.put('timestamp', now_date); }
+				inv_list.add(inv_new);
+			}` + investigationStoreScript
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
+	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Equal(t, "investigations", criteria.Params["investigationObject"])
 
 	// Test investigation delete case
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
-		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove(params.investigationObject);
 			ctx._source.event.remove('investigation_session_id');
-		}
-	`
+			ctx._source.event.remove('investigated_by');
+			ctx._source.event.remove('investigated_timestamp');`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Nil(t, criteria.Params["sessionId"])
 
@@ -1149,13 +1145,23 @@ func TestAddUpdateScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
-		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
-			ctx._source.event.remove('investigation_session_id');
-		}
-	`
+	expected = investigationEntriesScript + `
+			inv_list.removeIf(inv_entry -> inv_entry.session_id == params.sessionId);` + investigationStoreScript
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
+}
+
+func TestInvestigationObjectFollowsTheAssistantPrefix(t *testing.T) {
+	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+
+	criteria := model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, time.Now(), "admin", false, "s-1")
+	assert.Equal(t, "so_investigations", criteria.Params["investigationObject"])
+
+	store.assistantSchemaPrefix = "custom_"
+	criteria = model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, time.Now(), "admin", true, "s-1")
+	assert.Equal(t, "custom_investigations", criteria.Params["investigationObject"])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {
@@ -1442,8 +1448,9 @@ func TestAddInvestigateScript_InjectionAttack(t *testing.T) {
 	store.addInvestigateScript(updateCriteria, time.Now(), attackUser, attackSession)
 
 	script := updateCriteria.UpdateScripts[0]
-	assert.Contains(t, script, `ctx._source.event.investigated_by = params.userId;`)
-	assert.Contains(t, script, `ctx._source.event.investigation_session_id = params.sessionId;`)
+	assert.Contains(t, script, `inv_new.put('user_id', params.userId);`)
+	assert.Contains(t, script, `inv_new.put('session_id', params.sessionId);`)
+	assert.NotContains(t, script, "leaked")
 	assert.Equal(t, attackUser, updateCriteria.Params["userId"])
 	assert.Equal(t, attackSession, updateCriteria.Params["sessionId"])
 }

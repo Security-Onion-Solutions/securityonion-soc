@@ -136,6 +136,7 @@ func (elastic *Elastic) Init(cfg module.ModuleConfig) error {
 					return err
 				}
 				elastic.server.Assistantstore = assiststore
+				elastic.store.assistantSchemaPrefix = schemaPrefix
 			}
 		}
 	}

@@ -57,6 +57,20 @@ func (mr *MockAssistantManagerMockRecorder) AcquireTurnSlot(ctx, sessionId, sele
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireTurnSlot", reflect.TypeOf((*MockAssistantManager)(nil).AcquireTurnSlot), ctx, sessionId, selector)
 }
 
+// AttachInvestigation mocks base method.
+func (m *MockAssistantManager) AttachInvestigation(ctx context.Context, socId, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttachInvestigation", ctx, socId, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AttachInvestigation indicates an expected call of AttachInvestigation.
+func (mr *MockAssistantManagerMockRecorder) AttachInvestigation(ctx, socId, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).AttachInvestigation), ctx, socId, sessionId)
+}
+
 // Balance mocks base method.
 func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
@@ -104,6 +118,21 @@ func (mr *MockAssistantManagerMockRecorder) ChatStreamInSession(ctx, incMsg, ent
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ChatStreamInSession), ctx, incMsg, entityType, entityId)
 }
 
+// CloneSessionOntoAlert mocks base method.
+func (m *MockAssistantManager) CloneSessionOntoAlert(ctx context.Context, sessionId, socId string) (*model.AssistantSession, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloneSessionOntoAlert", ctx, sessionId, socId)
+	ret0, _ := ret[0].(*model.AssistantSession)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CloneSessionOntoAlert indicates an expected call of CloneSessionOntoAlert.
+func (mr *MockAssistantManagerMockRecorder) CloneSessionOntoAlert(ctx, sessionId, socId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneSessionOntoAlert", reflect.TypeOf((*MockAssistantManager)(nil).CloneSessionOntoAlert), ctx, sessionId, socId)
+}
+
 // DeleteAgent mocks base method.
 func (m *MockAssistantManager) DeleteAgent(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
@@ -144,6 +173,34 @@ func (m *MockAssistantManager) DeleteSkill(ctx context.Context, name string) err
 func (mr *MockAssistantManagerMockRecorder) DeleteSkill(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSkill", reflect.TypeOf((*MockAssistantManager)(nil).DeleteSkill), ctx, name)
+}
+
+// DetachInvestigation mocks base method.
+func (m *MockAssistantManager) DetachInvestigation(ctx context.Context, socId, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachInvestigation", ctx, socId, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachInvestigation indicates an expected call of DetachInvestigation.
+func (mr *MockAssistantManagerMockRecorder) DetachInvestigation(ctx, socId, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).DetachInvestigation), ctx, socId, sessionId)
+}
+
+// DetachSessionInvestigation mocks base method.
+func (m *MockAssistantManager) DetachSessionInvestigation(ctx context.Context, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachSessionInvestigation", ctx, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachSessionInvestigation indicates an expected call of DetachSessionInvestigation.
+func (mr *MockAssistantManagerMockRecorder) DetachSessionInvestigation(ctx, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachSessionInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).DetachSessionInvestigation), ctx, sessionId)
 }
 
 // Embed mocks base method.

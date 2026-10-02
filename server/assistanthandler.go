@@ -50,6 +50,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
 		r.Post("/sessions/{sessionId}/clone", h.CloneSession)
+		r.Post("/sessions/access", h.PostSessionsAccess)
 
 		r.Put("/agents/{name}", h.SaveAgent)
 		r.Delete("/agents/{name}", h.DeleteAgent)
@@ -84,10 +85,6 @@ func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.R
 		return false
 	}
 	return true
-}
-
-type EventstoreUpdater interface {
-	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }
 
 // decodeIncomingMessage decodes a chat message body, generating a session id
@@ -191,9 +188,9 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
 
-	if entityType != "" && entityId != "" {
-		// Don't fail the request on association errors (already logged in helper)
-		_ = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
+	if entityType == "alert_investigation" && entityId != "" {
+		// Don't fail the request on association errors (already logged)
+		_ = h.server.AssistantManager.AttachInvestigation(ctx, entityId, incMsg.SessionId)
 	}
 
 	streaming, accept := streamingAccepted(r)
@@ -657,8 +654,23 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// GetSessions drops unreadable sessions; distinguish that (403) from not found.
 	if root == nil {
-		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
+		userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+
+		_, exists, _, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, sessionId)
+		if err != nil {
+			logger.WithError(err).Error("unable to check whether session exists")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
+
+		if exists {
+			web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+		} else {
+			web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound.Error())
+		}
 
 		return
 	}
@@ -911,13 +923,15 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 }
 
 // @Summary      Clone an Assistant Session
-// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued.
+// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation; that requires events/write.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored, assistant/delete_authored]
-// @Param        sessionId  path  string  true  "Session ID to clone"
+// @Param        sessionId   path   string  true   "Session ID to clone"
+// @Param        entityType  query  string  false  "alert_investigation, to record the copy on an alert" example(alert_investigation)
+// @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
 // @Produce      json
 // @Success      201  {object}  model.AssistantSession  "The new session"
-// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session"
+// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session, or the alert does not reference the session"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Session not found"
@@ -948,7 +962,24 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	clone, err := h.server.Assistantstore.CloneSession(ctx, sessionId)
+	entityType := r.URL.Query().Get("entityType")
+	entityId := r.URL.Query().Get("entityId")
+	if (entityType != "" || entityId != "") && (entityType != "alert_investigation" || entityId == "") {
+		web.Respond(w, r, http.StatusBadRequest, "entityType must be alert_investigation, with the alert's soc_id as entityId")
+		return
+	}
+
+	var clone *model.AssistantSession
+	if entityId != "" {
+		clone, err = h.server.AssistantManager.CloneSessionOntoAlert(ctx, sessionId, entityId)
+	} else {
+		clone, err = h.server.Assistantstore.CloneSession(ctx, sessionId, "", "")
+	}
+
+	if errors.Is(err, ErrSessionNotOnAlert) {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
 	if errors.Is(err, ErrSessionNotFound) {
 		web.Respond(w, r, http.StatusNotFound, err)
 		return
@@ -958,13 +989,85 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err != nil {
-		logger.WithError(err).WithField("sessionId", sessionId).Error("unable to clone session")
+		logger.WithError(err).WithFields(log.Fields{"sessionId": sessionId, "entityId": entityId}).Error("unable to clone session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
 
 	web.Respond(w, r, http.StatusCreated, clone)
+}
+
+// MaxSessionAccessIds caps the ids per access check.
+const MaxSessionAccessIds = 50
+
+// @Summary      Check Access to Assistant Sessions
+// @Description  Report, for each session id, whether the caller could open that session. Nothing else about a session is returned, and one that does not exist reads the same as one the caller may not open.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Param        request  body  model.SessionAccessRequest  true  "The sessions to check"
+// @Produce      json
+// @Success      200  {object}  map[string]bool  "Whether each session can be opened, keyed by session id"
+// @Failure      400           "No session ids, or more than 50"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/sessions/access [post]
+func (h *AssistantHandler) PostSessionsAccess(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	req := &model.SessionAccessRequest{}
+
+	err = json.NewDecoder(r.Body).Decode(req)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	ids := []string{}
+	for _, id := range req.SessionIds {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 || len(ids) > MaxSessionAccessIds {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Sprintf("between 1 and %d session ids are required", MaxSessionAccessIds))
+		return
+	}
+
+	// Mirror the lookup used to open a session, so true means it would open.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionIds(ids),
+		model.GetSessionsWithIncludeDeleted(true),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		logger.WithError(err).Error("unable to check session access")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	access := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		access[id] = false
+	}
+
+	for _, s := range sessions {
+		if _, requested := access[s.SessionId]; requested {
+			access[s.SessionId] = true
+		}
+	}
+
+	web.Respond(w, r, http.StatusOK, access)
 }
 
 // @Summary      Delete Your Assistant Session
@@ -996,8 +1099,24 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Clear investigation session from alert if applicable
-	h.handleInvestigationSessionCleanup(ctx, sessionId)
+	err = h.server.AssistantManager.DetachSessionInvestigation(ctx, sessionId)
+	if errors.Is(err, ErrSessionNotFound) {
+		web.Respond(w, r, http.StatusNoContent, nil)
+
+		return
+	}
+	if errors.Is(err, ErrSessionAccessDenied) {
+		logger.WithField("assistantSessionId", sessionId).Warn("user attempted to delete a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+
+		return
+	}
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
 
 	err = h.server.Assistantstore.DeleteSession(ctx, sessionId)
 
@@ -1631,157 +1750,6 @@ func removeAuxData(messages []*model.StoredMessage) {
 			cb.ThoughtSignature = nil
 		}
 	}
-}
-
-func (h *AssistantHandler) handleEntityAssociation(ctx context.Context, entityType, entityId, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	// Handle entity-specific logic based on type
-	if entityType == "alert_investigation" && entityId != "" {
-		// Mark the alert as investigated with the session ID
-		err := h.markAlertAsInvestigated(ctx, entityId, sessionId)
-		if err != nil {
-			logger.WithError(err).WithFields(log.Fields{
-				"entityType": entityType,
-				"entityId":   entityId,
-			}).Warn("unable to mark alert as investigated")
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId string, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	err := h.server.CheckAuthorized(ctx, "write", "events")
-	if err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":     socId,
-		"sessionId": sessionId,
-	}).Info("Marking alert as investigated")
-
-	// Create update criteria to mark the alert as investigated
-	updateCriteria := model.NewEventUpdateCriteria()
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
-
-	if h.server.Eventstore != nil {
-		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
-			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, false, sessionId)
-		} else {
-			return fmt.Errorf("eventstore does not support investigation updates")
-		}
-	} else {
-		return fmt.Errorf("eventstore is not available")
-	}
-
-	// Create a simple query to match the soc_id
-	updateCriteria.ParsedQuery = model.NewQuery()
-	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, false, true, false)
-	updateCriteria.ParsedQuery.AddSegment(searchSegment)
-	updateCriteria.Asynchronous = false
-	updateCriteria.IgnoreUnavailable = true
-
-	// Execute the update
-	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
-	if err != nil {
-		logger.WithError(err).Error("unable to mark alert as investigated")
-		return err
-	}
-
-	if results.UpdatedCount == 0 && results.UnchangedCount == 0 {
-		logger.WithField("socId", socId).Error("update made no changes")
-		return fmt.Errorf("no alert found with soc_id: %s", socId)
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":          socId,
-		"updatedCount":   results.UpdatedCount,
-		"unchangedCount": results.UnchangedCount,
-	}).Info("Successfully marked alert as investigated")
-
-	return nil
-}
-
-func (h *AssistantHandler) handleInvestigationSessionCleanup(ctx context.Context, sessionId string) {
-	logger := log.FromContext(ctx)
-
-	// Retrieve session details before deletion to check if it's an investigation session
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to retrieve session before deletion")
-		return
-	}
-
-	// If this is an investigation session, clear the investigation_session_id from the alert
-	if len(sessions) > 0 {
-		session := sessions[0]
-		if session.Type == "alert_investigation" && session.EntityId != "" {
-			err = h.clearInvestigationSessionFromAlert(ctx, session.EntityId, sessionId)
-			if err != nil {
-				logger.WithError(err).WithFields(log.Fields{
-					"sessionId": sessionId,
-					"entityId":  session.EntityId,
-				}).Warn("unable to clear investigation_session_id from alert")
-				// Continue with deletion even if clearing fails
-			}
-		}
-	}
-}
-
-func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Context, socId string, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	// Check write permission on events
-	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":     socId,
-		"sessionId": sessionId,
-	}).Info("Clearing investigation_session_id from alert")
-
-	// Create update criteria to remove the investigation_session_id field
-	updateCriteria := model.NewEventUpdateCriteria()
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
-
-	if h.server.Eventstore != nil {
-		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
-			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, true, sessionId)
-		} else {
-			return fmt.Errorf("eventstore does not support investigation updates")
-		}
-	} else {
-		return fmt.Errorf("eventstore is not available")
-	}
-
-	// Create a query to match the soc_id
-	updateCriteria.ParsedQuery = model.NewQuery()
-	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, false, true, false)
-	updateCriteria.ParsedQuery.AddSegment(searchSegment)
-	updateCriteria.Asynchronous = false
-	updateCriteria.IgnoreUnavailable = true
-
-	// Execute the update
-	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
-	if err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":          socId,
-		"updatedCount":   results.UpdatedCount,
-		"unchangedCount": results.UnchangedCount,
-	}).Info("Successfully cleared investigation_session_id from alert")
-
-	return nil
 }
 
 // @Summary      Save an Assistant Agent
