@@ -1877,11 +1877,20 @@ func TestExtractDetails(t *testing.T) {
 func TestExtractDetailsRuleType(t *testing.T) {
 	eng := &ElastAlertEngine{}
 
-	detect := &model.Detection{Content: testCorrelationContent}
+	// a single-event rule edited into a correlation loses its stale logsource fields
+	detect := &model.Detection{
+		Content:  testCorrelationContent,
+		Category: "process_creation",
+		Product:  "windows",
+		Service:  "sysmon",
+	}
 	require.NoError(t, eng.ExtractDetails(detect))
 	assert.Equal(t, model.RuleTypeCorrelation, detect.RuleType)
 	assert.Equal(t, "value_count", detect.CorrelationType)
 	assert.Equal(t, "10m", detect.CorrelationTimespan)
+	assert.Empty(t, detect.Category)
+	assert.Empty(t, detect.Product)
+	assert.Empty(t, detect.Service)
 
 	// a correlation edited into a single-event rule loses its correlation fields
 	detect.Content = SimpleRule

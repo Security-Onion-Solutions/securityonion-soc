@@ -436,6 +436,11 @@ func (r *SigmaRule) setRuleType(det *model.Detection) {
 	det.RuleType = model.RuleTypeCorrelation
 	det.CorrelationType = r.Correlation.Type
 
+	// correlations have no logsource of their own, so drop any left over from a single-event rule
+	det.Category = ""
+	det.Product = ""
+	det.Service = ""
+
 	if r.Correlation.Timespan != nil {
 		det.CorrelationTimespan = *r.Correlation.Timespan
 	}
