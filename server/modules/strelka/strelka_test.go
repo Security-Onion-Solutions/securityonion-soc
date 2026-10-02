@@ -376,6 +376,80 @@ func TestSyncStrelka(t *testing.T) {
 	}
 }
 
+func TestSyncSerialized(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	mockDetStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+
+	mod := NewStrelkaEngine(&server.Server{
+		DetectionEngines: sync.Map{},
+		Detectionstore:   mockDetStore,
+	})
+	mod.isRunning = true
+	mod.IOManager = iom
+	mod.compileYaraPythonScriptPath = "compileYaraPythonScriptPath"
+	mod.yaraRulesFolder = "yaraRulesFolder"
+
+	eventsMu := sync.Mutex{}
+	events := []string{}
+	record := func(ev string) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
+		events = append(events, ev)
+	}
+
+	const syncs = 8
+	firstCompiling := make(chan struct{})
+	release := make(chan struct{})
+	started := make(chan struct{}, syncs)
+	blockFirst := sync.Once{}
+
+	mockDetStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{}, nil).Times(syncs)
+	iom.EXPECT().ReadDir("yaraRulesFolder").DoAndReturn(func(string) ([]fs.DirEntry, error) {
+		record("read")
+		return nil, nil
+	}).Times(syncs)
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(*exec.Cmd) ([]byte, int, time.Duration, error) {
+		record("compile-start")
+		blockFirst.Do(func() {
+			close(firstCompiling)
+			<-release
+		})
+		record("compile-end")
+		return []byte{}, 0, 0, nil
+	}).Times(syncs)
+
+	wg := sync.WaitGroup{}
+	runSync := func() {
+		defer wg.Done()
+		started <- struct{}{}
+		_, err := mod.SyncLocalDetections(context.Background(), nil)
+		assert.NoError(t, err)
+	}
+
+	wg.Add(1)
+	go runSync()
+	<-started
+	<-firstCompiling
+
+	// the rest start while the first is still compiling
+	for range syncs - 1 {
+		wg.Add(1)
+		go runSync()
+		<-started
+	}
+	close(release)
+	wg.Wait()
+
+	expected := []string{}
+	for range syncs {
+		expected = append(expected, "read", "compile-start", "compile-end")
+	}
+	assert.Equal(t, expected, events)
+}
+
 func TestParseRule(t *testing.T) {
 	t.Parallel()
 
