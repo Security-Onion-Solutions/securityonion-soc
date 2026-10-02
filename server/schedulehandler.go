@@ -6,7 +6,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -47,7 +45,7 @@ func RegisterScheduleRoutes(srv *Server, r chi.Router, prefix string) {
 
 func (h *ScheduleHandler) schedulesEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h.server.Configstore == nil {
+		if (h.server == nil || h.server.Configstore == nil) && (h.server == nil || h.server.Schedulestore == nil) {
 			web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 			return
 		}
@@ -63,58 +61,20 @@ func (h *ScheduleHandler) respondError(w http.ResponseWriter, r *http.Request, e
 	errStr := err.Error()
 	if strings.Contains(errStr, "unauthorized") || strings.Contains(errStr, "Missing Authorizer") {
 		web.Respond(w, r, http.StatusUnauthorized, err)
-	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "Unauthorized") {
+	} else if strings.Contains(errStr, "forbidden") || strings.Contains(errStr, "Unauthorized") || strings.Contains(errStr, "not authorized") {
 		web.Respond(w, r, http.StatusForbidden, err)
+	} else if errors.Is(err, ErrScheduleNotFound) || strings.Contains(errStr, "not found") {
+		web.Respond(w, r, http.StatusNotFound, err)
+	} else if errors.Is(err, ErrInvalidScheduleID) || errors.Is(err, ErrDuplicateScheduleID) ||
+		strings.Contains(errStr, "invalid") || strings.Contains(errStr, "already exists") ||
+		strings.Contains(errStr, "cannot") || strings.Contains(errStr, "exceeds") ||
+		strings.Contains(errStr, "required") || strings.Contains(errStr, "cycle") ||
+		strings.Contains(errStr, "circular") || strings.Contains(errStr, "dependency") ||
+		strings.Contains(errStr, "exclude") {
+		web.Respond(w, r, http.StatusBadRequest, err)
 	} else {
 		web.Respond(w, r, http.StatusInternalServerError, err)
 	}
-}
-
-// IsScheduleActiveInConfig checks if a given schedule ID is active according to the schedules stored in Configstore.
-// If scheduleID is empty, store is nil, or schedule data is missing/corrupt, it fails open and returns (true, ...).
-func IsScheduleActiveInConfig(ctx context.Context, store Configstore, scheduleID string, evalTime time.Time) (bool, error) {
-	if scheduleID == "" || store == nil {
-		return true, nil
-	}
-	setting, err := store.GetSetting(ctx, "soc.config.server.schedules")
-	if err != nil {
-		return true, err
-	}
-	if setting == nil || setting.Value == "" {
-		return true, nil
-	}
-	schedules, err := model.UnmarshalSchedules(setting.Value)
-	if err != nil {
-		return true, err
-	}
-	active, _ := model.IsScheduleIDActive(schedules, scheduleID, evalTime)
-	return active, nil
-}
-
-func (h *ScheduleHandler) loadSchedules(ctx context.Context) ([]model.Schedule, error) {
-	if h.server == nil || h.server.Configstore == nil {
-		return []model.Schedule{}, nil
-	}
-	setting, err := h.server.Configstore.GetSetting(ctx, "soc.config.server.schedules")
-	if err != nil {
-		return nil, err
-	}
-	if setting == nil || setting.Value == "" {
-		return []model.Schedule{}, nil
-	}
-	return model.UnmarshalSchedules(setting.Value)
-}
-
-func (h *ScheduleHandler) saveSchedules(ctx context.Context, schedules []model.Schedule) error {
-	valBytes, err := json.Marshal(schedules)
-	if err != nil {
-		return err
-	}
-	setting := &model.Setting{
-		Id:    "soc.config.server.schedules",
-		Value: string(valBytes),
-	}
-	return h.server.Configstore.UpdateSetting(ctx, setting, false)
 }
 
 // @Summary      Get Schedules
@@ -138,15 +98,15 @@ func (h *ScheduleHandler) GetSchedules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Schedulestore == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 		return
 	}
 
-	schedules, err := h.loadSchedules(ctx)
+	schedules, err := h.server.Schedulestore.GetSchedules(ctx)
 	if err != nil {
 		logger.WithError(err).Error("failed to load schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		h.respondError(w, r, err)
 		return
 	}
 
@@ -176,8 +136,8 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Schedulestore == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 		return
 	}
 
@@ -188,51 +148,14 @@ func (h *ScheduleHandler) PostSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := model.ValidateScheduleName(req.Name); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	if err := model.ValidateScheduleDescription(req.Description); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	if req.ID == "" {
-		req.ID = uuid.NewString()
-	} else if !model.IsValidScheduleID(req.ID) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
-		return
-	}
-
-	schedules, err := h.loadSchedules(ctx)
+	created, err := h.server.Schedulestore.CreateSchedule(ctx, &req)
 	if err != nil {
-		logger.WithError(err).Error("failed to load schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("failed to create schedule")
+		h.respondError(w, r, err)
 		return
 	}
 
-	for _, s := range schedules {
-		if s.ID == req.ID {
-			web.Respond(w, r, http.StatusBadRequest, errors.New("schedule with this ID already exists"))
-			return
-		}
-	}
-
-	if err := model.ValidateScheduleDAG(&req, schedules); err != nil {
-		logger.WithError(err).Warn("invalid schedule DAG")
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	schedules = append(schedules, req)
-	if err := h.saveSchedules(ctx, schedules); err != nil {
-		logger.WithError(err).Error("failed to save schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	web.Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, created)
 }
 
 // @Summary      Update Schedule
@@ -261,13 +184,9 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if !model.IsValidScheduleID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
-		return
-	}
 
-	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Schedulestore == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 		return
 	}
 
@@ -278,52 +197,14 @@ func (h *ScheduleHandler) PutSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := model.ValidateScheduleName(req.Name); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	if err := model.ValidateScheduleDescription(req.Description); err != nil {
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	req.ID = id // force ID to match path param
-
-	schedules, err := h.loadSchedules(ctx)
+	updated, err := h.server.Schedulestore.UpdateSchedule(ctx, id, &req)
 	if err != nil {
-		logger.WithError(err).Error("failed to load schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		logger.WithError(err).Error("failed to update schedule")
+		h.respondError(w, r, err)
 		return
 	}
 
-	foundIndex := -1
-	for i, s := range schedules {
-		if s.ID == id {
-			foundIndex = i
-			break
-		}
-	}
-
-	if foundIndex == -1 {
-		web.Respond(w, r, http.StatusNotFound, errors.New("schedule not found"))
-		return
-	}
-
-	if err := model.ValidateScheduleDAG(&req, schedules); err != nil {
-		logger.WithError(err).Warn("invalid schedule DAG")
-		web.Respond(w, r, http.StatusBadRequest, err)
-		return
-	}
-
-	schedules[foundIndex] = req
-	if err := h.saveSchedules(ctx, schedules); err != nil {
-		logger.WithError(err).Error("failed to save schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	web.Respond(w, r, http.StatusOK, nil)
+	web.Respond(w, r, http.StatusOK, updated)
 }
 
 // @Summary      Delete Schedule
@@ -350,40 +231,15 @@ func (h *ScheduleHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request)
 	logger := log.FromContext(ctx)
 
 	id := chi.URLParam(r, "id")
-	if !model.IsValidScheduleID(id) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("invalid schedule ID"))
+
+	if h.server == nil || h.server.Schedulestore == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 		return
 	}
 
-	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+	if err := h.server.Schedulestore.DeleteSchedule(ctx, id); err != nil {
+		logger.WithError(err).Error("failed to delete schedule")
 		h.respondError(w, r, err)
-		return
-	}
-
-	schedules, err := h.loadSchedules(ctx)
-	if err != nil {
-		logger.WithError(err).Error("failed to load schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-		return
-	}
-
-	foundIndex := -1
-	for i, s := range schedules {
-		if s.ID == id {
-			foundIndex = i
-			break
-		}
-	}
-
-	if foundIndex == -1 {
-		web.Respond(w, r, http.StatusNotFound, errors.New("schedule not found"))
-		return
-	}
-
-	schedules = append(schedules[:foundIndex], schedules[foundIndex+1:]...)
-	if err := h.saveSchedules(ctx, schedules); err != nil {
-		logger.WithError(err).Error("failed to save schedules")
-		web.Respond(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -427,8 +283,8 @@ func (h *ScheduleHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
-	if err := h.server.CheckAuthorized(ctx, "read", "config"); err != nil {
-		h.respondError(w, r, err)
+	if h.server == nil || h.server.Schedulestore == nil {
+		web.Respond(w, r, http.StatusMethodNotAllowed, errors.New("Config module not enabled"))
 		return
 	}
 
@@ -450,16 +306,10 @@ func (h *ScheduleHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 		evalTime = parsed.UTC()
 	}
 
-	schedules, _ := h.loadSchedules(ctx)
-	lookup := model.BuildScheduleLookup(schedules)
-	if req.Schedule.ID != "" {
-		lookup[req.Schedule.ID] = &req.Schedule
-	}
-
-	active, err := model.IsScheduleActive(&req.Schedule, evalTime, lookup)
+	active, err := h.server.Schedulestore.EvaluateSchedule(ctx, &req.Schedule, evalTime)
 	if err != nil {
 		logger.WithError(err).Error("failed to evaluate schedule")
-		web.Respond(w, r, http.StatusInternalServerError, err)
+		h.respondError(w, r, err)
 		return
 	}
 

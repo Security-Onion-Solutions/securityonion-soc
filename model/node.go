@@ -9,6 +9,7 @@ package model
 import (
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 )
 
@@ -231,9 +232,16 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 }
 
 func (node *Node) IsProcessRunning(match string) bool {
+	if node.ProcessJson == "" {
+		return false
+	}
 	nodeStatus := NodeStatus{}
 	err := json.LoadJson([]byte(node.ProcessJson), &nodeStatus)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"node":        node.Id,
+			"processJson": node.ProcessJson,
+		}).WithError(err).Errorf("error loading node status")
 		return false
 	}
 	for _, process := range nodeStatus.Containers {

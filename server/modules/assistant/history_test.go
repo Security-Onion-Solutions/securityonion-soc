@@ -138,6 +138,21 @@ func TestHistoryToContext(t *testing.T) {
 				{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "latest"}}},
 			},
 		},
+		{
+			name: "abandoned partial message is dropped",
+			history: []*model.StoredMessage{
+				{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hello"}}}},
+				{
+					Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "tool_use", Text: "half a tool call"}}},
+					Tags:    []string{model.MessageTagPartial},
+				},
+				{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hi"}}}},
+			},
+			expectedContext: []*model.Message{
+				{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hello"}}},
+				{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "Hi"}}},
+			},
+		},
 	}
 
 	for _, tt := range tests {

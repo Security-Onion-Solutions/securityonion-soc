@@ -31,7 +31,6 @@ test('initializes with default tab and delegates refresh', () => {
 
   comp.refresh();
   expect(loadDestDataMock).toHaveBeenCalled();
-  expect(loadSchedDataMock).toHaveBeenCalled();
 });
 
 test('delegates add actions based on active tab', () => {
@@ -55,4 +54,26 @@ test('delegates add actions based on active tab', () => {
   comp.tab = 'schedules';
   comp.addSchedule();
   expect(showAddSchedMock).toHaveBeenCalled();
+});
+
+test('delegates sendNotification to destinationsManager.showSendDialog', () => {
+  const showSendDialogMock = jest.fn();
+  comp.$refs = {
+    destinationsManager: {
+      showSendDialog: showSendDialogMock,
+    },
+  };
+  comp.sendNotification();
+  expect(showSendDialogMock).toHaveBeenCalledWith(null);
+});
+
+test('onScheduleUpdated triggers getSchedules on destinationsManager', () => {
+  const getSchedulesMock = jest.fn();
+  comp.$refs = {
+    destinationsManager: {
+      getSchedules: getSchedulesMock,
+    },
+  };
+  comp.onScheduleUpdated();
+  expect(getSchedulesMock).toHaveBeenCalled();
 });

@@ -255,7 +255,7 @@ func (a *SOAiCloudAdapter) SendMessageStream(ctx context.Context, req *model.Cha
 
 	logger.WithField("outgoingChatBodySize", buf.Len()).Info("outgoing chat request body")
 
-	httpReq, err := http.NewRequest(http.MethodPost, endpoint, &buf)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
 	if err != nil {
 		logger.WithError(err).WithField("apiEndpoint", endpoint).Error("unable to make request object")
 

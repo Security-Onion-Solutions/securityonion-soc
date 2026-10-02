@@ -21,15 +21,30 @@ import (
 )
 
 type mockChannel struct {
-	channelType string
-	mu          sync.Mutex
-	sentPayload *model.NotificationPayload
-	sentParams  map[string]interface{}
-	sendErr     error
+	channelType         string
+	supportsRecipients  bool
+	supportsAttachments bool
+	supportsLinks       bool
+	mu                  sync.Mutex
+	sentPayload         *model.NotificationPayload
+	sentParams          map[string]interface{}
+	sendErr             error
 }
 
 func (m *mockChannel) Type() string {
 	return m.channelType
+}
+
+func (m *mockChannel) SupportsRecipients() bool {
+	return m.supportsRecipients
+}
+
+func (m *mockChannel) SupportsAttachments() bool {
+	return m.supportsAttachments
+}
+
+func (m *mockChannel) SupportsLinks() bool {
+	return m.supportsLinks
 }
 
 func (m *mockChannel) ValidateConfig(params map[string]interface{}) error {
@@ -52,8 +67,9 @@ func TestNotifierSendNilPayload(t *testing.T) {
 	cfg := model.NotificationConfig{Enabled: true}
 	notifier := NewNotifier(nil, reg, cfg)
 
-	err := notifier.Send(context.Background(), nil)
+	count, err := notifier.Send(context.Background(), nil)
 	assert.Error(t, err)
+	assert.Equal(t, 0, count)
 }
 
 func TestNotifierSendDisabled(t *testing.T) {
@@ -65,8 +81,9 @@ func TestNotifierSendDisabled(t *testing.T) {
 	notifier := NewNotifier(nil, reg, cfg)
 
 	payload := &model.NotificationPayload{Title: "Test"}
-	err := notifier.Send(context.Background(), payload)
+	count, err := notifier.Send(context.Background(), payload)
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }
 
 func TestNotifierSend_Unlicensed(t *testing.T) {
@@ -78,8 +95,7 @@ func TestNotifierSend_Unlicensed(t *testing.T) {
 	_ = reg.Register(mockCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"soc-bell"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"soc-bell": {
 				Name:    "SOC Bell",
@@ -97,12 +113,13 @@ func TestNotifierSend_Unlicensed(t *testing.T) {
 	}
 
 	// Without NTF license, Send should skip dispatch and not invoke the channel driver
-	err := notifier.Send(context.Background(), payload)
+	count, err := notifier.Send(context.Background(), payload)
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 	assert.Nil(t, mockCh.sentPayload)
 }
 
-func TestNotifierSendDefaultDestinations(t *testing.T) {
+func TestNotifierSendAllConfiguredDestinations(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
@@ -111,8 +128,7 @@ func TestNotifierSendDefaultDestinations(t *testing.T) {
 	_ = reg.Register(mockCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"soc-bell"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"soc-bell": {
 				Name:    "SOC Bell",
@@ -129,8 +145,9 @@ func TestNotifierSendDefaultDestinations(t *testing.T) {
 		Severity: model.NotificationSeverityHigh,
 	}
 
-	err := notifier.Send(context.Background(), payload)
+	count, err := notifier.Send(context.Background(), payload)
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, mockCh.sentPayload)
 	assert.Equal(t, true, mockCh.sentParams["storeInPostgres"])
 }
@@ -146,8 +163,7 @@ func TestNotifierSendExplicitDestinations(t *testing.T) {
 	_ = reg.Register(emailCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"default-email"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"default-email": {
 				Name:    "Email",
@@ -171,8 +187,9 @@ func TestNotifierSendExplicitDestinations(t *testing.T) {
 	payload := &model.NotificationPayload{Title: "Security Finding"}
 
 	// Send explicitly to slack-sec and disabled-dest
-	err := notifier.Send(context.Background(), payload, "slack-sec", "disabled-dest")
+	count, err := notifier.Send(context.Background(), payload, "slack-sec", "disabled-dest")
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, slackCh.sentPayload)
 	assert.Nil(t, emailCh.sentPayload)
 }
@@ -189,8 +206,7 @@ func TestNotifierSendErrors(t *testing.T) {
 	_ = reg.Register(failingCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"email-dest", "missing-dest", "missing-driver"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"email-dest": {
 				Name:    "Email",
@@ -207,8 +223,9 @@ func TestNotifierSendErrors(t *testing.T) {
 	notifier := NewNotifier(nil, reg, cfg)
 
 	payload := &model.NotificationPayload{Title: "Error Test"}
-	err := notifier.Send(context.Background(), payload)
+	count, err := notifier.Send(context.Background(), payload, "email-dest", "missing-dest", "missing-driver")
 	assert.Error(t, err)
+	assert.Equal(t, 0, count)
 	assert.Contains(t, err.Error(), "destination 'missing-dest' not found")
 	assert.Contains(t, err.Error(), "channel driver 'matrix' not found for destination 'missing-driver'")
 	assert.Contains(t, err.Error(), "destination 'email-dest' send failed")
@@ -223,8 +240,7 @@ func TestNotifierSendWithSilence(t *testing.T) {
 	_ = reg.Register(mockCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"soc-bell"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"soc-bell": {
 				Name:    "SOC Bell",
@@ -289,8 +305,7 @@ func TestNotifierGettersAndUpdateConfig(t *testing.T) {
 
 	reg := NewChannelRegistry()
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"soc-bell"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"soc-bell": {
 				Name:    "SOC Bell",
@@ -301,7 +316,6 @@ func TestNotifierGettersAndUpdateConfig(t *testing.T) {
 	}
 	notifier := NewNotifier(nil, reg, cfg)
 
-	assert.Equal(t, []string{"soc-bell"}, notifier.GetDefaultDestinations())
 	dests := notifier.GetDestinations()
 	assert.Len(t, dests, 1)
 
@@ -314,12 +328,10 @@ func TestNotifierGettersAndUpdateConfig(t *testing.T) {
 
 	// UpdateConfig
 	newCfg := model.NotificationConfig{
-		Enabled:             false,
-		DefaultDestinations: []string{"new-dest"},
-		Destinations:        map[string]model.DestinationConfig{},
+		Enabled:      false,
+		Destinations: map[string]model.DestinationConfig{},
 	}
 	notifier.UpdateConfig(newCfg)
-	assert.Equal(t, []string{"new-dest"}, notifier.GetDefaultDestinations())
 	assert.Empty(t, notifier.GetDestinations())
 }
 
@@ -332,8 +344,7 @@ func TestNotifierSendSeverityFiltering(t *testing.T) {
 	_ = reg.Register(mockCh)
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"critical-only"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"critical-only": {
 				Name:       "Critical Alerts Only",
@@ -350,8 +361,9 @@ func TestNotifierSendSeverityFiltering(t *testing.T) {
 		Title:    "Low alert",
 		Severity: model.NotificationSeverityLow,
 	}
-	err := notifier.Send(context.Background(), lowPayload)
+	count, err := notifier.Send(context.Background(), lowPayload)
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 	assert.Nil(t, mockCh.sentPayload)
 
 	// High severity should be delivered
@@ -359,8 +371,9 @@ func TestNotifierSendSeverityFiltering(t *testing.T) {
 		Title:    "High alert",
 		Severity: model.NotificationSeverityHigh,
 	}
-	err = notifier.Send(context.Background(), highPayload)
+	count, err = notifier.Send(context.Background(), highPayload)
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, highPayload, mockCh.sentPayload)
 
 	// Critical severity should be delivered
@@ -369,9 +382,22 @@ func TestNotifierSendSeverityFiltering(t *testing.T) {
 		Title:    "Critical alert",
 		Severity: model.NotificationSeverityCritical,
 	}
-	err = notifier.Send(context.Background(), critPayload)
+	count, err = notifier.Send(context.Background(), critPayload)
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, critPayload, mockCh.sentPayload)
+
+	// Client notification with filtered severity should still be filtered out
+	mockCh.sentPayload = nil
+	testLowPayload := &model.NotificationPayload{
+		Title:    "Client Low Alert",
+		Severity: model.NotificationSeverityLow,
+		Source:   model.SourceClient,
+	}
+	count, err = notifier.Send(context.Background(), testLowPayload)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+	assert.Nil(t, mockCh.sentPayload)
 }
 
 func TestNotifierSendScheduleEvaluation(t *testing.T) {
@@ -414,8 +440,7 @@ func TestNotifierSendScheduleEvaluation(t *testing.T) {
 	}
 
 	cfg := model.NotificationConfig{
-		Enabled:             true,
-		DefaultDestinations: []string{"dest-active", "dest-inactive"},
+		Enabled: true,
 		Destinations: map[string]model.DestinationConfig{
 			"dest-active": {
 				Name:        "Active Scheduled Dest",
@@ -463,37 +488,248 @@ func TestNotifierSendScheduleEvaluation(t *testing.T) {
 	}
 
 	// Active schedule dest should receive payload
-	err := notifier.Send(context.Background(), payload, "dest-active")
+	count, err := notifier.Send(context.Background(), payload, "dest-active")
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, mockCh.sentPayload)
 
 	// Multi schedule dest with at least one active schedule should receive payload
 	mockCh.sentPayload = nil
-	err = notifier.Send(context.Background(), payload, "dest-multi")
+	count, err = notifier.Send(context.Background(), payload, "dest-multi")
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, mockCh.sentPayload)
 
 	// Destination with no schedules (empty ScheduleIDs) is always active
 	mockCh.sentPayload = nil
-	err = notifier.Send(context.Background(), payload, "dest-no-sched")
+	count, err = notifier.Send(context.Background(), payload, "dest-no-sched")
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, mockCh.sentPayload)
 
-	// Inactive schedule dest should be skipped
+	// Inactive schedule dest should be skipped when BypassSchedules is false
 	mockCh.sentPayload = nil
-	err = notifier.Send(context.Background(), payload, "dest-inactive")
+	count, err = notifier.Send(context.Background(), payload, "dest-inactive")
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 	assert.Nil(t, mockCh.sentPayload)
+
+	// Inactive schedule dest should NOT be skipped when BypassSchedules is true
+	bypassPayload := &model.NotificationPayload{
+		Title:           "Bypass Notification",
+		Severity:        model.NotificationSeverityInfo,
+		Source:          model.SourceClient,
+		BypassSchedules: true,
+	}
+	mockCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), bypassPayload, "dest-inactive")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, bypassPayload, mockCh.sentPayload)
 
 	// Multi schedule with all inactive schedules should be skipped
 	mockCh.sentPayload = nil
-	err = notifier.Send(context.Background(), payload, "dest-all-inactive")
+	count, err = notifier.Send(context.Background(), payload, "dest-all-inactive")
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 	assert.Nil(t, mockCh.sentPayload)
 
 	// Unknown schedule ID should fail open and receive payload
 	mockCh.sentPayload = nil
-	err = notifier.Send(context.Background(), payload, "dest-unknown")
+	count, err = notifier.Send(context.Background(), payload, "dest-unknown")
 	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 	assert.Equal(t, payload, mockCh.sentPayload)
+}
+
+func TestNotifierSend_RecipientTargeting(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	reg := NewChannelRegistry()
+	socCh := &mockChannel{channelType: "soc", supportsRecipients: true}
+	webhookCh := &mockChannel{channelType: "webhook", supportsRecipients: false}
+	_ = reg.Register(socCh)
+	_ = reg.Register(webhookCh)
+
+	enableTrue := true
+	enableFalse := false
+
+	cfg := model.NotificationConfig{
+		Enabled: true,
+		Destinations: map[string]model.DestinationConfig{
+			"soc-default": {
+				Type:    "soc",
+				Enabled: true,
+			},
+			"soc-enabled": {
+				Type:             "soc",
+				Enabled:          true,
+				EnableRecipients: &enableTrue,
+			},
+			"soc-disabled-noskip": {
+				Type:             "soc",
+				Enabled:          true,
+				EnableRecipients: &enableFalse,
+				SkipIfRecipients: false,
+			},
+			"soc-disabled-skip": {
+				Type:             "soc",
+				Enabled:          true,
+				EnableRecipients: &enableFalse,
+				SkipIfRecipients: true,
+			},
+			"webhook-noskip": {
+				Type:             "webhook",
+				Enabled:          true,
+				SkipIfRecipients: false,
+			},
+			"webhook-skip": {
+				Type:             "webhook",
+				Enabled:          true,
+				SkipIfRecipients: true,
+			},
+		},
+	}
+
+	notifier := NewNotifier(nil, reg, cfg)
+	targetedPayload := &model.NotificationPayload{
+		ID:         "target-1",
+		Source:     model.SourcePcap,
+		Title:      "PCAP #100",
+		Severity:   model.NotificationSeverityInfo,
+		Recipients: []string{"user-123"},
+	}
+
+	// 1. SOC Default (supports and defaults to enabled): receives targeted payload
+	socCh.sentPayload = nil
+	count, err := notifier.Send(context.Background(), targetedPayload, "soc-default")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, socCh.sentPayload)
+	assert.Equal(t, []string{"user-123"}, socCh.sentPayload.Recipients)
+
+	// 2. SOC Explicitly Enabled: receives targeted payload
+	socCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), targetedPayload, "soc-enabled")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, socCh.sentPayload)
+	assert.Equal(t, []string{"user-123"}, socCh.sentPayload.Recipients)
+
+	// 3. SOC Disabled, SkipIfRecipients=false: receives untargeted payload (Recipients = nil)
+	socCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), targetedPayload, "soc-disabled-noskip")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, socCh.sentPayload)
+	assert.Nil(t, socCh.sentPayload.Recipients)
+
+	// 4. SOC Disabled, SkipIfRecipients=true: skipped
+	socCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), targetedPayload, "soc-disabled-skip")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+	assert.Nil(t, socCh.sentPayload)
+
+	// 5. Webhook (unsupported), SkipIfRecipients=false: receives untargeted payload
+	webhookCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), targetedPayload, "webhook-noskip")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, webhookCh.sentPayload)
+	assert.Nil(t, webhookCh.sentPayload.Recipients)
+
+	// 6. Webhook (unsupported), SkipIfRecipients=true: skipped
+	webhookCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), targetedPayload, "webhook-skip")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+	assert.Nil(t, webhookCh.sentPayload)
+
+	// 7. Untargeted payload with SkipIfRecipients=true: delivered normally
+	untargetedPayload := &model.NotificationPayload{
+		ID:       "untargeted-1",
+		Source:   model.SourceDetection,
+		Title:    "Global Alert",
+		Severity: model.NotificationSeverityHigh,
+	}
+	webhookCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), untargetedPayload, "webhook-skip")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, webhookCh.sentPayload)
+	assert.Equal(t, "untargeted-1", webhookCh.sentPayload.ID)
+}
+
+func TestNotifierSend_AttachmentsAndLinksFiltering(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	reg := NewChannelRegistry()
+	fullCh := &mockChannel{channelType: "full", supportsAttachments: true, supportsLinks: true}
+	noAttCh := &mockChannel{channelType: "no-att", supportsAttachments: false, supportsLinks: true}
+	noLinkCh := &mockChannel{channelType: "no-link", supportsAttachments: true, supportsLinks: false}
+	_ = reg.Register(fullCh)
+	_ = reg.Register(noAttCh)
+	_ = reg.Register(noLinkCh)
+
+	cfg := model.NotificationConfig{
+		Enabled: true,
+		Destinations: map[string]model.DestinationConfig{
+			"dest-full": {
+				Type:    "full",
+				Enabled: true,
+			},
+			"dest-no-att": {
+				Type:    "no-att",
+				Enabled: true,
+			},
+			"dest-no-link": {
+				Type:    "no-link",
+				Enabled: true,
+			},
+		},
+	}
+
+	notifier := NewNotifier(nil, reg, cfg)
+	payload := &model.NotificationPayload{
+		ID:       "payload-1",
+		Source:   model.SourceReport,
+		Title:    "Report Complete",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"view": "https://example.com/report",
+		},
+		Attachments: []model.Attachment{
+			{Filename: "report.pdf", ContentType: "application/pdf"},
+		},
+	}
+
+	// 1. Full channel receives attachments and links
+	fullCh.sentPayload = nil
+	count, err := notifier.Send(context.Background(), payload, "dest-full")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, fullCh.sentPayload)
+	assert.Len(t, fullCh.sentPayload.Attachments, 1)
+	assert.Len(t, fullCh.sentPayload.Links, 1)
+
+	// 2. Channel without attachment support has attachments stripped
+	noAttCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), payload, "dest-no-att")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, noAttCh.sentPayload)
+	assert.Empty(t, noAttCh.sentPayload.Attachments)
+	assert.Len(t, noAttCh.sentPayload.Links, 1)
+
+	// 3. Channel without link support has links stripped
+	noLinkCh.sentPayload = nil
+	count, err = notifier.Send(context.Background(), payload, "dest-no-link")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	assert.NotNil(t, noLinkCh.sentPayload)
+	assert.Len(t, noLinkCh.sentPayload.Attachments, 1)
+	assert.Empty(t, noLinkCh.sentPayload.Links)
 }

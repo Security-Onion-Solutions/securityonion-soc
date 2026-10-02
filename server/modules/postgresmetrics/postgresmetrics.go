@@ -133,6 +133,10 @@ func (pm *PostgresMetrics) SetStore(store *database.Store) {
 	pm.dbStore = store
 }
 
+func (pm *PostgresMetrics) GetMaxMetricAgeSeconds() int {
+	return pm.maxMetricAgeSeconds
+}
+
 func (pm *PostgresMetrics) GetGridEps(ctx context.Context) int {
 	pm.updateCache(ctx)
 	pm.cacheLock.Lock()

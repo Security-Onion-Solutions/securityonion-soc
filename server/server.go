@@ -57,6 +57,8 @@ type Server struct {
 	Statusstore       Statusstore
 	Notifier          Notifier
 	Notificationstore Notificationstore
+	Schedulestore     Schedulestore
+	Alarmstore        Alarmstore
 }
 
 func NewServer(cfg *config.ServerConfig, version string) *Server {
@@ -66,6 +68,7 @@ func NewServer(cfg *config.ServerConfig, version string) *Server {
 		stoppedChan:      make(chan bool, 1),
 		DetectionEngines: sync.Map{},
 	}
+	server.Schedulestore = NewSchedulestore(server)
 	server.initContext()
 
 	licensing.ValidateSocUrl(server.Config.BaseUrl)
@@ -128,6 +131,7 @@ func (server *Server) Start() {
 		RegisterUtilRoutes(server, server.ApiRouter, "/api/util")
 		RegisterNotificationRoutes(server, server.ApiRouter, "/api/notifications")
 		RegisterScheduleRoutes(server, server.ApiRouter, "/api/schedules")
+		RegisterAlarmRoutes(server, server.ApiRouter, "/api/alarms")
 
 		server.Host.RegisterRouter("/api/", server.ApiRouter)
 
@@ -152,7 +156,7 @@ func (server *Server) CheckAuthorized(ctx context.Context, operation string, tar
 	logger := log.FromContext(ctx)
 
 	if server.Authorizer == nil {
-		if server.Config.DeveloperEnabled {
+		if server.Config != nil && server.Config.DeveloperEnabled {
 			logger.Info("Using developer mode; all authorization requests will succeed")
 		} else {
 			logger.Warn("No authorizer module has been configured; assuming no authorization")

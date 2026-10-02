@@ -63,18 +63,16 @@ func TestGetSchedules(t *testing.T) {
 	assert.Equal(t, "sch-1", resp[0].ID)
 }
 
-func TestGetSchedules_PillarNDJSONFormat(t *testing.T) {
+func TestGetSchedules_SingleObjectFormat(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	srv := NewFakeAuthorizedServer(nil)
-	// Pillar loading produces newline-delimited JSON objects when deserializing a YAML list of objects
-	ndjson := `{"definitions":[{"daysOfMonth":[1],"endTime":"17:00","months":[1],"startTime":"08:00","type":"annually"},{"daysOfMonth":[25],"endTime":"17:00","months":[12],"startTime":"08:00","type":"annually"}],"enabled":true,"id":"cb4963c2-eede-48e2-b654-49a7f093b94f","name":"Holidays","timezone":"America/New_York"}` + "\n" +
-		`{"definitions":[],"enabled":true,"id":"sch-2","name":"Weekends","timezone":"UTC"}` + "\n"
+	singleJSON := `{"definitions":[{"daysOfMonth":[1],"endTime":"17:00","months":[1],"startTime":"08:00","type":"annually"}],"enabled":true,"id":"cb4963c2-eede-48e2-b654-49a7f093b94f","name":"Holidays","timezone":"America/New_York"}`
 	settings := []*model.Setting{
 		{
 			Id:    "soc.config.server.schedules",
-			Value: ndjson,
+			Value: singleJSON,
 		},
 	}
 	srv.Configstore = NewMemConfigStore(settings)
@@ -93,11 +91,9 @@ func TestGetSchedules_PillarNDJSONFormat(t *testing.T) {
 	var resp []model.Schedule
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp, 2)
+	assert.Len(t, resp, 1)
 	assert.Equal(t, "cb4963c2-eede-48e2-b654-49a7f093b94f", resp[0].ID)
 	assert.Equal(t, "Holidays", resp[0].Name)
-	assert.Len(t, resp[0].Definitions, 2)
-	assert.Equal(t, "sch-2", resp[1].ID)
 }
 
 func TestPostSchedule(t *testing.T) {

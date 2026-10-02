@@ -40,6 +40,10 @@ const (
 	ASYNC_UPDATE_PAUSE        = time.Second
 	// ASYNC_UPDATE_MAX_ERRORS caps how many individual errors are broadcast to the client
 	ASYNC_UPDATE_MAX_ERRORS = 5
+
+	ACK_BROADCAST_KIND       = "events:ack"
+	UNACK_BROADCAST_KIND     = "events:unack"
+	ACK_BROADCAST_PERMISSION = "events"
 )
 
 type FieldDefinition struct {
@@ -450,83 +454,76 @@ func (store *ElasticEventstore) disableCrossClusterIndexing(indexes []string) []
 	return indexes
 }
 
-func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (results *model.EventUpdateResults, err error) {
-	logger := log.FromContext(ctx)
-
-	results = model.NewEventUpdateResults()
-	if err = store.server.CheckAuthorized(ctx, "write", "events"); err == nil {
-		store.refreshCache(ctx)
-
-		results.Criteria = criteria
-		var query string
-		query, err = convertToElasticUpdateRequest(store, criteria)
-		if err == nil {
-			var response string
-			var asyncTasks []asyncTaskRef
-
-			for idx, client := range store.esAllClients {
-				logger.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
-				response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous)
-				if err == nil {
-					if !criteria.Asynchronous {
-						currentResults := model.NewEventUpdateResults()
-						err = convertFromElasticUpdateResults(store, response, currentResults)
-						if err == nil {
-							results.AddEventUpdateResults(currentResults)
-						} else {
-							logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
-							results.Errors = append(results.Errors, err.Error())
-						}
-					} else {
-						// The update is running asynchronously; capture the node-specific task id
-						// so a background goroutine can watch it to completion and report the outcome.
-						taskId, taskErr := convertFromElasticAsyncUpdateResults(response)
-						if taskErr == nil {
-							asyncTasks = append(asyncTasks, asyncTaskRef{client: client, hostUrl: store.hostUrls[idx], taskId: taskId})
-						} else {
-							logger.WithError(taskErr).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while parsing asynchronous elasticsearch update response")
-							results.Errors = append(results.Errors, taskErr.Error())
-						}
-					}
-				} else {
-					logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
-					results.Errors = append(results.Errors, err.Error())
-				}
-			}
-
-			if criteria.Asynchronous && len(asyncTasks) > 0 {
-				// The returned task ids are the correlation tokens the client tracks (one per
-				// host); the watcher polls every node's task and broadcasts a single aggregated
-				// result carrying all of them.
-				taskIds := make([]string, len(asyncTasks))
-				for i, task := range asyncTasks {
-					taskIds[i] = task.taskId
-				}
-				results.TaskIds = taskIds
-
-				noTimeOutCtx := context.Background()
-				val := ctx.Value(web.ContextKeyRunAsUsername)
-				if val != nil {
-					if username, ok := val.(string); ok {
-						noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRunAsUsername, username)
-					}
-				}
-				noTimeOutCtx = context.WithValue(noTimeOutCtx, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId).(string))
-				noTimeOutCtx = log.NewContext(noTimeOutCtx, log.FromContext(ctx))
-
-				go store.watchAsyncUpdate(noTimeOutCtx, asyncTasks, taskIds)
-			}
-		}
-
-		if len(results.Errors) < len(store.esAllClients) {
-			// Do not fail this request completely since some hosts succeeded.
-			// The results.Errors property contains the list of errors.
-			err = nil
-		}
+func (store *ElasticEventstore) Update(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
+	results, asyncTasks, err := store.runUpdate(ctx, criteria)
+	if len(asyncTasks) > 0 {
+		// The returned task ids are the correlation tokens the client tracks (one per
+		// host); the watcher polls every node's task and broadcasts a single aggregated
+		// result carrying all of them.
+		go store.watchAsyncUpdate(context.WithoutCancel(ctx), asyncTasks, results.TaskIds, criteria.BroadcastKind, criteria.RequiredPermissionGroup)
 	}
 
 	results.Complete()
 	return results, err
+}
+
+// runUpdate submits the update to every host. Asynchronous updates return their task refs for
+// the caller to watch or wait on; results.TaskIds already lists them. Callers own
+// results.Complete().
+func (store *ElasticEventstore) runUpdate(ctx context.Context, criteria *model.EventUpdateCriteria) (results *model.EventUpdateResults, asyncTasks []asyncTaskRef, err error) {
+	logger := log.FromContext(ctx)
+
+	results = model.NewEventUpdateResults()
+	if err = store.server.CheckAuthorized(ctx, "write", "events"); err != nil {
+		return results, nil, err
+	}
+	store.refreshCache(ctx)
+
+	results.Criteria = criteria
+	query, err := convertToElasticUpdateRequest(store, criteria)
+	if err != nil {
+		return results, nil, err
+	}
+
+	var response string
+	for idx, client := range store.esAllClients {
+		logger.WithField("clientHost", store.hostUrls[idx]).Debug("Sending request to client")
+		response, err = store.updateDocuments(ctx, client, query, store.disableCrossClusterIndexing(strings.Split(store.index, ",")), !criteria.Asynchronous, criteria.IgnoreUnavailable)
+		if err == nil {
+			if !criteria.Asynchronous {
+				currentResults := model.NewEventUpdateResults()
+				err = convertFromElasticUpdateResults(store, response, currentResults)
+				if err == nil {
+					results.AddEventUpdateResults(currentResults)
+				} else {
+					logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+					results.Errors = append(results.Errors, err.Error())
+				}
+			} else {
+				// The update is running asynchronously; capture the node-specific task id
+				// so the caller can watch it to completion and report the outcome.
+				taskId, taskErr := convertFromElasticAsyncUpdateResults(response)
+				if taskErr == nil {
+					asyncTasks = append(asyncTasks, asyncTaskRef{client: client, hostUrl: store.hostUrls[idx], taskId: taskId})
+					results.TaskIds = append(results.TaskIds, taskId)
+				} else {
+					logger.WithError(taskErr).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while parsing asynchronous elasticsearch update response")
+					results.Errors = append(results.Errors, taskErr.Error())
+				}
+			}
+		} else {
+			logger.WithError(err).WithField("clientHost", store.hostUrls[idx]).Error("Encountered error while updating elasticsearch")
+			results.Errors = append(results.Errors, err.Error())
+		}
+	}
+
+	if len(results.Errors) < len(store.esAllClients) {
+		// Do not fail this request completely since some hosts succeeded.
+		// The results.Errors property contains the list of errors.
+		err = nil
+	}
+
+	return results, asyncTasks, err
 }
 
 func (store *ElasticEventstore) Index(ctx context.Context, index string, document map[string]interface{}, id string) (results *model.EventIndexResults, err error) {
@@ -715,7 +712,7 @@ func (store *ElasticEventstore) deleteDocument(ctx context.Context, index string
 	return jsonStr, err
 }
 
-func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool) (string, error) {
+func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *elasticsearch.Client, query string, indexes []string, waitForCompletion bool, ignoreUnavailable bool) (string, error) {
 	logger := log.FromContext(ctx)
 
 	logger.WithFields(log.Fields{
@@ -723,15 +720,18 @@ func (store *ElasticEventstore) updateDocuments(ctx context.Context, client *ela
 		"requestId": ctx.Value(web.ContextKeyRequestId),
 	}).Debug("Updating documents in Elasticsearch")
 	var jsonStr string
-	res, err := client.UpdateByQuery(
-		indexes,
+	opts := []func(*esapi.UpdateByQueryRequest){
 		client.UpdateByQuery.WithContext(ctx),
 		client.UpdateByQuery.WithPretty(),
 		client.UpdateByQuery.WithConflicts("proceed"),
 		client.UpdateByQuery.WithBody(strings.NewReader(query)),
 		client.UpdateByQuery.WithRefresh(true),
 		client.UpdateByQuery.WithWaitForCompletion(waitForCompletion),
-	)
+	}
+	if ignoreUnavailable {
+		opts = append(opts, client.UpdateByQuery.WithIgnoreUnavailable(true))
+	}
+	res, err := client.UpdateByQuery(indexes, opts...)
 	if err == nil {
 		defer res.Body.Close()
 		jsonStr, err = readJsonFromResponse(res)
@@ -754,8 +754,9 @@ type asyncTaskRef struct {
 }
 
 // watchAsyncUpdate watches all of the supplied asynchronous update tasks to completion, then
-// broadcasts a single aggregated result so the initiating client can report success or failure.
-func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string) {
+// broadcasts a single aggregated result on kind to clients that can read permissionGroup so the
+// initiating client can report success or failure. Nothing is broadcast when either is empty.
+func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []asyncTaskRef, taskIds []string, kind string, permissionGroup string) {
 	logger := log.FromContext(ctx).WithField("taskIds", taskIds)
 
 	status := store.aggregateAsyncUpdate(ctx, tasks, taskIds)
@@ -764,9 +765,13 @@ func (store *ElasticEventstore) watchAsyncUpdate(ctx context.Context, tasks []as
 		"success": status.Success,
 		"updated": status.Updated,
 		"errors":  status.Errors,
-	}).Info("Asynchronous event update task finished; broadcasting result")
+	}).Info("Asynchronous event update task finished")
 
-	store.server.Host.Broadcast("events:ack", "events", status)
+	if kind == "" || permissionGroup == "" {
+		return
+	}
+
+	store.server.Host.Broadcast(kind, permissionGroup, status)
 }
 
 // aggregateAsyncUpdate watches every supplied task to completion and combines their results into a
@@ -802,8 +807,6 @@ func (store *ElasticEventstore) aggregateAsyncUpdate(ctx context.Context, tasks 
 func (store *ElasticEventstore) waitForUpdateTask(ctx context.Context, task asyncTaskRef) (int, []string) {
 	deadline := time.Now().Add(ASYNC_UPDATE_MAX_WAIT)
 	for {
-		time.Sleep(ASYNC_UPDATE_PAUSE)
-
 		res, err := task.client.Tasks.Get(
 			task.taskId,
 			task.client.Tasks.Get.WithContext(ctx),
@@ -830,6 +833,7 @@ func (store *ElasticEventstore) waitForUpdateTask(ctx context.Context, task asyn
 				return 0, []string{fmt.Sprintf("timed out waiting for task %s to complete", task.taskId)}
 			}
 			// Tasks.Get returned before the task finished (server-side poll timeout); keep waiting.
+			time.Sleep(ASYNC_UPDATE_PAUSE)
 			continue
 		}
 
@@ -1428,7 +1432,18 @@ func (store *ElasticEventstore) addUnacknowledgeScript(updateCriteria *model.Eve
 	updateCriteria.AddUpdateScript(`ctx._source.event.acknowledged = false;`)
 }
 
-func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria) {
+// With a session id, only that session's link is removed so deleting a clone
+// leaves an alert still pointing at its source session untouched.
+func (store *ElasticEventstore) addInvestigateDeleteScript(updateCriteria *model.EventUpdateCriteria, sessionId ...string) {
+	if len(sessionId) > 0 && sessionId[0] != "" {
+		updateCriteria.Params["sessionId"] = sessionId[0]
+		updateCriteria.AddUpdateScript(`
+		if (ctx._source.event.containsKey('investigation_session_id') && ctx._source.event.investigation_session_id == params.sessionId) {
+			ctx._source.event.remove('investigation_session_id');
+		}
+	`)
+		return
+	}
 	updateCriteria.AddUpdateScript(`
 		if (ctx._source.event.containsKey('investigation_session_id')) {
 			ctx._source.event.remove('investigation_session_id');
@@ -1446,7 +1461,7 @@ func (store *ElasticEventstore) AddAckEscalateUpdateScripts(updateCriteria *mode
 
 func (store *ElasticEventstore) AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string) {
 	if isDelete {
-		store.addInvestigateDeleteScript(updateCriteria)
+		store.addInvestigateDeleteScript(updateCriteria, sessionId...)
 	} else {
 		store.addInvestigateScript(updateCriteria, timeNow, userId, sessionId...)
 	}
@@ -1485,6 +1500,12 @@ func (store *ElasticEventstore) Acknowledge(ctx context.Context, ackCriteria *mo
 			}
 
 			updateCriteria.Asynchronous = false
+			updateCriteria.IgnoreUnavailable = true
+			updateCriteria.RequiredPermissionGroup = ACK_BROADCAST_PERMISSION
+			updateCriteria.BroadcastKind = UNACK_BROADCAST_KIND
+			if ackCriteria.Acknowledge {
+				updateCriteria.BroadcastKind = ACK_BROADCAST_KIND
+			}
 			for key, value := range ackCriteria.EventFilter {
 				if strings.ToLower(key) != "count" {
 					valueStr := fmt.Sprintf("%v", value)

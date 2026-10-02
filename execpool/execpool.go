@@ -21,6 +21,7 @@ var (
 	ErrDuplicate = errors.New("a job with this dedupe key is already queued or running")
 	ErrShutdown  = errors.New("execution pool is shutting down")
 	ErrNoRun     = errors.New("job has no Run function")
+	ErrBusy      = errors.New("no capacity to start this job immediately")
 )
 
 // Job is one unit of work submitted to a Pool.
@@ -35,6 +36,10 @@ type Job struct {
 	// another (a single automation task)
 	DedupeKey string
 
+	// Immediate starts the job now, ahead of the queue and past MaxConcurrent, or
+	// refuses it with ErrBusy when its Key is at its limit. It never waits.
+	Immediate bool
+
 	// Run must respect its context. Shutdown cancels it but cannot force a goroutine
 	// to stop, so a Run that ignores cancellation outlives the pool.
 	Run func(ctx context.Context) error
@@ -48,7 +53,8 @@ type Config struct {
 	// unlimited.
 	MaxQueueDepth int
 
-	// MaxConcurrent caps running jobs across all keys. 0 means unlimited.
+	// MaxConcurrent caps running jobs across all keys when admitting from the queue;
+	// Immediate jobs count toward it but are not held back by it. 0 means unlimited.
 	MaxConcurrent int
 
 	// KeyLimitFunc reports the maximum number of concurrent jobs for a key; any
@@ -78,6 +84,7 @@ type Stats struct {
 	PeakRunning int
 	Rejected    uint64
 	Deduped     uint64
+	Busy        uint64
 
 	Keys map[string]KeyStats
 }
@@ -123,7 +130,8 @@ type admission struct {
 // logger, which bites hardest exactly when the pool is busiest.
 type logBatch struct {
 	admitted  []admission
-	changed   bool // the saturation edge flipped
+	abandoned []*entry // queued entries failed because the pool's context ended
+	changed   bool     // the saturation edge flipped
 	saturated bool
 	running   int
 	queued    int
@@ -148,6 +156,7 @@ type Pool struct {
 	peakRunning int
 	rejected    uint64
 	deduped     uint64
+	busy        uint64
 }
 
 // New derives the pool's job context from parent. The caller must eventually call
@@ -168,7 +177,7 @@ func New(parent context.Context, cfg Config) *Pool {
 }
 
 // Submit queues a job, starting it immediately if the limits allow. It reports
-// ErrShutdown, ErrDuplicate or ErrQueueFull when the job is refused; on success the
+// ErrShutdown, ErrDuplicate, ErrQueueFull or ErrBusy when the job is refused; on success the
 // returned Handle closes when the job finishes.
 func (p *Pool) Submit(job Job) (*Handle, error) {
 	if job.Run == nil {
@@ -177,7 +186,7 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 
 	p.mu.Lock()
 
-	if p.shutdown {
+	if p.shutdown || p.ctx.Err() != nil {
 		p.mu.Unlock()
 
 		return nil, ErrShutdown
@@ -194,6 +203,10 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 		}).Debug("refused duplicate job")
 
 		return nil, ErrDuplicate
+	}
+
+	if job.Immediate {
+		return p.submitImmediateLocked(job)
 	}
 
 	if p.cfg.MaxQueueDepth > 0 && len(p.queue) >= p.cfg.MaxQueueDepth {
@@ -237,6 +250,36 @@ func (p *Pool) Submit(job Job) (*Handle, error) {
 	return e.handle, nil
 }
 
+// submitImmediateLocked starts job without queueing it. The caller must hold mu; it is
+// released before returning.
+func (p *Pool) submitImmediateLocked(job Job) (*Handle, error) {
+	if !p.keyAdmissible(job.Key) {
+		p.busy++
+
+		p.mu.Unlock()
+
+		p.logger().WithField("key", job.Key).Debug("refused immediate job, key is at its limit")
+
+		return nil, ErrBusy
+	}
+
+	e := &entry{
+		job:      job,
+		handle:   &Handle{done: make(chan struct{})},
+		enqueued: time.Now(),
+	}
+
+	if job.DedupeKey != "" {
+		p.dedupe[job.DedupeKey]++
+	}
+
+	p.startLocked(e)
+
+	p.mu.Unlock()
+
+	return e.handle, nil
+}
+
 // Stats reports a point-in-time snapshot. Keys holds only the keys with work
 // outstanding right now.
 func (p *Pool) Stats() Stats {
@@ -250,6 +293,7 @@ func (p *Pool) Stats() Stats {
 		PeakRunning: p.peakRunning,
 		Rejected:    p.rejected,
 		Deduped:     p.deduped,
+		Busy:        p.busy,
 		Keys:        make(map[string]KeyStats, len(p.running)+len(p.queued)),
 	}
 
@@ -268,6 +312,29 @@ func (p *Pool) Stats() Stats {
 	return s
 }
 
+// Holds reports whether a job with this dedupe key is queued or running.
+func (p *Pool) Holds(dedupeKey string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.dedupe[dedupeKey] > 0
+}
+
+// QueuedDedupeKeys reports the dedupe keys of the jobs waiting for a slot.
+func (p *Pool) QueuedDedupeKeys() map[string]bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	keys := make(map[string]bool, len(p.queue))
+	for _, e := range p.queue {
+		if e.job.DedupeKey != "" {
+			keys[e.job.DedupeKey] = true
+		}
+	}
+
+	return keys
+}
+
 // Shutdown stops admitting new jobs and waits for the queued and running ones to
 // finish. If ctx expires first it cancels the running jobs, fails everything still
 // queued, and returns ctx.Err() without waiting any longer. Calling it more than once
@@ -284,9 +351,16 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 	p.shutdown = true
 	queued, running := len(p.queue), p.total
 
+	var abandoned []*entry
+	if p.ctx.Err() != nil {
+		abandoned = p.abandonQueuedLocked()
+	}
+
 	p.closeDrainedLocked()
 
 	p.mu.Unlock()
+
+	failAbandoned(abandoned)
 
 	if !already {
 		p.logger().WithFields(log.Fields{
@@ -295,27 +369,45 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 		}).Info("draining execution pool")
 	}
 
-	select {
-	case <-p.drained:
-		p.logger().Info("execution pool drained")
-
-		return nil
-	case <-ctx.Done():
+	if !p.isDrained() {
+		select {
+		case <-p.drained:
+		case <-ctx.Done():
+			return p.abandonRemaining(ctx)
+		}
 	}
 
-	// Out of time. Cancel whatever is running and fail everything still queued so no
-	// caller is left waiting on a handle that will never close. Jobs that ignore their
-	// context are not waited on; the pool cannot force a goroutine to stop.
+	p.logger().Info("execution pool drained")
+
+	return nil
+}
+
+func (p *Pool) isDrained() bool {
+	select {
+	case <-p.drained:
+		return true
+	default:
+		return false
+	}
+}
+
+// abandonRemaining is the timed-out half of Shutdown: cancel whatever is running and
+// fail everything still queued so no caller is left waiting on a handle that will never
+// close. Jobs that ignore their context are not waited on; the pool cannot force a
+// goroutine to stop.
+func (p *Pool) abandonRemaining(ctx context.Context) error {
 	p.cancel(ErrShutdown)
 
-	abandoned := p.abandonQueued()
-
 	p.mu.Lock()
+	abandoned := p.abandonQueuedLocked()
 	stillRunning := p.total
+	p.closeDrainedLocked()
 	p.mu.Unlock()
 
+	failAbandoned(abandoned)
+
 	p.logger().WithFields(log.Fields{
-		"abandoned":    abandoned,
+		"abandoned":    len(abandoned),
 		"stillRunning": stillRunning,
 	}).Warn("execution pool shutdown timed out")
 
@@ -330,6 +422,15 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 // The caller must hold mu, and must emit the returned batch only after releasing it.
 func (p *Pool) dispatch() logBatch {
 	var batch logBatch
+
+	// A cancelled pool starts nothing more; what is still queued fails now rather than
+	// running only to observe the cancellation.
+	if p.ctx.Err() != nil {
+		batch.abandoned = p.abandonQueuedLocked()
+		p.noteSaturationLocked(&batch)
+
+		return batch
+	}
 
 	kept := p.queue[:0]
 
@@ -346,13 +447,6 @@ func (p *Pool) dispatch() logBatch {
 			delete(p.queued, e.job.Key)
 		}
 
-		p.running[e.job.Key]++
-		p.total++
-
-		if p.total > p.peakRunning {
-			p.peakRunning = p.total
-		}
-
 		if e.blocked {
 			batch.admitted = append(batch.admitted, admission{
 				key:    e.job.Key,
@@ -360,7 +454,7 @@ func (p *Pool) dispatch() logBatch {
 			})
 		}
 
-		go p.run(e)
+		p.startLocked(e)
 	}
 
 	// Release the tail so started entries are collectable, and drop the backing array
@@ -380,11 +474,27 @@ func (p *Pool) dispatch() logBatch {
 	return batch
 }
 
+// startLocked counts e as running and starts it. The caller must hold mu.
+func (p *Pool) startLocked(e *entry) {
+	p.running[e.job.Key]++
+	p.total++
+
+	if p.total > p.peakRunning {
+		p.peakRunning = p.total
+	}
+
+	go p.run(e)
+}
+
 func (p *Pool) admissible(key string) bool {
 	if p.cfg.MaxConcurrent > 0 && p.total >= p.cfg.MaxConcurrent {
 		return false
 	}
 
+	return p.keyAdmissible(key)
+}
+
+func (p *Pool) keyAdmissible(key string) bool {
 	if p.cfg.KeyLimitFunc != nil {
 		if limit := p.cfg.KeyLimitFunc(key); limit > 0 && p.running[key] >= limit {
 			return false
@@ -480,10 +590,9 @@ func (p *Pool) closeDrainedLocked() {
 	}
 }
 
-// abandonQueued fails every still-queued job, reporting how many there were.
-func (p *Pool) abandonQueued() int {
-	p.mu.Lock()
-
+// abandonQueuedLocked detaches every still-queued entry for failAbandoned to fail once
+// the lock is released. The caller must hold mu.
+func (p *Pool) abandonQueuedLocked() []*entry {
 	queued := p.queue
 	p.queue = nil
 	p.queued = make(map[string]int)
@@ -492,19 +601,19 @@ func (p *Pool) abandonQueued() int {
 		p.releaseDedupeLocked(e.job)
 	}
 
-	p.closeDrainedLocked()
+	return queued
+}
 
-	p.mu.Unlock()
-
-	for _, e := range queued {
+func failAbandoned(abandoned []*entry) {
+	for _, e := range abandoned {
 		e.handle.err = ErrShutdown
 		close(e.handle.done)
 	}
-
-	return len(queued)
 }
 
 func (p *Pool) emit(b logBatch) {
+	failAbandoned(b.abandoned)
+
 	logger := p.logger()
 
 	for _, a := range b.admitted {

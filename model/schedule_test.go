@@ -571,16 +571,7 @@ func TestUnmarshalSchedules(t *testing.T) {
 	assert.Len(t, res, 1)
 	assert.Equal(t, "sch-2", res[0].ID)
 
-	// 5. NDJSON format
-	ndjson := `{"id":"sch-1","name":"Work","enabled":true,"definitions":[]}` + "\n" +
-		`{"id":"sch-2","name":"Weekends","enabled":true,"definitions":[]}`
-	res, err = UnmarshalSchedules(ndjson)
-	assert.NoError(t, err)
-	assert.Len(t, res, 2)
-	assert.Equal(t, "sch-1", res[0].ID)
-	assert.Equal(t, "sch-2", res[1].ID)
-
-	// 6. Invalid JSON
+	// 5. Invalid JSON
 	_, err = UnmarshalSchedules("invalid-json{")
 	assert.Error(t, err)
 }

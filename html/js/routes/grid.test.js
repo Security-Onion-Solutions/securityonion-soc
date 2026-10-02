@@ -476,4 +476,77 @@ test('metricsNodeId watcher resets metricsContainerId if container not on select
 	expect(comp.updateRoute).toHaveBeenCalled();
 });
 
+test('alarmsEnabled requires historicalMetricsEnabled and notificationsStarted and ntf license', () => {
+	comp.historicalMetricsEnabled = true;
+	comp.$root.notificationsStarted = true;
+	comp.$root.isLicensed = jest.fn((feat) => feat === 'ntf');
+	expect(comp.alarmsEnabled()).toBe(true);
+
+	// When notifications not started
+	comp.$root.notificationsStarted = false;
+	expect(comp.alarmsEnabled()).toBe(false);
+
+	// When unlicensed
+	comp.$root.notificationsStarted = true;
+	comp.$root.isLicensed = jest.fn(() => false);
+	expect(comp.alarmsEnabled()).toBe(false);
+
+	// When historical metrics disabled
+	comp.historicalMetricsEnabled = false;
+	comp.$root.isLicensed = jest.fn(() => true);
+	expect(comp.alarmsEnabled()).toBe(false);
+});
+
+test('isAnyAlarmActive delegates to $root.isAlarmActive', () => {
+	comp.$root.isAlarmActive = jest.fn(() => true);
+	expect(comp.isAnyAlarmActive()).toBe(true);
+
+	comp.$root.isAlarmActive = jest.fn(() => false);
+	expect(comp.isAnyAlarmActive()).toBe(false);
+});
+
+test('addAlarm delegates to alarmsManager.showAddAlarm', () => {
+	const showAddAlarm = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			showAddAlarm,
+		},
+	};
+	comp.addAlarm();
+	expect(showAddAlarm).toHaveBeenCalled();
+});
+
+test('refresh reloads alarmsManager when activeTab is alarms', () => {
+	const loadData = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData,
+		},
+	};
+	comp.activeTab = 'alarms';
+	comp.refresh();
+	expect(loadData).toHaveBeenCalled();
+});
+
+test('loadUrlParameters parses tab=alarms and tab=metrics with nodeId', () => {
+	comp.$route = {
+		query: {
+			tab: 'alarms',
+		},
+	};
+	comp.loadUrlParameters();
+	expect(comp.activeTab).toBe('alarms');
+
+	comp.$route = {
+		query: {
+			tab: 'metrics',
+			nodeId: 'sensor-1',
+		},
+	};
+	comp.loadUrlParameters();
+	expect(comp.activeTab).toBe('metrics');
+	expect(comp.metricsNodeId).toBe('sensor-1');
+});
+
+
 

@@ -36,8 +36,31 @@ const (
 	ContextKeySubgridResponses  ContextKey = "ContextKeySubgridResponses"  // []*http.Response
 )
 
+// DetachContext returns a context free of the request's cancellation and
+// deadline but bounded by its own timeout, carrying over the requestor
+// identity, request id, and logger.
+func DetachContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	detached := context.Background()
+	if username, ok := ctx.Value(ContextKeyRunAsUsername).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRunAsUsername, username)
+	}
+	if requestorId, ok := ctx.Value(ContextKeyRequestorId).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRequestorId, requestorId)
+	}
+	// Downstream stores key work off the request id (e.g. the salt relay's queue filename).
+	if requestId, ok := ctx.Value(ContextKeyRequestId).(string); ok {
+		detached = context.WithValue(detached, ContextKeyRequestId, requestId)
+	}
+	return context.WithTimeout(log.NewContext(detached, log.FromContext(ctx)), timeout)
+}
+
 type HostHandler interface {
 	Handle(responseWriter http.ResponseWriter, request *http.Request)
+}
+
+// RecipientFilterable represents an object that can specify targeted recipients for broadcasts.
+type RecipientFilterable interface {
+	GetRecipients() []string
 }
 
 type Preprocessor interface {
@@ -156,8 +179,32 @@ func (host *Host) Broadcast(kind string, reqPermission string, obj interface{}) 
 		Kind:   kind,
 		Object: obj,
 	}
+
+	var recipients []string
+	if rf, ok := obj.(RecipientFilterable); ok {
+		recipients = rf.GetRecipients()
+	}
+
 	for _, connection := range host.connections {
 		if err := host.Authorizer.CheckUserOperationAuthorized(connection.userId, "read", reqPermission); err == nil {
+			if len(recipients) > 0 {
+				isRecipient := false
+				for _, r := range recipients {
+					if r == connection.userId {
+						isRecipient = true
+						break
+					}
+				}
+				if !isRecipient {
+					log.WithFields(log.Fields{
+						"messageKind": kind,
+						"sourceIp":    connection.ip,
+						"userId":      connection.userId,
+					}).Debug("Skipping broadcast because user is not in recipient list")
+					continue
+				}
+			}
+
 			log.WithFields(log.Fields{
 				"messageKind": kind,
 				// "remoteAddr": connection.websocket.RemoteAddr().String(),

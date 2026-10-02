@@ -401,7 +401,7 @@ func matchesMonthlyRecurrence(def ScheduleDefinition, t time.Time) bool {
 	return false
 }
 
-// UnmarshalSchedules parses a schedule string (JSON array, JSON object, or newline-delimited JSON objects)
+// UnmarshalSchedules parses a schedule string (JSON array or single JSON object)
 // into a slice of sanitized Schedule structs.
 func UnmarshalSchedules(val string) ([]Schedule, error) {
 	val = strings.TrimSpace(val)
@@ -418,28 +418,7 @@ func UnmarshalSchedules(val string) ([]Schedule, error) {
 		}
 	}
 
-	// 2. Try newline-delimited JSON objects (produced when loaded from YAML pillars)
-	lines := strings.Split(val, "\n")
-	schedules = nil
-	allLinesParsed := true
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var s Schedule
-		if err := json.Unmarshal([]byte(line), &s); err == nil {
-			schedules = append(schedules, s)
-		} else {
-			allLinesParsed = false
-			break
-		}
-	}
-	if allLinesParsed && len(schedules) > 0 {
-		return SanitizeScheduleDAG(schedules), nil
-	}
-
-	// 3. Try single JSON object
+	// 2. Try single JSON object
 	var single Schedule
 	if err := json.Unmarshal([]byte(val), &single); err == nil {
 		return SanitizeScheduleDAG([]Schedule{single}), nil

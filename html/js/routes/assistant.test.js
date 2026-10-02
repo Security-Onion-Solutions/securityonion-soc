@@ -18,6 +18,7 @@ require('../components/tool-use-card.js');
 require('../components/delegation-child.js');
 
 const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+const MSGTAG_PARTIAL = "partial";
 
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
@@ -1617,6 +1618,24 @@ test('executeTool still surfaces a 400 that is not already-resolved', async () =
   expect(comp.messages).toHaveLength(1);
 });
 
+test('executeTool warns when the tool turn stays busy past the retries', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.toolBusyRetryDelayMs = 0;
+  comp.toolBusyMaxRetries = 1;
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('ERROR_AGENT_BUSY');
+  expect(toolUse.status).toBe('error');
+});
+
 test('executeTool processes streaming response with message_start', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
@@ -2098,6 +2117,47 @@ test('callAIAPI handles fetch error', async () => {
   expect(comp.messages[0].role).toBe('assistant');
   expect(comp.messages[0].content).toContain('having trouble connecting to the AI service');
   expect(comp.scrollToBottom).toHaveBeenCalled();
+});
+
+test('callAIAPI warns and restores the message when the agent is busy', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = '';
+  comp.$root.showWarning = jest.fn();
+  comp.$root.showError = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = {
+    status: 409,
+    data: {
+      pipeThrough: () => ({ getReader: () => ({ read: jest.fn().mockResolvedValue({ done: false, value: '"ERROR_AGENT_BUSY"' }) }) }),
+    },
+  };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('"ERROR_AGENT_BUSY"');
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('Test message');
+  expect(comp.isTyping).toBe(false);
+});
+
+test('callAIAPI keeps a newer draft when restoring a busy message', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = 'typed since';
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('typed since');
 });
 
 test('callAIAPI processes message_start event', async () => {
@@ -3474,6 +3534,42 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end of session
   expect(toolUse.timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(toolUse.approved).toBe(null);
   expect(toolUse.sessionId).toBe('test_session_123'); // Should include sessionId
+});
+
+// A turn still tagged partial never finished streaming, so its tool_use was never
+// sent to the model. Approving it would resume with a tool_result the model has no
+// tool_use for.
+test('convertBackendMessagesToFrontend does not await approval for a tool_use in an unfinished turn', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'test_session_123';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: [MSGTAG_PARTIAL],
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'tool_use', id: 'tool_abandoned', name: 'query_events', input: {} }
+        ]
+      }
+    }
+  ];
+
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+
+  const toolUse = result[0].toolUses[0];
+  expect(toolUse.status).toBe('skipped');
+  expect(toolUse.approved).toBe(false);
+  expect(comp.sessionTools('test_session_123').floatingTool).toBeFalsy();
+});
+
+test('isPartialMessage detects the partial tag', () => {
+  expect(comp.isPartialMessage({ tags: [MSGTAG_PARTIAL] })).toBe(true);
+  expect(comp.isPartialMessage({ tags: ['tool_result'] })).toBe(false);
+  expect(comp.isPartialMessage({})).toBe(false);
+  expect(comp.isPartialMessage(null)).toBe(false);
 });
 
 // A top-level turn can request tools in parallel whose results land as separate
@@ -6667,6 +6763,59 @@ test('delegateOwnOutputTokens returns 0 when there is no child session', () => {
   expect(comp.delegateOwnOutputTokens(null)).toBe(0);
   expect(comp.delegateOwnOutputTokens({})).toBe(0);
   expect(comp.delegateOwnOutputTokens({ childSession: {} })).toBe(0);
+});
+
+test('recomputeCreditsFromHistory ignores messages cloned from another session', () => {
+  const data = {
+    session: { sessionId: 'root', model: 'Orchestrator' },
+    history: [
+      { model: 'Orchestrator', tags: ['clone'], message: { role: 'assistant', usage: { credits: 300 } } },
+      { model: 'Orchestrator', message: { role: 'assistant', usage: { credits: 25 } } },
+    ],
+    subSessions: [
+      { session: { sessionId: 'c1', delegateAgent: 'Investigator' }, history: [
+        { model: 'Investigator', tags: ['tool_result', 'clone'], message: { role: 'assistant', usage: { credits: 150 } } },
+        { model: 'Investigator', message: { role: 'assistant', usage: { credits: 5 } } },
+      ] },
+    ],
+  };
+
+  comp.recomputeCreditsFromHistory(data);
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 25, Investigator: 5 });
+  expect(comp.creditsUsed).toBe(30);
+});
+
+test('reconstructChildSession flags cloned turns so delegate cards do not bill them', () => {
+  const delegate = { id: 'tu-1', name: 'delegate_to_helper', childSession: null };
+  const sub = {
+    session: { sessionId: 'c1', delegateAgent: 'Helper' },
+    history: [
+      { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied' }], usage: { credits: 40, output_tokens: 400 } } },
+      { createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'fresh' }], usage: { credits: 2, output_tokens: 20 } } },
+    ],
+  };
+
+  comp.reconstructChildSession(delegate, sub, { byParentToolUseId: new Map() }, 'root');
+
+  const msgs = delegate.childSession.messages;
+  expect(msgs.map(m => !!m.cloned)).toEqual([true, false]);
+  expect(msgs.map(m => m.usage.credits)).toEqual([40, 2]);
+  expect(comp.delegateOwnCredits(delegate)).toBe(2);
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(20);
+});
+
+test('convertBackendMessagesToFrontend counts cloned messages toward context', () => {
+  comp.resetContextLength = jest.fn();
+
+  const result = comp.convertBackendMessagesToFrontend([
+    { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'copied question' }] } },
+    { tags: ['clone'], createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied answer' }], usage: { input_tokens: 700, output_tokens: 300, credits: 9 } } },
+  ]);
+
+  expect(result).toHaveLength(2);
+  expect(result[1].tags).toEqual(['clone']);
+  expect(comp.contextLength).toBe(1000);
 });
 
 // Floating tool tests

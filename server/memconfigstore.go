@@ -36,6 +36,10 @@ func (m *MemConfigStore) GetSetting(ctx context.Context, id string) (*model.Sett
 	return nil, nil
 }
 
+func (m *MemConfigStore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return m.GetSetting(ctx, id)
+}
+
 func (m *MemConfigStore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
 	_, index, ok := lo.FindIndexOf(m.settings, func(s *model.Setting) bool {
 		return s.Id == setting.Id

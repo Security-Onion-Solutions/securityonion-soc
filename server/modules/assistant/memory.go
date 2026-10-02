@@ -603,6 +603,10 @@ func (ac *AssistantCoordinator) scanForMemories(ctx context.Context, logger *log
 
 		sessionId := sessionDetails.Session.SessionId
 
+		// Both the extract below and the scan index recorded afterwards must stop
+		// short of a turn that is still being written.
+		sessionDetails.History = trimTrailingPartials(sessionDetails.History)
+
 		logger.WithFields(log.Fields{
 			"sessionId":              sessionId,
 			"lastMemoryScannedIndex": sessionDetails.Session.LastMemoryScannedIndex,
@@ -1455,6 +1459,20 @@ func renderMemoryTranscript(msgs []*model.StoredMessage) string {
 	}
 
 	return strings.Join(lines, "\n\n")
+}
+
+// trimTrailingPartials drops the messages of a turn that is still streaming.
+// Their text is truncated and their document is rewritten when the turn ends, so
+// scanning them would extract facts from half a sentence and move the scan index
+// past the version worth reading.
+func trimTrailingPartials(history []*model.StoredMessage) []*model.StoredMessage {
+	for i := len(history) - 1; i >= 0; i-- {
+		if !history[i].IsPartial() {
+			return history[:i+1]
+		}
+	}
+
+	return nil
 }
 
 // buildMemoryExtractTranscripts splits the unscanned history into batches of

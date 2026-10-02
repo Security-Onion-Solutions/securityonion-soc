@@ -115,7 +115,7 @@ func TestInfoHandler_getCustomReports(t *testing.T) {
 	}
 }
 
-func TestInfoHandler_parseReportTitle(t *testing.T) {
+func TestParseReportTitle(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  []byte
@@ -188,8 +188,7 @@ Content`),
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := &InfoHandler{}
-			result := handler.parseReportTitle(tt.content, tt.deflt)
+			result := ParseReportTitle(tt.content, tt.deflt)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

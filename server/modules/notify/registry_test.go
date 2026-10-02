@@ -16,11 +16,26 @@ import (
 )
 
 type dummyChannel struct {
-	channelType string
+	channelType         string
+	supportsRecipients  bool
+	supportsAttachments bool
+	supportsLinks       bool
 }
 
 func (d *dummyChannel) Type() string {
 	return d.channelType
+}
+
+func (d *dummyChannel) SupportsRecipients() bool {
+	return d.supportsRecipients
+}
+
+func (d *dummyChannel) SupportsAttachments() bool {
+	return d.supportsAttachments
+}
+
+func (d *dummyChannel) SupportsLinks() bool {
+	return d.supportsLinks
 }
 
 func (d *dummyChannel) ValidateConfig(params map[string]interface{}) error {

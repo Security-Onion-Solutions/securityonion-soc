@@ -278,6 +278,144 @@ func TestPool_QueueDepthZeroUnlimited(t *testing.T) {
 	})
 }
 
+func limitA(n int) func(string) int {
+	return func(key string) int {
+		if key == "a" {
+			return n
+		}
+
+		return 0
+	}
+}
+
+func TestPool_ImmediateStartsUnderKeyLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", Immediate: true, Run: g.job("a")})
+		synctest.Wait()
+
+		assert.Equal(t, KeyStats{Running: 1}, p.Stats().Keys["a"])
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediateBusyAtKeyLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "one", Run: g.job("a")})
+		synctest.Wait()
+
+		h, err := p.Submit(Job{Key: "a", DedupeKey: "two", Immediate: true, Run: g.job("a")})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrBusy)
+
+		stats := p.Stats()
+		assert.Equal(t, KeyStats{Running: 1}, stats.Keys["a"])
+		assert.Equal(t, uint64(1), stats.Busy)
+
+		// The refused job left no dedupe hold behind.
+		submit(t, p, Job{Key: "b", DedupeKey: "two", Run: g.job("b")})
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediatePassesGlobalLimit(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1})
+		running := newGate()
+		immediate := newGate()
+
+		submit(t, p, Job{Key: "a", Run: running.job("a")})
+		submit(t, p, Job{Key: "q", Run: running.job("q")})
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "b", Immediate: true, Run: immediate.job("b")})
+		synctest.Wait()
+
+		assert.Equal(t, []string{"b"}, immediate.startedKeys())
+		assert.Equal(t, []string{"a"}, running.startedKeys(), "the queued job stays behind the cap")
+
+		stats := p.Stats()
+		assert.Equal(t, 2, stats.Running)
+		assert.Equal(t, 1, stats.Queued)
+
+		running.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a"}, running.startedKeys(), "the immediate job still holds the only slot")
+		assert.Equal(t, 1, p.Stats().Queued)
+
+		immediate.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a", "q"}, running.startedKeys())
+	})
+}
+
+func TestPool_ImmediateIgnoresQueueDepth(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1, MaxQueueDepth: 1})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", Run: g.job("a")})
+		submit(t, p, Job{Key: "a", Run: g.job("a")})
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "b", Immediate: true, Run: g.job("b")})
+		synctest.Wait()
+
+		assert.Contains(t, g.startedKeys(), "b")
+
+		g.open()
+	})
+}
+
+func TestPool_ImmediateDuplicateRefused(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test"})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+		synctest.Wait()
+
+		h, err := p.Submit(Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrDuplicate)
+
+		g.open()
+		synctest.Wait()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "session", Immediate: true, Run: g.job("a")})
+	})
+}
+
+func TestPool_ImmediateCompletionAdmitsQueued(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: limitA(1)})
+		immediate := newGate()
+		queued := newGate()
+
+		submit(t, p, Job{Key: "a", Immediate: true, Run: immediate.job("a")})
+		submit(t, p, Job{Key: "a", Run: queued.job("a")})
+		synctest.Wait()
+
+		assert.Equal(t, KeyStats{Running: 1, Queued: 1}, p.Stats().Keys["a"])
+
+		immediate.open()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"a"}, queued.startedKeys())
+
+		queued.open()
+	})
+}
+
 func TestPool_DuplicateDedupeKeyRefusedWhileRunning(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		p := newPool(t, Config{Name: "test"})
@@ -326,6 +464,55 @@ func TestPool_DedupeKeyFreedAfterCompletion(t *testing.T) {
 		synctest.Wait()
 
 		assert.Empty(t, p.dedupe)
+	})
+}
+
+func TestPool_HoldsTracksADedupeKeyWhileQueuedOrRunning(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", MaxConcurrent: 1})
+		g := newGate()
+
+		assert.False(t, p.Holds("task"))
+
+		submit(t, p, Job{Key: "a", DedupeKey: "other", Run: g.job("other")})
+		h := submit(t, p, Job{Key: "a", DedupeKey: "task", Run: g.job("task")})
+		synctest.Wait()
+
+		assert.True(t, p.Holds("task"), "queued behind the running job")
+
+		g.open()
+		<-h.Done()
+		synctest.Wait()
+
+		assert.False(t, p.Holds("task"))
+		assert.False(t, p.Holds("other"))
+	})
+}
+
+func TestPool_QueuedDedupeKeysTracksAKeyOnlyWhileWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: func(string) int { return 1 }})
+		first, second := newGate(), newGate()
+
+		assert.Empty(t, p.QueuedDedupeKeys())
+
+		h := submit(t, p, Job{Key: "a", DedupeKey: "other", Run: first.job("other")})
+		submit(t, p, Job{Key: "a", DedupeKey: "task", Run: second.job("task")})
+		submit(t, p, Job{Key: "a", Run: second.job("anonymous")})
+		synctest.Wait()
+
+		// "task" is held back by its key's limit, "other" is running, and the anonymous job has no key to report.
+		assert.Equal(t, map[string]bool{"task": true}, p.QueuedDedupeKeys())
+
+		first.open()
+		<-h.Done()
+		synctest.Wait()
+
+		assert.Equal(t, []string{"task"}, second.startedKeys())
+		assert.Empty(t, p.QueuedDedupeKeys(), "admitted once the slot freed")
+		assert.True(t, p.Holds("task"))
+
+		second.open()
 	})
 }
 
@@ -451,7 +638,13 @@ func TestPool_ShutdownTimeoutCancelsAndFailsQueued(t *testing.T) {
 		}
 
 		running := submit(t, p, Job{Key: "a", Run: blocking})
-		queued := submit(t, p, Job{Key: "a", Run: blocking})
+
+		var started atomic.Bool
+		queued := submit(t, p, Job{Key: "a", Run: func(context.Context) error {
+			started.Store(true)
+
+			return nil
+		}})
 
 		synctest.Wait()
 		assert.Equal(t, 1, p.Stats().Queued)
@@ -464,6 +657,47 @@ func TestPool_ShutdownTimeoutCancelsAndFailsQueued(t *testing.T) {
 		// Nobody is left holding a handle that never closes.
 		assert.ErrorIs(t, queued.Wait(context.Background()), ErrShutdown)
 		assert.ErrorIs(t, running.Wait(context.Background()), context.Canceled)
+
+		synctest.Wait()
+		assert.False(t, started.Load(), "the running job's exit must not start the queued one after cancel")
+	})
+}
+
+func TestPool_ParentCancelFailsQueuedWithoutRunningThem(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		p := New(ctx, Config{Name: "test", MaxConcurrent: 1})
+		g := newGate()
+
+		running := submit(t, p, Job{Key: "a", Run: g.job("a")})
+		queued := submit(t, p, Job{Key: "b", Run: g.job("b")})
+
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
+
+		assert.ErrorIs(t, running.Wait(context.Background()), context.Canceled)
+		assert.ErrorIs(t, queued.Wait(context.Background()), ErrShutdown)
+		assert.Equal(t, []string{"a"}, g.startedKeys())
+		assert.Equal(t, Stats{PeakQueued: 1, PeakRunning: 1, Keys: map[string]KeyStats{}}, p.Stats())
+
+		// Nothing is left, so Shutdown has nothing to wait for.
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+}
+
+func TestPool_ParentCancelRefusesNewSubmissions(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		p := New(ctx, Config{Name: "test"})
+
+		cancel()
+
+		h, err := p.Submit(Job{Key: "a", Run: func(context.Context) error { return nil }})
+		assert.Nil(t, h)
+		assert.ErrorIs(t, err, ErrShutdown)
+
+		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 }
 

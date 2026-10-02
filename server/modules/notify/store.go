@@ -9,6 +9,7 @@ package notify
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -18,15 +19,38 @@ import (
 )
 
 type NotificationstoreImpl struct {
-	server *server.Server
-	store  *database.Store
+	server       *server.Server
+	store        *database.Store
+	defaultLimit int
+	mu           sync.RWMutex
 }
 
 func NewNotificationstore(srv *server.Server, store *database.Store) *NotificationstoreImpl {
 	return &NotificationstoreImpl{
-		server: srv,
-		store:  store,
+		server:       srv,
+		store:        store,
+		defaultLimit: DEFAULT_MAX_LIST_LIMIT,
 	}
+}
+
+func (s *NotificationstoreImpl) SetDefaultLimit(limit int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit > 0 {
+		if limit > MAX_ALLOWED_LIST_LIMIT {
+			limit = MAX_ALLOWED_LIST_LIMIT
+		}
+		s.defaultLimit = limit
+	}
+}
+
+func (s *NotificationstoreImpl) GetDefaultLimit() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.defaultLimit <= 0 {
+		return DEFAULT_MAX_LIST_LIMIT
+	}
+	return s.defaultLimit
 }
 
 func (s *NotificationstoreImpl) getUser(ctx context.Context) *model.User {
@@ -54,14 +78,52 @@ func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error)
 	return "", errors.New("unauthorized: missing user in context")
 }
 
-func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter string) ([]*model.NotificationRecord, error) {
+func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string, []string, bool, error) {
+	readAll := false
 	if s.server != nil {
 		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
-			return nil, err
+			return "", nil, false, err
+		}
+		if err := s.server.CheckAuthorized(ctx, "read_all", "notifications"); err == nil {
+			readAll = true
 		}
 	}
 
 	username, err := s.getUsername(ctx)
+	if err != nil {
+		return "", nil, false, err
+	}
+
+	identifiers := make([]string, 0, 2)
+
+	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
+		if reqId, ok := val.(string); ok && reqId != "" {
+			identifiers = append(identifiers, reqId)
+		}
+	}
+
+	if u := s.getUser(ctx); u != nil && u.Id != "" {
+		found := false
+		for _, id := range identifiers {
+			if id == u.Id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			identifiers = append(identifiers, u.Id)
+		}
+	}
+
+	if len(identifiers) == 0 {
+		identifiers = append(identifiers, username)
+	}
+
+	return username, identifiers, readAll, nil
+}
+
+func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter string, limit ...int) (*model.NotificationListResponse, error) {
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +131,11 @@ func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter str
 	var createdAfter time.Time
 	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
 		createdAfter = u.CreateTime
+	}
+
+	maxLimit := s.GetDefaultLimit()
+	if len(limit) > 0 && limit[0] > 0 && limit[0] < maxLimit {
+		maxLimit = limit[0]
 	}
 
 	if s.store == nil {
@@ -82,17 +149,11 @@ func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter str
 		s.store = st
 	}
 
-	return s.store.GetNotifications(ctx, username, filter, createdAfter)
+	return s.store.GetNotifications(ctx, username, identifiers, readAll, filter, createdAfter, maxLimit)
 }
 
 func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Time, error) {
-	if s.server != nil {
-		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
-			return nil, err
-		}
-	}
-
-	username, err := s.getUsername(ctx)
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +174,7 @@ func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Ti
 		s.store = st
 	}
 
-	return s.store.GetLastUnreadTime(ctx, username, createdAfter)
+	return s.store.GetLastUnreadTime(ctx, username, identifiers, readAll, createdAfter)
 }
 
 func (s *NotificationstoreImpl) SetRead(ctx context.Context, id string, isRead bool) error {
@@ -146,6 +207,37 @@ func (s *NotificationstoreImpl) SetRead(ctx context.Context, id string, isRead b
 	return s.store.SetRead(ctx, id, username, isRead)
 }
 
+func (s *NotificationstoreImpl) SetAllRead(ctx context.Context, isRead bool) error {
+	if s.server != nil {
+		if err := s.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
+			return err
+		}
+	}
+
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	if err != nil {
+		return err
+	}
+
+	var createdAfter time.Time
+	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
+		createdAfter = u.CreateTime
+	}
+
+	if s.store == nil {
+		if s.server == nil || s.server.DB == nil {
+			return errors.New("database not configured")
+		}
+		st, err := database.New(ctx, s.server.DB)
+		if err != nil {
+			return err
+		}
+		s.store = st
+	}
+
+	return s.store.SetAllRead(ctx, username, identifiers, readAll, createdAfter, isRead)
+}
+
 func (s *NotificationstoreImpl) SetDismissed(ctx context.Context, id string, isDismissed bool) error {
 	if s.server != nil {
 		if err := s.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
@@ -174,6 +266,37 @@ func (s *NotificationstoreImpl) SetDismissed(ctx context.Context, id string, isD
 	}
 
 	return s.store.SetDismissed(ctx, id, username, isDismissed)
+}
+
+func (s *NotificationstoreImpl) SetAllDismissed(ctx context.Context, isDismissed bool) error {
+	if s.server != nil {
+		if err := s.server.CheckAuthorized(ctx, "write", "notifications"); err != nil {
+			return err
+		}
+	}
+
+	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	if err != nil {
+		return err
+	}
+
+	var createdAfter time.Time
+	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
+		createdAfter = u.CreateTime
+	}
+
+	if s.store == nil {
+		if s.server == nil || s.server.DB == nil {
+			return errors.New("database not configured")
+		}
+		st, err := database.New(ctx, s.server.DB)
+		if err != nil {
+			return err
+		}
+		s.store = st
+	}
+
+	return s.store.SetAllDismissed(ctx, username, identifiers, readAll, createdAfter, isDismissed)
 }
 
 func (s *NotificationstoreImpl) GetAuditLogs(ctx context.Context, id string) ([]*model.NotificationAuditEntry, error) {

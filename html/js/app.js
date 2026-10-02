@@ -243,6 +243,7 @@ $(document).ready(function () {
           notificationMenu: false,
           notificationShowDismissed: false,
           notifications: [],
+          notificationsTruncated: false,
           expandedNotifications: {},
           unreadCount: 0,
           notificationAudits: {},
@@ -273,6 +274,8 @@ $(document).ready(function () {
           casesEnabled: false,
           detectionsEnabled: false,
           notificationsStarted: false,
+          showNotificationOptions: false,
+          alarmStates: [],
           subtitle: '',
           connected: false,
           reconnecting: false,
@@ -637,6 +640,7 @@ $(document).ready(function () {
                   }
                   this.notificationsStarted = !!response.data.notificationsStarted;
                   this.handleServerInfoNotifications(response.data);
+                  this.loadAlarmStates();
 
                   if (this.parameterCallback != null) {
                     this.parameterCallback(this.parameters[this.parameterSection]);
@@ -679,6 +683,7 @@ $(document).ready(function () {
 
                   this.subscribe("status", this.updateStatus);
                   this.subscribe('notification', this.handleIncomingNotification);
+                  this.subscribe('alarm:state', this.onAlarmStateUpdate);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);
@@ -1076,10 +1081,12 @@ $(document).ready(function () {
           return text
         },
         colorSeverity(value) {
-          if (value == "low_false") return "yellow";
-          if (value == "medium_false") return "orange-darken-1";
-          if (value == "high_false") return "red-lighten-1";
-          if (value == "critical_false") return "red-darken-4";
+          const val = (value || '').toLowerCase();
+          if (val == "low_false" || val == "low") return "yellow";
+          if (val == "medium_false" || val == "medium") return "orange-darken-1";
+          if (val == "high_false" || val == "high") return "red-lighten-1";
+          if (val == "critical_false" || val == "critical") return "red-darken-4";
+          if (val == "info_false" || val == "info") return "grey";
           return "icon";
         },
         colorizeChip(color) {
@@ -1681,6 +1688,34 @@ $(document).ready(function () {
           this.updateTitle();
           this.loadServerSettings(true);
         },
+        onAlarmStateUpdate(state) {
+          if (!state || !state.alarmId) return;
+          if (!this.alarmStates) this.alarmStates = [];
+          const idx = this.alarmStates.findIndex(s => s.alarmId === state.alarmId && s.nodeId === state.nodeId);
+          if (idx !== -1) {
+            this.alarmStates.splice(idx, 1, state);
+          } else {
+            this.alarmStates.push(state);
+          }
+          this.updateStatus();
+          this.setFavicon();
+          this.updateTitle();
+        },
+        loadAlarmStates() {
+          if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+          return this.papi.get('alarms/states')
+            .then(response => {
+              this.alarmStates = response?.data || [];
+              this.updateStatus();
+              this.setFavicon();
+              this.updateTitle();
+            })
+            .catch(() => {});
+        },
+        isAlarmActive(gridId) {
+          if (!this.alarmStates || this.alarmStates.length === 0) return false;
+          return this.alarmStates.some(s => s.status === 'alarm');
+        },
         getDetectionEngines() {
           return ['elastalert', 'strelka', 'suricata'];
         },
@@ -1803,6 +1838,9 @@ $(document).ready(function () {
         isGridUnhealthy(gridId) {
           const status = this.statusByGridId[gridId];
           if (status && status.grid && status.grid.unhealthyNodeCount > 0) {
+            return true;
+          }
+          if (this.isAlarmActive(gridId)) {
             return true;
           }
           return false;

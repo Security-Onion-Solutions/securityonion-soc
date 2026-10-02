@@ -167,7 +167,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		Links:     stringifyValues(args.Links),
 	}
 
-	err = srv.Notifier.Send(ctx, payload)
+	_, err = srv.Notifier.Send(ctx, payload)
 	if err != nil {
 		logger.WithError(err).Error("error sending notification")
 		return nil, err

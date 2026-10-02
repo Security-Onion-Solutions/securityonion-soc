@@ -16,7 +16,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/openai/openai-go/v3"
@@ -172,11 +171,9 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 		params.Tools = tools
 	}
 
-	// Use noTimeout context like Responses adapter
-	noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
-	noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
-
-	stream := a.client.ChatCompletionsNewStreaming(noTimeoutContext, params)
+	// The coordinator detaches a user's turn from their request before this call;
+	// an automation's turn stays attached so it can be cancelled.
+	stream := a.client.ChatCompletionsNewStreaming(ctx, params)
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 
@@ -236,6 +233,16 @@ func (a *OpenAIChatAdapter) SendMessageStream(ctx context.Context, req *model.Ch
 			// Update usage if present (it comes in the final chunk)
 			if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
 				usage = chunk.Usage
+			}
+		}
+
+		if err := stream.Err(); err != nil {
+			replacement, shouldReturn := handleStreamError(err, processor.firstSend, writer, logger, req.Model)
+			if shouldReturn {
+				if replacement != nil {
+					response = replacement
+				}
+				return
 			}
 		}
 

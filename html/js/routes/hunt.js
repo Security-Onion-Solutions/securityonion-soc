@@ -226,6 +226,7 @@ const huntComponent = {
     this.$root.unsubscribe('detections:bulkUpdate', this.bulkUpdateReport);
     this.$root.unsubscribe('related:bulkCreate', this.bulkUpdateReport);
     this.$root.unsubscribe('events:ack', this.ackTaskReport);
+    this.$root.unsubscribe('events:unack', this.unackTaskReport);
 
     if (this.isCategory('alerts')) {
       window.removeEventListener('resize', this.calculateEventColumnWidth);
@@ -251,6 +252,7 @@ const huntComponent = {
     if (this.isCategory('alerts')) {
       window.addEventListener('resize', this.calculateEventColumnWidth);
       this.$root.subscribe('events:ack', this.ackTaskReport);
+      this.$root.subscribe('events:unack', this.unackTaskReport);
     }
   },
   watch: {
@@ -2682,6 +2684,12 @@ const huntComponent = {
       }
     },
     ackTaskReport(status) {
+      this.reportAckTask(status, this.i18n.ackTaskSuccess, this.i18n.ackTaskError);
+    },
+    unackTaskReport(status) {
+      this.reportAckTask(status, this.i18n.ackUndoTaskSuccess, this.i18n.ackUndoTaskError);
+    },
+    reportAckTask(status, successMsg, errorMsg) {
       // ignore broadcasts for other clients.
       const ids = status.taskIds || [];
       if (!ids.some(id => this.runningAckTasks.includes(id))) return;
@@ -2690,11 +2698,11 @@ const huntComponent = {
       this.runningAckTasks = this.runningAckTasks.filter(id => !ids.includes(id));
 
       if (status.success) {
-        const msg = this.$root.replaceActionVar(this.i18n.ackTaskSuccess, 'count', (status.updated || 0).toLocaleString())
+        const msg = this.$root.replaceActionVar(successMsg, 'count', (status.updated || 0).toLocaleString())
         this.$root.showTip(msg);
       } else {
         let errors = (status.errors || []).join('; ');
-        const msg = this.$root.replaceActionVar(this.i18n.ackTaskError, 'errors', errors);
+        const msg = this.$root.replaceActionVar(errorMsg, 'errors', errors);
         this.$root.showError(msg);
       }
     },

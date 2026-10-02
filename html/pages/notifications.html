@@ -5,6 +5,9 @@
         <v-toolbar class="so-toolbar elevation-0" fixed>
           <h4 class="ml-2 my-0" data-aid="notifications_summary" role="heading" aria-level="2">{{ i18n.notifications }}</h4>
           <v-spacer></v-spacer>
+          <v-btn v-if="tab === 'destinations'" icon variant="flat" class="circle-button mx-2" @click.stop="sendNotification()" :title="i18n.sendNotification" :aria-label="i18n.ariaSendNotification" id="send-notification-button" data-aid="notifications_send_button">
+            <v-icon>fa-paper-plane</v-icon>
+          </v-btn>
           <v-btn v-if="tab === 'destinations'" icon variant="flat" class="circle-button mx-2" @click.stop="addDestination()" :title="i18n.addDestination" :aria-label="i18n.ariaDestinationNew" id="add-destination-button" data-aid="notifications_add_destination_button">
             <v-icon>fa-plus</v-icon>
           </v-btn>
@@ -33,7 +36,7 @@
 
         <!-- Activation Schedules Tab -->
         <v-tabs-window-item value="schedules" data-aid="notifications_schedules_tab">
-          <schedules-manager ref="schedulesManager" data-aid="notifications_schedules_manager"></schedules-manager>
+          <schedules-manager ref="schedulesManager" @schedule-saved="onScheduleUpdated" @schedule-deleted="onScheduleUpdated" data-aid="notifications_schedules_manager"></schedules-manager>
         </v-tabs-window-item>
       </v-tabs-window>
     </v-col>

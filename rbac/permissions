@@ -60,6 +60,7 @@ memory/read_all:           memory-admin memory-monitor
 memory/write_self:         memory-user
 memory/write_global:       memory-curator
 memory/write_all:          memory-admin
+automations/read:          automation-monitor
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA

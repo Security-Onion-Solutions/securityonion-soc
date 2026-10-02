@@ -18,10 +18,22 @@ import (
 // maps it to 409 Conflict so the client can retry, rather than blocking the request.
 var ErrToolTurnBusy = errors.New("ERROR_TOOL_TURN_BUSY")
 
+// ErrAgentBusy is returned when a chat turn's agent is at its maxConcurrentInstances.
+// The handler maps it to 409 Conflict so the client can try again later.
+var ErrAgentBusy = errors.New("ERROR_AGENT_BUSY")
+
 // ErrToolUseNotFound is returned when a tool request names a toolUseId with no
 // matching assistant tool_use in the session (or the session itself can't be
 // found). The handler maps it to 404 Not Found.
 var ErrToolUseNotFound = errors.New("ERROR_TOOL_USE_NOT_FOUND")
+
+// ErrSessionNotFound is returned when a session lookup by id finds nothing the
+// caller may read. The handler maps it to 404 Not Found.
+var ErrSessionNotFound = errors.New("ERROR_SESSION_NOT_FOUND")
+
+// ErrSessionNotRoot is returned when an operation that only applies to a root
+// session targets a delegation sub-session. The handler maps it to 400.
+var ErrSessionNotRoot = errors.New("ERROR_SESSION_NOT_ROOT")
 
 // ErrToolAlreadyResolved is returned when the targeted tool_use already has a
 // tool_result in the session's history, so approving or rejecting it again must
@@ -36,11 +48,13 @@ var ErrToolRequestMismatch = errors.New("ERROR_TOOL_REQUEST_MISMATCH")
 type AssistantManager interface {
 	Send(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) ([]*model.Message, error)
 	SendStream(ctx context.Context, aiModel string, messages []*model.Message, opts ...model.ChatOpt) (*http.Response, *model.AuxMessageData, error)
+	AcquireTurnSlot(ctx context.Context, sessionId string, selector string) (release func(), err error)
 	ChatInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) ([]*model.Message, error)
 	ChatStreamInSession(ctx context.Context, incMsg *model.IncomingMessage, entityType, entityId string) (*http.Response, *model.AuxMessageData, func(rawResponse []byte) error, error)
 	ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error)
 	ToolStreamInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) (*model.StreamedTurn, error)
 	RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error)
+	ValidateAgentSessionRequest(req *model.AgentSessionRequest) error
 	ResolveDelegationStream(ctx context.Context, childSession *model.AssistantSession, childFinalText string) (*model.StreamedTurn, error)
 	ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error)
 	Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error)
@@ -49,6 +63,13 @@ type AssistantManager interface {
 	DeleteAgent(ctx context.Context, name string) error
 	SaveSkill(ctx context.Context, originalName string, skill *model.StoredSkill) error
 	DeleteSkill(ctx context.Context, name string) error
+	ListAutomations(ctx context.Context) ([]*model.Automation, error)
+	GetAutomation(ctx context.Context, id string) (*model.Automation, error)
+	SaveAutomation(ctx context.Context, automation *model.Automation) error
+	DeleteAutomation(ctx context.Context, id string) error
+	GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error)
+	GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error)
+	GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error)
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error

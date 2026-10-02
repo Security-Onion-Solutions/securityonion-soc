@@ -7,6 +7,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -135,6 +136,10 @@ func (h *JobHandler) putJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.server.Host.Broadcast("job", "jobs", job)
+
+	if job.Status == model.JobStatusCompleted {
+		go SendJobCompletionNotification(context.Background(), h.server, job)
+	}
 
 	web.Respond(w, r, http.StatusOK, job)
 }

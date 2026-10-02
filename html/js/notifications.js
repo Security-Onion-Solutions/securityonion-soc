@@ -10,7 +10,14 @@ globalThis.socNotifications = {
     const filter = this.notificationShowDismissed ? 'all' : 'active';
     return this.papi.get('notifications?filter=' + filter)
       .then(response => {
-        this.notifications = response.data || [];
+        const data = response?.data || {};
+        if (Array.isArray(data)) {
+          this.notifications = data;
+          this.notificationsTruncated = false;
+        } else {
+          this.notifications = data.notifications || [];
+          this.notificationsTruncated = !!data.truncated;
+        }
         this.unreadCount = this.notifications.filter(n => !n.isRead && !n.isDismissed).length;
         return this.notifications;
       })
@@ -23,7 +30,16 @@ globalThis.socNotifications = {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
     return this.papi.get('notifications?filter=unread')
       .then(response => {
-        this.unreadCount = (response.data || []).length;
+        const data = response?.data || {};
+        if (Array.isArray(data)) {
+          this.unreadCount = data.length;
+        } else if (typeof data.count === 'number') {
+          this.unreadCount = data.count;
+        } else if (Array.isArray(data.notifications)) {
+          this.unreadCount = data.notifications.length;
+        } else {
+          this.unreadCount = 0;
+        }
         return this.unreadCount;
       })
       .catch(err => {
@@ -41,13 +57,39 @@ globalThis.socNotifications = {
       });
   },
 
+  markAllAsRead(isRead = true) {
+    this.notificationMenu = true;
+    return this.papi.put('notifications/read/all', { isRead })
+      .then(() => {
+        this.notificationMenu = true;
+        return Promise.all([this.loadNotifications(), this.loadUnreadCount()]);
+      })
+      .catch(err => {
+        console.error('Failed to mark all notifications as read', err);
+      });
+  },
+
   dismissNotification(id, isDismissed) {
+    this.notificationMenu = true;
     return this.papi.put('notifications/' + id + '/dismiss', { isDismissed })
       .then(() => {
+        this.notificationMenu = true;
         return this.loadNotifications();
       })
       .catch(err => {
         console.error('Failed to update dismiss state', err);
+      });
+  },
+
+  dismissAll(isDismissed = true) {
+    this.notificationMenu = true;
+    return this.papi.put('notifications/dismiss/all', { isDismissed })
+      .then(() => {
+        this.notificationMenu = true;
+        return Promise.all([this.loadNotifications(), this.loadUnreadCount()]);
+      })
+      .catch(err => {
+        console.error('Failed to dismiss all notifications', err);
       });
   },
 
@@ -114,7 +156,14 @@ globalThis.socNotifications = {
     }
   },
 
+  toggleNotificationShowDismissed() {
+    this.notificationShowDismissed = !this.notificationShowDismissed;
+    this.notificationMenu = true;
+    return this.loadNotifications();
+  },
+
   refreshNotifications() {
+    this.notificationMenu = true;
     return this.loadNotifications();
   },
 

@@ -7,21 +7,44 @@
 package notify
 
 import (
+	"context"
+
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
 const (
-	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 300
+	DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS = 0
+	DEFAULT_DISMISSED_PRUNE_DAYS          = 30
+	DEFAULT_MAX_LIST_LIMIT                = 500
+	MAX_ALLOWED_LIST_LIMIT                = 5000
 )
+
+// LoadConfigFromStore reads notification destinations configuration from onionconfig.
+// Returns the destinations map and true if destinations were found in the store.
+func LoadConfigFromStore(ctx context.Context, store server.Configstore) (map[string]model.DestinationConfig, bool) {
+	if store == nil {
+		return nil, false
+	}
+
+	if setting, err := store.GetSetting(ctx, ConfigSettingNotificationDestinations); err == nil && setting != nil && setting.Value != "" {
+		if dests, err := unmarshalDestinations(setting.Value); err == nil && len(dests) > 0 {
+			return dests, true
+		}
+	}
+
+	return nil, false
+}
 
 // ParseConfig parses and validates module configuration, ensuring default destinations
 // (such as soc-bell) are set on new or empty configurations.
 func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 	config := model.NotificationConfig{
 		Enabled:                    module.GetBoolDefault(cfg, "enabled", true),
-		DefaultDestinations:        module.GetStringArrayDefault(cfg, "defaultDestinations", []string{model.DefaultDestinationSOCBell}),
 		GlobalSilenceWindowSeconds: module.GetIntDefault(cfg, "globalSilenceWindowSeconds", DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS),
+		DismissedPruneDays:         module.GetIntDefault(cfg, "dismissedPruneDays", DEFAULT_DISMISSED_PRUNE_DAYS),
+		MaxListLimit:               module.GetIntDefault(cfg, "maxListLimit", DEFAULT_MAX_LIST_LIMIT),
 		Destinations:               make(map[string]model.DestinationConfig),
 	}
 
@@ -65,11 +88,6 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 	// If no destinations are defined, configure default soc-bell destination
 	if len(config.Destinations) == 0 {
 		config.Destinations = model.DefaultDestinationsMap()
-	}
-
-	// Ensure default destinations list has at least soc-bell if empty
-	if len(config.DefaultDestinations) == 0 {
-		config.DefaultDestinations = []string{model.DefaultDestinationSOCBell}
 	}
 
 	return config, nil

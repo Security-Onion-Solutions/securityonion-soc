@@ -15,15 +15,17 @@ import (
 
 type Assistantstore interface {
 	SaveChat(context.Context, *model.StoredMessage) error
-	GetChatHistory(context.Context, string) ([]*model.StoredMessage, error)
-	// GetChatMessages returns the messages for an already-loaded session,
-	// applying the same read authorization as GetChatHistory without
-	// re-fetching the session record.
-	GetChatMessages(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
+	SavePartialChat(context.Context, *model.StoredMessage) error
+	FinishPartialChat(context.Context, *model.StoredMessage) error
+	GetChatHistory(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error)
+	// GetChatHistoryOutlines is GetChatHistory for several sessions at once, without text, tool inputs or tool output.
+	GetChatHistoryOutlines(context.Context, []*model.AssistantSession) ([][]*model.StoredMessage, error)
 	GetSessions(context.Context, ...model.GetSessionsOpt) ([]*model.AssistantSession, error)
-	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, err error)
+	DoesUserOwnSession(ctx context.Context, userId string, sessionId string) (ownedByUser bool, sessionExists bool, isAutomation bool, sessionModel string, err error)
 	CreateSession(context.Context, *model.AssistantSession) error
+	CloneSession(ctx context.Context, sessionId string) (*model.AssistantSession, error)
 	UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error
+	ToggleSessionsTag(ctx context.Context, sessionIds []string, tag string, present bool) error
 	DeleteSession(context.Context, string) error
 
 	GetUsage(context.Context, time.Time, time.Time) ([]*model.UserUsage, error)
@@ -33,3 +35,12 @@ type Assistantstore interface {
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore
+
+//go:generate mockgen -destination mock/mock_alerttriageupdater.go -package mock . AlertTriageUpdater
+type AlertTriageUpdater interface {
+	// AlertTriageUpdate records the outcome on every alert the update selects and returns only
+	// once the update has landed, even when it ran as a background task.
+	AlertTriageUpdate(ctx context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error)
+	// AlertTriageSchemaPrefix names the event sub-object the ledger lives under, for building the scan.
+	AlertTriageSchemaPrefix() string
+}
