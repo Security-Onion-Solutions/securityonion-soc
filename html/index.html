@@ -635,7 +635,7 @@
                   <v-list-item-title v-text="i18n.agentstudio"></v-list-item-title>
                 </router-link>
               </v-list-item>
-              <v-list-item data-aid="nav_admin_agentmonitor" v-if="$root.isUserAdmin() && isLicensed('oai') && $root.parameters.assistant?.agentic" :class="{ 'nav-active': $route.name === 'agentmonitor' }">
+              <v-list-item data-aid="nav_admin_agentmonitor" v-if="$root.canReadAutomations() && isLicensed('oai') && $root.parameters.assistant?.agentic" :class="{ 'nav-active': $route.name === 'agentmonitor' }">
                 <template #prepend>
                   <router-link to="/agentmonitor" class="text-decoration-none" aria-hidden="true" tabindex="-1">
                     <v-icon>fa-display</v-icon>

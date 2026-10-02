@@ -6,14 +6,17 @@
 package assistant
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestActivityNotifierSendsOncePerWindow(t *testing.T) {
@@ -136,4 +139,24 @@ func TestAutomationActivityWithoutNotifierOrHost(t *testing.T) {
 
 	ac.srv = &server.Server{}
 	ac.broadcastAutomationActivity()
+}
+
+func TestAutomationActivityRecordsWhenItWasBuilt(t *testing.T) {
+	before := time.Now()
+	activity, err := newActivityCoordinator(t).automationActivity(context.Background(), &fakeActivityStore{})
+	require.NoError(t, err)
+
+	assert.False(t, activity.GeneratedAt.Before(before))
+}
+
+func TestAutomationActivityIsBroadcastWhole(t *testing.T) {
+	ac := newActivityCoordinator(t)
+	var published []*model.AutomationActivity
+	ac.publishActivity = func(snapshot *model.AutomationActivity) { published = append(published, snapshot) }
+
+	ac.broadcastAutomationActivity()
+
+	require.Len(t, published, 1)
+	assert.False(t, published[0].GeneratedAt.IsZero())
+	assert.NotNil(t, published[0].Runs)
 }

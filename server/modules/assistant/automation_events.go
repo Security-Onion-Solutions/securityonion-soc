@@ -8,6 +8,10 @@ package assistant
 import (
 	"sync"
 	"time"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
+
+	"github.com/apex/log"
 )
 
 // Changes within one window reach clients as a single event, sent as the window closes.
@@ -88,7 +92,33 @@ func (ac *AssistantCoordinator) notifyAutomationActivity() {
 
 // Sent to whoever may read automations, which is who may call the activity endpoint.
 func (ac *AssistantCoordinator) broadcastAutomationActivity() {
-	if ac.srv != nil && ac.srv.Host != nil {
-		ac.srv.Host.Broadcast(AutomationActivityKind, "automations", nil)
+	if ac.srv == nil {
+		return
 	}
+
+	publish := ac.publishActivity
+	if publish == nil {
+		if ac.srv.Host == nil {
+			return
+		}
+
+		publish = func(snapshot *model.AutomationActivity) {
+			ac.srv.Host.Broadcast(AutomationActivityKind, "automations", snapshot)
+		}
+	}
+
+	// A nil *database.Store is a non-nil interface.
+	var store automationActivityStore
+	if ac.store != nil {
+		store = ac.store
+	}
+
+	// The server's context is the system identity; this view is the same for every reader.
+	snapshot, err := ac.automationActivity(ac.srv.Context, store)
+	if err != nil {
+		log.WithError(err).Warn("unable to build automation activity to broadcast")
+		return
+	}
+
+	publish(snapshot)
 }

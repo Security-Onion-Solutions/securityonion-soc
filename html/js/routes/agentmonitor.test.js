@@ -155,6 +155,7 @@ beforeEach(() => {
   serve();
 
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.user = { id: 'analyst-1', roles: ['analyst'] };
   comp.$root.showError = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
@@ -540,14 +541,32 @@ test('the details tab lists the work item as key/value rows', async () => {
   expect(rows.find(r => r.key === comp.i18n.agentMonitorGroup).value).toBe('—');
 });
 
-test('the automation row links to that automation in Agent Studio', async () => {
+test('for an admin, the automation row links to that automation in Agent Studio', async () => {
   await load();
+  comp.$root.user = { id: 'admin-1', roles: ['superuser'] };
 
   for (const item of [itemById('item-ps'), itemById('item-mimi')]) {
     const row = comp.itemDetails(item).find(r => r.key === comp.i18n.agentMonitorAutomation);
     expect(row.link).toEqual({ name: 'agentstudio', query: { tab: 'automations', automation: TRIAGE_ID } });
   }
   expect(comp.automationConfigLink({})).toBeNull();
+
+  // Agent Studio stays admin-only.
+  comp.$root.user = { id: 'analyst-1', roles: ['analyst'] };
+  expect(comp.automationConfigLink(itemById('item-ps'))).toBeNull();
+});
+
+test('anyone with automations/read sees the page; anyone else loads nothing', () => {
+  for (const roles of [['analyst'], ['auditor'], ['superuser']]) {
+    comp.$root.user = { id: 'u', roles };
+    expect(comp.$root.canReadAutomations()).toBe(true, roles[0]);
+  }
+
+  comp.$root.user = { id: 'u', roles: ['limited-analyst'] };
+  expect(comp.$root.canReadAutomations()).toBe(false);
+  comp.loadData = jest.fn();
+  comp.initAssistant(agenticParams());
+  expect(comp.loadData).not.toHaveBeenCalled();
 });
 
 test('the key/value tabs follow the item, with result only once there is one', async () => {
@@ -693,50 +712,47 @@ test('elapsed formats as minutes and padded seconds', () => {
   expect(comp.formatElapsed(600000)).toBe('10:00');
 });
 
-test('activity is pushed, not polled: each event reloads it, and the clock only ticks', () => {
+const pushed = (generatedAt, items) => ({
+  generatedAt, schedulerRunning: true, pool: {},
+  runs: [{ id: 'run-1', automationId: TRIAGE_ID, displayName: 'Alert Triage', items }],
+});
+
+test('pushed activity is applied as it arrives, with no request, and the clock only ticks', () => {
   comp.$root.subscribe = jest.fn();
   comp.reload = jest.fn();
   comp.mounted();
   expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.onAutomationActivity);
 
-  comp.loadActivity = jest.fn();
-  comp.onAutomationActivity();
-  expect(comp.loadActivity).toHaveBeenCalledWith(true);
+  const get = serve();
+  comp.onAutomationActivity(pushed('2026-10-02T12:00:00Z', [{ id: 'a', state: 'running' }]));
+  expect(comp.items.map(i => i.id)).toEqual(['a']);
+  expect(get).not.toHaveBeenCalled();
 
-  comp.loadActivity.mockClear();
   comp.tick();
-  expect(comp.loadActivity).not.toHaveBeenCalled();
+  expect(get).not.toHaveBeenCalled();
 });
 
-test('a change announced during a load is loaded once that load finishes', async () => {
-  let finishFirst;
-  const get = jest.fn()
-    .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
-    .mockResolvedValue({ data: { runs: [] } });
-  comp.$root.papi.get = get;
+test('activity older than what is shown is dropped', () => {
+  comp.applyActivity(pushed('2026-10-02T12:00:02Z', [{ id: 'a', state: 'running', payload: { groupFilter: 'x' } }]));
 
-  const first = comp.loadActivity(true);
-  comp.onAutomationActivity();
-  comp.onAutomationActivity();
-  expect(get).toHaveBeenCalledTimes(1);
+  comp.applyActivity(pushed('2026-10-02T12:00:01Z', []));
+  expect(comp.items.map(i => i.id)).toEqual(['a'], 'a slow fetch does not undo a newer push');
 
-  finishFirst({ data: { runs: [] } });
-  await first;
-
-  expect(get).toHaveBeenCalledTimes(2);
-  expect(comp.activityReloadPending).toBe(false);
+  // A push carries the item whole, including its current payload.
+  comp.applyActivity(pushed('2026-10-02T12:00:03Z', [{ id: 'a', state: 'running', payload: { groupFilter: 'x', latestAlertId: 'alert-9' } }]));
+  expect(comp.items[0].payload).toEqual({ groupFilter: 'x', latestAlertId: 'alert-9' });
 });
 
-test('pausing stops the clock and ignores changes until resumed', () => {
+test('pausing stops the clock and ignores pushes; resuming fetches what was missed', () => {
   comp.loadActivity = jest.fn();
   comp.now = 0;
   comp.togglePaused();
   expect(comp.paused).toBe(true);
 
   comp.tick();
-  comp.onAutomationActivity();
+  comp.onAutomationActivity(pushed('2026-10-02T12:00:00Z', [{ id: 'a', state: 'running' }]));
   expect(comp.now).toBe(0);
-  expect(comp.loadActivity).not.toHaveBeenCalled();
+  expect(comp.items).toEqual([]);
 
   comp.togglePaused();
   expect(comp.loadActivity).toHaveBeenCalledWith(true);
@@ -754,12 +770,12 @@ test('reconnecting reloads what was missed while disconnected', () => {
   expect(comp.loadActivity).toHaveBeenCalledWith(true);
 });
 
-test('refreshes that overlap one in flight collapse into a single follow-up', async () => {
+test('a refresh already in flight is not doubled', async () => {
   const get = serve();
 
-  await Promise.all([comp.loadActivity(true), comp.loadActivity(true), comp.loadActivity(true)]);
+  await Promise.all([comp.loadActivity(true), comp.loadActivity(true)]);
 
-  expect(get.mock.calls.filter(call => call[0] === 'assistant/automations/activity').length).toBe(2);
+  expect(get.mock.calls.filter(call => call[0] === 'assistant/automations/activity').length).toBe(1);
 });
 
 test('the refresh button reloads everything, including the watched transcript', async () => {

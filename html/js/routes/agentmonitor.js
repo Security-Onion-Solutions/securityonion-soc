@@ -68,8 +68,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     transcriptLoading: false,
     transcriptRefreshTimer: null,
     activityLoading: false,
-    // A change announced mid-load; that load may predate it, so another follows.
-    activityReloadPending: false,
+    // generatedAt of the activity shown, in ms; anything older is dropped.
+    activityGeneratedAt: 0,
 
     // Written by the reused assistant conversion.
     sessionToolState: new Map(),
@@ -176,7 +176,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.agentic = params.agentic || false;
       this.agentMapping = params.agentMapping || {};
       this.paramsLoaded = true;
-      if (this.assistantEnabled && this.agentic) {
+      if (this.assistantEnabled && this.agentic && this.$root.canReadAutomations()) {
         this.loadLocalSettings();
         this.applyRoute();
         this.loadData();
@@ -229,10 +229,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       await Promise.all(loads);
     },
     async loadActivity(background = false) {
-      if (this.activityLoading) {
-        this.activityReloadPending = true;
-        return;
-      }
+      if (this.activityLoading) return;
       this.activityLoading = true;
       try {
         const response = await this.$root.papi.get('assistant/automations/activity');
@@ -242,16 +239,16 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       } finally {
         this.activityLoading = false;
       }
-      if (this.activityReloadPending) {
-        this.activityReloadPending = false;
-        await this.loadActivity(true);
-      }
     },
-    // The server pushes no data, only that activity changed.
-    onAutomationActivity() {
-      if (!this.paused) this.loadActivity(true);
+    onAutomationActivity(activity) {
+      if (activity && !this.paused) this.applyActivity(activity);
     },
     applyActivity(activity) {
+      // A slow fetch can land after a newer push.
+      const generatedAt = Date.parse(activity.generatedAt) || 0;
+      if (generatedAt && generatedAt < this.activityGeneratedAt) return;
+      if (generatedAt) this.activityGeneratedAt = generatedAt;
+
       this.schedulerRunning = activity.schedulerRunning !== false;
       this.pool = Object.assign(emptyPool(), activity.pool || {});
 
@@ -478,8 +475,9 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       if (item.error) rows.push({ key: this.i18n.error, value: item.error });
       return rows;
     },
+    // Agent Studio stays admin-only.
     automationConfigLink(item) {
-      if (!item.automationId) return null;
+      if (!item.automationId || !this.$root.isUserAdmin()) return null;
       return { name: 'agentstudio', query: { tab: 'automations', automation: item.automationId } };
     },
     kvRows(obj) {

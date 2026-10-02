@@ -1,5 +1,5 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="agentmonitor_loading_parameters"></v-container>
-<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentmonitor_screen">
+<v-container v-else-if="assistantEnabled && agentic && $root.canReadAutomations()" fluid data-aid="agentmonitor_screen">
   <v-row align="center" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
     <v-col style="flex: 0 0 auto;" class="pa-0 align-self-end" id="agentmonitor-breadcrumbs">
       <v-breadcrumbs :items="breadcrumbs()" density="compact" class="py-0">
@@ -273,6 +273,11 @@
       </v-col>
     </v-row>
   </template>
+</v-container>
+<v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentmonitor_no_access">
+  <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">
+    <div class="my-8">{{ i18n.agentMonitorNoAccess }}</div>
+  </div>
 </v-container>
 <v-container v-else-if="$root.isLicensed('oai') && !assistantEnabled" fluid data-aid="agentmonitor_assistant_disabled">
   <div class="d-flex flex-column align-center justify-center ga-2 agentstudio-notice">

@@ -9,6 +9,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -46,6 +47,8 @@ func (ac *AssistantCoordinator) automationActivity(ctx context.Context, store au
 		SchedulerRunning: status.Running,
 		Pool:             ac.agentPoolActivity(status.Pool),
 		Runs:             []*model.AutomationRunActivity{},
+		// Taken before the reads, so it never claims to be newer than its data.
+		GeneratedAt: time.Now(),
 	}
 
 	if store == nil {

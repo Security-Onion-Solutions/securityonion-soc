@@ -339,6 +339,7 @@ const i18n = {
       agentMonitorNoTranscript: 'No transcript retained for this attempt.',
       agentMonitorNotStarted: 'No session has started for this item yet.',
       agentMonitorBackToFlight: 'Back to in-flight work',
+      agentMonitorNoAccess: 'You do not have permission to view automation activity. Contact your Security Onion administrator.',
       agentStudioAgents: 'Agents',
       agentStudioSkills: 'Skills',
       agentStudioSkill: 'Skill',

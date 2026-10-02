@@ -208,6 +208,8 @@ type AssistantCoordinator struct {
 	execPool *execpool.Pool
 	// Tells clients the activity view changed; nil in tests that skip Init.
 	activityEvents *activityNotifier
+	// Replaces the websocket broadcast in tests.
+	publishActivity func(*model.AutomationActivity)
 
 	// automationWorkerMu guards the scheduler, nil when stopped. The pool's KeyLimitFunc takes
 	// agentMu under the pool lock, so nothing may call a pool method while holding agentMu.
@@ -352,7 +354,7 @@ const (
 	AgenticUpdateKind = "assistant:agentic"
 	// AgentStreamKind carries a headless session's turn as it streams.
 	AgentStreamKind = "assistant:stream"
-	// AutomationActivityKind says the activity view changed; it carries nothing, so clients refetch.
+	// AutomationActivityKind carries the activity view each time it changes.
 	AutomationActivityKind = "assistant:automation"
 	// Skill definitions, in the same structured form as the agents setting.
 	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
