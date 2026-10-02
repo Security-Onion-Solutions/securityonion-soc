@@ -319,14 +319,16 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 	pm.diskUsedNsmPct = pm.dbStore.FetchFloatValues(ctx, "disk", "used_percent", "path", "/nsm", startTime)
 
 	// RAID, Process, EPS
-	pm.raidStatus = pm.dbStore.FetchIntValues(ctx, "raid", "nsmraid", "", "", startTime)
+	if pm.dbStore.TableExists(ctx, "telegraf", "raid") {
+		pm.raidStatus = pm.dbStore.FetchIntValues(ctx, "raid", "nsmraid", "", "", startTime)
+	} else {
+		pm.raidStatus = make(map[string]int)
+	}
 	pm.processStatus = pm.dbStore.FetchIntValues(ctx, "sostatus", "status", "", "", startTime)
 	pm.processJson = pm.dbStore.FetchStringValues(ctx, "sostatus", "json", "", "", startTime)
 	pm.consumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "", "", startTime)
 
-	// Filebeat & Elasticsearch
-	pm.productionEps = pm.dbStore.FetchIntValues(ctx, "fbstats", "eps", "", "", startTime)
-	pm.failedEvents = pm.dbStore.FetchIntValues(ctx, "fbstats", "failed", "", "", startTime)
+	// Elasticsearch
 	pm.eventstoreStatus = pm.dbStore.FetchStringValues(ctx, "elasticsearch_cluster_health", "status", "", "", startTime)
 
 	// Pcap age, Suricata rules, drops, Zeek loss

@@ -40,6 +40,8 @@ func (m *MockRow) Scan(dest ...interface{}) error {
 			*d = val.(int)
 		case *float64:
 			*d = val.(float64)
+		case *bool:
+			*d = val.(bool)
 		case *time.Time:
 			*d = val.(time.Time)
 		default:
@@ -74,6 +76,8 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 			*d = val.(int)
 		case *float64:
 			*d = val.(float64)
+		case *bool:
+			*d = val.(bool)
 		case *time.Time:
 			*d = val.(time.Time)
 		default:
@@ -84,11 +88,20 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 }
 
 type MockDB struct {
-	QueryFunc func(sql string, args ...interface{}) (db.Rows, error)
+	QueryFunc    func(sql string, args ...interface{}) (db.Rows, error)
+	QueryRowFunc func(sql string, args ...interface{}) db.Row
 }
 
 func (m *MockDB) Exec(ctx context.Context, sql string, args ...any) error { return nil }
-func (m *MockDB) QueryRow(ctx context.Context, sql string, args ...any) db.Row { return nil }
+func (m *MockDB) QueryRow(ctx context.Context, sql string, args ...any) db.Row {
+	if m.QueryRowFunc != nil {
+		return m.QueryRowFunc(sql, args...)
+	}
+	if contains(sql, "to_regclass") {
+		return &MockRow{values: []interface{}{true}}
+	}
+	return &MockRow{}
+}
 func (m *MockDB) Query(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 	if m.QueryFunc != nil {
 		return m.QueryFunc(sql, args...)
@@ -214,9 +227,6 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 			if contains(sql, "telegraf.consumptioneps") {
 				return &MockRows{rows: [][]interface{}{{"host1", 150}}}, nil
 			}
-			if contains(sql, "telegraf.fbstats") {
-				return &MockRows{rows: [][]interface{}{{"host1", 120}}}, nil
-			}
 			if contains(sql, "telegraf.elasticsearch_cluster_health") {
 				return &MockRows{rows: [][]interface{}{{"host1", "green"}}}, nil
 			}
@@ -280,6 +290,97 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOk, node.ProcessStatus)
 	assert.Equal(t, `{"foo":"bar"}`, node.ProcessJson)
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
+}
+
+func TestPostgresMetrics_UpdateNodeMetrics_MissingRaidTable(t *testing.T) {
+	raidQueried := false
+	mockDb := &MockDB{
+		QueryRowFunc: func(sql string, args ...interface{}) db.Row {
+			if contains(sql, "to_regclass") {
+				return &MockRow{values: []interface{}{false}}
+			}
+			return &MockRow{}
+		},
+		QueryFunc: func(sql string, args ...interface{}) (db.Rows, error) {
+			if contains(sql, "telegraf.raid") {
+				raidQueried = true
+				return nil, errors.New("should not be called when table does not exist")
+			}
+			if contains(sql, "telegraf.cpu") {
+				return &MockRows{rows: [][]interface{}{{"host1", 95.0}}}, nil
+			}
+			if contains(sql, "telegraf.mem") || contains(sql, "telegraf.swap") {
+				return &MockRows{rows: [][]interface{}{{"host1", 50.0}}}, nil
+			}
+			if contains(sql, "telegraf.system") {
+				if contains(sql, "load1") || contains(sql, "load5") || contains(sql, "load15") {
+					return &MockRows{rows: [][]interface{}{{"host1", 1.0}}}, nil
+				}
+				if contains(sql, "uptime") {
+					return &MockRows{rows: [][]interface{}{{"host1", 3600}}}, nil
+				}
+			}
+			if contains(sql, "telegraf.disk") {
+				if contains(sql, "total") {
+					return &MockRows{rows: [][]interface{}{{"host1", 100000000000.0}}}, nil // 100GB in bytes
+				}
+				return &MockRows{rows: [][]interface{}{{"host1", 45.0}}}, nil // 45% used
+			}
+			if contains(sql, "telegraf.sostatus") {
+				if contains(sql, "fields->>'status'") {
+					return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+				}
+				return &MockRows{rows: [][]interface{}{{"host1", `{"foo":"bar"}`}}}, nil
+			}
+			if contains(sql, "telegraf.consumptioneps") {
+				return &MockRows{rows: [][]interface{}{{"host1", 150}}}, nil
+			}
+			if contains(sql, "telegraf.elasticsearch_cluster_health") {
+				return &MockRows{rows: [][]interface{}{{"host1", "green"}}}, nil
+			}
+			if contains(sql, "telegraf.node_config") {
+				return &MockRows{rows: [][]interface{}{{"host1", "eth0", "eth1"}}}, nil
+			}
+			if contains(sql, "telegraf.net") {
+				return &MockRows{rows: [][]interface{}{
+					{"host1", "eth0", 1000000.0, 500000.0, 0.0},
+					{"host1", "eth1", 2000000.0, 0.0, 5.0},
+				}}, nil
+			}
+			if contains(sql, "telegraf.pcapage") || contains(sql, "telegraf.suridrop") || contains(sql, "telegraf.zeekdrop") || contains(sql, "telegraf.zeekcaptureloss") || contains(sql, "telegraf.elasticsearch_indices") || contains(sql, "telegraf.influxsize") {
+				return &MockRows{rows: [][]interface{}{{"host1", 1.0}}}, nil
+			}
+			if contains(sql, "telegraf.surirules") {
+				if contains(sql, "loaded") || contains(sql, "failed") {
+					return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+				}
+				return &MockRows{rows: [][]interface{}{{"host1", "loaded"}}}, nil
+			}
+			if contains(sql, "telegraf.redisqueue") || contains(sql, "telegraf.salt") || contains(sql, "telegraf.os") || contains(sql, "telegraf.features") {
+				return &MockRows{rows: [][]interface{}{{"host1", 1}}}, nil
+			}
+			if contains(sql, "::bigint") || contains(sql, "::int") {
+				return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+			}
+			return &MockRows{rows: [][]interface{}{{"host1", 0.0}}}, nil
+		},
+	}
+
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	srv.DB = mockDb
+
+	pm := NewPostgresMetrics(srv)
+	pm.Init(10000, 600)
+
+	ctx := context.Background()
+	node := &model.Node{
+		Id:               "host1",
+		ConnectionStatus: model.NodeStatusOk,
+	}
+	pm.UpdateNodeMetrics(ctx, node)
+
+	assert.False(t, raidQueried, "telegraf.raid should not be queried when table does not exist")
+	assert.Equal(t, model.NodeStatusUnknown, node.RaidStatus)
 }
 
 func TestGenerateDefaultMetricsDashboard(t *testing.T) {
