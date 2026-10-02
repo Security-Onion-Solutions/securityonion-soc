@@ -141,6 +141,37 @@ func TestDisableCrossClusterIndexing(tester *testing.T) {
 	assert.Equal(tester, "my-*", newIndexes[1])
 }
 
+func TestUpdateDocumentsIgnoreUnavailable(t *testing.T) {
+	for _, ignoreUnavailable := range []bool{true, false} {
+		client, transport := modmock.NewMockClient(t)
+
+		transport.AddResponse(&http.Response{
+			StatusCode: 200,
+			Header: http.Header{
+				"X-Elastic-Product": []string{"Elasticsearch"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"took":1,"timed_out":false,"total":1,"updated":1,"failures":[]}`)),
+		}, nil)
+
+		store := &ElasticEventstore{
+			maxLogLength: math.MaxInt,
+		}
+
+		_, err := store.updateDocuments(context.Background(), client, `{"query":{}}`, []string{"so-*", "logs-*"}, true, ignoreUnavailable)
+		assert.Nil(t, err)
+
+		reqs := transport.GetRequests()
+		assert.Equal(t, 1, len(reqs))
+		assert.Equal(t, "POST", reqs[0].Method)
+		assert.Equal(t, "/so-*,logs-*/_update_by_query", reqs[0].URL.Path)
+		if ignoreUnavailable {
+			assert.Contains(t, reqs[0].URL.RawQuery, "ignore_unavailable=true")
+		} else {
+			assert.NotContains(t, reqs[0].URL.RawQuery, "ignore_unavailable")
+		}
+	}
+}
+
 func TestScrollSunnyDay(t *testing.T) {
 	ctx := context.Background()
 
@@ -1819,6 +1850,8 @@ func TestAcknowledgeSetsBroadcastKind(t *testing.T) {
 			assert.Equal(t, tt.kind, results.Criteria.BroadcastKind)
 			assert.Equal(t, ACK_BROADCAST_PERMISSION, results.Criteria.RequiredPermissionGroup)
 			assert.Equal(t, []string{"node-1:1"}, results.TaskIds)
+			assert.True(t, results.Criteria.IgnoreUnavailable)
+			assert.Contains(t, transport.GetRequests()[0].URL.RawQuery, "ignore_unavailable=true")
 		})
 	}
 }

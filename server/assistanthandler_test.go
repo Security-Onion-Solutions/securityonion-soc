@@ -2132,6 +2132,7 @@ func TestMarkAlertAsInvestigated(t *testing.T) {
 		updateFunc: func(ctx context.Context, criteria *model.EventUpdateCriteria) (*model.EventUpdateResults, error) {
 			// Verify the criteria has the correct query
 			assert.NotNil(t, criteria.ParsedQuery)
+			assert.True(t, criteria.IgnoreUnavailable)
 			return &model.EventUpdateResults{
 				UpdatedCount:   1,
 				UnchangedCount: 0,
@@ -2544,6 +2545,7 @@ func TestClearInvestigationSessionFromAlert(t *testing.T) {
 			// Verify the criteria has the correct query and script
 			assert.NotNil(t, criteria.ParsedQuery)
 			assert.NotEmpty(t, criteria.UpdateScripts)
+			assert.True(t, criteria.IgnoreUnavailable)
 			return &model.EventUpdateResults{
 				UpdatedCount:   1,
 				UnchangedCount: 0,
