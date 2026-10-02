@@ -162,6 +162,8 @@ type EventUpdateCriteria struct {
 	BroadcastKind string `json:"broadcastKind,omitempty" example:"events:ack"`
 	// Permission group a client must be able to read to receive the broadcast
 	RequiredPermissionGroup string `json:"requiredPermissionGroup,omitempty" example:"events"`
+	// Skip closed or missing indices matched by the index pattern instead of failing the update
+	IgnoreUnavailable bool `json:"-"`
 }
 
 func NewEventUpdateCriteria() *EventUpdateCriteria {
