@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
 )
@@ -311,15 +313,34 @@ func TestTimeFrame(t *testing.T) {
 	assert.Equal(t, 1, *tf.Weeks)
 }
 
+// expectSigmaPipelines mocks a pipelines folder holding the given files.
+func expectSigmaPipelines(iom *mock.MockIOManager, dir string, files ...string) {
+	iom.EXPECT().WalkDir(dir, gomock.Any()).DoAndReturn(func(root string, fn fs.WalkDirFunc) error {
+		err := fn(root, &handmock.MockDirEntry{Filename: filepath.Base(root), Dir: true}, nil)
+		if err != nil {
+			return err
+		}
+
+		for _, file := range files {
+			err = fn(filepath.Join(root, file), &handmock.MockDirEntry{Filename: filepath.Base(file)}, nil)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
 func TestCheckSigmaPipelines(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	iom := mock.NewMockIOManager(ctrl)
 
+	dir := "/opt/sensoroni/sigma_pipelines"
 	e := &ElastAlertEngine{
-		sigmaPipelineFinal:            "/opt/sensoroni/sigma_final_pipeline.yaml",
-		sigmaPipelineSO:               "/opt/sensoroni/sigma_so_pipeline.yaml",
+		sigmaPipelinesDir:             dir,
 		sigmaPipelinesFingerprintFile: "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint",
 		IOManager:                     iom,
 	}
@@ -334,10 +355,10 @@ func TestCheckSigmaPipelines(t *testing.T) {
 		{
 			name: "No changes in pipelines",
 			setupMock: func() {
-				// Setup the hash values to be the same
-				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data"), nil)
-				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data"), nil)
-				hash := "3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				expectSigmaPipelines(iom, dir, "sigma_so_pipeline.yml", "sigma_final_pipeline.yml")
+				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data"), nil)
+				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7" + "-" + e.conversionFingerprint()
 				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: false,
@@ -347,24 +368,57 @@ func TestCheckSigmaPipelines(t *testing.T) {
 		{
 			name: "Changes detected in pipelines",
 			setupMock: func() {
-				// Setup the hash values to be different
-				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return([]byte("data1"), nil)
-				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_so_pipeline.yaml").Return([]byte("data2"), nil)
-				hash := "7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
+				expectSigmaPipelines(iom, dir, "sigma_final_pipeline.yml", "sigma_so_pipeline.yml")
+				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data1"), nil)
+				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data2"), nil)
+				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
 				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: true,
-			expectedHash:   "5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
+			expectedHash:   "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c" + "-" + e.conversionFingerprint(),
 			expectedErr:    nil,
 		},
 		{
-			name: "Error reading final pipeline file",
+			name: "Added pipeline is a change, other files are ignored",
 			setupMock: func() {
-				iom.EXPECT().ReadFile("/opt/sensoroni/sigma_final_pipeline.yaml").Return(nil, errors.New("file read error"))
+				expectSigmaPipelines(iom, dir, "sigma_final_pipeline.yml", "sigma_so_pipeline.yml", "sub/sigma_extra_pipeline.yml", "notes.yaml", "README")
+				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data"), nil)
+				iom.EXPECT().ReadFile(dir+"/sub/sigma_extra_pipeline.yml").Return([]byte("data"), nil)
+				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
+			},
+			expectedChange: true,
+			expectedHash:   "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sub/sigma_extra_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7" + "-" + e.conversionFingerprint(),
+			expectedErr:    nil,
+		},
+		{
+			name: "Error reading a pipeline file",
+			setupMock: func() {
+				expectSigmaPipelines(iom, dir, "sigma_final_pipeline.yml", "sigma_so_pipeline.yml")
+				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return(nil, errors.New("file read error"))
 			},
 			expectedChange: false,
 			expectedHash:   "",
-			expectedErr:    fmt.Errorf("error hashing file /opt/sensoroni/sigma_final_pipeline.yaml: file read error"),
+			expectedErr:    fmt.Errorf("error hashing file /opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml: file read error"),
+		},
+		{
+			name: "Error walking the pipelines folder",
+			setupMock: func() {
+				iom.EXPECT().WalkDir(dir, gomock.Any()).Return(errors.New("no such directory"))
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    fmt.Errorf("error listing sigma pipelines in /opt/sensoroni/sigma_pipelines: no such directory"),
+		},
+		{
+			name: "No pipelines in the folder",
+			setupMock: func() {
+				expectSigmaPipelines(iom, dir, "sigma_so_pipeline.yaml")
+			},
+			expectedChange: false,
+			expectedHash:   "",
+			expectedErr:    fmt.Errorf("no sigma pipelines (*.yml) in /opt/sensoroni/sigma_pipelines"),
 		},
 	}
 
@@ -382,6 +436,56 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConversionFingerprint(t *testing.T) {
+	t.Parallel()
+
+	engine := func() *ElastAlertEngine {
+		return &ElastAlertEngine{
+			useEsql:                  true,
+			esqlCaseInsensitive:      true,
+			esqlCorrelationAllowance: 10 * time.Minute,
+			esqlQueryDelay:           30 * time.Second,
+			elastAlertRunEvery:       3 * time.Minute,
+		}
+	}
+	base := engine().conversionFingerprint()
+	assert.Equal(t, base, engine().conversionFingerprint())
+
+	changes := map[string]func(e *ElastAlertEngine){
+		"useEsql":                  func(e *ElastAlertEngine) { e.useEsql = false },
+		"esqlCaseInsensitive":      func(e *ElastAlertEngine) { e.esqlCaseInsensitive = false },
+		"esqlCorrelationAllowance": func(e *ElastAlertEngine) { e.esqlCorrelationAllowance = 5 * time.Minute },
+		"esqlQueryDelay":           func(e *ElastAlertEngine) { e.esqlQueryDelay = time.Minute },
+		"elastAlertRunEvery":       func(e *ElastAlertEngine) { e.elastAlertRunEvery = 5 * time.Minute },
+	}
+	for name, change := range changes {
+		changed := engine()
+		change(changed)
+		assert.NotEqual(t, base, changed.conversionFingerprint(), name)
+	}
+}
+
+func TestCheckSigmaPipelinesRegeneratesOnUpgrade(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	e := &ElastAlertEngine{
+		sigmaPipelinesDir:             "pipelines",
+		sigmaPipelinesFingerprintFile: "fingerprint",
+		IOManager:                     iom,
+	}
+
+	// A fingerprint written before conversion settings were part of it.
+	expectSigmaPipelines(iom, "pipelines", "a.yml")
+	iom.EXPECT().ReadFile("pipelines/a.yml").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("fingerprint").Return([]byte("pipelines/a.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
+
+	regenNeeded, _, err := e.checkSigmaPipelines()
+	require.NoError(t, err)
+	assert.True(t, regenNeeded)
 }
 
 func TestSigmaToElastAlertSunnyDay(t *testing.T) {
@@ -430,6 +534,7 @@ func TestSigmaToElastAlertSunnyDay(t *testing.T) {
 	assert.True(t, hasEcsWindows, "ecs_windows pipeline should always be included")
 
 	assert.Contains(t, capturedArgs, "--disable-pipeline-check", "--disable-pipeline-check should always be included")
+	assert.NotContains(t, capturedArgs, "multivalue_match_operator=true", "EQL has no match operator")
 
 	// No license
 	wrappedRule, err := engine.wrapRule(det, query)
@@ -621,7 +726,8 @@ func TestWrapRuleTimestampFieldEsql(t *testing.T) {
 	t.Parallel()
 
 	engine := ElastAlertEngine{
-		useEsql: true,
+		useEsql:        true,
+		esqlQueryDelay: 30 * time.Second,
 	}
 
 	det := &model.Detection{
@@ -633,7 +739,8 @@ func TestWrapRuleTimestampFieldEsql(t *testing.T) {
 
 	wrapped, err := engine.wrapRule(det, "test filter")
 	assert.NoError(t, err)
-	assert.Contains(t, wrapped, "timestamp_field: '@timestamp'")
+	assert.Contains(t, wrapped, "timestamp_field: event.ingested")
+	assert.Contains(t, wrapped, "query_delay:\n    seconds: 30")
 }
 
 func TestSigmaToElastAlertESQL(t *testing.T) {
@@ -678,6 +785,7 @@ func TestSigmaToElastAlertESQL(t *testing.T) {
 	assert.Contains(t, capturedArgs, "esql")
 
 	assert.Contains(t, capturedArgs, "case_insensitive=true")
+	assert.NotContains(t, capturedArgs, "--correlation-method", "a plain rule has no correlation method")
 
 	wrappedRule, err := engine.wrapRule(det, query)
 	assert.NoError(t, err)
@@ -697,9 +805,42 @@ realert:
 type: any
 filter:
     - esql: <esql>
-timestamp_field: "@timestamp"
+timestamp_field: event.ingested
 `
 	assert.YAMLEq(t, expected, wrappedRule)
+}
+
+func TestSigmaToElastAlertCorrelationUsesWindow(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	var capturedArgs []string
+	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
+		capturedArgs = append(capturedArgs, cmd.Args...)
+		return []byte("<esql>"), 0, time.Duration(0), nil
+	})
+
+	engine := ElastAlertEngine{
+		IOManager: iom,
+		useEsql:   true,
+	}
+
+	det := &model.Detection{
+		PublicID: "11111111-1111-1111-1111-111111111111",
+		Content:  testCorrelationContent,
+		Title:    "Many Distinct Names",
+		Severity: model.SeverityMedium,
+	}
+
+	_, err := engine.sigmaToElastAlert(context.Background(), det)
+	require.NoError(t, err)
+
+	idx := slices.Index(capturedArgs, "--correlation-method")
+	require.NotEqual(t, -1, idx)
+	assert.Equal(t, "window", capturedArgs[idx+1])
+	assert.Contains(t, capturedArgs, "multivalue_match_operator=true")
 }
 
 func TestSigmaToElastAlertSunnyDayLicensed(t *testing.T) {
@@ -1280,6 +1421,7 @@ level: high
 		IsCommunity:   true,
 		Engine:        model.EngineNameElastAlert,
 		Language:      model.SigLangSigma,
+		RuleType:      model.RuleTypeSingle,
 		Ruleset:       "all_rules",
 		License:       model.LicenseDRL,
 		SourceCreated: util.Ptr(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
@@ -1351,6 +1493,7 @@ license: Elastic-2.0
 		Service:       "audit",
 		Engine:        model.EngineNameElastAlert,
 		Language:      model.SigLangSigma,
+		RuleType:      model.RuleTypeSingle,
 		Ruleset:       "repo-path",
 		License:       model.LicenseDRL,
 		SourceCreated: util.Ptr(time.Date(2024, 3, 6, 0, 0, 0, 0, time.UTC)),
@@ -1601,6 +1744,65 @@ func TestSyncElastAlert(t *testing.T) {
 			},
 		},
 		{
+			Name: "Correlation Is Not Deployed Without ES|QL",
+			Detections: []*model.Detection{
+				{
+					PublicID:  "11111111-1111-1111-1111-111111111111",
+					Content:   testCorrelationContent,
+					IsEnabled: true,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules; no sigma-cli run, no rule file, and not an error
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
+				// treated as disabled, so the missing file is ignored
+				m.EXPECT().DeleteFile("11111111-1111-1111-1111-111111111111.yml").Return(os.ErrNotExist)
+			},
+		},
+		{
+			Name: "Correlation Deployed Before Reverting To EQL Is Removed",
+			Detections: []*model.Detection{
+				{
+					PublicID:  "11111111-1111-1111-1111-111111111111",
+					Content:   testCorrelationContent,
+					IsEnabled: true,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules finds the ES|QL rule deployed earlier
+				filename := "11111111-1111-1111-1111-111111111111.yml"
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{
+					&handmock.MockDirEntry{
+						Filename: filename,
+					},
+				}, nil)
+				// removed rather than left running; no sigma-cli run
+				m.EXPECT().DeleteFile(filename).Return(nil)
+			},
+		},
+		{
+			Name: "Correlation Whose Group-By Columns Cannot Be Read",
+			Detections: []*model.Detection{
+				{
+					PublicID:  "11111111-1111-1111-1111-111111111111",
+					Content:   testCorrelationContent,
+					IsEnabled: true,
+					Title:     "Many Distinct Names",
+					Severity:  model.SeverityMedium,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				mod.useEsql = true
+				// IndexExistingRules
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
+				// sigmaToElastAlert, returning a query without a stats command; no rule file follows
+				m.EXPECT().ExecCommand(gomock.Any()).Return([]byte("from .ds-logs-* | where true"), 0, time.Duration(0), nil)
+			},
+			ExpectedErrMap: map[string]string{
+				"11111111-1111-1111-1111-111111111111": "unable to wrap elastalert rule: unable to read the group-by columns [source.ip host.name] from the converted query",
+			},
+		},
+		{
 			Name: "Enable Rule w/Override",
 			Detections: []*model.Detection{
 				{
@@ -1724,6 +1926,42 @@ func TestExtractDetails(t *testing.T) {
 	}
 }
 
+func TestExtractDetailsRuleType(t *testing.T) {
+	eng := &ElastAlertEngine{}
+
+	// a single-event rule edited into a correlation loses its stale logsource fields
+	detect := &model.Detection{
+		Content:  testCorrelationContent,
+		Category: "process_creation",
+		Product:  "windows",
+		Service:  "sysmon",
+	}
+	require.NoError(t, eng.ExtractDetails(detect))
+	assert.Equal(t, model.RuleTypeCorrelation, detect.RuleType)
+	assert.Equal(t, "value_count", detect.CorrelationType)
+	assert.Equal(t, "10m", detect.CorrelationTimespan)
+	assert.Empty(t, detect.Category)
+	assert.Empty(t, detect.Product)
+	assert.Empty(t, detect.Service)
+
+	// a correlation edited into a single-event rule loses its correlation fields
+	detect.Content = SimpleRule
+	require.NoError(t, eng.ExtractDetails(detect))
+	assert.Equal(t, model.RuleTypeSingle, detect.RuleType)
+	assert.Empty(t, detect.CorrelationType)
+	assert.Empty(t, detect.CorrelationTimespan)
+}
+
+func TestToDetectionCorrelation(t *testing.T) {
+	collection, err := ParseElastAlertRuleCollection([]byte(testCorrelationContent))
+	require.NoError(t, err)
+
+	det := collection.Primary.ToDetection("ruleset", model.LicenseDRL, true)
+	assert.Equal(t, model.RuleTypeCorrelation, det.RuleType)
+	assert.Equal(t, "value_count", det.CorrelationType)
+	assert.Equal(t, "10m", det.CorrelationTimespan)
+}
+
 func TestGetDeployedPublicIds(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1832,12 +2070,12 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -1864,9 +2102,9 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	logger := log.WithField("detectionEngine", "test-elastalert")
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
-	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("sigmaPipelinesDir/a.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-"+eng.conversionFingerprint()), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
@@ -1912,7 +2150,10 @@ func TestSyncDisabled(t *testing.T) {
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
+	migrationsChecked := false
+
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() { migrationsChecked = true },
 		srv: &server.Server{
 			Detectionstore: detStore,
 			Config:         &config.ServerConfig{},
@@ -1927,6 +2168,9 @@ func TestSyncDisabled(t *testing.T) {
 
 	err := eng.Sync(logger, false)
 	assert.NoError(t, err)
+
+	// migrations run even when there is nothing to sync
+	assert.True(t, migrationsChecked)
 
 	assert.False(t, eng.EngineState.Syncing)
 	assert.False(t, eng.EngineState.IntegrityFailure)
@@ -1957,13 +2201,13 @@ func TestSyncChanges(t *testing.T) {
 	auditm := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -1992,9 +2236,9 @@ func TestSyncChanges(t *testing.T) {
 	auditItems := []esutil.BulkIndexerItem{}
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
@@ -2165,13 +2409,13 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -2199,9 +2443,9 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
@@ -2313,13 +2557,13 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 	// bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -2347,8 +2591,8 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return([]byte("something"), nil)
 	// downloadSigmaPackages
@@ -2498,13 +2742,13 @@ func TestSyncLocalNew(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -2536,9 +2780,9 @@ func TestSyncLocalNew(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
@@ -2677,13 +2921,13 @@ func TestSyncLocalExisting(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
+		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
 		},
 		isRunning:                     true,
-		sigmaPipelineFinal:            "sigmaPipelineFinal",
-		sigmaPipelineSO:               "sigmaPipelineSO",
+		sigmaPipelinesDir:             "sigmaPipelinesDir",
 		sigmaPipelinesFingerprintFile: "sigmaPipelinesFingerprintFile",
 		sigmaRulePackages:             []string{"core+"},
 		sigmaPackageDownloadTemplate:  "https://github.com/SigmaHQ/sigma/releases/latest/download/sigma_%s.zip",
@@ -2715,9 +2959,9 @@ func TestSyncLocalExisting(t *testing.T) {
 	workItems := []esutil.BulkIndexerItem{}
 
 	// checkSigmaPipelines
-	iom.EXPECT().ReadFile("sigmaPipelineFinal").Return([]byte("data"), nil)
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
+	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("rulesFingerprintFile").Return(nil, os.ErrNotExist)
-	iom.EXPECT().ReadFile("sigmaPipelineSO").Return([]byte("data"), nil)
 	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("a different hash"), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
@@ -2979,4 +3223,51 @@ func TestSigmaToElastAlertEsqlCaseInsensitiveNotSentForEql(t *testing.T) {
 
 	assert.Contains(t, capturedArgs, "eql")
 	assert.NotContains(t, capturedArgs, "case_insensitive=true")
+}
+
+const testCorrelationContent = `title: Many Distinct Names
+id: 11111111-1111-1111-1111-111111111111
+correlation:
+    type: value_count
+    rules:
+        - base_rule
+    group-by:
+        - source.ip
+        - host.name
+    timespan: 10m
+    condition:
+        field: dns.query.name
+        gte: 40
+level: medium
+---
+title: Base
+name: base_rule
+logsource:
+    category: network
+    service: dns
+detection:
+    selection:
+        dns.query.name|exists: true
+    condition: selection
+`
+
+func TestSyncStopsWithoutSigmaPipelines(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	eng := &ElastAlertEngine{
+		isRunning:           true,
+		sigmaPipelinesDir:   "sigmaPipelinesDir",
+		IOManager:           iom,
+		autoUpdateEnabled:   true,
+		checkMigrationsOnce: func() {},
+	}
+
+	// a folder with only a .yaml file: sigma-cli would load no pipelines
+	expectSigmaPipelines(iom, "sigmaPipelinesDir", "sigma_so_pipeline.yaml")
+
+	err := eng.Sync(log.WithField("detectionEngine", "test-elastalert"), false)
+	assert.ErrorIs(t, err, detections.ErrSyncFailed)
 }

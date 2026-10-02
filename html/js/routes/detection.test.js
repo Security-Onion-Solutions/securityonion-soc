@@ -433,33 +433,83 @@ test('onNewDetectionLanguageChange', async () => {
 		"elastalert": 'c [publicId]',
 	};
 	// no language means no engine means no request means no change
-	comp.detect = { language: '', content: 'x' };
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = '';
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('x');
 
 	// yara, no publicId, results in template without publicId, note that the template is trimmed and there is no [publicId]
-	comp.detect = { language:'yara', content: 'x' };
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = 'yara';
 	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.language).toBe('yara');
 	expect(comp.detect.content).toBe('b');
 
 	// suricata, sid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { language:'suricata', content: 'x' };
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = 'suricata';
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('a X');
 
 	// sigma, uuid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { language:'sigma', content: 'x' };
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = 'sigma';
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X');
 
 	// [today] is replaced with the current date in YYYY-MM-DD format
 	comp.ruleTemplates["elastalert"] = 'c [publicId] [today]';
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { language:'sigma', content: 'x' };
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = 'sigma';
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X ' + moment().format('YYYY-MM-DD'));
+});
+
+test('onNewDetectionLanguageChange - correlation', async () => {
+	comp.ruleTemplates = {
+		"elastalert": 'c [publicId]',
+		"elastalert_correlation": 'corr [publicId]',
+	};
+	comp.detect = { content: 'x' };
+	comp.newDetectionLanguage = 'Sigma:correlation';
+
+	const mock = resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	await comp.onNewDetectionLanguageChange();
+
+	expect(mock).toHaveBeenCalledWith('detection/elastalert/genpublicid');
+	expect(comp.detect.language).toBe('Sigma');
+	expect(comp.detect.content).toBe('corr X');
+
+	// switching to the single-event entry loads the single-event template
+	resetPapi().mockPapi("get", { data: { publicId: 'Y' } }, null);
+	comp.newDetectionLanguage = 'Sigma';
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.language).toBe('Sigma');
+	expect(comp.detect.content).toBe('c Y');
+});
+
+test('newDetectionLanguages', () => {
+	comp.presets = { language: { labels: ['suricata', 'sigma', 'yara'] } };
+
+	// with a correlation template, Sigma is offered once per template
+	comp.ruleTemplates = { "elastalert": 'c', "elastalert_correlation": 'corr' };
+	expect(comp.newDetectionLanguages()).toEqual([
+		{ title: 'Suricata', value: 'Suricata' },
+		{ title: comp.i18n.sigmaSingleEvent, value: 'Sigma' },
+		{ title: comp.i18n.sigmaCorrelation, value: 'Sigma:correlation' },
+		{ title: 'YARA', value: 'YARA' },
+	]);
+
+	// without one, Sigma is a single entry
+	comp.ruleTemplates = { "elastalert": 'c' };
+	expect(comp.newDetectionLanguages()).toEqual([
+		{ title: 'Suricata', value: 'Suricata' },
+		{ title: 'Sigma', value: 'Sigma' },
+		{ title: 'YARA', value: 'YARA' },
+	]);
 });
 
 test('getDefaultPreset', () => {
@@ -951,6 +1001,28 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
 });
 
+test('saveDetection - errors go through showRequestError', async () => {
+	const error = { message: 'Request failed with status code 400', response: { status: 400, data: 'invalid rule' } };
+	resetPapi().mockPapi('put', null, error);
+	comp.detect = { content: "", language: '' };
+	comp.origDetect = { content: "" };
+	comp.revertEnabled = jest.fn();
+	comp.showRequestError = jest.fn();
+
+	await comp.saveDetection(false, false);
+
+	expect(comp.showRequestError).toHaveBeenCalledWith(error);
+	resetPapi();
+});
+
+test('showRequestError - 400 shows body, others show message', () => {
+	comp.showRequestError({ message: 'Request failed with status code 400', response: { status: 400, data: 'missingPublicIdErr' } });
+	expect(comp.$root.errorMessage).toBe(comp.i18n.missingPublicIdErr);
+
+	comp.showRequestError({ message: 'Request failed with status code 500', response: { status: 500, data: 'The request could not be processed.' } });
+	expect(comp.$root.errorMessage).toBe('Request failed with status code 500');
+});
+
 test('validateElastAlert', () => {
 	comp.detect = {
 		language: 'sigma',
@@ -1239,6 +1311,31 @@ test('loadPlaybooks', async () => {
 		window.open = originalOpen;
 		LZString.compressToEncodedURIComponent = originalCompress;
 		resetPapi();
+	});
+
+	test('formatEsql puts each command on its own line', () => {
+		expect(comp.formatEsql(' from * | where a == 1\n| stats c=count() by d ')).toBe(
+			'from *\n' +
+			'| where a == 1\n' +
+			'| stats c=count() by d');
+	});
+
+	test('esqlHighlighter highlights the formatted query as ES|QL', () => {
+		const originalPrism = global.Prism;
+		global.Prism = { highlight: jest.fn(() => '<span>highlighted</span>'), languages: { esql: 'esql-grammar' } };
+
+		expect(comp.esqlHighlighter('from * | limit 1')).toBe('<span>highlighted</span>');
+		expect(global.Prism.highlight).toHaveBeenCalledWith('from *\n| limit 1', 'esql-grammar', 'esql');
+
+		global.Prism = originalPrism;
+	});
+
+	test('formatEsql ignores pipes inside strings', () => {
+		expect(comp.formatEsql('from * | where m == "a | (b" and n == "q\\"|(" | where o == """x|"(""" | limit 1')).toBe(
+			'from *\n' +
+			'| where m == "a | (b" and n == "q\\"|("\n' +
+			'| where o == """x|"("""\n' +
+			'| limit 1');
 	});
 
 	test('buildEsqlDiscoverUrl escapes rison special characters', () => {
@@ -1530,50 +1627,66 @@ name: failed_login
 		expect(comp.extractedLogic).toContain('service: kratos');
 	});
 
-	test('extractElastAlertLogic with correlation in first doc', () => {
+	test('extractLogic lists the rules a correlation refers to', () => {
 		comp.detect = {
 			engine: 'elastalert',
-			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
-id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
-status: experimental
-description: |
-  Detects two or more failed SOC logins from
-  the same client IP within 30 seconds.
+			content: `title: Corr
+id: abc123
 correlation:
-    type: event_count
+    type: temporal
     rules:
-        - failed_login
+        - rule_a
+        - 22222222-2222-2222-2222-222222222222
     group-by:
-        - http.request.headers.x-real-ip
-    timespan: 30s
-    condition:
-        gte: 2
-falsepositives:
-    - TBD
-level: medium
+        - source.ip
+    timespan: 10m
 ---
-title: Failed SOC Console Login
-id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
-name: failed_login
+title: A
+name: rule_a
 logsource:
-    product: securityonion
-    service: kratos
+    category: test
 detection:
     selection:
-        service_name: 'Ory Kratos'
-        event.action: 'Encountered self-service login error.'
+        a: b
+    condition: selection
+---
+title: B
+id: 22222222-2222-2222-2222-222222222222
+logsource:
+    category: test
+detection:
+    selection:
+        c: d
     condition: selection
 `,
 		};
 
-		comp.extractedLogic = '';
-		comp.extractElastAlertLogic();
+		comp.extractLogic();
 
-		expect(comp.extractedLogic).not.toContain('correlation:');
-		expect(comp.extractedLogic).toContain('type: event_count');
-		expect(comp.extractedLogic).toContain('rules:');
-		expect(comp.extractedLogic).toContain('failed_login');
-		expect(comp.extractedLogic).not.toContain('logsource:');
+		// a rule referenced by id is labelled with its id
+		expect(comp.extractedLogic).toBe('');
+		expect(comp.correlationRules).toEqual([
+			{ title: 'A', name: 'rule_a', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    a: b\n  condition: selection" },
+			{ title: 'B', name: '22222222-2222-2222-2222-222222222222', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    c: d\n  condition: selection" },
+		]);
+
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Plain
+id: abc123
+logsource:
+    category: test
+detection:
+    selection:
+        a: b
+    condition: selection
+`,
+		};
+
+		comp.extractLogic();
+
+		expect(comp.correlationRules).toEqual([]);
+		expect(comp.extractedLogic).toBe("logsource:\n  category: test\ndetection:\n  selection:\n    a: b\n  condition: selection");
 	});
 
 	test('extractElastAlertDetection with correlation in first doc', () => {
@@ -1636,3 +1749,42 @@ detection:
 		expect(det).toBeUndefined();
 	});
 
+	test('extractElastAlertSeverity', () => {
+		comp.presets = {
+			severity: { labels: ['unknown', 'informational', 'low', 'medium', 'high', 'critical'] },
+		};
+
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: No Level
+id: abc123
+correlation:
+    type: event_count
+    rules:
+        - base
+    group-by:
+        - source.ip
+    timespan: 5m
+    condition:
+        gte: 10
+`,
+		};
+
+		expect(comp.extractElastAlertSeverity()).toBeUndefined();
+
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Has Level
+id: abc123
+logsource:
+    category: test
+detection:
+    selection:
+        a: b
+    condition: selection
+level: high
+`,
+		};
+
+		expect(comp.extractElastAlertSeverity()).toBe('high');
+	});

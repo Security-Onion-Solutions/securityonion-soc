@@ -39,6 +39,12 @@ func TestWithEnabled(t *testing.T) {
 	assert.Equal(t, query, `query AND schemaPrefixdetection.isEnabled:"false"`)
 }
 
+func TestWithoutRuleType(t *testing.T) {
+	queryModder := WithoutRuleType()
+	query := queryModder("query", "schemaPrefix")
+	assert.Equal(t, query, `query AND NOT _exists_:schemaPrefixdetection.ruleType`)
+}
+
 func TestWithCommunity(t *testing.T) {
 	queryModder := WithCommunity(true)
 	query := queryModder("query", "schemaPrefix")

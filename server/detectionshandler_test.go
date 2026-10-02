@@ -814,7 +814,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(`"invalid rule: something went wrong"`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1438,7 +1438,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(`"invalid rule: something went wrong"`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3332,6 +3332,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("converted query", nil)
 			},
 			Code: 200,
@@ -3372,6 +3373,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Language: model.SigLangSigma}).Return("converted query", nil)
 			},
 			Code: 200,
@@ -3383,12 +3385,29 @@ func TestHandlerConvertContent(t *testing.T) {
 			},
 		},
 		{
+			Name:    "Invalid Rule",
+			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ValidateRule("sigma goes here").Return("", errors.New("missing required fields: id"))
+			},
+			Code:     400,
+			Response: []byte(`"invalid rule: missing required fields: id"`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
 			Name:    "Unknown Error",
 			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("", errors.New("something went wrong"))
 			},
 			Code:     500,

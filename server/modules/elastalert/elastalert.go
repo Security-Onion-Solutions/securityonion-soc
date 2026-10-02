@@ -56,8 +56,7 @@ const (
 	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
 	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
 	DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE         = "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint"
-	DEFAULT_SIGMA_PIPELINE_FINAL_FILE                = "/opt/sensoroni/sigma_final_pipeline.yaml"
-	DEFAULT_SIGMA_PIPELINE_SO_FILE                   = "/opt/sensoroni/sigma_so_pipeline.yaml"
+	DEFAULT_SIGMA_PIPELINES_DIR                      = "/opt/sensoroni/sigma_pipelines"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
@@ -69,6 +68,17 @@ const (
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 	DEFAULT_AUTO_UPDATE_ENABLED                      = false
+	// Mirrors the grid-wide elastalert.config run_every managed by Salt.
+	DEFAULT_ELASTALERT_RUN_EVERY_SECONDS = 180
+	// Covers the index refresh interval, so ingested documents are searchable.
+	DEFAULT_ESQL_QUERY_DELAY_SECONDS = 30
+	// How spread out the arrivals of one burst can be and still be counted together.
+	DEFAULT_ESQL_CORRELATION_ALLOWANCE_SECONDS = 600
+
+	// Selecting by arrival still evaluates events that arrive after their window.
+	esqlTimestampField = "event.ingested"
+	// Bump when a code change alters rule files, so deployed rules regenerate.
+	ruleFormatVersion = 6
 )
 
 type RuleCriteria struct {
@@ -89,6 +99,8 @@ var ( // treat as constant
 	}
 )
 
+var errNoSigmaPipelines = errors.New("no sigma pipelines (*.yml)")
+
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
 	".yaml": true,
@@ -101,8 +113,7 @@ type ElastAlertEngine struct {
 	sigmaPackageDownloadTemplate       string
 	elastAlertRulesFolder              string
 	rulesFingerprintFile               string
-	sigmaPipelineFinal                 string
-	sigmaPipelineSO                    string
+	sigmaPipelinesDir                  string
 	sigmaPipelinesFingerprintFile      string
 	sigmaRulePackages                  []string
 	autoEnabledSigmaRules              []string
@@ -135,6 +146,11 @@ type ElastAlertEngine struct {
 	autoUpdateEnabled                  bool
 	useEsql                            bool
 	esqlCaseInsensitive                bool
+	elastAlertRunEvery                 time.Duration
+	esqlQueryDelay                     time.Duration
+	esqlCorrelationAllowance           time.Duration
+	migrations                         map[string]func(string) error
+	checkMigrationsOnce                func()
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -235,7 +251,17 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	resMan := &detections.ResourceManager{Config: srv.Config}
 	engine.IOManager = resMan
 
+	engine.checkMigrationsOnce = sync.OnceFunc(engine.checkForMigrations)
+
+	engine.migrations = map[string]func(string) error{
+		"3.4.0": engine.Migration340,
+	}
+
 	return engine
+}
+
+func (e *ElastAlertEngine) checkForMigrations() {
+	detections.RunMigrations(e.IOManager, model.EngineNameElastAlert, e.migrations, &e.EngineState)
 }
 
 func (e *ElastAlertEngine) PrerequisiteModules() []string {
@@ -261,8 +287,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
-	e.sigmaPipelineFinal = module.GetStringDefault(config, "sigmaPipelineFinal", DEFAULT_SIGMA_PIPELINE_FINAL_FILE)
-	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
+	e.sigmaPipelinesDir = module.GetStringDefault(config, "sigmaPipelinesDir", DEFAULT_SIGMA_PIPELINES_DIR)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.enabledSigmaRules = loadEnabledSigmaRules(config)
@@ -285,6 +310,9 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	e.useEsql = module.GetBoolDefault(config, "useEsql", false)
 	e.esqlCaseInsensitive = module.GetBoolDefault(config, "esqlCaseInsensitive", true)
+	e.elastAlertRunEvery = time.Duration(module.GetIntDefault(config, "elastAlertRunEverySeconds", DEFAULT_ELASTALERT_RUN_EVERY_SECONDS)) * time.Second
+	e.esqlQueryDelay = time.Duration(module.GetIntDefault(config, "esqlQueryDelaySeconds", DEFAULT_ESQL_QUERY_DELAY_SECONDS)) * time.Second
+	e.esqlCorrelationAllowance = time.Duration(module.GetIntDefault(config, "esqlCorrelationAllowanceSeconds", DEFAULT_ESQL_CORRELATION_ALLOWANCE_SECONDS)) * time.Second
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -412,12 +440,27 @@ func (e *ElastAlertEngine) IsRunning() bool {
 }
 
 func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
-	_, err := ParseElastAlertRule([]byte(data))
+	collection, err := ParseElastAlertRuleCollection([]byte(data))
 	if err != nil {
 		return "", err
 	}
 
-	return string(data), nil
+	if collection.IsCorrelation() && !e.useEsql {
+		return "", errCorrelationNeedsEsql
+	}
+
+	return data, nil
+}
+
+// correlationWithoutEsql reports a correlation that cannot run because ES|QL is off.
+func (e *ElastAlertEngine) correlationWithoutEsql(content string) bool {
+	if e.useEsql {
+		return false
+	}
+
+	collection, err := parseRuleCollection([]byte(content))
+
+	return err == nil && collection.IsCorrelation()
 }
 
 func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
@@ -457,6 +500,8 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 	if rule.LogSource.Service != nil {
 		detect.Service = *rule.LogSource.Service
 	}
+
+	rule.setRuleType(detect)
 
 	if rule.Level != nil {
 		switch strings.ToLower(string(*rule.Level)) {
@@ -572,7 +617,13 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 			path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", name))
 		}
 
-		if det.IsEnabled {
+		deploy := det.IsEnabled
+		if deploy && e.correlationWithoutEsql(det.Content) {
+			log.WithField("detectionPublicId", det.PublicID).Warn("correlation is not deployed because it requires ES|QL; enable useEsql to run it")
+			deploy = false
+		}
+
+		if deploy {
 			eaRule, err := e.sigmaToElastAlert(ctx, det)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Sprintf("unable to convert sigma to elastalert: %s", err)
@@ -581,6 +632,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 
 			wrapped, err := e.wrapRule(det, eaRule)
 			if err != nil {
+				errMap[det.PublicID] = fmt.Sprintf("unable to wrap elastalert rule: %s", err)
 				continue
 			}
 
@@ -590,10 +642,10 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 		} else {
-			// was enabled, no longer is enabled: Disable
+			// disabled, or a correlation without ES|QL: remove any deployed rule
 			err = e.DeleteFile(path)
 			if err != nil && !os.IsNotExist(err) {
-				errMap[det.PublicID] = fmt.Sprintf("unable to remove disabled detection file: %s", err)
+				errMap[det.PublicID] = fmt.Sprintf("unable to remove detection file: %s", err)
 				continue
 			}
 		}
@@ -627,6 +679,9 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	e.writeNoRead = nil
 
+	// before the early returns, so migrations always run
+	e.checkMigrationsOnce()
+
 	if !e.autoUpdateEnabled && !forceSync {
 		logger.WithFields(log.Fields{
 			"autoUpdateEnabled": e.autoUpdateEnabled,
@@ -657,6 +712,18 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
 	if err != nil {
 		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
+
+		// without pipelines every rule converts wrong, so keep the current rule files
+		if errors.Is(err, errNoSigmaPipelines) {
+			if e.notify {
+				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+					Engine: model.EngineNameElastAlert,
+					Status: "error",
+				})
+			}
+
+			return detections.ErrSyncFailed
+		}
 	} else {
 		logger.Info("successfully checked the sigma processing pipelines")
 	}
@@ -924,17 +991,52 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	return nil
 }
 
+// sigmaPipelineFiles lists what sigma-cli loads from the folder: every *.yml, recursively.
+func (e *ElastAlertEngine) sigmaPipelineFiles() ([]string, error) {
+	var files []string
+
+	err := e.WalkDir(e.sigmaPipelinesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(path, ".yml") {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error listing sigma pipelines in %s: %w", e.sigmaPipelinesDir, err)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("%w in %s", errNoSigmaPipelines, e.sigmaPipelinesDir)
+	}
+
+	slices.Sort(files)
+
+	return files, nil
+}
+
 func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
-	// Hash the pipeline files
-	hashFinal, err := e.hashFile(e.sigmaPipelineFinal)
+	files, err := e.sigmaPipelineFiles()
 	if err != nil {
-		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineFinal, err)
+		return false, "", err
 	}
-	hashSO, err := e.hashFile(e.sigmaPipelineSO)
-	if err != nil {
-		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineSO, err)
+
+	// paths count too: adding, removing or renaming a pipeline is a change
+	hashes := make([]string, 0, len(files))
+	for _, file := range files {
+		hash, err := e.hashFile(file)
+		if err != nil {
+			return false, "", fmt.Errorf("error hashing file %s: %w", file, err)
+		}
+
+		hashes = append(hashes, file+":"+hash)
 	}
-	newHash := hashFinal + "-" + hashSO
+
+	newHash := strings.Join(hashes, "-") + "-" + e.conversionFingerprint()
 
 	// Read the existing hash from the fingerprint file
 	oldHash, err := e.ReadFile(e.sigmaPipelinesFingerprintFile)
@@ -949,9 +1051,18 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 	}
 
 	// If hashes do not match, the elastalert rules need to be regenerated
-	log.Info("changes detected in sigma processing pipelines")
+	log.Info("changes detected in sigma processing pipelines or conversion settings")
 
 	return true, newHash, nil
+}
+
+// conversionFingerprint changes with any setting or code version that shapes rule files.
+func (e *ElastAlertEngine) conversionFingerprint() string {
+	settings := fmt.Sprintf("v%d|esql=%t|ci=%t|allowance=%s|delay=%s|every=%s",
+		ruleFormatVersion, e.useEsql, e.esqlCaseInsensitive, e.esqlCorrelationAllowance,
+		e.esqlQueryDelay, e.elastAlertRunEvery)
+	hash := sha256.Sum256([]byte(settings))
+	return hex.EncodeToString(hash[:])
 }
 
 func (e *ElastAlertEngine) hashFile(filePath string) (string, error) {
@@ -1172,6 +1283,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	createAudit := make([]model.AuditInfo, 0, len(detects)) // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
+	needsEsql := []string{} // publicIDs of enabled correlations left undeployed
 
 	for i := range detects {
 		detect := detects[i]
@@ -1348,7 +1460,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			}
 		}
 
-		if detect.IsEnabled {
+		deploy := detect.IsEnabled
+		if deploy && e.correlationWithoutEsql(detect.Content) {
+			needsEsql = append(needsEsql, detect.PublicID)
+			deploy = false
+		}
+
+		if deploy {
 			// 2. if enabled, send data to cli package to get converted to query
 			rule, err := e.sigmaToElastAlert(ctx, detect)
 			if err != nil {
@@ -1358,6 +1476,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 			rule, err = e.wrapRule(detect, rule)
 			if err != nil {
+				errMap[detect.PublicID] = fmt.Errorf("unable to wrap elastalert rule: %s", err)
 				continue
 			}
 
@@ -1373,10 +1492,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				continue
 			}
 		} else if path != "" {
-			// detection is disabled but a file exists, remove it
+			// disabled, or a correlation without ES|QL, but a file exists: remove it
 			err = e.DeleteFile(path)
 			if err != nil {
-				errMap[detect.PublicID] = fmt.Errorf("unable to remove disabled detection file: %s", err)
+				errMap[detect.PublicID] = fmt.Errorf("unable to remove detection file: %s", err)
 				continue
 			}
 		}
@@ -1517,6 +1636,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
 
+	if len(needsEsql) > 0 {
+		logger.WithFields(log.Fields{
+			"correlationCount":     len(needsEsql),
+			"correlationPublicIds": lo.Slice(needsEsql, 0, 10),
+		}).Warn("enabled correlations are not deployed because they require ES|QL; enable useEsql to run them")
+	}
+
 	return errMap, nil
 }
 
@@ -1636,51 +1762,37 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 
 	// apply overrides
 	if len(filters) > 0 {
-		doc := map[string]interface{}{}
-
-		err := yaml.Unmarshal([]byte(rule), &doc)
+		filtered, err := applyCustomFilters(rule, filters)
 		if err != nil {
-			return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
+			return "", err
 		}
 
-		detection, ok := doc["detection"].(map[string]interface{})
-		if !ok || detection == nil {
-			return "", fmt.Errorf("sigma rule does not contain a detection section")
-		}
+		rule = filtered
+	}
 
-		condition, ok := detection["condition"].(string)
-		if !ok || condition == "" {
-			return "", fmt.Errorf("sigma rule does not contain a condition")
-		}
-
-		for _, f := range filters {
-			o, err := f.PrepareForSigma()
-			if err != nil {
-				return "", fmt.Errorf("unable to marshal filter: %w", err)
-			}
-
-			for k, v := range o {
-				detection[k] = v
-			}
-		}
-
-		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
-
-		raw, err := yaml.Marshal(doc)
-		if err != nil {
-			return "", fmt.Errorf("unable to marshal sigma rule with overrides: %w", err)
-		}
-
-		rule = string(raw)
+	// An unparseable rule fails in sigma-cli with a clearer error.
+	collection, parseErr := parseRuleCollection([]byte(rule))
+	isCorrelation := parseErr == nil && collection.IsCorrelation()
+	if isCorrelation && !e.useEsql {
+		return "", errCorrelationNeedsEsql
 	}
 
 	target := "eql"
 	if e.useEsql {
 		target = "esql"
 	}
-	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	args := []string{"convert", "-t", target, "-p", e.sigmaPipelinesDir, "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 	if e.useEsql && e.esqlCaseInsensitive {
 		args = append(args, "-O", "case_insensitive=true")
+	}
+
+	if e.useEsql {
+		// `:` on multivalued fields is pushed down to the index
+		args = append(args, "-O", "multivalue_match_operator=true")
+
+		if isCorrelation {
+			args = append(args, "--correlation-method", "window")
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
@@ -1710,6 +1822,60 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
+}
+
+// applyCustomFilters adds the custom filters to every rule document; a correlation document has none.
+func applyCustomFilters(content string, filters []*model.Override) (string, error) {
+	docs, err := decodeDocuments[map[string]interface{}](strings.NewReader(content))
+	if err != nil {
+		return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
+	}
+
+	prepared := []map[string]interface{}{}
+
+	for _, f := range filters {
+		o, err := f.PrepareForSigma()
+		if err != nil {
+			return "", fmt.Errorf("unable to marshal filter: %w", err)
+		}
+
+		prepared = append(prepared, o)
+	}
+
+	filtered := false
+
+	for _, doc := range docs {
+		detection, ok := (*doc)["detection"].(map[string]interface{})
+		if !ok || detection == nil {
+			// correlation document
+			continue
+		}
+
+		condition, ok := detection["condition"].(string)
+		if !ok || condition == "" {
+			return "", fmt.Errorf("sigma rule does not contain a condition")
+		}
+
+		for _, o := range prepared {
+			for k, v := range o {
+				detection[k] = v
+			}
+		}
+
+		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
+		filtered = true
+	}
+
+	if !filtered {
+		return "", fmt.Errorf("sigma rule does not contain a detection section")
+	}
+
+	out, err := encodeDocuments(docs)
+	if err != nil {
+		return "", fmt.Errorf("unable to marshal sigma rule with overrides: %w", err)
+	}
+
+	return out, nil
 }
 
 func (e *ElastAlertEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
@@ -1748,8 +1914,15 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 		return nil, err
 	}
 
-	rule.OriginalSource = ""
-	rule.Title += " (copy)"
+	title := rule.Title + " (copy)"
+
+	content, err := duplicateContent(detection.Content, id, title)
+	if err != nil {
+		return nil, err
+	}
+
+	rule.OriginalSource = content
+	rule.Title = title
 	rule.ID = &id
 
 	det := rule.ToDetection(detections.RULESET_CUSTOM, detection.License, false)
@@ -1767,6 +1940,43 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
+}
+
+// duplicateContent sets a new id and title on the first document, keeping the rest.
+func duplicateContent(content string, id string, title string) (string, error) {
+	docs, err := decodeDocuments[yaml.Node](strings.NewReader(content))
+	if err != nil {
+		return "", err
+	}
+
+	if len(docs) == 0 {
+		return "", fmt.Errorf("no Sigma rule documents found")
+	}
+
+	setMappingValue(docs[0], "id", id)
+	setMappingValue(docs[0], "title", title)
+
+	return encodeDocuments(docs)
+}
+
+// setMappingValue sets a top-level scalar key, appending it when absent.
+func setMappingValue(doc *yaml.Node, key string, value string) {
+	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content[i+1].SetString(value)
+			return
+		}
+	}
+
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value},
+	)
 }
 
 func (e *ElastAlertEngine) IsAirgapped() bool {
@@ -1891,6 +2101,7 @@ type CustomWrapper struct {
 	SigmaCategory     string   `yaml:"sigma_category,omitempty"`
 	SigmaProduct      string   `yaml:"sigma_product,omitempty"`
 	SigmaService      string   `yaml:"sigma_service,omitempty"`
+	SigmaCorrelation  string   `yaml:"sigma_correlation,omitempty"`
 	EventModule       string   `yaml:"event.module"`
 	EventDataset      string   `yaml:"event.dataset"`
 	EventSeverity     int      `yaml:"event.severity"`
@@ -1903,6 +2114,14 @@ type CustomWrapper struct {
 	Type           string                   `yaml:"type"`
 	Filter         []map[string]interface{} `yaml:"filter"`
 	TimestampField string                   `yaml:"timestamp_field,omitempty"`
+	QueryDelay     *TimeFrame               `yaml:"query_delay,omitempty"`
+
+	// Correlation rules only; see applyCorrelation.
+	BufferTime          *TimeFrame `yaml:"buffer_time,omitempty"`
+	Timeframe           *TimeFrame `yaml:"timeframe,omitempty"`
+	ScanEntireTimeframe bool       `yaml:"scan_entire_timeframe,omitempty"`
+	QueryKey            []string   `yaml:"query_key,omitempty"`
+	SummaryTemplate     *string    `yaml:"summary_template,omitempty"`
 }
 
 type TimeFrame struct {
@@ -2022,6 +2241,13 @@ func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
+func secondsFrame(d time.Duration) *TimeFrame {
+	frame := &TimeFrame{}
+	frame.SetSeconds(int(d.Seconds()))
+
+	return frame
+}
+
 func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, error) {
 	severities := map[model.Severity]int{
 		model.SeverityUnknown:       0,
@@ -2051,6 +2277,7 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	timestampField := "@timestamp"
 	filterType := "eql"
 	if e.useEsql {
+		timestampField = esqlTimestampField
 		filterType = "esql"
 	}
 
@@ -2071,6 +2298,17 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Type:              "any",
 		Filter:            []map[string]interface{}{{filterType: rule}},
 		TimestampField:    timestampField,
+	}
+
+	if e.useEsql && e.esqlQueryDelay > 0 {
+		wrapper.QueryDelay = secondsFrame(e.esqlQueryDelay)
+	}
+
+	if sigmaRule != nil && sigmaRule.Correlation != nil {
+		err = e.applyCorrelation(wrapper, det.PublicID, rule, sigmaRule)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if slices.Contains(sigmaTags, "so.notification") {
@@ -2099,10 +2337,6 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 			strYaml += "\n" + params + "\n"
 		}
 	}
-
-	// ES|QL sigma converter rename hardcoded timebucket refs to @timestamp
-	strYaml = strings.ReplaceAll(strYaml, " | eval timebucket", " | eval "+timestampField)
-	strYaml = strings.ReplaceAll(strYaml, " by timebucket", " by "+timestampField)
 
 	if len(wrapper.Alert) == 0 {
 		log.WithFields(log.Fields{
@@ -2150,7 +2384,11 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for pid := range ret {
+	for pid, det := range ret {
+		if e.correlationWithoutEsql(det.Content) {
+			continue // left undeployed until ES|QL is enabled
+		}
+
 		enabled = append(enabled, pid)
 	}
 

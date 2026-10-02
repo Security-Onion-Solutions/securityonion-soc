@@ -24,6 +24,7 @@ type Severity string
 type IDType string
 type EngineName string
 type OverrideType string
+type RuleType string
 
 const (
 	ScanTypeFiles           ScanType = "files"
@@ -53,6 +54,12 @@ const (
 	OverrideTypeThreshold    OverrideType = "threshold"
 	OverrideTypeModify       OverrideType = "modify"
 	OverrideTypeCustomFilter OverrideType = "customFilter"
+
+	RuleTypeSingle      RuleType = "single"
+	RuleTypeCorrelation RuleType = "correlation"
+
+	// Sigma correlations have no logsource category.
+	PlaybookCategoryCorrelation = "correlation"
 
 	// Valid values for Track parameter (shared between threshold and suppress)
 	TrackBySrc = "by_src"
@@ -163,6 +170,12 @@ type Detection struct {
 	Product string `json:"product,omitempty" example:"windows"`
 	// Used by Sigma rules for filtering a subset of log ouputs to a specific server.
 	Service string `json:"service,omitempty" example:"sshd"`
+	// The kind of rule: single or correlation for Sigma, empty for other languages.
+	RuleType RuleType `json:"ruleType,omitempty" enums:"single,correlation"`
+	// The Sigma correlation type, such as value_count or temporal. Empty for single-event rules.
+	CorrelationType string `json:"correlationType,omitempty" example:"value_count"`
+	// The Sigma correlation timespan as written in the rule. Empty for single-event rules.
+	CorrelationTimespan string `json:"correlationTimespan,omitempty" example:"10m"`
 
 	// AI Description fields
 	*AiFields `json:",omitempty"`
@@ -297,6 +310,15 @@ func (o *Override) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	return nil
+}
+
+// PlaybookCategory is the category playbooks are looked up by.
+func (detect *Detection) PlaybookCategory() string {
+	if detect.RuleType == RuleTypeCorrelation {
+		return PlaybookCategoryCorrelation
+	}
+
+	return detect.Category
 }
 
 func (detect *Detection) Validate() error {

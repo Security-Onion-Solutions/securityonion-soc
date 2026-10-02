@@ -630,6 +630,68 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", playbooks[1].Id)
 }
 
+func TestGetPlaybooksForDetection_Correlation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+
+	byCategory := map[string][]string{
+		model.PlaybookCategoryCorrelation: {"correlation-baseline"},
+	}
+
+	pdm := PlaybookDiskManager{
+		srv: server.NewFakeAuthorizedServer(nil),
+		PlaybooksByDetectionId: map[string][]string{
+			"own-rule": {"own-playbook"},
+		},
+		PlaybooksByCategory: byCategory,
+		PlaybooksByEngine: map[string][]string{
+			string(model.EngineNameElastAlert): {"engine-baseline"},
+		},
+		playbooksOnDisk: map[string]string{
+			"own-playbook":         "/path/own",
+			"correlation-baseline": "/path/correlation",
+			"engine-baseline":      "/path/engine",
+		},
+		playbookTypes: map[string]string{
+			"own-playbook":         "sigma",
+			"correlation-baseline": "sigma",
+			"engine-baseline":      "sigma",
+		},
+		IOManager: iom,
+	}
+
+	ctx := context.Background()
+
+	// the rule's own playbook replaces the correlation baseline
+	iom.EXPECT().ReadFile("/path/own").Return([]byte("id: own-playbook"), nil)
+	playbooks, err := pdm.GetPlaybooksForDetection(ctx, "own-rule", model.PlaybookCategoryCorrelation, model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "own-playbook", playbooks[0].Id)
+
+	// without its own playbook, a correlation gets the correlation baseline
+	iom.EXPECT().ReadFile("/path/correlation").Return([]byte("id: correlation-baseline"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "other-rule", model.PlaybookCategoryCorrelation, model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "correlation-baseline", playbooks[0].Id)
+
+	// with neither, a correlation gets nothing rather than the engine baseline
+	delete(byCategory, model.PlaybookCategoryCorrelation)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "other-rule", model.PlaybookCategoryCorrelation, model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Empty(t, playbooks)
+
+	// a single-event rule still falls back to the engine baseline
+	iom.EXPECT().ReadFile("/path/engine").Return([]byte("id: engine-baseline"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, "other-rule", "", model.EngineNameElastAlert)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "engine-baseline", playbooks[0].Id)
+}
+
 func TestGetPlaybookById(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -693,7 +755,7 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 		assert.True(t, strings.HasSuffix(cmd.Path, "sigma"))
-		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
+		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_pipelines", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
 
 		in, err := io.ReadAll(cmd.Stdin)
 		assert.NoError(t, err)

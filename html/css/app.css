@@ -728,7 +728,7 @@ td {
   padding: 8px;
 }
 
-.extracted-content > pre {
+.extracted-content pre {
   text-wrap: wrap;
   word-break: break-word;
   background: unset !important;
@@ -764,6 +764,11 @@ td {
 
 .case-title {
   text-transform: capitalize;
+}
+
+.converted-rule code {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 #convert-button-container {

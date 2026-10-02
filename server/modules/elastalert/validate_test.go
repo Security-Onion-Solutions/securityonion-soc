@@ -7,6 +7,7 @@ package elastalert
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -69,29 +71,180 @@ func TestParseRule(t *testing.T) {
 		},
 		{
 			Name:  "Rule With Correlation",
-			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+			Input: correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
 		},
 		{
 			Name:          "Rule With Incomplete Correlation - Missing Rules",
-			Input:         `{ id: "x", title: "title", correlation: { type: event_count, group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+			Input:         correlationRule(`type: event_count, group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
 			ExpectedError: util.Ptr("missing required fields: correlation.rules"),
 		},
 		{
 			Name:          "Rule With Incomplete Correlation - Missing Timespan",
-			Input:         `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], condition: { gte: 2 } }}`,
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], condition: { gte: 2 }`),
 			ExpectedError: util.Ptr("missing required fields: correlation.timespan"),
 		},
 		{
-			Name:  "Rule With Incomplete Correlation - Missing Condition",
-			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s" }}`,
+			Name:          "Rule With Incomplete Correlation - Missing Condition",
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
+			ExpectedError: util.Ptr("missing required fields: correlation.condition (a count comparison such as gte)"),
 		},
 		{
-			Name:  "Rule With Incomplete Correlation - Missing GroupBy",
-			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], timespan: "30s", condition: { gte: 2 } }}`,
+			Name:          "Rule With Incomplete Correlation - Missing GroupBy",
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], timespan: "30s", condition: { gte: 2 }`),
+			ExpectedError: util.Ptr("missing required fields: correlation.group-by"),
 		},
 		{
-			Name:          "Rule With Correlation but No LogSource or Detection",
-			Input:         `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}`,
+			Name:  "Value Count Correlation Carries A Field In Its Condition",
+			Input: correlationRule(`type: value_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "field2", gte: 2 }`),
+		},
+		{
+			Name:          "Value Count Correlation Without A Condition Field",
+			Input:         correlationRule(`type: value_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
+			ExpectedError: util.Ptr("missing required fields: correlation.condition.field"),
+		},
+		{
+			Name:          "Correlation Without A Type",
+			Input:         correlationRule(`rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
+			ExpectedError: util.Ptr("missing required fields: correlation.type"),
+		},
+		{
+			Name:  "Metric Correlation With A Fractional Threshold",
+			Input: correlationRule(`type: value_avg, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", gt: 0.5 }`),
+		},
+		{
+			Name:          "Metric Correlation Without A Comparison Or Field",
+			Input:         correlationRule(`type: value_sum, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
+			ExpectedError: util.Ptr("missing required fields: correlation.condition (a comparison such as gt), correlation.condition.field"),
+		},
+		{
+			Name:          "Median Correlation Without A Field",
+			Input:         correlationRule(`type: value_median, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gt: 5 }`),
+			ExpectedError: util.Ptr("missing required fields: correlation.condition.field"),
+		},
+		{
+			Name:          "Percentile Correlation Without A Percentile",
+			Input:         correlationRule(`type: value_percentile, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", gt: 5 }`),
+			ExpectedError: util.Ptr("missing required fields: correlation.condition.percentile"),
+		},
+		{
+			Name:  "Percentile Correlation With A Percentile",
+			Input: correlationRule(`type: value_percentile, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", percentile: 95, gt: 5 }`),
+		},
+		{
+			Name:  "Temporal Correlation Requiring Some Of Its Rules",
+			Input: correlationRule(`type: temporal, rules: ["rule1", "rule2", "rule3"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`, "rule1", "rule2", "rule3"),
+		},
+		{
+			Name:          "Temporal Correlation Condition Naming A Field",
+			Input:         correlationRule(`type: temporal, rules: ["rule1", "rule2"], group-by: ["field1"], timespan: "30s", condition: { field: "user.name", gte: 2 }`, "rule1", "rule2"),
+			ExpectedError: util.Ptr("a temporal correlation counts matching rules, so its condition cannot name a field"),
+		},
+		{
+			Name:  "Temporal Correlation Needs No Condition",
+			Input: correlationRule(`type: temporal, rules: ["rule1", "rule2"], group-by: ["field1"], timespan: "30s"`, "rule1", "rule2"),
+		},
+		{
+			Name:          "Temporal Correlation With Only One Rule",
+			Input:         correlationRule(`type: temporal, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
+			ExpectedError: util.Ptr("a temporal correlation must reference at least 2 rules, found 1"),
+		},
+		{
+			Name:          "Correlation Type Unsupported By The ESQL Backend",
+			Input:         correlationRule(`type: temporal_ordered, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
+			ExpectedError: util.Ptr(`unsupported correlation type "temporal_ordered"; supported types are: event_count, value_count, temporal, value_sum, value_avg, value_percentile, value_median`),
+		},
+		{
+			Name:          "Unknown Correlation Type",
+			Input:         correlationRule(`type: nonsense, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
+			ExpectedError: util.Ptr(`unsupported correlation type "nonsense"; supported types are: event_count, value_count, temporal, value_sum, value_avg, value_percentile, value_median`),
+		},
+		{
+			Name:          "Correlation With An Unparseable Timespan",
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30 minutes", condition: { gte: 2 }`),
+			ExpectedError: util.Ptr(`invalid timespan "30 minutes": expected a positive count followed by s, m, h, d or w (e.g. 15m)`),
+		},
+		{
+			Name:          "Correlation With A Timespan Too Long For A Duration",
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "99999999999w", condition: { gte: 2 }`),
+			ExpectedError: util.Ptr(`invalid timespan "99999999999w": too long`),
+		},
+		{
+			Name: "Correlation Referencing A Rule By Its ID",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["abc-123"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
+---
+{ id: "abc-123", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}`,
+		},
+		{
+			Name: "Correlation Chained Onto Another Correlation",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["inner"], group-by: ["field1"], timespan: "1h", condition: { gte: 2 } }}
+---
+{ name: "inner", title: "t1", correlation: { type: event_count, rules: ["base"], group-by: ["field1"], timespan: "10m", condition: { gte: 5 } }}
+---
+{ name: "base", title: "t2", logsource: { category: "test" }, detection: { condition: "sel" }}`,
+			ExpectedError: util.Ptr(`referenced rule "inner" is itself a correlation, which is not supported; refer to the rules it correlates directly`),
+		},
+		{
+			Name: "Correlation Referencing A Rule That Is Not Present",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["missing_rule"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
+---
+{ name: "other_rule", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}`,
+			ExpectedError: util.Ptr("correlation references 1 rule(s) not defined in this detection: missing_rule; " +
+				"add each referenced rule as an additional YAML document (separated by ---) with a matching id or name"),
+		},
+		{
+			Name: "Referenced Rule Missing Its Detection",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
+---
+{ name: "rule1", title: "t1", logsource: { category: "test" }}`,
+			ExpectedError: util.Ptr(`referenced rule "rule1" is invalid: missing required fields: detection.condition`),
+		},
+		{
+			Name:          "Correlation That Also Generates Its Referenced Rules",
+			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "10m", condition: { gte: 2 }, generate: true`),
+			ExpectedError: util.Ptr("correlation.generate is not supported; to alert on a referenced rule by itself as well, add it as its own detection"),
+		},
+		{
+			Name:  "Correlation With Generate Explicitly Off",
+			Input: correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "10m", condition: { gte: 2 }, generate: false`),
+		},
+		{
+			Name:          "Correlation With Aliases",
+			Input:         correlationRule(`type: temporal, rules: ["rule1", "rule2"], group-by: ["host"], timespan: "10m", aliases: { host: { rule1: source.ip, rule2: client.ip } }`, "rule1", "rule2"),
+			ExpectedError: util.Ptr("correlation.aliases is not supported; give the referenced rules the same field name instead"),
+		},
+		{
+			Name: "Referenced Rule With Neither ID Nor Name",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
+---
+{ name: "rule1", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}
+---
+{ title: "orphan", logsource: { category: "test" }, detection: { condition: "sel" }}`,
+			ExpectedError: util.Ptr("document 3 is invalid: missing required fields: id or name"),
+		},
+		{
+			Name: "Plain Rule May Not Carry Extra Documents",
+			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: "sel" }}
+---
+{ id: "y", title: "title2", logsource: { category: "test" }, detection: { condition: "sel" }}`,
+			ExpectedError: util.Ptr("only a correlation rule may contain multiple YAML documents; found 1 additional document(s)"),
+		},
+		{
+			Name: "Plain Rule With Leading And Trailing Separators",
+			Input: `---
+{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: "sel" }}
+---
+# only a comment
+---
+`,
+		},
+		{
+			Name: "Correlation With Empty Documents",
+			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "10m", condition: { gte: 2 } }}
+---
+---
+{ name: "rule1", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}
+---
+`,
 		},
 	}
 
@@ -252,6 +405,7 @@ func TestToDetection(t *testing.T) {
 				Severity:    model.SeverityUnknown, // default when Level is nil
 				IsCommunity: false,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -283,6 +437,7 @@ func TestToDetection(t *testing.T) {
 				Description: "", // empty string Description is preserved
 				IsCommunity: true,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -319,6 +474,7 @@ func TestToDetection(t *testing.T) {
 				Service:       "test-service",
 				IsCommunity:   true,
 				Language:      model.SigLangSigma,
+				RuleType:      model.RuleTypeSingle,
 				Ruleset:       "test-ruleset",
 				License:       "test-license",
 				SourceCreated: util.Ptr(time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)),
@@ -344,6 +500,7 @@ func TestToDetection(t *testing.T) {
 				Severity:    model.SeverityInformational,
 				IsCommunity: false,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -367,6 +524,7 @@ func TestToDetection(t *testing.T) {
 				Severity:    model.SeverityMedium,
 				IsCommunity: false,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -390,6 +548,7 @@ func TestToDetection(t *testing.T) {
 				Severity:    model.SeverityCritical,
 				IsCommunity: false,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -413,6 +572,7 @@ func TestToDetection(t *testing.T) {
 				Severity:    model.SeverityLow,
 				IsCommunity: false,
 				Language:    model.SigLangSigma,
+				RuleType:    model.RuleTypeSingle,
 				Ruleset:     "test-ruleset",
 				License:     "test-license",
 			},
@@ -437,4 +597,136 @@ func TestToDetection(t *testing.T) {
 			assert.Equal(t, tc.expected, result, "Detection struct mismatch")
 		})
 	}
+}
+
+// correlationRule wraps a correlation section with the referenced rules it names.
+func correlationRule(correlation string, refs ...string) string {
+	if len(refs) == 0 {
+		refs = []string{"rule1"}
+	}
+
+	rule := `{ id: "x", title: "title", correlation: { ` + correlation + ` }}`
+	for _, ref := range refs {
+		rule += "\n---\n" + `{ name: "` + ref + `", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}`
+	}
+
+	return rule
+}
+
+var testCustomFilters = []*model.Override{
+	{
+		Type:      model.OverrideTypeCustomFilter,
+		IsEnabled: true,
+		OverrideParameters: model.OverrideParameters{
+			CustomFilter: util.Ptr("sofilter_hosts:\n  source.ip: 10.0.0.1"),
+		},
+	},
+}
+
+const testTwoRuleCorrelationContent = `title: Correlated
+id: 11111111-1111-1111-1111-111111111111
+correlation:
+    type: temporal
+    rules:
+        - rule_a
+        - rule_b
+    group-by:
+        - source.ip
+    timespan: 10m
+---
+title: A
+name: rule_a
+logsource:
+    category: network
+    service: dns
+detection:
+    selection:
+        dns.query.name|exists: true
+    condition: selection
+---
+title: B
+name: rule_b
+logsource:
+    category: network
+    service: ssl
+detection:
+    selection:
+        ssl.server_name|exists: true
+    condition: selection
+`
+
+func TestDuplicateContentPreservesEveryDocument(t *testing.T) {
+	t.Parallel()
+
+	content := "# a leading comment\n" + strings.Replace(testTwoRuleCorrelationContent, "title: Correlated", "title: Original", 1)
+
+	duplicated, err := duplicateContent(content, "22222222-2222-2222-2222-222222222222", "Original (copy)")
+	require.NoError(t, err)
+
+	collection, err := ParseElastAlertRuleCollection([]byte(duplicated))
+	require.NoError(t, err)
+	require.Len(t, collection.Referenced, 2)
+
+	assert.Equal(t, "22222222-2222-2222-2222-222222222222", *collection.Primary.ID)
+	assert.Equal(t, "Original (copy)", collection.Primary.Title)
+	assert.Equal(t, "rule_a", *collection.Referenced[0].Name)
+	assert.Equal(t, "rule_b", *collection.Referenced[1].Name)
+	assert.Contains(t, duplicated, "a leading comment")
+}
+
+func TestDuplicateContentAddsMissingKeys(t *testing.T) {
+	t.Parallel()
+
+	duplicated, err := duplicateContent("logsource:\n    category: test\n", "22222222-2222-2222-2222-222222222222", "Copy")
+	require.NoError(t, err)
+	assert.Equal(t, "logsource:\n    category: test\nid: 22222222-2222-2222-2222-222222222222\ntitle: Copy\n", duplicated)
+
+	_, err = duplicateContent("", "id", "title")
+	assert.EqualError(t, err, "no Sigma rule documents found")
+
+	_, err = duplicateContent("not: [valid", "id", "title")
+	assert.Error(t, err)
+}
+
+func TestApplyCustomFiltersToCorrelation(t *testing.T) {
+	t.Parallel()
+
+	filtered, err := applyCustomFilters(testTwoRuleCorrelationContent, testCustomFilters)
+	require.NoError(t, err)
+
+	// The filter reaches every referenced rule, not just the first.
+	assert.Equal(t, 2, strings.Count(filtered, "and not 1 of sofilter*"))
+	assert.Equal(t, 2, strings.Count(filtered, "sofilter_hosts"))
+
+	collection, err := ParseElastAlertRuleCollection([]byte(filtered))
+	require.NoError(t, err)
+	assert.True(t, collection.IsCorrelation())
+	assert.Len(t, collection.Referenced, 2)
+}
+
+func TestApplyCustomFiltersInvalidYaml(t *testing.T) {
+	t.Parallel()
+
+	_, err := applyCustomFilters("not: [valid", testCustomFilters)
+	assert.ErrorContains(t, err, "unable to unmarshal sigma rule")
+}
+
+func TestApplyCustomFiltersWithoutAnyDetection(t *testing.T) {
+	t.Parallel()
+
+	content := `title: Correlated
+id: 11111111-1111-1111-1111-111111111111
+correlation:
+    type: event_count
+    rules:
+        - rule_a
+    group-by:
+        - source.ip
+    timespan: 10m
+    condition:
+        gte: 5
+`
+
+	_, err := applyCustomFilters(content, testCustomFilters)
+	assert.EqualError(t, err, "sigma rule does not contain a detection section")
 }

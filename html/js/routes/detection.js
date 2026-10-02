@@ -129,6 +129,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedReferences: [],
 			extractedLogic: '',
 			extractedLogicClass: '',
+			correlationRules: [],
 			history: [],
 			comments: [],
 			commentsTable: {
@@ -151,6 +152,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			curCommentEditTarget: null,
 			origComment: null,
 			showSigmaDialog: false,
+			newDetectionLanguage: null,
 			convertedRule: '',
 			isEsql: false,
 			showDirtySourceDialog: false,
@@ -186,6 +188,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			Prism.highlightAll();
 		});
 	},
+	computed: {
+		newDetectionLanguages() {
+			return this.getPresets('language').flatMap(lang => {
+				if (lang.toLowerCase() !== 'sigma' || !this.ruleTemplates['elastalert_correlation']) {
+					return [{ title: lang, value: lang }];
+				}
+
+				return [
+					{ title: this.i18n.sigmaSingleEvent, value: lang },
+					{ title: this.i18n.sigmaCorrelation, value: lang + ':correlation' },
+				];
+			});
+		},
+	},
 	methods: {
 		async initDetection(params) {
 			this.params = params;
@@ -197,6 +213,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
+				this.newDetectionLanguage = null;
 			} else {
 				await this.loadData();
 			}
@@ -365,6 +382,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractLogic() {
 			this.extractedLogic = '';
 			this.extractedLogicClass = '';
+			this.correlationRules = [];
 
 			switch (this.detect.engine) {
 				case 'suricata':
@@ -464,15 +482,19 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				this.extractedLogic = '';
 				return;
 			}
-			const doc = docs[0];
-			if (doc['correlation']) {
-				this.extractedLogic = jsyaml.dump(doc['correlation']).trim();
+			const logic = doc => jsyaml.dump({ logsource: doc['logsource'], detection: doc['detection'] }).trim();
+
+			if (docs[0]['correlation']) {
+				// the documents after a correlation are the rules it refers to
+				this.correlationRules = docs.slice(1).map(doc => ({
+					title: doc['title'],
+					name: doc['name'] || doc['id'],
+					logic: logic(doc),
+				}));
 				return;
 			}
-			const logSource = doc['logsource'];
-			const detection = doc['detection'];
 
-			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
+			this.extractedLogic = logic(docs[0]);
 		},
 		async loadHistory(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
@@ -827,7 +849,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						this.$root.showWarning(this.i18n.detectionSyncBlockedErr);
 						break;
 					default:
-						this.$root.showError(error);
+						this.showRequestError(error);
 						break;
 				}
 
@@ -993,6 +1015,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			const docs = parseMultiDocYaml(this.detect.content);
 			if (docs.length > 0) {
 				const level = docs[0]['level'];
+				if (!level) return;
+
 				for (let lvl in this.presets['severity'].labels) {
 					if (this.presets['severity'].labels[lvl].toUpperCase() === level.toUpperCase()) {
 						return this.presets['severity'].labels[lvl];
@@ -1001,10 +1025,13 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		async onNewDetectionLanguageChange() {
-			const lang = (this.detect.language || '').toLowerCase();
-			const engine = this.languageToEngine[lang];
+			const [lang, variant] = (this.newDetectionLanguage || '').split(':');
+			this.detect.language = lang;
 
-			if (engine) {
+			const engine = this.languageToEngine[lang.toLowerCase()];
+			const template = this.ruleTemplates[variant ? `${engine}_${variant}` : engine];
+
+			if (template) {
 				let publicId = '';
 
 				if (engine !== 'strelka') {
@@ -1016,7 +1043,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = this.ruleTemplates[engine]
+				this.detect.content = template
 					.replaceAll('[publicId]', publicId)
 					.replaceAll('[today]', moment().format('YYYY-MM-DD'))
 					.trim();
@@ -1390,15 +1417,42 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					this.showSigmaDialog = true;
 				}
 			} catch (error) {
-				this.$root.showError(error);
+				this.showRequestError(error);
 			} finally {
 				this.$root.stopLoading();
 			}
+		},
+		showRequestError(error) {
+			// 400 bodies carry the validation reason
+			const reason = error?.response?.status === 400 ? error.response.data : null;
+			this.$root.showError(typeof reason === 'string' ? reason : error);
 		},
 		cancelConvert() {
 			this.convertedRule = '';
 			this.isEsql = false;
 			this.showSigmaDialog = false;
+		},
+		formatEsql(query) {
+			// one command per line; a pipe inside a string is not a command break
+			const commands = [];
+			let start = 0;
+
+			for (let i = 0; i < query.length; i++) {
+				if (query[i] === '"') {
+					const close = query.startsWith('"""', i) ? '"""' : '"';
+					let end = i + close.length;
+					while (end < query.length && !query.startsWith(close, end)) {
+						end += query[end] === '\\' && close === '"' ? 2 : 1;
+					}
+					i = end + close.length - 1;
+				} else if (query[i] === '|') {
+					commands.push(query.slice(start, i).trim());
+					start = i + 1;
+				}
+			}
+			commands.push(query.slice(start).trim());
+
+			return commands.join('\n| ');
 		},
 		copyConvertToClipboard() {
 			this.$root.copyToClipboard(this.convertedRule);
@@ -1469,6 +1523,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		playbookHighlighter(code) {
 			return Prism.highlight(code, Prism.languages.yaml, 'yaml');
+		},
+		esqlHighlighter(query) {
+			// highlighted before render, so the dialog never repaints
+			return Prism.highlight(this.formatEsql(query), Prism.languages.esql, 'esql');
 		},
 		checkChangedKey(id, key) {
 			return this.changedKeys[id]?.includes(key);

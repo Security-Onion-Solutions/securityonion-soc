@@ -480,10 +480,16 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		}
 	}
 
+	// a correlation's own playbook replaces its baseline, and correlations never use the engine baseline
+	isCorrelation := detectCategory == model.PlaybookCategoryCorrelation
+	if isCorrelation && len(forId) > 0 {
+		forCategory = nil
+	}
+
 	results := append([]string{}, forId...)
 	results = append(results, forCategory...)
 
-	if len(results) == 0 {
+	if len(results) == 0 && !isCorrelation {
 		results = pdm.PlaybooksByEngine[string(detectEngine)]
 	}
 
@@ -626,7 +632,7 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 	}
 
 	// no playbooks for this detection is a valid state, not an error
-	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
+	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.PlaybookCategory(), detection.Engine)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
 	}
@@ -683,7 +689,7 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		}
 	}()
 
-	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", "/opt/sensoroni/sigma_pipelines", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
 	// pySigma rejects a title-less rule, so prepend a throwaway title to any query
 	// that lacks one. It is stripped from the OQL output and need not be unique.
