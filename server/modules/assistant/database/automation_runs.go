@@ -69,6 +69,8 @@ func (s *Store) OpenAutomationRun(ctx context.Context, automationId string) (*mo
 		return nil, err
 	}
 
+	s.automationChanged()
+
 	return run, nil
 }
 
@@ -109,6 +111,8 @@ func (s *Store) CloseAutomationRun(ctx context.Context, runId string, state mode
 		return ErrAutomationRunNotOpen
 	}
 
+	s.automationChanged()
+
 	return nil
 }
 
@@ -120,11 +124,11 @@ func (s *Store) FailAbandonedAutomationRun(ctx context.Context, automationId, ca
 		return 0, fmt.Errorf("cannot fail a run without an automation id")
 	}
 
-	return countAffected(ctx, s.db, `
+	return s.countAutomationChanges(countAffected(ctx, s.db, `
 		UPDATE automation_runs
 		SET state = 'failed', ended_at = now(), error = NULLIF($2, '')
 		WHERE automation_id = $1 AND ended_at IS NULL
-		RETURNING id`, automationId, cause)
+		RETURNING id`, automationId, cause))
 }
 
 func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.AutomationRunRecord, error) {

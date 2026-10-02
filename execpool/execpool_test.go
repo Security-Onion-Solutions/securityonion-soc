@@ -880,3 +880,64 @@ func TestPool_ConcurrentSubmitAndStats(t *testing.T) {
 	assert.Equal(t, 0, p.Stats().Running)
 	assert.Empty(t, p.Stats().Keys)
 }
+
+// OnChange reads Stats here, which would deadlock if it ran under the pool lock.
+func TestPool_OnChangeFollowsEveryStatsChange(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var p *Pool
+		var mu sync.Mutex
+		var seen []Stats
+
+		p = newPool(t, Config{Name: "test", MaxConcurrent: 1, MaxQueueDepth: 1, OnChange: func() {
+			s := p.Stats()
+			mu.Lock()
+			seen = append(seen, s)
+			mu.Unlock()
+		}})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", DedupeKey: "d", Run: g.job("a")})
+		submit(t, p, Job{Key: "b", Run: g.job("b")})
+
+		_, err := p.Submit(Job{Key: "c", Run: g.job("c")})
+		assert.ErrorIs(t, err, ErrQueueFull)
+
+		_, err = p.Submit(Job{Key: "a", DedupeKey: "d", Run: g.job("a")})
+		assert.ErrorIs(t, err, ErrDuplicate)
+
+		synctest.Wait()
+		mu.Lock()
+		assert.Len(t, seen, 4, "started, queued, rejected, deduplicated")
+		mu.Unlock()
+
+		g.open()
+		synctest.Wait()
+
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(t, seen, 6, "and each completion")
+		last := seen[len(seen)-1]
+		assert.Equal(t, 0, last.Running)
+		assert.Equal(t, 0, last.Queued)
+		assert.Equal(t, uint64(1), last.Rejected)
+		assert.Equal(t, uint64(1), last.Deduped)
+	})
+}
+
+func TestPool_OnChangeFollowsImmediateJobs(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var changes atomic.Int32
+		p := newPool(t, Config{Name: "test", KeyLimitFunc: func(string) int { return 1 }, OnChange: func() { changes.Add(1) }})
+		g := newGate()
+
+		submit(t, p, Job{Key: "a", Immediate: true, Run: g.job("a")})
+
+		_, err := p.Submit(Job{Key: "a", Immediate: true, Run: g.job("a")})
+		assert.ErrorIs(t, err, ErrBusy)
+		assert.Equal(t, int32(2), changes.Load(), "started, then refused as busy")
+
+		g.open()
+		synctest.Wait()
+		assert.Equal(t, int32(3), changes.Load())
+	})
+}

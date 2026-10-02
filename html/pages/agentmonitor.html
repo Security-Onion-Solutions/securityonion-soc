@@ -1,18 +1,5 @@
 <v-container v-if="!paramsLoaded" fluid data-aid="agentmonitor_loading_parameters"></v-container>
 <v-container v-else-if="assistantEnabled && agentic" fluid data-aid="agentmonitor_screen">
-  <v-dialog v-model="showOptionsDialog" max-width="540" data-aid="agentmonitor_options_dialog">
-    <v-card class="options-dialog">
-      <v-card-title role="heading" aria-level="2">{{ i18n.options }}</v-card-title>
-      <v-card-text data-aid="agentmonitor_options">
-        <v-select v-model="autoRefreshInterval" :items="autoRefreshIntervals" :label="i18n.autoRefresh" prepend-icon="fa-hourglass-half" data-aid="agentmonitor_autorefresh"></v-select>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn variant="text" @click="showOptionsDialog = false">{{ i18n.close }}</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
-
   <v-row align="center" class="no-print" style="gap: 8px; flex-wrap: nowrap;">
     <v-col style="flex: 0 0 auto;" class="pa-0 align-self-end" id="agentmonitor-breadcrumbs">
       <v-breadcrumbs :items="breadcrumbs()" density="compact" class="py-0">
@@ -32,9 +19,6 @@
         </v-btn>
         <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadData()" data-aid="agentmonitor_refresh" :title="i18n.refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
-        </v-btn>
-        <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptionsDialog = true" data-aid="agentmonitor_options_button" :title="i18n.options" :aria-label="i18n.options">
-          <v-icon>fa-gear</v-icon>
         </v-btn>
         <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" data-aid="agentmonitor_docs" :title="i18n.contextualDocsBtn" :aria-label="i18n.contextualDocsBtn">
           <v-icon>fa-circle-question</v-icon>

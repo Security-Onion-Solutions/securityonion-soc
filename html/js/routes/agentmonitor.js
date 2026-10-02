@@ -68,7 +68,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     transcriptLoading: false,
     transcriptRefreshTimer: null,
     activityLoading: false,
-    lastRefresh: 0,
+    // A change announced mid-load; that load may predate it, so another follows.
+    activityReloadPending: false,
 
     // Written by the reused assistant conversion.
     sessionToolState: new Map(),
@@ -83,13 +84,10 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     expandedRecent: [],
     itemTabs: {},
 
-    showOptionsDialog: false,
     collapsedSections: [],
 
     canChat: false,
     showModelThinking: true,
-    autoRefreshInterval: 10,
-    autoRefreshIntervals: [],
     paused: false,
 
     tickTimer: null,
@@ -138,24 +136,20 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     '$route': 'applyRoute',
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
-    'autoRefreshInterval': 'saveLocalSettings',
-  },
-  created() {
-    this.autoRefreshIntervals = [
-      { title: this.i18n.interval0s, value: 0 },
-      { title: this.i18n.interval5s, value: 5 },
-      { title: this.i18n.interval10s, value: 10 },
-      { title: this.i18n.interval30s, value: 30 },
-      { title: this.i18n.interval1m, value: 60 },
-    ];
+    // Changes pushed while disconnected were missed.
+    '$root.connected'(connected) {
+      if (connected && this.agentic && !this.paused) this.loadActivity(true);
+    },
   },
   mounted() {
     this.reload();
     this.$root.subscribe('assistant:stream', this.onAgentStream);
+    this.$root.subscribe('assistant:automation', this.onAutomationActivity);
   },
   beforeUnmount() {
     this.stopTick();
     this.$root.unsubscribe('assistant:stream', this.onAgentStream);
+    this.$root.unsubscribe('assistant:automation', this.onAutomationActivity);
     clearTimeout(this.transcriptRefreshTimer);
   },
   methods: Object.assign({
@@ -204,14 +198,12 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       localStorage['settings.agentmonitor.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.agentmonitor.itemsPerPage'] = this.itemsPerPage;
       localStorage['settings.agentmonitor.collapsedSections'] = JSON.stringify(this.collapsedSections);
-      localStorage['settings.agentmonitor.autoRefreshInterval'] = this.autoRefreshInterval;
     },
     loadLocalSettings() {
       if (localStorage['settings.agentmonitor.sortBy']) this.sortBy[0].key = localStorage['settings.agentmonitor.sortBy'];
       if (localStorage['settings.agentmonitor.sortDesc']) this.sortBy[0].order = localStorage['settings.agentmonitor.sortDesc'];
       if (localStorage['settings.agentmonitor.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentmonitor.itemsPerPage']);
       if (localStorage['settings.agentmonitor.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.agentmonitor.collapsedSections']);
-      if (localStorage['settings.agentmonitor.autoRefreshInterval']) this.autoRefreshInterval = parseInt(localStorage['settings.agentmonitor.autoRefreshInterval']);
     },
     toggleShowSection(item) {
       if (this.isExpandedSection(item)) {
@@ -232,13 +224,15 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     async loadData(background = false) {
       this.now = Date.now();
-      this.lastRefresh = this.now;
       const loads = [this.loadActivity(background), this.loadRecent(background)];
       if (this.selectedSessionId) loads.push(this.loadTranscript(this.selectedSessionId, background));
       await Promise.all(loads);
     },
     async loadActivity(background = false) {
-      if (this.activityLoading) return;
+      if (this.activityLoading) {
+        this.activityReloadPending = true;
+        return;
+      }
       this.activityLoading = true;
       try {
         const response = await this.$root.papi.get('assistant/automations/activity');
@@ -248,6 +242,14 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       } finally {
         this.activityLoading = false;
       }
+      if (this.activityReloadPending) {
+        this.activityReloadPending = false;
+        await this.loadActivity(true);
+      }
+    },
+    // The server pushes no data, only that activity changed.
+    onAutomationActivity() {
+      if (!this.paused) this.loadActivity(true);
     },
     applyActivity(activity) {
       this.schedulerRunning = activity.schedulerRunning !== false;
@@ -602,16 +604,13 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       if (this.tickTimer) clearInterval(this.tickTimer);
       this.tickTimer = null;
     },
+    // Resuming catches up on what was ignored while paused.
     togglePaused() {
       this.paused = !this.paused;
+      if (!this.paused) this.loadActivity(true);
     },
     tick() {
-      if (this.paused) return;
-      this.now = Date.now();
-      if (this.autoRefreshInterval > 0 && this.now - this.lastRefresh >= this.autoRefreshInterval * 1000) {
-        this.lastRefresh = this.now;
-        this.loadActivity(true);
-      }
+      if (!this.paused) this.now = Date.now();
     },
   }, monitorDelegationCtx())
 }});

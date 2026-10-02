@@ -78,6 +78,8 @@ func (ac *AssistantCoordinator) startAutomationScheduler() {
 	ac.automationScheduler = s
 
 	go ac.automationWorker(s)
+
+	ac.notifyAutomationActivity()
 }
 
 // stopAutomationScheduler cancels the worker and every run, then waits until ctx ends for their rows to close.
@@ -90,6 +92,8 @@ func (ac *AssistantCoordinator) stopAutomationScheduler(ctx context.Context) {
 	if s == nil {
 		return
 	}
+
+	ac.notifyAutomationActivity()
 
 	s.cancel(ErrAutomationSchedulerStopped)
 

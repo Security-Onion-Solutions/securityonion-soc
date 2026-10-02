@@ -206,6 +206,8 @@ type AssistantCoordinator struct {
 	automationMaxQueuedItems     int
 	// Shared by automation work items and user chat turns, keyed by agent.
 	execPool *execpool.Pool
+	// Tells clients the activity view changed; nil in tests that skip Init.
+	activityEvents *activityNotifier
 
 	// automationWorkerMu guards the scheduler, nil when stopped. The pool's KeyLimitFunc takes
 	// agentMu under the pool lock, so nothing may call a pool method while holding agentMu.
@@ -350,6 +352,8 @@ const (
 	AgenticUpdateKind = "assistant:agentic"
 	// AgentStreamKind carries a headless session's turn as it streams.
 	AgentStreamKind = "assistant:stream"
+	// AutomationActivityKind says the activity view changed; it carries nothing, so clients refetch.
+	AutomationActivityKind = "assistant:automation"
 	// Skill definitions, in the same structured form as the agents setting.
 	ConfigSettingSkills = "soc.config.server.modules.assistant.skills"
 	// ConfigSettingMaxDelegationDepth / ConfigSettingMaxSubSessionTokens are scalar
@@ -459,6 +463,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.automationTickInterval.Store(int64(ac.automationDefaultTickInterval))
 	ac.automationMaxConcurrentItems = max(module.GetIntDefault(automationSettings, "maxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
 	ac.automationMaxQueuedItems = max(module.GetIntDefault(automationSettings, "maxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+	ac.activityEvents = newActivityNotifier(automationActivityWindow, ac.broadcastAutomationActivity)
 	ac.execPool = ac.newExecPool()
 
 	epoch := DEFAULT_ALERT_TRIAGE_EPOCH
@@ -811,6 +816,7 @@ func (ac *AssistantCoordinator) Start() error {
 			return err
 		}
 		ac.store = store
+		store.OnAutomationChange(ac.notifyAutomationActivity)
 
 		ac.reconcileAutomationRuns(ac.srv.Context)
 	}
@@ -976,6 +982,10 @@ func (ac *AssistantCoordinator) Stop() error {
 
 	ac.stopAutomationScheduler(ctx)
 	ac.stopExecPool(ctx)
+
+	if ac.activityEvents != nil {
+		ac.activityEvents.stop()
+	}
 
 	return nil
 }

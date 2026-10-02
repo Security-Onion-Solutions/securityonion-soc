@@ -693,47 +693,73 @@ test('elapsed formats as minutes and padded seconds', () => {
   expect(comp.formatElapsed(600000)).toBe('10:00');
 });
 
-test('ticking refreshes the activity on the auto refresh interval', () => {
+test('activity is pushed, not polled: each event reloads it, and the clock only ticks', () => {
+  comp.$root.subscribe = jest.fn();
+  comp.reload = jest.fn();
+  comp.mounted();
+  expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.onAutomationActivity);
+
   comp.loadActivity = jest.fn();
-  comp.autoRefreshInterval = 10;
-  comp.lastRefresh = Date.now();
-
-  comp.tick();
-  expect(comp.loadActivity).not.toHaveBeenCalled();
-
-  comp.lastRefresh = Date.now() - 11000;
-  comp.tick();
+  comp.onAutomationActivity();
   expect(comp.loadActivity).toHaveBeenCalledWith(true);
 
   comp.loadActivity.mockClear();
-  comp.autoRefreshInterval = 0;
-  comp.lastRefresh = 0;
   comp.tick();
   expect(comp.loadActivity).not.toHaveBeenCalled();
 });
 
-test('pausing stops the clock and the refresh', () => {
+test('a change announced during a load is loaded once that load finishes', async () => {
+  let finishFirst;
+  const get = jest.fn()
+    .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
+    .mockResolvedValue({ data: { runs: [] } });
+  comp.$root.papi.get = get;
+
+  const first = comp.loadActivity(true);
+  comp.onAutomationActivity();
+  comp.onAutomationActivity();
+  expect(get).toHaveBeenCalledTimes(1);
+
+  finishFirst({ data: { runs: [] } });
+  await first;
+
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(comp.activityReloadPending).toBe(false);
+});
+
+test('pausing stops the clock and ignores changes until resumed', () => {
   comp.loadActivity = jest.fn();
-  comp.lastRefresh = 0;
   comp.now = 0;
   comp.togglePaused();
   expect(comp.paused).toBe(true);
 
   comp.tick();
+  comp.onAutomationActivity();
   expect(comp.now).toBe(0);
   expect(comp.loadActivity).not.toHaveBeenCalled();
 
   comp.togglePaused();
-  comp.tick();
-  expect(comp.loadActivity).toHaveBeenCalled();
+  expect(comp.loadActivity).toHaveBeenCalledWith(true);
 });
 
-test('a refresh already in flight is not doubled', async () => {
+test('reconnecting reloads what was missed while disconnected', () => {
+  const onConnected = routes.find(r => r.name === 'agentmonitor').component.watch['$root.connected'];
+  comp.loadActivity = jest.fn();
+  comp.agentic = true;
+
+  onConnected.call(comp, false);
+  expect(comp.loadActivity).not.toHaveBeenCalled();
+
+  onConnected.call(comp, true);
+  expect(comp.loadActivity).toHaveBeenCalledWith(true);
+});
+
+test('refreshes that overlap one in flight collapse into a single follow-up', async () => {
   const get = serve();
 
-  await Promise.all([comp.loadActivity(true), comp.loadActivity(true)]);
+  await Promise.all([comp.loadActivity(true), comp.loadActivity(true), comp.loadActivity(true)]);
 
-  expect(get.mock.calls.filter(call => call[0] === 'assistant/automations/activity').length).toBe(1);
+  expect(get.mock.calls.filter(call => call[0] === 'assistant/automations/activity').length).toBe(2);
 });
 
 test('the refresh button reloads everything, including the watched transcript', async () => {
@@ -785,28 +811,15 @@ test('sections collapse and the choice persists', () => {
   expect(comp.isExpandedSection('agentmonitor-recent')).toBe(false);
 });
 
-test('table and refresh settings persist to local storage', () => {
+test('table settings persist to local storage', () => {
   comp.sortBy = [{ key: 'automationName', order: 'desc' }];
   comp.itemsPerPage = 50;
-  comp.autoRefreshInterval = 30;
   comp.saveLocalSettings();
 
   comp.sortBy = [{ key: 'createTime', order: 'asc' }];
   comp.itemsPerPage = 10;
-  comp.autoRefreshInterval = 10;
   comp.loadLocalSettings();
 
   expect(comp.sortBy[0]).toEqual({ key: 'automationName', order: 'desc' });
   expect(comp.itemsPerPage).toBe(50);
-  expect(comp.autoRefreshInterval).toBe(30);
-});
-
-test('an auto refresh of off persists as off', () => {
-  comp.autoRefreshInterval = 0;
-  comp.saveLocalSettings();
-  comp.autoRefreshInterval = 10;
-
-  comp.loadLocalSettings();
-
-  expect(comp.autoRefreshInterval).toBe(0);
 });

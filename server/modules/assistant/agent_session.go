@@ -582,7 +582,6 @@ func withoutThoughtSignatures(msg *model.Message) *model.Message {
 
 func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, phase string) {
 	ac.agentPhaseMu.Lock()
-	defer ac.agentPhaseMu.Unlock()
 
 	if ac.agentPhases == nil {
 		ac.agentPhases = map[string]model.AgentSessionPhase{}
@@ -595,13 +594,17 @@ func (ac *AssistantCoordinator) setAgentPhase(sessionId, rootSessionId, agent, p
 		Phase:         phase,
 		Since:         time.Now(),
 	}
+
+	ac.agentPhaseMu.Unlock()
+	ac.notifyAutomationActivity()
 }
 
 func (ac *AssistantCoordinator) clearAgentPhase(sessionId string) {
 	ac.agentPhaseMu.Lock()
-	defer ac.agentPhaseMu.Unlock()
-
 	delete(ac.agentPhases, sessionId)
+	ac.agentPhaseMu.Unlock()
+
+	ac.notifyAutomationActivity()
 }
 
 // AgentSessionPhases reports every headless session currently running.
