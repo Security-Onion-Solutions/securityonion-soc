@@ -1701,11 +1701,31 @@ func TestSyncElastAlert(t *testing.T) {
 				},
 			},
 			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
-				// IndexExistingRules; no sigma-cli run and no rule file
+				// IndexExistingRules; no sigma-cli run, no rule file, and not an error
 				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{}, nil)
+				// treated as disabled, so the missing file is ignored
+				m.EXPECT().DeleteFile("11111111-1111-1111-1111-111111111111.yml").Return(os.ErrNotExist)
 			},
-			ExpectedErrMap: map[string]string{
-				"11111111-1111-1111-1111-111111111111": "unable to convert sigma to elastalert: " + errCorrelationNeedsEsql.Error(),
+		},
+		{
+			Name: "Correlation Deployed Before Reverting To EQL Is Removed",
+			Detections: []*model.Detection{
+				{
+					PublicID:  "11111111-1111-1111-1111-111111111111",
+					Content:   testCorrelationContent,
+					IsEnabled: true,
+				},
+			},
+			InitMock: func(mod *ElastAlertEngine, m *mock.MockIOManager) {
+				// IndexExistingRules finds the ES|QL rule deployed earlier
+				filename := "11111111-1111-1111-1111-111111111111.yml"
+				m.EXPECT().ReadDir(mod.elastAlertRulesFolder).Return([]fs.DirEntry{
+					&handmock.MockDirEntry{
+						Filename: filename,
+					},
+				}, nil)
+				// removed rather than left running; no sigma-cli run
+				m.EXPECT().DeleteFile(filename).Return(nil)
 			},
 		},
 		{

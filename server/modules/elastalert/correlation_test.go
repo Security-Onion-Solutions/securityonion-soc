@@ -7,14 +7,23 @@ package elastalert
 
 import (
 	"context"
+	"io/fs"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 
+	"github.com/apex/log"
+	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestWrapRuleSchedule(t *testing.T) {
@@ -170,6 +179,107 @@ func TestCorrelationRequiresEsql(t *testing.T) {
 
 	_, err = engine.ValidateRule(SimpleRule)
 	assert.NoError(t, err)
+}
+
+func TestIntegrityCheckCorrelationWithoutEsql(t *testing.T) {
+	t.Parallel()
+
+	const correlationId = "11111111-1111-1111-1111-111111111111"
+
+	for _, useEsql := range []bool{false, true} {
+		ctrl := gomock.NewController(t)
+		detStore := servermock.NewMockDetectionstore(ctrl)
+		iom := mock.NewMockIOManager(ctrl)
+
+		engine := &ElastAlertEngine{
+			srv: &server.Server{
+				Context:        context.Background(),
+				Detectionstore: detStore,
+			},
+			elastAlertRulesFolder: "rules",
+			IOManager:             iom,
+			useEsql:               useEsql,
+		}
+
+		// only the simple rule is deployed
+		iom.EXPECT().ReadDir("rules").Return([]fs.DirEntry{
+			&handmock.MockDirEntry{Filename: SimpleRuleSID + ".yml"},
+		}, nil)
+		detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+			SimpleRuleSID: {PublicID: SimpleRuleSID, Content: SimpleRule, IsEnabled: true},
+			correlationId: {PublicID: correlationId, Content: testCorrelationContent, IsEnabled: true},
+		}, nil)
+
+		deployedButNotEnabled, enabledButNotDeployed, err := engine.IntegrityCheck(false, nil)
+
+		assert.Empty(t, deployedButNotEnabled)
+		if useEsql {
+			// an ES|QL correlation that is missing is still a failure
+			assert.ErrorIs(t, err, detections.ErrIntCheckFailed)
+			assert.Equal(t, []string{correlationId}, enabledButNotDeployed)
+		} else {
+			// undeployed on purpose until ES|QL is enabled
+			assert.NoError(t, err)
+			assert.Empty(t, enabledButNotDeployed)
+		}
+	}
+}
+
+func TestSyncCommunityCorrelationWithoutEsql(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	detStore := servermock.NewMockDetectionstore(ctrl)
+	iom := mock.NewMockIOManager(ctrl)
+	bim := servermock.NewMockBulkIndexer(ctrl)
+
+	const publicId = "11111111-1111-1111-1111-111111111111"
+
+	engine := &ElastAlertEngine{
+		srv: &server.Server{
+			Context:        ctx,
+			Detectionstore: detStore,
+		},
+		isRunning:             true,
+		elastAlertRulesFolder: "rules",
+		IOManager:             iom,
+	}
+
+	// the ES|QL rule deployed before reverting to EQL
+	iom.EXPECT().ReadDir("rules").Return([]fs.DirEntry{
+		&handmock.MockDirEntry{Filename: publicId + ".yml"},
+	}, nil)
+	detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(map[string]*model.Detection{
+		publicId: {
+			Auditable:   model.Auditable{Id: "detection-id"},
+			PublicID:    publicId,
+			Content:     testCorrelationContent,
+			IsEnabled:   true,
+			IsCommunity: true,
+		},
+	}, nil)
+	detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil).AnyTimes()
+	detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).AnyTimes()
+	bim.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	bim.EXPECT().Close(gomock.Any()).Return(nil).AnyTimes()
+	bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{}).AnyTimes()
+	// removed, not left running; no ExecCommand is expected, so sigma-cli never runs
+	iom.EXPECT().DeleteFile("rules/" + publicId + ".yml").Return(nil)
+
+	errMap, err := engine.syncCommunityDetections(ctx, log.WithField("test", t.Name()), []*model.Detection{
+		{
+			PublicID:    publicId,
+			Content:     testCorrelationContent,
+			IsCommunity: true,
+			Engine:      model.EngineNameElastAlert,
+		},
+	}, false)
+
+	assert.NoError(t, err)
+	assert.Empty(t, errMap) // not a sync error, so the sync status stays green
 }
 
 func TestWrapRuleQueryKeyFromQueryColumns(t *testing.T) {

@@ -453,6 +453,17 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	return data, nil
 }
 
+// correlationWithoutEsql reports a correlation that cannot run because ES|QL is off.
+func (e *ElastAlertEngine) correlationWithoutEsql(content string) bool {
+	if e.useEsql {
+		return false
+	}
+
+	collection, err := parseRuleCollection([]byte(content))
+
+	return err == nil && collection.IsCorrelation()
+}
+
 func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
 	return false, nil
 }
@@ -607,7 +618,13 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 			path = filepath.Join(e.elastAlertRulesFolder, fmt.Sprintf("%s.yml", name))
 		}
 
-		if det.IsEnabled {
+		deploy := det.IsEnabled
+		if deploy && e.correlationWithoutEsql(det.Content) {
+			log.WithField("detectionPublicId", det.PublicID).Warn("correlation is not deployed because it requires ES|QL; enable useEsql to run it")
+			deploy = false
+		}
+
+		if deploy {
 			eaRule, err := e.sigmaToElastAlert(ctx, det)
 			if err != nil {
 				errMap[det.PublicID] = fmt.Sprintf("unable to convert sigma to elastalert: %s", err)
@@ -626,10 +643,10 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 				continue
 			}
 		} else {
-			// was enabled, no longer is enabled: Disable
+			// disabled, or a correlation without ES|QL: remove any deployed rule
 			err = e.DeleteFile(path)
 			if err != nil && !os.IsNotExist(err) {
-				errMap[det.PublicID] = fmt.Sprintf("unable to remove disabled detection file: %s", err)
+				errMap[det.PublicID] = fmt.Sprintf("unable to remove detection file: %s", err)
 				continue
 			}
 		}
@@ -1220,6 +1237,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 	createAudit := make([]model.AuditInfo, 0, len(detects)) // Object => *model.Detection
 	auditMut := sync.Mutex{}
 	errMut := sync.Mutex{}
+	needsEsql := []string{} // publicIDs of enabled correlations left undeployed
 
 	for i := range detects {
 		detect := detects[i]
@@ -1396,7 +1414,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 			}
 		}
 
-		if detect.IsEnabled {
+		deploy := detect.IsEnabled
+		if deploy && e.correlationWithoutEsql(detect.Content) {
+			needsEsql = append(needsEsql, detect.PublicID)
+			deploy = false
+		}
+
+		if deploy {
 			// 2. if enabled, send data to cli package to get converted to query
 			rule, err := e.sigmaToElastAlert(ctx, detect)
 			if err != nil {
@@ -1422,10 +1446,10 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 				continue
 			}
 		} else if path != "" {
-			// detection is disabled but a file exists, remove it
+			// disabled, or a correlation without ES|QL, but a file exists: remove it
 			err = e.DeleteFile(path)
 			if err != nil {
-				errMap[detect.PublicID] = fmt.Errorf("unable to remove disabled detection file: %s", err)
+				errMap[detect.PublicID] = fmt.Errorf("unable to remove detection file: %s", err)
 				continue
 			}
 		}
@@ -1565,6 +1589,13 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 		"syncUnchanged": results.Unchanged,
 		"syncErrors":    util.TruncateMap(errMap, 5),
 	}).Info("elastalert community diff")
+
+	if len(needsEsql) > 0 {
+		logger.WithFields(log.Fields{
+			"correlationCount":     len(needsEsql),
+			"correlationPublicIds": lo.Slice(needsEsql, 0, 10),
+		}).Warn("enabled correlations are not deployed because they require ES|QL; enable useEsql to run them")
+	}
 
 	return errMap, nil
 }
@@ -2307,7 +2338,11 @@ func (e *ElastAlertEngine) IntegrityCheck(canInterrupt bool, logger *log.Entry) 
 	}
 
 	enabled := make([]string, 0, len(ret))
-	for pid := range ret {
+	for pid, det := range ret {
+		if e.correlationWithoutEsql(det.Content) {
+			continue // left undeployed until ES|QL is enabled
+		}
+
 		enabled = append(enabled, pid)
 	}
 
