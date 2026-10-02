@@ -1685,6 +1685,7 @@ func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId st
 	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
+	updateCriteria.IgnoreUnavailable = true
 
 	// Execute the update
 	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
@@ -1766,6 +1767,7 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 	searchSegment.AddFilter("soc_id", socId, false, true, false)
 	updateCriteria.ParsedQuery.AddSegment(searchSegment)
 	updateCriteria.Asynchronous = false
+	updateCriteria.IgnoreUnavailable = true
 
 	// Execute the update
 	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
