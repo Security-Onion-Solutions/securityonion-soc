@@ -7,7 +7,6 @@ package suricata
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"sort"
 	"testing"
@@ -19,68 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 )
-
-func TestM2470ReadStateFile(t *testing.T) {
-	tests := []struct {
-		Name          string
-		Contents      string
-		ShouldMigrate bool
-		Error         error
-	}{
-		{
-			Name:          "Hasn't Run Yet",
-			Contents:      "0",
-			ShouldMigrate: true,
-			Error:         nil,
-		},
-		{
-			Name:          "Has Run",
-			Contents:      "1",
-			ShouldMigrate: false,
-			Error:         nil,
-		},
-		{
-			Name:          "Invalid Contents",
-			Contents:      "2",
-			ShouldMigrate: false,
-			Error:         fmt.Errorf("unexpected state file content: 2"),
-		},
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.Name, func(t *testing.T) {
-			iom := mock.NewMockIOManager(ctrl)
-			iom.EXPECT().ReadFile(idstoolsYaml).Return([]byte(test.Contents), nil)
-
-			e := &SuricataEngine{
-				IOManager: iom,
-			}
-
-			shouldMigrate, err := e.m2470ReadStateFile(idstoolsYaml)
-			assert.Equal(t, test.ShouldMigrate, shouldMigrate)
-			assert.Equal(t, test.Error, err)
-		})
-	}
-}
-
-func TestM2470WriteStateFileSuccess(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	iom := mock.NewMockIOManager(ctrl)
-	iom.EXPECT().WriteFile("stateFile", []byte("1"), fs.FileMode(0644)).Return(nil)
-
-	e := &SuricataEngine{
-		IOManager: iom,
-	}
-
-	err := e.m2470WriteStateFileSuccess("stateFile")
-	assert.NoError(t, err)
-}
 
 func TestM2470LoadEnabledDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)

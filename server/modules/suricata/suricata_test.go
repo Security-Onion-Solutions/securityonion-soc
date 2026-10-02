@@ -3705,7 +3705,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 		defer ctrl.Finish()
 
 		iom := mock.NewMockIOManager(ctrl)
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return(nil, errors.New("directory not found"))
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return(nil, errors.New("directory not found"))
 
 		eng := &SuricataEngine{
 			srv:       &server.Server{},
@@ -3723,7 +3723,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 		defer ctrl.Finish()
 
 		iom := mock.NewMockIOManager(ctrl)
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return([]fs.DirEntry{}, nil)
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return([]fs.DirEntry{}, nil)
 
 		eng := &SuricataEngine{
 			srv:       &server.Server{},
@@ -3743,7 +3743,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 
 		// Create a mock DirEntry
 		mockEntry := &mockDirEntry{name: "suricata-migration-9.9.99", isDir: false}
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return([]fs.DirEntry{mockEntry}, nil)
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return([]fs.DirEntry{mockEntry}, nil)
 
 		eng := &SuricataEngine{
 			srv:        &server.Server{},
@@ -3763,7 +3763,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 		iom := mock.NewMockIOManager(ctrl)
 
 		mockEntry := &mockDirEntry{name: "suricata-migration-9.9.99", isDir: false}
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return([]fs.DirEntry{mockEntry}, nil)
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return([]fs.DirEntry{mockEntry}, nil)
 
 		eng := &SuricataEngine{
 			srv:       &server.Server{},
@@ -3787,7 +3787,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 		iom := mock.NewMockIOManager(ctrl)
 
 		dirEntry := &mockDirEntry{name: "suricata-migration-1.0.0", isDir: true}
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return([]fs.DirEntry{dirEntry}, nil)
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return([]fs.DirEntry{dirEntry}, nil)
 
 		eng := &SuricataEngine{
 			srv:        &server.Server{},
@@ -3807,7 +3807,7 @@ func TestCheckForMigrationsAdditionalCoverage(t *testing.T) {
 		iom := mock.NewMockIOManager(ctrl)
 
 		fileEntry := &mockDirEntry{name: "other-file.txt", isDir: false}
-		iom.EXPECT().ReadDir(DEFAULT_MIGRATIONS_DIR).Return([]fs.DirEntry{fileEntry}, nil)
+		iom.EXPECT().ReadDir(detections.MigrationsDir).Return([]fs.DirEntry{fileEntry}, nil)
 
 		eng := &SuricataEngine{
 			srv:        &server.Server{},
