@@ -560,7 +560,7 @@ func (ac *AssistantCoordinator) broadcastAgentStream(event model.AgentStreamEven
 		return
 	}
 
-	ac.srv.Host.Broadcast(AgentStreamKind, "assistant", event)
+	ac.srv.Host.Broadcast(AgentStreamKind, "automations", event)
 }
 
 // withoutThoughtSignatures copies msg with provider signatures dropped, as the
