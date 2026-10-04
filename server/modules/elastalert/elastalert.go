@@ -56,7 +56,6 @@ const (
 	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
 	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
 	DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE         = "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint"
-	DEFAULT_SIGMA_PIPELINES_DIR                      = "/opt/sensoroni/sigma_pipelines"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
@@ -87,8 +86,6 @@ var ( // treat as constant
 		},
 	}
 )
-
-var errNoSigmaPipelines = errors.New("no sigma pipelines (*.yml)")
 
 var acceptedExtensions = map[string]bool{
 	".yml":  true,
@@ -261,7 +258,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
-	e.sigmaPipelinesDir = module.GetStringDefault(config, "sigmaPipelinesDir", DEFAULT_SIGMA_PIPELINES_DIR)
+	e.sigmaPipelinesDir = module.GetStringDefault(config, "sigmaPipelinesDir", detections.DEFAULT_SIGMA_PIPELINES_DIR)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.enabledSigmaRules = loadEnabledSigmaRules(config)
@@ -655,22 +652,20 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	// If they have, set forceSync to true to regenerate the elastalert rule files.
 	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
 	if err != nil {
+		// without pipelines every rule converts wrong, so keep the current rule files
 		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
 
-		// without pipelines every rule converts wrong, so keep the current rule files
-		if errors.Is(err, errNoSigmaPipelines) {
-			if e.notify {
-				e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
-					Engine: model.EngineNameElastAlert,
-					Status: "error",
-				})
-			}
-
-			return detections.ErrSyncFailed
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
 		}
-	} else {
-		logger.Info("successfully checked the sigma processing pipelines")
+
+		return detections.ErrSyncFailed
 	}
+
+	logger.Info("successfully checked the sigma processing pipelines")
 
 	if regenNeeded {
 		forceSync = true
@@ -955,7 +950,7 @@ func (e *ElastAlertEngine) sigmaPipelineFiles() ([]string, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("%w in %s", errNoSigmaPipelines, e.sigmaPipelinesDir)
+		return nil, fmt.Errorf("no sigma pipelines (*.yml) in %s", e.sigmaPipelinesDir)
 	}
 
 	slices.Sort(files)
@@ -970,17 +965,18 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 	}
 
 	// paths count too: adding, removing or renaming a pipeline is a change
-	hashes := make([]string, 0, len(files))
+	h := sha256.New()
 	for _, file := range files {
-		hash, err := e.hashFile(file)
+		data, err := e.ReadFile(file)
 		if err != nil {
-			return false, "", fmt.Errorf("error hashing file %s: %w", file, err)
+			return false, "", fmt.Errorf("error reading sigma pipeline %s: %w", file, err)
 		}
 
-		hashes = append(hashes, file+":"+hash)
+		fmt.Fprintf(h, "%s\x00%d\x00", file, len(data))
+		h.Write(data)
 	}
 
-	newHash := strings.Join(hashes, "-")
+	newHash := hex.EncodeToString(h.Sum(nil))
 
 	// Read the existing hash from the fingerprint file
 	oldHash, err := e.ReadFile(e.sigmaPipelinesFingerprintFile)
@@ -998,15 +994,6 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 	log.Info("changes detected in sigma processing pipelines")
 
 	return true, newHash, nil
-}
-
-func (e *ElastAlertEngine) hashFile(filePath string) (string, error) {
-	data, err := e.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:]), nil
 }
 
 func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*model.Detection, errMap map[string]error) {

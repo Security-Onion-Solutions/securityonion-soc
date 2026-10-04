@@ -357,7 +357,7 @@ func TestCheckSigmaPipelines(t *testing.T) {
 				expectSigmaPipelines(iom, dir, "sigma_so_pipeline.yml", "sigma_final_pipeline.yml")
 				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data"), nil)
 				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data"), nil)
-				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				hash := "36cc1fc97087863c0d9c968445f3831c57b67c6a6337fd69d0a899e4e2cb073a"
 				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: false,
@@ -370,11 +370,11 @@ func TestCheckSigmaPipelines(t *testing.T) {
 				expectSigmaPipelines(iom, dir, "sigma_final_pipeline.yml", "sigma_so_pipeline.yml")
 				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data1"), nil)
 				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data2"), nil)
-				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:7c563a27ed29beba2a5e9fd515c0b4435065d7c90af52b29a7f96f1ba2f00d7b-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:6d8758d5149c097c5131dd1355b7b8891b2b207384ff8f66a650537c3d2ffd6f"
+				hash := "a different hash"
 				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: true,
-			expectedHash:   "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:5b41362bc82b7f3d56edc5a306db22105707d01ff4819e26faef9724a2d406c9-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:d98cf53e0c8b77c14a96358d5b69584225b4bb9026423cbc2f7b0161894c402c",
+			expectedHash:   "18a8e15a089fc183176dea47c63c17fafbeb6d750d6e959a68b3a56e63d3cc2f",
 			expectedErr:    nil,
 		},
 		{
@@ -384,11 +384,11 @@ func TestCheckSigmaPipelines(t *testing.T) {
 				iom.EXPECT().ReadFile(dir+"/sigma_final_pipeline.yml").Return([]byte("data"), nil)
 				iom.EXPECT().ReadFile(dir+"/sigma_so_pipeline.yml").Return([]byte("data"), nil)
 				iom.EXPECT().ReadFile(dir+"/sub/sigma_extra_pipeline.yml").Return([]byte("data"), nil)
-				hash := "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"
+				hash := "36cc1fc97087863c0d9c968445f3831c57b67c6a6337fd69d0a899e4e2cb073a"
 				iom.EXPECT().ReadFile("/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint").Return([]byte(hash), nil)
 			},
 			expectedChange: true,
-			expectedHash:   "/opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sigma_so_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7-/opt/sensoroni/sigma_pipelines/sub/sigma_extra_pipeline.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+			expectedHash:   "08cec6ac67e5164b32b4d03e12b0c62ebb4cd4541740854a5caaaebc2c7f5e5a",
 			expectedErr:    nil,
 		},
 		{
@@ -399,7 +399,7 @@ func TestCheckSigmaPipelines(t *testing.T) {
 			},
 			expectedChange: false,
 			expectedHash:   "",
-			expectedErr:    fmt.Errorf("error hashing file /opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml: file read error"),
+			expectedErr:    fmt.Errorf("error reading sigma pipeline /opt/sensoroni/sigma_pipelines/sigma_final_pipeline.yml: file read error"),
 		},
 		{
 			name: "Error walking the pipelines folder",
@@ -1918,7 +1918,7 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	// checkSigmaPipelines
 	expectSigmaPipelines(iom, "sigmaPipelinesDir", "a.yml")
 	iom.EXPECT().ReadFile("sigmaPipelinesDir/a.yml").Return([]byte("data"), nil)
-	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("sigmaPipelinesDir/a.yml:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7"), nil)
+	iom.EXPECT().ReadFile("sigmaPipelinesFingerprintFile").Return([]byte("7ee8dbfc8f5ab14d2e772682d441e49f6d6bdfb55418cd5763f655a3dab82de5"), nil)
 	// downloadSigmaPackages
 	iom.EXPECT().MakeRequest(gomock.Any(), false).Return(&http.Response{
 		StatusCode: 200,
