@@ -189,16 +189,19 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 
 	sharedNote := ""
 	rootSessionId := ""
-	if args.ShareChat {
+	if args.ShareChat && srv.Assistantstore != nil {
 		rootSessionId = server.GetRootSessionId(ctx, srv.Assistantstore, req.SessionId)
 	}
 	if rootSessionId != "" {
 		// Shared before sending so the chat is readable by the time anyone follows the link.
-		shared, shareErr := server.ShareSessionTree(ctx, srv.Assistantstore, rootSessionId)
+		tree, shareErr := server.GetSessionTree(ctx, srv.Assistantstore, rootSessionId)
+		if shareErr == nil {
+			shareErr = server.SetSessionTreeShared(ctx, srv.Assistantstore, tree, true)
+		}
 		if shareErr != nil {
 			logger.WithError(shareErr).WithField("rootSessionId", rootSessionId).Warn("unable to share the chat that sent the notification")
-		} else if shared {
-			sharedNote = " This chat is now shared so recipients can open it."
+		} else {
+			sharedNote = " This chat is shared so recipients can open it."
 		}
 
 		if payload.Links == nil {

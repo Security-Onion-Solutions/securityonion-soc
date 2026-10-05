@@ -8,8 +8,6 @@ package server
 
 import (
 	"context"
-	"errors"
-	"slices"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -72,37 +70,6 @@ func GetSessionTree(ctx context.Context, store Assistantstore, sessionId string)
 		model.GetSessionsWithAutomationSessions(true),
 		model.GetSessionsWithDescendants(true),
 		model.GetSessionsWithMessageMeta(false))
-}
-
-// ShareSessionTree shares a session and its sub-sessions, as the manual share action does,
-// for server-side callers such as assistant tools. The write is skipped when every session
-// is already shared; the result reports whether anything changed.
-func ShareSessionTree(ctx context.Context, store Assistantstore, sessionId string) (bool, error) {
-	if store == nil {
-		return false, errors.New("assistant store is not available")
-	}
-
-	tree, err := GetSessionTree(ctx, store, sessionId)
-	if err != nil {
-		return false, err
-	}
-	if len(tree) == 0 {
-		return false, ErrSessionNotFound
-	}
-
-	needsShare := slices.ContainsFunc(tree, func(s *model.AssistantSession) bool {
-		return !slices.Contains(s.Tags, model.SessionTagShared)
-	})
-	if !needsShare {
-		return false, nil
-	}
-
-	err = SetSessionTreeShared(ctx, store, tree, true)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // SetSessionTreeShared adds or removes the shared tag on a session and its delegated
