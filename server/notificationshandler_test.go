@@ -1137,8 +1137,8 @@ func TestPostSendNotification_Link(t *testing.T) {
 		expectedLinks map[string]string
 	}{
 		{name: "no link", expectedCode: http.StatusOK},
-		{name: "relative SOC link", link: " /#/case/abc123 ", expectedCode: http.StatusOK, expectedLinks: map[string]string{"Open link": "/#/case/abc123"}},
-		{name: "absolute link", link: "https://so.example/#/case/abc123", expectedCode: http.StatusOK, expectedLinks: map[string]string{"Open link": "https://so.example/#/case/abc123"}},
+		{name: "relative SOC link", link: " /#/case/abc123 ", expectedCode: http.StatusOK, expectedLinks: map[string]string{"notificationLinkOpen": "/#/case/abc123"}},
+		{name: "absolute link", link: "https://so.example/#/case/abc123", expectedCode: http.StatusOK, expectedLinks: map[string]string{"notificationLinkOpen": "https://so.example/#/case/abc123"}},
 		{name: "unsafe scheme is rejected", link: "javascript:alert(1)", expectedCode: http.StatusBadRequest},
 		{name: "unsupported scheme is rejected", link: "ftp://so.example/file", expectedCode: http.StatusBadRequest},
 		{name: "overlong link is rejected", link: "/" + strings.Repeat("a", 2048), expectedCode: http.StatusBadRequest},

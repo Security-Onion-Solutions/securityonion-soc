@@ -1407,6 +1407,7 @@ const i18n = {
       broadcastToAllUsersHint: 'When no recipients are selected, notification will be sent to everyone.',
       bypassSchedules: 'Bypass Assigned Schedules',
       link: 'Link',
+      notificationLinkOpen: 'Open link',
       notificationLinkHint: 'Optional. A SOC page such as /#/case/<id>, or an http(s) URL.',
       invalidNotificationLink: 'Link must start with http://, https://, or /',
       notificationSent: 'Notification sent successfully!',

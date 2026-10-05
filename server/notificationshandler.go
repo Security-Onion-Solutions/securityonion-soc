@@ -27,7 +27,8 @@ import (
 const (
 	ConfigSettingNotificationDestinations = "soc.config.server.modules.notification.destinations"
 
-	sendLinkLabel     = "Open link"
+	// An i18n key rather than text: the bell translates link labels that name one.
+	sendLinkLabel     = "notificationLinkOpen"
 	maxSendLinkLength = 2048
 )
 
