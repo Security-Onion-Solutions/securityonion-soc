@@ -283,8 +283,8 @@
 
   <v-dialog v-model="confirmDeleteDialog" persistent max-width="390" data-aid="agentstudio_delete_dialog">
     <v-card v-if="deleteTarget">
-      <v-card-title class="headline" role="heading" aria-level="2" v-text="deleteTarget.kind === 'agent' ? i18n.agentStudioDeleteAgentTitle : i18n.agentStudioDeleteAutomationTitle"></v-card-title>
-      <v-card-text v-text="deleteTarget.kind === 'agent' ? i18n.agentStudioDeleteAgentConfirm : i18n.agentStudioDeleteAutomationConfirm"></v-card-text>
+      <v-card-title class="headline" role="heading" aria-level="2" v-text="deleteTitle()"></v-card-title>
+      <v-card-text v-text="deleteConfirmText()"></v-card-text>
       <v-card-text class="font-weight-bold" v-text="deleteTarget.item.displayName || deleteTarget.item.name" data-aid="agentstudio_delete_dialog_name"></v-card-text>
       <v-card-text v-text="i18n.continue"></v-card-text>
       <v-card-actions>
@@ -442,7 +442,7 @@
                                 <v-row>
                                   <v-col cols="12" md="6">
                                     <v-text-field v-if="item.isSystem" :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
-                                    <v-text-field v-else v-model="draftForAgent(item).name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details></v-text-field>
+                                    <v-text-field v-else v-model="draftForAgent(item).name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details :data-aid="'agentstudio_agent_name_' + item.id"></v-text-field>
                                   </v-col>
                                   <v-col cols="12" md="6">
                                     <v-text-field v-if="item.isSystem" :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
@@ -625,7 +625,7 @@
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
                             <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateSkill(item)" :data-aid="'agentstudio_skill_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="removeSkill(item)" :data-aid="'agentstudio_skill_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('skill', item)" :data-aid="'agentstudio_skill_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
                             <v-btn variant="text" :color="skillDirty(item) ? 'primary' : ''" :disabled="!skillDirty(item)" @click.stop="saveSkill(item)" :data-aid="'agentstudio_skill_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
@@ -746,10 +746,10 @@
                     <td><v-chip size="small" variant="tonal">{{ automationKindLabel(item.automationKind) }}</v-chip></td>
                     <td>{{ formatInterval(item.intervalSeconds) }}</td>
                     <td><v-chip size="small" variant="outlined">{{ item.agent }}</v-chip></td>
-                    <td>
+                    <td class="agentstudio-status-cell">
                       <div v-if="automationStatus(item)" class="d-flex align-center ga-2" :data-aid="'agentstudio_automation_status_' + item.id">
                         <v-chip size="small" :color="automationStatusColor(automationStatus(item))" :variant="automationStatusColor(automationStatus(item)) ? 'flat' : 'tonal'">
-                          <v-progress-circular v-if="automationStatus(item) === 'running'" indeterminate size="12" width="2" class="mr-2"></v-progress-circular>
+                          <v-progress-circular v-if="automationStatus(item) === 'running'" indeterminate size="12" width="2" class="mr-2" aria-hidden="true"></v-progress-circular>
                           {{ automationStatusLabel(automationStatus(item)) }}
                         </v-chip>
                         <span class="text-body-small text-medium-emphasis text-no-wrap" :title="i18n.agentStudioAutomationLastRun">{{ automationLastRun(item) }}</span>
@@ -826,7 +826,7 @@
                                 </div>
                                 <!-- Slots, not raw <tr>/<td>, which would close the enclosing expanded-row cell. -->
                                 <v-data-table v-if="automationHistory(item).runs.length" :headers="runHeaders" :items="automationHistory(item).runs" item-value="id" density="compact" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="runItemsPerPage" class="agentstudio-runs" :data-aid="'agentstudio_automation_runs_' + item.id">
-                                  <template #item.startTime="{ value }">{{ value ? $root.formatDateTime(value) : '' }}</template>
+                                  <template #item.starttime="{ value }">{{ value ? $root.formatDateTime(value) : '' }}</template>
                                   <template #item.done="{ item: run }">{{ runItemCount(run, 'done') }}</template>
                                   <template #item.failed="{ item: run }">{{ runItemCount(run, 'failed') }}</template>
                                   <template #item.state="{ item: run }">

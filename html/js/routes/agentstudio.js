@@ -150,7 +150,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       { title: this.$root.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
     ],
     runHeaders: [
-      { title: this.$root.i18n.startTime, value: 'startTime', key: 'startTime', sortable: false },
+      // Lowercase key: the browser lowercases the template's #item.<key> slot name.
+      { title: this.$root.i18n.startTime, value: 'startTime', key: 'starttime', sortable: false },
       { title: this.$root.i18n.stateDone, value: 'done', key: 'done', sortable: false },
       { title: this.$root.i18n.stateFailed, value: 'failed', key: 'failed', sortable: false },
       { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', key: 'state', sortable: false },
@@ -1152,7 +1153,22 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.cancelDelete();
       if (!target) return;
       if (target.kind === 'agent') await this.removeAgent(target.item);
+      else if (target.kind === 'skill') await this.removeSkill(target.item);
       else if (target.kind === 'automation') await this.removeAutomation(target.item);
+    },
+    deleteTitle() {
+      return ({
+        agent: this.i18n.agentStudioDeleteAgentTitle,
+        skill: this.i18n.agentStudioDeleteSkillTitle,
+        automation: this.i18n.agentStudioDeleteAutomationTitle,
+      })[this.deleteTarget.kind];
+    },
+    deleteConfirmText() {
+      return ({
+        agent: this.i18n.agentStudioDeleteAgentConfirm,
+        skill: this.i18n.agentStudioDeleteSkillConfirm,
+        automation: this.i18n.agentStudioDeleteAutomationConfirm,
+      })[this.deleteTarget.kind];
     },
     showAddAutomation() {
       const kind = (this.automationKinds[0] || {}).name || '';

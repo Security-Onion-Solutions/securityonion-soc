@@ -1424,7 +1424,8 @@ dfn {
   opacity: 0.65;
 }
 
-.agentstudio-row-disabled td:last-child {
+.agentstudio-row-disabled td:last-child,
+.agentstudio-row-disabled td.agentstudio-status-cell {
   opacity: 1;
 }
 
