@@ -26,9 +26,6 @@ import (
 
 const chatLinkLabel = "View chat"
 
-// The approval card shows this input, when a tool declares it, to explain the call.
-const approvalMessageParam = "approvalMessage"
-
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
 

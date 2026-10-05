@@ -43,6 +43,8 @@ func TestAckAlertsTool_GetSchema(t *testing.T) {
 	assert.Contains(t, schema.Json.Properties, "range_format")
 	assert.Equal(t, "string", schema.Json.Properties["range_format"].Type)
 	assert.Contains(t, schema.Json.Required, "search_filter")
+	assert.Contains(t, schema.Json.Required, approvalMessageParam)
+	assert.Equal(t, "string", schema.Json.Properties[approvalMessageParam].Type)
 }
 
 func TestAckAlertsTool_Execute(t *testing.T) {

@@ -394,6 +394,8 @@ func TestToggleDetectionsTool_GetSchema(t *testing.T) {
 	assert.NotNil(t, schema.Json)
 	assert.Equal(t, "object", schema.Json.Type)
 	assert.Contains(t, schema.Json.Required, "search_filter")
+	assert.Contains(t, schema.Json.Required, approvalMessageParam)
+	assert.Equal(t, "string", schema.Json.Properties[approvalMessageParam].Type)
 
 	// Check that all expected properties are present
 	expectedProperties := []string{"search_filter", "enable", "range_start", "range_end", "range_format"}

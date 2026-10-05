@@ -22,3 +22,6 @@ type Tool interface {
 //go:generate mockgen -destination mock/mock_tool.go -package mock . Tool
 
 var knownTools = map[string]Tool{}
+
+// The approval card shows this input, when a tool declares it, to explain the call.
+const approvalMessageParam = "approvalMessage"

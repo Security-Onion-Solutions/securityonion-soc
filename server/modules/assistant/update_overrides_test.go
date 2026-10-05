@@ -43,6 +43,8 @@ func TestUpdateOverridesTool_GetSchema(t *testing.T) {
 	assert.Contains(t, schema.Json.Properties, "soc_id")
 	assert.Contains(t, schema.Json.Properties, "public_id")
 	assert.Contains(t, schema.Json.Properties, "overrides")
+	assert.Equal(t, "string", schema.Json.Properties[approvalMessageParam].Type)
+	assert.Equal(t, []string{approvalMessageParam}, schema.Json.Required)
 }
 
 func TestUpdateOverridesTool_Execute(t *testing.T) {
