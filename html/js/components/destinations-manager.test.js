@@ -228,6 +228,7 @@ test('showSendDialog with destination initializes form with destination defaults
   expect(comp.sendForm.severity).toBe('info');
   expect(comp.sendForm.recipients).toEqual([]);
   expect(comp.sendForm.bypassSchedules).toBe(false);
+  expect(comp.sendForm.link).toBe('');
   expect(comp.getSendDialogTitle()).toBe('Send Notification to SOC Bell');
 });
 
@@ -240,6 +241,7 @@ test('showSendDialog without destination initializes form with global defaults',
   expect(comp.sendForm.severity).toBe('info');
   expect(comp.sendForm.recipients).toEqual([]);
   expect(comp.sendForm.bypassSchedules).toBe(false);
+  expect(comp.sendForm.link).toBe('');
   expect(comp.getSendDialogTitle()).toBe('Send Notification');
 });
 
@@ -287,6 +289,29 @@ test('submitSendNotification dispatches global notification when destination is 
   expect(comp.sendDialog).toBe(false);
   expect(comp.$root.notification).toBe(true);
   expect(comp.$root.notificationMessage).toBe('Notification sent successfully!');
+});
+
+test('submitSendNotification includes a trimmed link when one is given', async () => {
+  comp.showSendDialog(null);
+  comp.sendForm.title = 'Case opened';
+  comp.sendForm.link = '  /#/case/abc123  ';
+
+  const postMock = mockPapi('post', { count: 1 });
+  await comp.submitSendNotification();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/send', expect.objectContaining({
+    title: 'Case opened',
+    link: '/#/case/abc123',
+  }));
+});
+
+test('validateSendLink accepts empty, http(s), and SOC-relative links only', () => {
+  expect(comp.validateSendLink('')).toBe(true);
+  expect(comp.validateSendLink(null)).toBe(true);
+  expect(comp.validateSendLink('/#/case/abc123')).toBe(true);
+  expect(comp.validateSendLink('https://so.example/#/case/1')).toBe(true);
+  expect(comp.validateSendLink('javascript:alert(1)')).toBe(comp.i18n.invalidNotificationLink);
+  expect(comp.validateSendLink('ftp://so.example')).toBe(comp.i18n.invalidNotificationLink);
 });
 
 test('submitSendNotification shows warning when count is 0', async () => {

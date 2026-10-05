@@ -1129,6 +1129,50 @@ func TestPostSendNotification_Global(t *testing.T) {
 	assert.Empty(t, fakeNotif.lastSentDestinations)
 }
 
+func TestPostSendNotification_Link(t *testing.T) {
+	testCases := []struct {
+		name          string
+		link          string
+		expectedCode  int
+		expectedLinks map[string]string
+	}{
+		{name: "no link", expectedCode: http.StatusOK},
+		{name: "relative SOC link", link: " /#/case/abc123 ", expectedCode: http.StatusOK, expectedLinks: map[string]string{"Open link": "/#/case/abc123"}},
+		{name: "absolute link", link: "https://so.example/#/case/abc123", expectedCode: http.StatusOK, expectedLinks: map[string]string{"Open link": "https://so.example/#/case/abc123"}},
+		{name: "unsafe scheme is rejected", link: "javascript:alert(1)", expectedCode: http.StatusBadRequest},
+		{name: "unsupported scheme is rejected", link: "ftp://so.example/file", expectedCode: http.StatusBadRequest},
+		{name: "overlong link is rejected", link: "/" + strings.Repeat("a", 2048), expectedCode: http.StatusBadRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer licensing.Shutdown()
+			licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+			srv := NewFakeAuthorizedServer(nil)
+			fakeNotif := &fakeTestNotifier{}
+			srv.Notifier = fakeNotif
+			h := NewNotificationHandler(srv)
+
+			bodyJSON, _ := json.Marshal(map[string]string{"title": "Case opened", "link": tc.link})
+			r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewReader(bodyJSON))
+			ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+			ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+			r = r.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+			h.PostSendNotification(w, r)
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			if tc.expectedCode != http.StatusOK {
+				assert.Nil(t, fakeNotif.lastSentPayload)
+				return
+			}
+			assert.Equal(t, tc.expectedLinks, fakeNotif.lastSentPayload.Links)
+		})
+	}
+}
+
 func TestPostSendNotification_MissingTitle_ReturnsBadRequest(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")

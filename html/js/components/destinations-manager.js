@@ -49,6 +49,7 @@ components.push({
           severity: 'info',
           recipients: [],
           bypassSchedules: false,
+          link: '',
         },
         form: {
           isEdit: false,
@@ -348,6 +349,7 @@ components.push({
           severity: 'info',
           recipients: [],
           bypassSchedules: false,
+          link: '',
         };
         this.sendDialog = true;
       },
@@ -357,6 +359,10 @@ components.push({
           return (this.i18n.sendDestinationNotification).replace('{name}', name);
         }
         return this.i18n.sendNotification;
+      },
+      validateSendLink(value) {
+        const link = (value || '').trim();
+        return !link || /^(https?:\/\/|\/)/i.test(link) || this.i18n.invalidNotificationLink;
       },
       async submitSendNotification() {
         if (!this.sendForm.title || !this.sendForm.title.trim()) {
@@ -372,6 +378,10 @@ components.push({
             recipients: Array.isArray(this.sendForm.recipients) ? this.sendForm.recipients : [],
             bypassSchedules: Boolean(this.sendForm.bypassSchedules),
           };
+          const link = (this.sendForm.link || '').trim();
+          if (link) {
+            payload.link = link;
+          }
 
           let url = 'notifications/send';
           if (this.sendTargetDestination && this.sendTargetDestination.id) {

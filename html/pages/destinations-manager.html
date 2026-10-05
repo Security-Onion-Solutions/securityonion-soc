@@ -169,6 +169,9 @@
           <v-col cols="12">
             <v-textarea v-model="sendForm.summary" :label="i18n.summary" rows="3" maxlength="4000" counter="4000" data-aid="send_notification_summary"></v-textarea>
           </v-col>
+          <v-col cols="12">
+            <v-text-field v-model="sendForm.link" :label="i18n.link" :hint="i18n.notificationLinkHint" persistent-hint :rules="[validateSendLink]" maxlength="2048" clearable data-aid="send_notification_link"></v-text-field>
+          </v-col>
           <v-col cols="12" sm="6">
             <v-select v-model="sendForm.severity" :items="severityOptions" :label="i18n.severity" density="comfortable" data-aid="send_notification_severity"></v-select>
           </v-col>
@@ -203,7 +206,7 @@
       <v-card-actions class="pa-4">
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="sendDialog = false" data-aid="send_notification_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn color="primary" variant="flat" :disabled="!sendForm.title || !sendForm.title.trim()" :loading="isSending" @click="submitSendNotification()" data-aid="send_notification_submit">{{ i18n.send }}</v-btn>
+        <v-btn color="primary" variant="flat" :disabled="!sendForm.title || !sendForm.title.trim() || validateSendLink(sendForm.link) !== true" :loading="isSending" @click="submitSendNotification()" data-aid="send_notification_submit">{{ i18n.send }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

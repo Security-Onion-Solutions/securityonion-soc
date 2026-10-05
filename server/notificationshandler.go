@@ -20,11 +20,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	notifydb "github.com/security-onion-solutions/securityonion-soc/server/modules/notify/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
 const (
 	ConfigSettingNotificationDestinations = "soc.config.server.modules.notification.destinations"
+
+	sendLinkLabel     = "Open link"
+	maxSendLinkLength = 2048
 )
 
 type NotificationHandler struct {
@@ -277,6 +281,7 @@ type SendNotificationResponse struct {
 // @Param        summary         query  string  false  "Notification summary"
 // @Param        severity        query  string  false  "Notification severity"
 // @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
+// @Param        link            query  string  false  "Optional http(s) or SOC-relative URL shown as a link on the notification"
 // @Produce      json
 // @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
 // @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
@@ -317,6 +322,7 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 		Severity        string   `json:"severity"`
 		Recipients      []string `json:"recipients"`
 		BypassSchedules bool     `json:"bypassSchedules"`
+		Link            string   `json:"link"`
 	}
 
 	if r.Body != nil && r.ContentLength > 0 {
@@ -335,6 +341,9 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 	}
 	if req.Severity == "" {
 		req.Severity = r.URL.Query().Get("severity")
+	}
+	if req.Link == "" {
+		req.Link = r.URL.Query().Get("link")
 	}
 	if !req.BypassSchedules && r.URL.Query().Get("bypassSchedules") == "true" {
 		req.BypassSchedules = true
@@ -367,6 +376,19 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 		return
 	}
 
+	var links map[string]string
+	if link := strings.TrimSpace(req.Link); link != "" {
+		if len(link) > maxSendLinkLength {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("link exceeds maximum allowed length"))
+			return
+		}
+		links = notifydb.SanitizeLinks(map[string]string{sendLinkLabel: link})
+		if len(links) == 0 {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("link must be an http(s) or SOC-relative URL"))
+			return
+		}
+	}
+
 	severity := strings.ToLower(strings.TrimSpace(req.Severity))
 	if severity == "" {
 		severity = model.NotificationSeverityInfo
@@ -387,6 +409,7 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 		Timestamp:       time.Now().UTC(),
 		Recipients:      req.Recipients,
 		BypassSchedules: req.BypassSchedules,
+		Links:           links,
 	}
 
 	var count int
