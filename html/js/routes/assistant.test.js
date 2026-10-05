@@ -5616,6 +5616,14 @@ test('a new investigation\'s missing session starts the investigation; a denied 
 });
 
 // Auto-approval functionality tests
+test('toolApprovalNotice shows the approvalMessage the model wrote for the call', () => {
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: ' Sends an alert and shares this chat. ' } })).toBe('Sends an alert and shares this chat.');
+  expect(comp.toolApprovalNotice({ name: 'query_events', input: { query: '*' } })).toBe('');
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: 5 } })).toBe('');
+  expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('');
+  expect(comp.toolApprovalNotice(null)).toBe('');
+});
+
 test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   

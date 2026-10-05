@@ -14,9 +14,11 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestSendNotificationTool_GetName(t *testing.T) {
@@ -42,6 +44,10 @@ func TestSendNotificationTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "string", schema.Json.Properties["severity"].Type)
 	assert.Equal(t, "object", schema.Json.Properties["fields"].Type)
 	assert.Equal(t, "object", schema.Json.Properties["links"].Type)
+
+	assert.Equal(t, "string", schema.Json.Properties["approvalMessage"].Type)
+	assert.Equal(t, "boolean", schema.Json.Properties["share_chat"].Type)
+	assert.Equal(t, false, schema.Json.Properties["share_chat"].Default)
 
 	assert.ElementsMatch(t, []string{"title", "summary"}, schema.Json.Required)
 	assert.Equal(t, model.NotificationSeverityInfo, schema.Json.Properties["severity"].Default)
@@ -234,6 +240,173 @@ func TestSendNotificationTool_Execute_TrimsAndPropagatesContext(t *testing.T) {
 
 	assert.Len(t, fakeNotifier.InputContexts, 1)
 	assert.Equal(t, "test-user-123", fakeNotifier.InputContexts[0].Value(web.ContextKeyRequestorId))
+}
+
+// sessionTreeStore serves GetSessions from sessions keyed by id, honoring the
+// descendants option the way the elastic store does: root first, then sub-sessions.
+func sessionTreeStore(ctrl *gomock.Controller, sessions []*model.AssistantSession, getErr error) *servermock.MockAssistantstore {
+	store := servermock.NewMockAssistantstore(ctrl)
+	store.EXPECT().GetSessions(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, opts ...model.GetSessionsOpt) ([]*model.AssistantSession, error) {
+			if getErr != nil {
+				return nil, getErr
+			}
+
+			o := &model.GetSessionsOpts{}
+			for _, opt := range opts {
+				opt(o)
+			}
+
+			var out []*model.AssistantSession
+			for _, id := range o.SessionIds() {
+				for _, s := range sessions {
+					if s.SessionId == id {
+						out = append(out, s)
+					}
+				}
+			}
+			if o.Descendants() {
+				for i := 0; i < len(out); i++ {
+					for _, s := range sessions {
+						if s.ParentSessionId == out[i].SessionId {
+							out = append(out, s)
+						}
+					}
+				}
+			}
+
+			return out, nil
+		}).AnyTimes()
+
+	return store
+}
+
+func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
+	tree := func(rootTags ...string) []*model.AssistantSession {
+		return []*model.AssistantSession{
+			{SessionId: "root", Tags: rootTags},
+			{SessionId: "child", ParentSessionId: "root", Tags: rootTags},
+			{SessionId: "grand", ParentSessionId: "child", Tags: rootTags},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		sessionId     string
+		params        string
+		sessions      []*model.AssistantSession
+		getErr        error
+		toggleErr     error
+		expectToggle  []string
+		expectedLinks map[string]string
+		sharedNote    bool
+		noStore       bool
+	}{
+		{
+			name:          "top-level chat is shared with its sub-sessions and linked",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      tree(),
+			expectToggle:  []string{"root", "child", "grand"},
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+			sharedNote:    true,
+		},
+		{
+			name:          "sub-agent session resolves to its top-level chat",
+			sessionId:     "grand",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      tree(),
+			expectToggle:  []string{"root", "child", "grand"},
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+			sharedNote:    true,
+		},
+		{
+			name:          "already shared chat is not re-tagged",
+			sessionId:     "child",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      tree(model.SessionTagShared),
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+		},
+		{
+			name:         "model cannot replace the chat link but keeps its own",
+			sessionId:    "root",
+			params:       `{"title": "T", "summary": "S", "share_chat": true, "links": {"💬": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
+			sessions:     tree(),
+			expectToggle: []string{"root", "child", "grand"},
+			expectedLinks: map[string]string{
+				chatLinkLabel: "/#/assistant/root",
+				"View alert":  "/#/alerts?q=_id:abc",
+			},
+			sharedNote: true,
+		},
+		{
+			name:          "share failure still sends the notification",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      tree(),
+			toggleErr:     assert.AnError,
+			expectToggle:  []string{"root", "child", "grand"},
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+		},
+		{
+			name:          "lookup failure falls back to the given session",
+			sessionId:     "child",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			getErr:        assert.AnError,
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/child"},
+		},
+		{
+			name:      "chat stays private and unlinked unless share_chat is set",
+			sessionId: "root",
+			params:    `{"title": "T", "summary": "S", "links": {"View alert": "/#/alerts?q=_id:abc"}}`,
+			noStore:   true,
+			expectedLinks: map[string]string{
+				"View alert": "/#/alerts?q=_id:abc",
+			},
+		},
+		{
+			name:   "no session means no share and no link",
+			params: `{"title": "T", "summary": "S", "share_chat": true}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer licensing.Shutdown()
+			licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+			ctrl := gomock.NewController(t)
+			fakeNotifier := server.NewFakeNotifier()
+			mockServer := &server.Server{
+				Notifier: fakeNotifier,
+				Config:   &config.ServerConfig{DeveloperEnabled: true},
+			}
+
+			if tc.sessionId != "" && !tc.noStore {
+				store := sessionTreeStore(ctrl, tc.sessions, tc.getErr)
+				if tc.expectToggle != nil {
+					store.EXPECT().ToggleSessionsTag(gomock.Any(), tc.expectToggle, model.SessionTagShared, true).Return(tc.toggleErr)
+				}
+				mockServer.Assistantstore = store
+			} else {
+				mockServer.Assistantstore = servermock.NewMockAssistantstore(ctrl)
+			}
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+
+			tool := &SendNotificationTool{}
+			result, err := tool.Execute(ctx, mockServer, &model.ToolRequest{SessionId: tc.sessionId, Params: json.RawMessage(tc.params)})
+
+			assert.NoError(t, err)
+			assert.Len(t, fakeNotifier.InputPayloads, 1)
+			assert.Equal(t, tc.expectedLinks, fakeNotifier.InputPayloads[0].Links)
+			if tc.sharedNote {
+				assert.Contains(t, result.Result, "now shared")
+			} else {
+				assert.NotContains(t, result.Result, "now shared")
+			}
+		})
+	}
 }
 
 func TestNormalizeNotificationSeverity(t *testing.T) {
