@@ -47,7 +47,7 @@ func TestSendNotificationTool_GetSchema(t *testing.T) {
 
 	assert.Equal(t, "string", schema.Json.Properties["approvalMessage"].Type)
 
-	assert.ElementsMatch(t, []string{"title", "summary", "approvalMessage"}, schema.Json.Required)
+	assert.ElementsMatch(t, []string{"title", "summary"}, schema.Json.Required)
 	assert.Equal(t, model.NotificationSeverityInfo, schema.Json.Properties["severity"].Default)
 
 	// ToolSchemaProperty has no enum field, so the description is the only thing keeping

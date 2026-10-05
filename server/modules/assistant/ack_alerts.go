@@ -42,10 +42,6 @@ func (t *AckAlertsTool) GetSchema() model.JSONSchema {
 		Json: &model.ToolSchema{
 			Type: "object",
 			Properties: map[string]model.ToolSchemaProperty{
-				approvalMessageParam: {
-					Type:        "string",
-					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say which alerts will be acknowledged and how broad the query is, for example every alert matching a rule name on a host over the date range.",
-				},
 				"search_filter": {
 					Type:        "string",
 					Description: `OQL search filter to find matching events (e.g., "tags:alert AND rule.uuid:xyz")`,
@@ -64,7 +60,7 @@ func (t *AckAlertsTool) GetSchema() model.JSONSchema {
 					Type: "string",
 				},
 			},
-			Required: []string{"search_filter", approvalMessageParam},
+			Required: []string{"search_filter"},
 		},
 	}
 }

@@ -48,10 +48,6 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 		Json: &model.ToolSchema{
 			Type: "object",
 			Properties: map[string]model.ToolSchemaProperty{
-				approvalMessageParam: {
-					Type:        "string",
-					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say which detection is affected and what changes to its overrides, naming any override that will be removed because it is left out of the array.",
-				},
 				"soc_id": {
 					Type:        "string",
 					Description: `Server-assigned detection ID (so_detection.id field).`,
@@ -112,7 +108,6 @@ func (t *UpdateOverridesTool) GetSchema() model.JSONSchema {
 					Description: `COMPLETE overrides array for the detection (from so_detection.overrides). Must include ALL overrides, even unchanged ones.`,
 				},
 			},
-			Required: []string{approvalMessageParam},
 		},
 	}
 }

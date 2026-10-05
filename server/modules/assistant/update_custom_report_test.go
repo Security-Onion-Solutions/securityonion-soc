@@ -66,8 +66,6 @@ func TestUpdateCustomReportTool_Metadata(t *testing.T) {
 	assert.Contains(t, schema.Json.Properties, "content")
 	assert.Contains(t, schema.Json.Properties, "filename")
 	assert.Contains(t, schema.Json.Required, "content")
-	assert.Contains(t, schema.Json.Required, approvalMessageParam)
-	assert.Equal(t, "string", schema.Json.Properties[approvalMessageParam].Type)
 }
 
 func TestUpdateCustomReportTool_Execute(t *testing.T) {

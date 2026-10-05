@@ -40,10 +40,6 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 		Json: &model.ToolSchema{
 			Type: "object",
 			Properties: map[string]model.ToolSchemaProperty{
-				approvalMessageParam: {
-					Type:        "string",
-					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say whether detections will be enabled or disabled, which detections the filter matches, and that the change applies across the whole grid.",
-				},
 				"search_filter": {
 					Type:        "string",
 					Description: "OQL query to find detections. Search any relevant fields available in the detection schema.",
@@ -66,7 +62,7 @@ func (t *ToggleDetectionsTool) GetSchema() model.JSONSchema {
 					Description: "Maximum detections to return. Only use when user specifies a limit (e.g., \"enable the 5 most recent suricata detections\").",
 				},
 			},
-			Required: []string{"search_filter", approvalMessageParam},
+			Required: []string{"search_filter"},
 		},
 	}
 }

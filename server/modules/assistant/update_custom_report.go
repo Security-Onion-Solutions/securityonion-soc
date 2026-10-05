@@ -46,10 +46,6 @@ func (t *UpdateCustomReportTool) GetSchema() model.JSONSchema {
 		Json: &model.ToolSchema{
 			Type: "object",
 			Properties: map[string]model.ToolSchemaProperty{
-				approvalMessageParam: {
-					Type:        "string",
-					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say which report slot will be written or cleared and that the change is saved as a grid setting and deployed to the grid.",
-				},
 				"content": {
 					Type: "string",
 					Description: `The complete report template as Markdown, in three parts.
@@ -79,7 +75,7 @@ func (t *UpdateCustomReportTool) GetSchema() model.JSONSchema {
 						"Use query_reports to list them.",
 				},
 			},
-			Required: []string{"content", approvalMessageParam},
+			Required: []string{"content"},
 		},
 	}
 }

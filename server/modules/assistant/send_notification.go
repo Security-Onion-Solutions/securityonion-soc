@@ -26,6 +26,9 @@ import (
 
 const chatLinkLabel = "View chat"
 
+// The approval card shows this input, when a tool declares it, to explain the call.
+const approvalMessageParam = "approvalMessage"
+
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
 
@@ -87,7 +90,7 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"}). A link to this chat is added automatically.`,
 				},
 			},
-			Required: []string{"title", "summary", approvalMessageParam},
+			Required: []string{"title", "summary"},
 		},
 	}
 }
