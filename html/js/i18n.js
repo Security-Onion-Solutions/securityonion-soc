@@ -1344,6 +1344,7 @@ const i18n = {
       noActivityYet: 'No activity yet',
       noData: 'No information is currently available.',
       noNotifications: 'No notifications',
+      notificationLinkChat: 'View chat',
       notificationsTruncatedNote: 'The list has been truncated due to excessive notifications.',
       noRefresh: 'No refresh',
       nodeDashboard: 'View Node Metrics',

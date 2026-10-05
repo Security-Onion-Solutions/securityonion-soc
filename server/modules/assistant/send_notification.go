@@ -24,7 +24,8 @@ import (
 	"github.com/google/uuid"
 )
 
-const chatLinkLabel = "View chat"
+// An i18n key rather than text: the bell translates link labels that name one.
+const chatLinkLabel = "notificationLinkChat"
 
 // The approval card shows this input, when a tool declares it, to explain the call.
 const approvalMessageParam = "approvalMessage"

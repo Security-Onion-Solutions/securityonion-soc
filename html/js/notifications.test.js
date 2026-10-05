@@ -57,6 +57,16 @@ describe('notifications.js', () => {
     });
   });
 
+  describe('deepLinkLabel', () => {
+    it('translates labels that name an i18n key and leaves others as sent', () => {
+      const root = { i18n: { notificationLinkChat: 'View chat', dismiss: 'Dismiss' } };
+      expect(socNotifications.deepLinkLabel.call(root, 'notificationLinkChat')).toBe('View chat');
+      expect(socNotifications.deepLinkLabel.call(root, 'View alert')).toBe('View alert');
+      expect(socNotifications.deepLinkLabel.call(root, '👁')).toBe('👁');
+      expect(socNotifications.deepLinkLabel.call({}, 'notificationLinkChat')).toBe('notificationLinkChat');
+    });
+  });
+
   describe('sanitizeDeepLink', () => {
     it('returns # for empty, null, or undefined url', () => {
       expect(socNotifications.sanitizeDeepLink('')).toBe('#');
