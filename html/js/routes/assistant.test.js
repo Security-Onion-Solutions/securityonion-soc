@@ -5469,6 +5469,41 @@ test('an automated session is read-only and shows the continue banner', () => {
   expect(comp.isAutomatedSession()).toBe(false);
 });
 
+test('reloading the chat list keeps an open automated session read-only', async () => {
+  comp.currentChatId = 'auto-1';
+  comp.chatHistoryById = { 'auto-1': { sessionId: 'auto-1', tags: ['automation', 'shared'] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(comp.isAutomatedSession()).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(true);
+  expect(comp.chatHistory.map(s => s.sessionId)).toEqual([fakeSessionId]);
+});
+
+test('reloading the chat list keeps another user\'s open session read-only', async () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'theirs';
+  comp.chatHistoryById = { theirs: { sessionId: 'theirs', userId: 'someone-else', tags: ['shared'] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(comp.isOthersSession()).toBe(true);
+  expect(comp.chatHistory.map(s => s.sessionId)).toEqual([fakeSessionId]);
+});
+
+test('reloading the chat list drops an own session the server no longer returns', async () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'mine';
+  comp.chatHistoryById = { mine: { sessionId: 'mine', userId: 'me', tags: [] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(Object.keys(comp.chatHistoryById)).toEqual([fakeSessionId]);
+});
+
 test('continuing a real session clones it through the server and opens the copy', async () => {
   comp.currentChatId = 'real-1';
   comp.$router.push = jest.fn();

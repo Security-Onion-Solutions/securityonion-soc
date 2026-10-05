@@ -194,6 +194,8 @@ globalThis.AssistantSessions = (function() {
       try {
         const response = await this.$root.papi.get('/assistant/sessions');
         if (response.data && Array.isArray(response.data)) {
+          // The list omits automation and other users' sessions; keep the open one so it stays read-only.
+          const readOnlyCurrent = this.isReadOnlySession() ? this.chatHistoryById[this.currentChatId] : null;
           this.chatHistoryById = {};
           this.chatHistory = response.data.map(session => {
             let s = {
@@ -209,6 +211,9 @@ globalThis.AssistantSessions = (function() {
 
             return s;
           });
+          if (readOnlyCurrent && !this.chatHistoryById[this.currentChatId]) {
+            this.chatHistoryById[this.currentChatId] = readOnlyCurrent;
+          }
         } else {
           this.chatHistory = [];
         }
