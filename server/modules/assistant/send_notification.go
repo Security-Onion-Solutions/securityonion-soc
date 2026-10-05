@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,9 +28,6 @@ const chatLinkLabel = "💬"
 
 // The approval card shows this input, when a tool declares it, to explain the call.
 const approvalMessageParam = "approvalMessage"
-
-// Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
-const maxSessionAncestors = 16
 
 func init() {
 	t := &SendNotificationTool{}
@@ -194,11 +190,11 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	sharedNote := ""
 	rootSessionId := ""
 	if args.ShareChat {
-		rootSessionId = resolveRootSessionId(ctx, srv, req.SessionId)
+		rootSessionId = server.GetRootSessionId(ctx, srv.Assistantstore, req.SessionId)
 	}
 	if rootSessionId != "" {
 		// Shared before sending so the chat is readable by the time anyone follows the link.
-		shared, shareErr := shareSessionTree(ctx, srv, rootSessionId)
+		shared, shareErr := server.ShareSessionTree(ctx, srv.Assistantstore, rootSessionId)
 		if shareErr != nil {
 			logger.WithError(shareErr).WithField("rootSessionId", rootSessionId).Warn("unable to share the chat that sent the notification")
 		} else if shared {
@@ -221,60 +217,6 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	result.Result = fmt.Sprintf("Notification %q was submitted with severity %q (id %s).%s%s", title, severity, payload.ID, severityNote, sharedNote)
 
 	return result, nil
-}
-
-// resolveRootSessionId walks a delegated sub-agent's session up to the top-level chat,
-// which is what a person opens. A failed lookup stops at the last session resolved.
-func resolveRootSessionId(ctx context.Context, srv *server.Server, sessionId string) string {
-	if sessionId == "" || srv.Assistantstore == nil {
-		return sessionId
-	}
-
-	current := sessionId
-	for range maxSessionAncestors {
-		sessions, err := srv.Assistantstore.GetSessions(ctx,
-			model.GetSessionsWithSessionId(current),
-			model.GetSessionsWithIncludeDeleted(true),
-			model.GetSessionsWithMessageMeta(false),
-			model.GetSessionsWithAutomationSessions(true))
-		if err != nil || len(sessions) == 0 || sessions[0].ParentSessionId == "" {
-			return current
-		}
-		current = sessions[0].ParentSessionId
-	}
-
-	return current
-}
-
-// shareSessionTree shares the chat and its sub-sessions as the manual share action does,
-// skipping the write when they are all shared already. It reports whether anything changed.
-func shareSessionTree(ctx context.Context, srv *server.Server, rootSessionId string) (bool, error) {
-	if srv.Assistantstore == nil {
-		return false, errors.New("assistant store is not available")
-	}
-
-	sessions, err := srv.Assistantstore.GetSessions(ctx,
-		model.GetSessionsWithSessionId(rootSessionId),
-		model.GetSessionsWithAutomationSessions(true),
-		model.GetSessionsWithDescendants(true),
-		model.GetSessionsWithMessageMeta(false))
-	if err != nil {
-		return false, err
-	}
-
-	needsShare := slices.ContainsFunc(sessions, func(s *model.AssistantSession) bool {
-		return !slices.Contains(s.Tags, model.SessionTagShared)
-	})
-	if !needsShare {
-		return false, nil
-	}
-
-	err = server.SetSessionTreeShared(ctx, srv.Assistantstore, sessions, true)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // normalizeNotificationSeverity maps whatever the model sent onto a known severity, falling

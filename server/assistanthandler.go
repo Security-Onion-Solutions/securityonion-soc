@@ -826,7 +826,12 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Descendants come back after the root so sharing can cascade to them below.
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithDescendants(updateReq.Tag == model.SessionTagShared), model.GetSessionsWithMessageMeta(false))
+	var sessions []*model.AssistantSession
+	if updateReq.Tag == model.SessionTagShared {
+		sessions, err = GetSessionTree(ctx, h.server.Assistantstore, sessionId)
+	} else {
+		sessions, err = h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithMessageMeta(false))
+	}
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)

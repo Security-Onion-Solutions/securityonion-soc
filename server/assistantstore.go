@@ -8,6 +8,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -36,6 +38,72 @@ type Assistantstore interface {
 }
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore
+
+// Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
+const maxSessionAncestors = 16
+
+// GetRootSessionId walks a delegated sub-agent's session up to the top-level chat, which
+// is what a person opens. A failed lookup stops at the last session resolved.
+func GetRootSessionId(ctx context.Context, store Assistantstore, sessionId string) string {
+	if sessionId == "" || store == nil {
+		return sessionId
+	}
+
+	current := sessionId
+	for range maxSessionAncestors {
+		sessions, err := store.GetSessions(ctx,
+			model.GetSessionsWithSessionId(current),
+			model.GetSessionsWithIncludeDeleted(true),
+			model.GetSessionsWithMessageMeta(false),
+			model.GetSessionsWithAutomationSessions(true))
+		if err != nil || len(sessions) == 0 || sessions[0].ParentSessionId == "" {
+			return current
+		}
+		current = sessions[0].ParentSessionId
+	}
+
+	return current
+}
+
+// GetSessionTree returns the session followed by every delegated sub-session.
+func GetSessionTree(ctx context.Context, store Assistantstore, sessionId string) ([]*model.AssistantSession, error) {
+	return store.GetSessions(ctx,
+		model.GetSessionsWithSessionId(sessionId),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithDescendants(true),
+		model.GetSessionsWithMessageMeta(false))
+}
+
+// ShareSessionTree shares a session and its sub-sessions, as the manual share action does,
+// for server-side callers such as assistant tools. The write is skipped when every session
+// is already shared; the result reports whether anything changed.
+func ShareSessionTree(ctx context.Context, store Assistantstore, sessionId string) (bool, error) {
+	if store == nil {
+		return false, errors.New("assistant store is not available")
+	}
+
+	tree, err := GetSessionTree(ctx, store, sessionId)
+	if err != nil {
+		return false, err
+	}
+	if len(tree) == 0 {
+		return false, ErrSessionNotFound
+	}
+
+	needsShare := slices.ContainsFunc(tree, func(s *model.AssistantSession) bool {
+		return !slices.Contains(s.Tags, model.SessionTagShared)
+	})
+	if !needsShare {
+		return false, nil
+	}
+
+	err = SetSessionTreeShared(ctx, store, tree, true)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
 
 // SetSessionTreeShared adds or removes the shared tag on a session and its delegated
 // sub-sessions in one write. A shared session is readable through its sub-sessions too,
