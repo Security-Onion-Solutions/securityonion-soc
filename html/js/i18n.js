@@ -468,6 +468,8 @@ const i18n = {
       agentStudioDeleteAgentConfirm: 'You are about to permanently delete this agent:',
       agentStudioDeleteAutomationTitle: 'Delete Automation',
       agentStudioDeleteAutomationConfirm: 'You are about to permanently delete this automation:',
+      agentStudioDeleteSkillTitle: 'Delete Skill',
+      agentStudioDeleteSkillConfirm: 'You are about to permanently delete this skill:',
       agentStudioAutomations: 'Automations',
       agentStudioSystemAutomationHelp: 'Provided by Security Onion. It can be enabled or disabled and given a different handling agent, but not removed.',
       agentStudioNewAutomation: 'New Automation',

@@ -2045,6 +2045,21 @@ test('deleting an agent goes through the same confirmation', async () => {
   expect(comp.agents.map(a => a.name)).toEqual(['Coordinator']);
 });
 
+test('deleting a skill goes through the same confirmation', async () => {
+  comp.initAssistant(agenticParams());
+  const del = mockPapi('delete', {});
+  const skill = comp.skills.find(s => s.name === 'cases');
+
+  comp.confirmDelete('skill', skill);
+  expect(del).not.toHaveBeenCalled();
+  expect(comp.deleteTitle()).toBe(comp.i18n.agentStudioDeleteSkillTitle);
+  expect(comp.deleteConfirmText()).toBe(comp.i18n.agentStudioDeleteSkillConfirm);
+
+  await comp.performDelete();
+  expect(del).toHaveBeenCalledWith('assistant/skills/cases');
+  expect(comp.skills.map(s => s.name)).toEqual(['hunt']);
+});
+
 test('performDelete with nothing pending is a no-op', async () => {
   seedAutomations();
   const del = mockPapi('delete', {});
