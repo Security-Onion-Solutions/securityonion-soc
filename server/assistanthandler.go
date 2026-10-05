@@ -874,14 +874,8 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// A shared session is readable through its sub-sessions too, so the tag
-	// follows every descendant in one write. Other tags stay on the one session.
 	if updateReq.Tag == model.SessionTagShared {
-		ids := make([]string, len(sessions))
-		for i, s := range sessions {
-			ids[i] = s.SessionId
-		}
-		err = h.server.Assistantstore.ToggleSessionsTag(ctx, ids, updateReq.Tag, add)
+		err = SetSessionTreeShared(ctx, h.server.Assistantstore, sessions, add)
 	} else {
 		err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, tags)
 	}

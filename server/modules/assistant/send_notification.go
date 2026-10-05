@@ -232,8 +232,8 @@ func resolveRootSessionId(ctx context.Context, srv *server.Server, sessionId str
 	return current
 }
 
-// shareSessionTree tags the chat and every sub-session as shared, as the manual share
-// action does, and reports whether anything changed.
+// shareSessionTree shares the chat and its sub-sessions as the manual share action does,
+// skipping the write when they are all shared already. It reports whether anything changed.
 func shareSessionTree(ctx context.Context, srv *server.Server, rootSessionId string) (bool, error) {
 	if srv.Assistantstore == nil {
 		return false, errors.New("assistant store is not available")
@@ -248,20 +248,14 @@ func shareSessionTree(ctx context.Context, srv *server.Server, rootSessionId str
 		return false, err
 	}
 
-	ids := make([]string, 0, len(sessions))
-	needsShare := false
-	for _, s := range sessions {
-		ids = append(ids, s.SessionId)
-		if !slices.Contains(s.Tags, model.SessionTagShared) {
-			needsShare = true
-		}
-	}
-
+	needsShare := slices.ContainsFunc(sessions, func(s *model.AssistantSession) bool {
+		return !slices.Contains(s.Tags, model.SessionTagShared)
+	})
 	if !needsShare {
 		return false, nil
 	}
 
-	err = srv.Assistantstore.ToggleSessionsTag(ctx, ids, model.SessionTagShared, true)
+	err = server.SetSessionTreeShared(ctx, srv.Assistantstore, sessions, true)
 	if err != nil {
 		return false, err
 	}

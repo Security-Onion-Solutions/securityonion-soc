@@ -37,6 +37,18 @@ type Assistantstore interface {
 
 //go:generate mockgen -destination mock/mock_assistantstore.go -package mock . Assistantstore
 
+// SetSessionTreeShared adds or removes the shared tag on a session and its delegated
+// sub-sessions in one write. A shared session is readable through its sub-sessions too,
+// so the tag must follow every descendant.
+func SetSessionTreeShared(ctx context.Context, store Assistantstore, tree []*model.AssistantSession, shared bool) error {
+	ids := make([]string, len(tree))
+	for i, s := range tree {
+		ids[i] = s.SessionId
+	}
+
+	return store.ToggleSessionsTag(ctx, ids, model.SessionTagShared, shared)
+}
+
 //go:generate mockgen -destination mock/mock_alerttriageupdater.go -package mock . AlertTriageUpdater
 type AlertTriageUpdater interface {
 	// AlertTriageUpdate records the outcome on every alert the update selects and returns only
