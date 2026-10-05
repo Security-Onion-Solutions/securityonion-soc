@@ -129,12 +129,6 @@ globalThis.socNotifications = {
     return moment(timestamp).fromNow();
   },
 
-  // Server-built links may use an i18n key as the label; anything else is shown as sent.
-  deepLinkLabel(name) {
-    const translated = this.i18n?.[name];
-    return typeof translated === 'string' ? translated : name;
-  },
-
   sanitizeDeepLink(url) {
     if (!url || typeof url !== 'string') return '#';
     const trimmed = url.trim();

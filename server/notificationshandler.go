@@ -27,8 +27,8 @@ import (
 const (
 	ConfigSettingNotificationDestinations = "soc.config.server.modules.notification.destinations"
 
-	// An i18n key rather than text: the bell translates link labels that name one.
-	sendLinkLabel     = "notificationLinkOpen"
+	// An emoji rather than text, like the PCAP job links, so the label needs no translation.
+	sendLinkLabel     = "🔗"
 	maxSendLinkLength = 2048
 )
 
