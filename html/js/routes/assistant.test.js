@@ -303,7 +303,8 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     ],
     availableAdapters: [
       { name: "SOAI", protocol: "securityonion_ai_cloud" }
-    ]
+    ],
+    toolApprovalNotices: { send_notification: 'Shares this chat.' }
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.$root.showDisclaimer = jest.fn();
@@ -330,6 +331,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.focusChatInput).toHaveBeenCalled();
   expect(comp.adaptersMap.size).toBe(1);
   expect(comp.adaptersMap.get('SOAI')).toEqual({ name: "SOAI", protocol: "securityonion_ai_cloud" });
+  expect(comp.toolApprovalNotices).toEqual({ send_notification: 'Shares this chat.' });
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
@@ -5616,28 +5618,15 @@ test('a new investigation\'s missing session starts the investigation; a denied 
 });
 
 // Auto-approval functionality tests
-test('toolWillShareChat warns before a notification shares an unshared chat', () => {
-  comp.currentChatId = fakeSessionId;
+test('toolApprovalNotice returns the notice the tool published', () => {
+  comp.toolApprovalNotices = { send_notification: 'Shares this chat.' };
 
-  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
-  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
+  expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('Shares this chat.');
+  expect(comp.toolApprovalNotice({ name: 'query_events' })).toBe('');
+  expect(comp.toolApprovalNotice(null)).toBe('');
 
-  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
-  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
-
-  comp.chatHistoryById = {};
-  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
-});
-
-test('toolWillShareChat is silent for shared chats and other tools', () => {
-  comp.currentChatId = fakeSessionId;
-
-  comp.chatHistoryById = { [fakeSessionId]: { tags: ['shared'] } };
-  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(false);
-
-  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
-  expect(comp.toolWillShareChat({ name: 'query_events' })).toBe(false);
-  expect(comp.toolWillShareChat(null)).toBe(false);
+  comp.toolApprovalNotices = {};
+  expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('');
 });
 
 test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {

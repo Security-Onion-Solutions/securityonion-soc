@@ -526,6 +526,7 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
 	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
 	ac.srv.Config.ClientParams.AssistantParams.AvailableTools = ac.exposeToolCatalog()
+	ac.srv.Config.ClientParams.AssistantParams.ToolApprovalNotices = ac.exposeToolApprovalNotices()
 	ac.srv.Config.ClientParams.AssistantParams.AvailableAutomationKinds = ac.exposeAutomationKinds()
 	ac.srv.Config.ClientParams.AssistantParams.MaxDelegationDepth = ac.getMaxDelegationDepth()
 	ac.srv.Config.ClientParams.AssistantParams.MaxSubSessionTokens = ac.getMaxSubSessionTokens()
@@ -571,6 +572,19 @@ func (ac *AssistantCoordinator) exposeToolCatalog() []string {
 	sort.Strings(tools)
 
 	return tools
+}
+
+func (ac *AssistantCoordinator) exposeToolApprovalNotices() map[string]string {
+	notices := map[string]string{}
+	for name, tool := range ac.FunctionLibrary {
+		if noticer, ok := tool.(ApprovalNoticer); ok {
+			if notice := noticer.GetApprovalNotice(); notice != "" {
+				notices[name] = notice
+			}
+		}
+	}
+
+	return notices
 }
 
 // exposeAutomationKinds returns the catalog the "new automation" form is built from.

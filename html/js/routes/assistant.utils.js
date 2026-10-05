@@ -273,11 +273,8 @@ globalThis.AssistantUtils = (function() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
-    // send_notification shares the chat server-side so recipients can open its link.
-    toolWillShareChat(toolUse) {
-      if (toolUse?.name !== 'send_notification') return false;
-      const session = this.chatHistoryById?.[this.currentChatId];
-      return !(session?.tags || []).includes(SESTAG_SHARED);
+    toolApprovalNotice(toolUse) {
+      return this.toolApprovalNotices?.[toolUse?.name] || '';
     },
 
     shouldAutoApproveTool(toolName) {

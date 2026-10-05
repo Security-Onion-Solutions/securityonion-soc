@@ -41,6 +41,7 @@ globalThis.AssistantSessions = (function() {
       this.toolBusyRetryDelayMs = params["toolBusyRetryDelayMs"];
       this.agentic = params["agentic"] || false;
       this.availableAdapters = params["availableAdapters"];
+      this.toolApprovalNotices = params["toolApprovalNotices"] || {};
       if (this.agentic) {
         // in agentic mode, use agent names rather than model names. Disabled agents
         // are published so the Agent Studio can re-enable them, but they cannot run.

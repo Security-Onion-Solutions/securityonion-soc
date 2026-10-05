@@ -19,6 +19,12 @@ type Tool interface {
 	Execute(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error)
 }
 
+// ApprovalNoticer is implemented by tools whose side effects the user should know about
+// before approving a call. The notice is shown on the approval card.
+type ApprovalNoticer interface {
+	GetApprovalNotice() string
+}
+
 //go:generate mockgen -destination mock/mock_tool.go -package mock . Tool
 
 var knownTools = map[string]Tool{}

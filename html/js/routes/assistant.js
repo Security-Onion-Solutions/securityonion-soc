@@ -36,6 +36,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     increaseContextLimit: false,
     restoreLastActive: false,
     alwaysApproveReadRequests: false,
+    toolApprovalNotices: {},
     // A tool POST 409s when another tool turn is already running (backend fails fast
     // rather than blocking); retry a bounded number of times before surfacing an error.
     toolBusyMaxRetries: 30,

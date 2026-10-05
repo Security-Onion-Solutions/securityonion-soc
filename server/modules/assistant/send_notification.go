@@ -56,6 +56,10 @@ func (t *SendNotificationTool) GetDescription() string {
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.`
 }
 
+func (t *SendNotificationTool) GetApprovalNotice() string {
+	return "Sending this notification shares this chat, including any sub-agent sessions, with everyone who can view shared chats, if it is not already shared."
+}
+
 func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 	return model.JSONSchema{
 		Json: &model.ToolSchema{
