@@ -15,6 +15,7 @@
 
     <!-- Tool Approval Buttons -->
     <div v-if="toolUse.status === 'pending_approval'" class="mb-2">
+      <v-alert v-if="ctx.toolWillShareChat(toolUse)" type="warning" variant="tonal" density="compact" class="mb-2 text-body-small" data-aid="assistant_tool_use_share_warning">{{ ctx.i18n.assistantNotificationSharesChat }}</v-alert>
       <div :id="'tool-use-question-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ ctx.i18n.toolExecuteQuestion }}</div>
       <div :aria-labelledby="'tool-use-question-' + toolUse.id" role="group" class="d-flex align-center tool-approval-buttons">
         <v-btn color="success" size="small" variant="flat" @click="ctx.approveTool(toolUse)" data-aid="assistant_tool_use_approve" :disabled="!ctx.canChat">

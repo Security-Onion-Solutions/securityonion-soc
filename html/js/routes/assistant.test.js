@@ -5616,6 +5616,30 @@ test('a new investigation\'s missing session starts the investigation; a denied 
 });
 
 // Auto-approval functionality tests
+test('toolWillShareChat warns before a notification shares an unshared chat', () => {
+  comp.currentChatId = fakeSessionId;
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
+  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
+  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
+
+  comp.chatHistoryById = {};
+  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(true);
+});
+
+test('toolWillShareChat is silent for shared chats and other tools', () => {
+  comp.currentChatId = fakeSessionId;
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['shared'] } };
+  expect(comp.toolWillShareChat({ name: 'send_notification' })).toBe(false);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
+  expect(comp.toolWillShareChat({ name: 'query_events' })).toBe(false);
+  expect(comp.toolWillShareChat(null)).toBe(false);
+});
+
 test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   

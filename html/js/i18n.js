@@ -573,6 +573,7 @@ const i18n = {
       assistantNoRawToolResult: 'Could not capture raw tool result',
       assistantNoResponse: 'Failed to get AI response',
       assistantNotAvailable: 'Onion AI is not enabled or is otherwise unavailable.',
+      assistantNotificationSharesChat: 'Sending this notification will share this chat, including any sub-agent sessions, with everyone who can view shared chats.',
       assistantOutOfCredits: 'Insufficient credits. Please contact your administrator to purchase more credits.',
       assistantSaveContextError: 'Failed to save context theshold setting',
       assistantSaveRecentError: 'Failed to save restore last active setting',

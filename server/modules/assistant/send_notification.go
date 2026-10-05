@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,11 @@ import (
 	"github.com/apex/log"
 	"github.com/google/uuid"
 )
+
+const chatLinkLabel = "View chat"
+
+// Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
+const maxSessionAncestors = 16
 
 func init() {
 	t := &SendNotificationTool{}
@@ -43,7 +49,10 @@ func (t *SendNotificationTool) GetDescription() string {
 	Write title as a single headline of a few words, and summary as one to three complete sentences that
 	stand alone without the chat context: a reader who sees only the notification must understand what
 	happened, where, and why it matters. Put identifiers, hostnames, IPs, rule names, and counts in fields
-	rather than burying them in prose, and put SOC deep links in links.
+	rather than burying them in prose, and put SOC deep links in links. A link back to this chat is added
+	automatically, so do not include one.
+	Sending shares this chat, including any sub-agent sessions, with every user who can read shared chats,
+	so that recipients can follow the link.
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.`
 }
 
@@ -71,7 +80,7 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 				},
 				"links": {
 					Type:        "object",
-					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"})`,
+					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"}). A link to this chat is added automatically.`,
 				},
 			},
 			Required: []string{"title", "summary"},
@@ -167,6 +176,23 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		Links:     stringifyValues(args.Links),
 	}
 
+	sharedNote := ""
+	rootSessionId := resolveRootSessionId(ctx, srv, req.SessionId)
+	if rootSessionId != "" {
+		// Shared before sending so the chat is readable by the time anyone follows the link.
+		shared, shareErr := shareSessionTree(ctx, srv, rootSessionId)
+		if shareErr != nil {
+			logger.WithError(shareErr).WithField("rootSessionId", rootSessionId).Warn("unable to share the chat that sent the notification")
+		} else if shared {
+			sharedNote = " This chat is now shared so recipients can open it."
+		}
+
+		if payload.Links == nil {
+			payload.Links = map[string]string{}
+		}
+		payload.Links[chatLinkLabel] = "/#/assistant/" + rootSessionId
+	}
+
 	_, err = srv.Notifier.Send(ctx, payload)
 	if err != nil {
 		logger.WithError(err).Error("error sending notification")
@@ -174,9 +200,69 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	}
 
 	// "Submitted", not "delivered": Send reports no error when the subsystem is disabled.
-	result.Result = fmt.Sprintf("Notification %q was submitted with severity %q (id %s).%s", title, severity, payload.ID, severityNote)
+	result.Result = fmt.Sprintf("Notification %q was submitted with severity %q (id %s).%s%s", title, severity, payload.ID, severityNote, sharedNote)
 
 	return result, nil
+}
+
+// resolveRootSessionId walks a delegated sub-agent's session up to the top-level chat,
+// which is what a person opens. A failed lookup stops at the last session resolved.
+func resolveRootSessionId(ctx context.Context, srv *server.Server, sessionId string) string {
+	if sessionId == "" || srv.Assistantstore == nil {
+		return sessionId
+	}
+
+	current := sessionId
+	for range maxSessionAncestors {
+		sessions, err := srv.Assistantstore.GetSessions(ctx,
+			model.GetSessionsWithSessionId(current),
+			model.GetSessionsWithIncludeDeleted(true),
+			model.GetSessionsWithMessageMeta(false),
+			model.GetSessionsWithAutomationSessions(true))
+		if err != nil || len(sessions) == 0 || sessions[0].ParentSessionId == "" {
+			return current
+		}
+		current = sessions[0].ParentSessionId
+	}
+
+	return current
+}
+
+// shareSessionTree tags the chat and every sub-session as shared, as the manual share
+// action does, and reports whether anything changed.
+func shareSessionTree(ctx context.Context, srv *server.Server, rootSessionId string) (bool, error) {
+	if srv.Assistantstore == nil {
+		return false, errors.New("assistant store is not available")
+	}
+
+	sessions, err := srv.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionId(rootSessionId),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithDescendants(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		return false, err
+	}
+
+	ids := make([]string, 0, len(sessions))
+	needsShare := false
+	for _, s := range sessions {
+		ids = append(ids, s.SessionId)
+		if !slices.Contains(s.Tags, model.SessionTagShared) {
+			needsShare = true
+		}
+	}
+
+	if !needsShare {
+		return false, nil
+	}
+
+	err = srv.Assistantstore.ToggleSessionsTag(ctx, ids, model.SessionTagShared, true)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // normalizeNotificationSeverity maps whatever the model sent onto a known severity, falling
