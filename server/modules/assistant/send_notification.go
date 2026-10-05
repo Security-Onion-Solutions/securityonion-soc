@@ -26,6 +26,9 @@ import (
 
 const chatLinkLabel = "View chat"
 
+// The approval card shows this input, when a tool declares it, to explain the call.
+const approvalMessageParam = "approvalMessage"
+
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
 
@@ -56,10 +59,6 @@ func (t *SendNotificationTool) GetDescription() string {
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.`
 }
 
-func (t *SendNotificationTool) GetApprovalNotice() string {
-	return "Sending this notification shares this chat, including any sub-agent sessions, with everyone who can view shared chats, if it is not already shared."
-}
-
 func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 	return model.JSONSchema{
 		Json: &model.ToolSchema{
@@ -82,12 +81,16 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 					Type:        "object",
 					Description: "Optional dict of field:value context such as host, source.ip, rule name, or event count. Values are recorded as text.",
 				},
+				approvalMessageParam: {
+					Type:        "string",
+					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say what notification will be sent and that sending it shares this chat, including any sub-agent sessions, with everyone who can view shared chats.",
+				},
 				"links": {
 					Type:        "object",
 					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"}). A link to this chat is added automatically.`,
 				},
 			},
-			Required: []string{"title", "summary"},
+			Required: []string{"title", "summary", approvalMessageParam},
 		},
 	}
 }

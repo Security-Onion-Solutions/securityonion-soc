@@ -303,8 +303,7 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
     ],
     availableAdapters: [
       { name: "SOAI", protocol: "securityonion_ai_cloud" }
-    ],
-    toolApprovalNotices: { send_notification: 'Shares this chat.' }
+    ]
   };
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
   comp.$root.showDisclaimer = jest.fn();
@@ -331,7 +330,6 @@ test('initAssistant sets assistantEnabled to true when enabled and licensed', as
   expect(comp.focusChatInput).toHaveBeenCalled();
   expect(comp.adaptersMap.size).toBe(1);
   expect(comp.adaptersMap.get('SOAI')).toEqual({ name: "SOAI", protocol: "securityonion_ai_cloud" });
-  expect(comp.toolApprovalNotices).toEqual({ send_notification: 'Shares this chat.' });
 });
 
 test('initAssistant sets assistantEnabled to false when not enabled', async () => {
@@ -5618,15 +5616,12 @@ test('a new investigation\'s missing session starts the investigation; a denied 
 });
 
 // Auto-approval functionality tests
-test('toolApprovalNotice returns the notice the tool published', () => {
-  comp.toolApprovalNotices = { send_notification: 'Shares this chat.' };
-
-  expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('Shares this chat.');
-  expect(comp.toolApprovalNotice({ name: 'query_events' })).toBe('');
-  expect(comp.toolApprovalNotice(null)).toBe('');
-
-  comp.toolApprovalNotices = {};
+test('toolApprovalNotice shows the approvalMessage the model wrote for the call', () => {
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: ' Sends an alert and shares this chat. ' } })).toBe('Sends an alert and shares this chat.');
+  expect(comp.toolApprovalNotice({ name: 'query_events', input: { query: '*' } })).toBe('');
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: 5 } })).toBe('');
   expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('');
+  expect(comp.toolApprovalNotice(null)).toBe('');
 });
 
 test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {

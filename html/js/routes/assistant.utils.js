@@ -273,8 +273,10 @@ globalThis.AssistantUtils = (function() {
       if (localStorage['settings.case.mruCases']) this.mruCases = JSON.parse(localStorage['settings.case.mruCases']);
     },
 
+    // Tools that want an explanation on the approval card declare an approvalMessage input.
     toolApprovalNotice(toolUse) {
-      return this.toolApprovalNotices?.[toolUse?.name] || '';
+      const message = toolUse?.input?.approvalMessage;
+      return typeof message === 'string' ? message.trim() : '';
     },
 
     shouldAutoApproveTool(toolName) {

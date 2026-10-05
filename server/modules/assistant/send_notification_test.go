@@ -34,24 +34,6 @@ func TestSendNotificationTool_GetDescription(t *testing.T) {
 	assert.NotEmpty(t, (&SendNotificationTool{}).GetDescription())
 }
 
-func TestSendNotificationTool_GetApprovalNotice(t *testing.T) {
-	var tool Tool = &SendNotificationTool{}
-	noticer, ok := tool.(ApprovalNoticer)
-	assert.True(t, ok)
-	assert.Contains(t, noticer.GetApprovalNotice(), "shares this chat")
-}
-
-func TestExposeToolApprovalNotices(t *testing.T) {
-	ac := &AssistantCoordinator{FunctionLibrary: map[string]Tool{
-		"send_notification": &SendNotificationTool{},
-		"query_events":      &QueryEventsTool{},
-	}}
-
-	notices := ac.exposeToolApprovalNotices()
-
-	assert.Equal(t, map[string]string{"send_notification": (&SendNotificationTool{}).GetApprovalNotice()}, notices)
-}
-
 func TestSendNotificationTool_GetSchema(t *testing.T) {
 	schema := (&SendNotificationTool{}).GetSchema()
 
@@ -63,7 +45,9 @@ func TestSendNotificationTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "object", schema.Json.Properties["fields"].Type)
 	assert.Equal(t, "object", schema.Json.Properties["links"].Type)
 
-	assert.ElementsMatch(t, []string{"title", "summary"}, schema.Json.Required)
+	assert.Equal(t, "string", schema.Json.Properties["approvalMessage"].Type)
+
+	assert.ElementsMatch(t, []string{"title", "summary", "approvalMessage"}, schema.Json.Required)
 	assert.Equal(t, model.NotificationSeverityInfo, schema.Json.Properties["severity"].Default)
 
 	// ToolSchemaProperty has no enum field, so the description is the only thing keeping

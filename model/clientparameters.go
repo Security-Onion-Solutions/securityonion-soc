@@ -199,8 +199,6 @@ type AssistantParameters struct {
 	// Tool names an admin-created skill may grant; delegate tools excluded.
 	AvailableTools []string          `json:"availableTools" example:"query_events,query_cases"`
 	AgentMapping   map[string]string `json:"agentMapping" example:"Malware Analyst:claude-sonnet-4.5@SOAI"`
-	// Tool name to the notice shown on that tool's approval card.
-	ToolApprovalNotices map[string]string `json:"toolApprovalNotices"`
 	// Delegation guardrails, surfaced so the Agent Studio can show and edit them
 	// without fetching every setting. 0 disables the limit.
 	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
