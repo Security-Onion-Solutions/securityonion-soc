@@ -24,8 +24,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// An i18n key rather than text: the bell translates link labels that name one.
-const chatLinkLabel = "notificationLinkChat"
+// An emoji rather than text, like the PCAP job links, so the label needs no translation.
+const chatLinkLabel = "💬"
 
 // The approval card shows this input, when a tool declares it, to explain the call.
 const approvalMessageParam = "approvalMessage"

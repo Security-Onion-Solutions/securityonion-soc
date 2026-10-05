@@ -330,7 +330,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:      "model cannot replace the chat link but keeps its own",
 			sessionId: "root",
-			params:    `{"title": "T", "summary": "S", "share_chat": true, "links": {"notificationLinkChat": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
+			params:    `{"title": "T", "summary": "S", "share_chat": true, "links": {"💬": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
 			sessions:  tree(model.SessionTagShared),
 			expectedLinks: map[string]string{
 				chatLinkLabel: "/#/assistant/root",

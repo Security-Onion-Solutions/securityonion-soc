@@ -164,7 +164,7 @@
                         <!-- Deep-links -->
                         <div v-if="notif.links && Object.keys(notif.links).length > 0" class="d-flex flex-wrap gap-1 mb-2">
                           <v-btn v-for="(url, name) in notif.links" :key="name" :href="sanitizeDeepLink(url)" target="_blank" size="x-small" color="primary" class="mr-1" data-aid="notification_deep_link" @click.stop>
-                            {{ deepLinkLabel(name) }}
+                            {{ name }}
                           </v-btn>
                         </div>
 
