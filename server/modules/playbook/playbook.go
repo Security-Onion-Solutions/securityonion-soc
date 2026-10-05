@@ -683,7 +683,7 @@ func (pdm *PlaybookDiskManager) ConvertQuestions(ctx context.Context, queries []
 		}
 	}()
 
-	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	args := []string{"convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", varsPath, "-p", detections.DEFAULT_SIGMA_PIPELINES_DIR, "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 
 	// pySigma rejects a title-less rule, so prepend a throwaway title to any query
 	// that lacks one. It is stripped from the OQL output and need not be unique.

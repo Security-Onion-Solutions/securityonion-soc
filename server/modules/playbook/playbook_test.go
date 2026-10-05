@@ -693,7 +693,7 @@ func TestConvertQuestions(t *testing.T) {
 
 	iom.EXPECT().ExecCommand(gomock.Any()).DoAndReturn(func(cmd *exec.Cmd) ([]byte, int, time.Duration, error) {
 		assert.True(t, strings.HasSuffix(cmd.Path, "sigma"))
-		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
+		assert.Equal(t, []string{"sigma", "convert", "-t", "security_onion", "-p", "SecurityOnion_playbook_placeholders", "-p", capturedVarsPath, "-p", "/opt/sensoroni/sigma_pipelines", "-p", "/opt/sensoroni/sigma_playbook_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}, cmd.Args)
 
 		in, err := io.ReadAll(cmd.Stdin)
 		assert.NoError(t, err)

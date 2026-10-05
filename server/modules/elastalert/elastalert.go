@@ -56,8 +56,6 @@ const (
 	DEFAULT_ELASTALERT_RULES_FOLDER                  = "/opt/sensoroni/elastalert"
 	DEFAULT_RULES_FINGERPRINT_FILE                   = "/opt/sensoroni/fingerprints/sigma.fingerprint"
 	DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE         = "/opt/sensoroni/fingerprints/sigma.pipelines.fingerprint"
-	DEFAULT_SIGMA_PIPELINE_FINAL_FILE                = "/opt/sensoroni/sigma_final_pipeline.yaml"
-	DEFAULT_SIGMA_PIPELINE_SO_FILE                   = "/opt/sensoroni/sigma_so_pipeline.yaml"
 	DEFAULT_REPOS_FOLDER                             = "/opt/sensoroni/sigma/repos"
 	DEFAULT_STATE_FILE_PATH                          = "/opt/sensoroni/fingerprints/elastalertengine.state"
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS        = 300
@@ -101,8 +99,7 @@ type ElastAlertEngine struct {
 	sigmaPackageDownloadTemplate       string
 	elastAlertRulesFolder              string
 	rulesFingerprintFile               string
-	sigmaPipelineFinal                 string
-	sigmaPipelineSO                    string
+	sigmaPipelinesDir                  string
 	sigmaPipelinesFingerprintFile      string
 	sigmaRulePackages                  []string
 	autoEnabledSigmaRules              []string
@@ -262,8 +259,7 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.CommunityRulesImportFrequencySeconds = module.GetIntDefault(config, "communityRulesImportFrequencySeconds", DEFAULT_COMMUNITY_RULES_IMPORT_FREQUENCY_SECONDS)
 	e.sigmaPackageDownloadTemplate = module.GetStringDefault(config, "sigmaPackageDownloadTemplate", DEFAULT_SIGMA_PACKAGE_DOWNLOAD_TEMPLATE)
 	e.elastAlertRulesFolder = module.GetStringDefault(config, "elastAlertRulesFolder", DEFAULT_ELASTALERT_RULES_FOLDER)
-	e.sigmaPipelineFinal = module.GetStringDefault(config, "sigmaPipelineFinal", DEFAULT_SIGMA_PIPELINE_FINAL_FILE)
-	e.sigmaPipelineSO = module.GetStringDefault(config, "sigmaPipelineSO", DEFAULT_SIGMA_PIPELINE_SO_FILE)
+	e.sigmaPipelinesDir = module.GetStringDefault(config, "sigmaPipelinesDir", detections.DEFAULT_SIGMA_PIPELINES_DIR)
 	e.sigmaPipelinesFingerprintFile = module.GetStringDefault(config, "sigmaPipelinesFingerprintFile", DEFAULT_SIGMA_PIPELINES_FINGERPRINT_FILE)
 	e.rulesFingerprintFile = module.GetStringDefault(config, "rulesFingerprintFile", DEFAULT_RULES_FINGERPRINT_FILE)
 	e.enabledSigmaRules = loadEnabledSigmaRules(config)
@@ -660,10 +656,20 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	// If they have, set forceSync to true to regenerate the elastalert rule files.
 	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
 	if err != nil {
+		// without pipelines every rule converts wrong, so keep the current rule files
 		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
-	} else {
-		logger.Info("successfully checked the sigma processing pipelines")
+
+		if e.notify {
+			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
+				Engine: model.EngineNameElastAlert,
+				Status: "error",
+			})
+		}
+
+		return detections.ErrSyncFailed
 	}
+
+	logger.Info("successfully checked the sigma processing pipelines")
 
 	if regenNeeded {
 		forceSync = true
@@ -928,17 +934,53 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	return nil
 }
 
+// sigmaPipelineFiles lists what sigma-cli loads from the folder: every *.yml, recursively.
+func (e *ElastAlertEngine) sigmaPipelineFiles() ([]string, error) {
+	var files []string
+
+	err := e.WalkDir(e.sigmaPipelinesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(path, ".yml") {
+			files = append(files, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error listing sigma pipelines in %s: %w", e.sigmaPipelinesDir, err)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no sigma pipelines (*.yml) in %s", e.sigmaPipelinesDir)
+	}
+
+	slices.Sort(files)
+
+	return files, nil
+}
+
 func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
-	// Hash the pipeline files
-	hashFinal, err := e.hashFile(e.sigmaPipelineFinal)
+	files, err := e.sigmaPipelineFiles()
 	if err != nil {
-		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineFinal, err)
+		return false, "", err
 	}
-	hashSO, err := e.hashFile(e.sigmaPipelineSO)
-	if err != nil {
-		return false, "", fmt.Errorf("error hashing file %s: %w", e.sigmaPipelineSO, err)
+
+	// paths count too: adding, removing or renaming a pipeline is a change
+	h := sha256.New()
+	for _, file := range files {
+		data, err := e.ReadFile(file)
+		if err != nil {
+			return false, "", fmt.Errorf("error reading sigma pipeline %s: %w", file, err)
+		}
+
+		io.WriteString(h, file)
+		h.Write(data)
 	}
-	newHash := hashFinal + "-" + hashSO
+
+	newHash := hex.EncodeToString(h.Sum(nil))
 
 	// Read the existing hash from the fingerprint file
 	oldHash, err := e.ReadFile(e.sigmaPipelinesFingerprintFile)
@@ -956,15 +998,6 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 	log.Info("changes detected in sigma processing pipelines")
 
 	return true, newHash, nil
-}
-
-func (e *ElastAlertEngine) hashFile(filePath string) (string, error) {
-	data, err := e.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:]), nil
 }
 
 func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*model.Detection, errMap map[string]error) {
@@ -1682,7 +1715,7 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	if e.useEsql {
 		target = "esql"
 	}
-	args := []string{"convert", "-t", target, "-p", "/opt/sensoroni/sigma_final_pipeline.yaml", "-p", "/opt/sensoroni/sigma_so_pipeline.yaml", "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
+	args := []string{"convert", "-t", target, "-p", e.sigmaPipelinesDir, "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 	if e.useEsql && e.esqlCaseInsensitive {
 		args = append(args, "-O", "case_insensitive=true")
 	}
