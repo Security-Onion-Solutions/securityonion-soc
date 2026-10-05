@@ -826,12 +826,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Descendants come back after the root so sharing can cascade to them below.
-	var sessions []*model.AssistantSession
-	if updateReq.Tag == model.SessionTagShared {
-		sessions, err = GetSessionTree(ctx, h.server.Assistantstore, sessionId)
-	} else {
-		sessions, err = h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithMessageMeta(false))
-	}
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithDescendants(updateReq.Tag == model.SessionTagShared), model.GetSessionsWithMessageMeta(false))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -879,8 +874,14 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// A shared session is readable through its sub-sessions too, so the tag
+	// follows every descendant in one write. Other tags stay on the one session.
 	if updateReq.Tag == model.SessionTagShared {
-		err = SetSessionTreeShared(ctx, h.server.Assistantstore, sessions, add)
+		ids := make([]string, len(sessions))
+		for i, s := range sessions {
+			ids[i] = s.SessionId
+		}
+		err = h.server.Assistantstore.ToggleSessionsTag(ctx, ids, updateReq.Tag, add)
 	} else {
 		err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, tags)
 	}

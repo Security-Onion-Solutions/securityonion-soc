@@ -321,6 +321,13 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			sharedNote:    true,
 		},
 		{
+			name:          "already shared chat is not re-tagged",
+			sessionId:     "child",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      tree(model.SessionTagShared),
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+		},
+		{
 			name:         "model cannot replace the chat link but keeps its own",
 			sessionId:    "root",
 			params:       `{"title": "T", "summary": "S", "share_chat": true, "links": {"💬": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
@@ -394,9 +401,9 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			assert.Len(t, fakeNotifier.InputPayloads, 1)
 			assert.Equal(t, tc.expectedLinks, fakeNotifier.InputPayloads[0].Links)
 			if tc.sharedNote {
-				assert.Contains(t, result.Result, "is shared")
+				assert.Contains(t, result.Result, "now shared")
 			} else {
-				assert.NotContains(t, result.Result, "is shared")
+				assert.NotContains(t, result.Result, "now shared")
 			}
 		})
 	}
