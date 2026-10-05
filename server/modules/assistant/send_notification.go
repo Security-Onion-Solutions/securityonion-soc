@@ -52,10 +52,11 @@ func (t *SendNotificationTool) GetDescription() string {
 	Write title as a single headline of a few words, and summary as one to three complete sentences that
 	stand alone without the chat context: a reader who sees only the notification must understand what
 	happened, where, and why it matters. Put identifiers, hostnames, IPs, rule names, and counts in fields
-	rather than burying them in prose, and put SOC deep links in links. A link back to this chat is added
-	automatically, so do not include one.
-	Sending shares this chat, including any sub-agent sessions, with every user who can read shared chats,
-	so that recipients can follow the link.
+	rather than burying them in prose, and put SOC deep links in links.
+	Set share_chat to true when recipients need this conversation to understand or act on the
+	notification. That shares this chat, including any sub-agent sessions, with every user who can read
+	shared chats, and adds a link back to it; do not add that link yourself. Leave it false for a
+	notification that stands on its own.
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.`
 }
 
@@ -81,13 +82,18 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 					Type:        "object",
 					Description: "Optional dict of field:value context such as host, source.ip, rule name, or event count. Values are recorded as text.",
 				},
+				"share_chat": {
+					Type:        "boolean",
+					Description: "Share this chat with everyone who can view shared chats and link the notification to it. Defaults to false.",
+					Default:     false,
+				},
 				approvalMessageParam: {
 					Type:        "string",
-					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say what notification will be sent and that sending it shares this chat, including any sub-agent sessions, with everyone who can view shared chats.",
+					Description: "Shown to the user when they are asked to approve this call. In one or two sentences, say what notification will be sent and, when share_chat is true, that sending it shares this chat, including any sub-agent sessions, with everyone who can view shared chats.",
 				},
 				"links": {
 					Type:        "object",
-					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"}). A link to this chat is added automatically.`,
+					Description: `Optional dict of link label:URL pointing back into SOC (e.g., {"View alert": "/#/alerts?q=_id:abc123"})`,
 				},
 			},
 			Required: []string{"title", "summary"},
@@ -99,11 +105,12 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 // a model will happily send {"count": 5}, and under map[string]string that fails the entire
 // unmarshal, leaving it with an opaque error that names no key. stringifyValues coerces instead.
 type sendNotificationArgs struct {
-	Title    string         `json:"title"`
-	Summary  string         `json:"summary"`
-	Severity string         `json:"severity,omitempty"`
-	Fields   map[string]any `json:"fields,omitempty"`
-	Links    map[string]any `json:"links,omitempty"`
+	Title     string         `json:"title"`
+	Summary   string         `json:"summary"`
+	Severity  string         `json:"severity,omitempty"`
+	Fields    map[string]any `json:"fields,omitempty"`
+	Links     map[string]any `json:"links,omitempty"`
+	ShareChat bool           `json:"share_chat,omitempty"`
 }
 
 func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, req *model.ToolRequest) (result *model.ToolResponse, err error) {
@@ -184,7 +191,10 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	}
 
 	sharedNote := ""
-	rootSessionId := resolveRootSessionId(ctx, srv, req.SessionId)
+	rootSessionId := ""
+	if args.ShareChat {
+		rootSessionId = resolveRootSessionId(ctx, srv, req.SessionId)
+	}
 	if rootSessionId != "" {
 		// Shared before sending so the chat is readable by the time anyone follows the link.
 		shared, shareErr := shareSessionTree(ctx, srv, rootSessionId)

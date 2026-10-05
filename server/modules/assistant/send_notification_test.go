@@ -46,6 +46,8 @@ func TestSendNotificationTool_GetSchema(t *testing.T) {
 	assert.Equal(t, "object", schema.Json.Properties["links"].Type)
 
 	assert.Equal(t, "string", schema.Json.Properties["approvalMessage"].Type)
+	assert.Equal(t, "boolean", schema.Json.Properties["share_chat"].Type)
+	assert.Equal(t, false, schema.Json.Properties["share_chat"].Default)
 
 	assert.ElementsMatch(t, []string{"title", "summary"}, schema.Json.Required)
 	assert.Equal(t, model.NotificationSeverityInfo, schema.Json.Properties["severity"].Default)
@@ -298,11 +300,12 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		expectToggle  []string
 		expectedLinks map[string]string
 		sharedNote    bool
+		noStore       bool
 	}{
 		{
 			name:          "top-level chat is shared with its sub-sessions and linked",
 			sessionId:     "root",
-			params:        `{"title": "T", "summary": "S"}`,
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
 			sessions:      tree(),
 			expectToggle:  []string{"root", "child", "grand"},
 			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
@@ -311,7 +314,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:          "sub-agent session resolves to its top-level chat",
 			sessionId:     "grand",
-			params:        `{"title": "T", "summary": "S"}`,
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
 			sessions:      tree(),
 			expectToggle:  []string{"root", "child", "grand"},
 			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
@@ -320,14 +323,14 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:          "already shared chat is not re-tagged",
 			sessionId:     "child",
-			params:        `{"title": "T", "summary": "S"}`,
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
 			sessions:      tree(model.SessionTagShared),
 			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
 		},
 		{
 			name:      "model cannot replace the chat link but keeps its own",
 			sessionId: "root",
-			params:    `{"title": "T", "summary": "S", "links": {"View chat": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
+			params:    `{"title": "T", "summary": "S", "share_chat": true, "links": {"View chat": "https://evil.example", "View alert": "/#/alerts?q=_id:abc"}}`,
 			sessions:  tree(model.SessionTagShared),
 			expectedLinks: map[string]string{
 				chatLinkLabel: "/#/assistant/root",
@@ -337,7 +340,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:          "share failure still sends the notification",
 			sessionId:     "root",
-			params:        `{"title": "T", "summary": "S"}`,
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
 			sessions:      tree(),
 			toggleErr:     assert.AnError,
 			expectToggle:  []string{"root", "child", "grand"},
@@ -346,13 +349,22 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:          "lookup failure falls back to the given session",
 			sessionId:     "child",
-			params:        `{"title": "T", "summary": "S"}`,
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
 			getErr:        assert.AnError,
 			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/child"},
 		},
 		{
+			name:      "chat stays private and unlinked unless share_chat is set",
+			sessionId: "root",
+			params:    `{"title": "T", "summary": "S", "links": {"View alert": "/#/alerts?q=_id:abc"}}`,
+			noStore:   true,
+			expectedLinks: map[string]string{
+				"View alert": "/#/alerts?q=_id:abc",
+			},
+		},
+		{
 			name:   "no session means no share and no link",
-			params: `{"title": "T", "summary": "S"}`,
+			params: `{"title": "T", "summary": "S", "share_chat": true}`,
 		},
 	}
 
@@ -368,7 +380,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 				Config:   &config.ServerConfig{DeveloperEnabled: true},
 			}
 
-			if tc.sessionId != "" {
+			if tc.sessionId != "" && !tc.noStore {
 				store := sessionTreeStore(ctrl, tc.sessions, tc.getErr)
 				if tc.expectToggle != nil {
 					store.EXPECT().ToggleSessionsTag(gomock.Any(), tc.expectToggle, model.SessionTagShared, true).Return(tc.toggleErr)
