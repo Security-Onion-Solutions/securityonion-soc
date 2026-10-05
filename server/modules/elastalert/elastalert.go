@@ -972,7 +972,7 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 			return false, "", fmt.Errorf("error reading sigma pipeline %s: %w", file, err)
 		}
 
-		fmt.Fprintf(h, "%s\x00%d\x00", file, len(data))
+		io.WriteString(h, file)
 		h.Write(data)
 	}
 
