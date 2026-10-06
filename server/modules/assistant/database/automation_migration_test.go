@@ -121,3 +121,13 @@ func TestMigrationIndexesWorkItemsByRun(t *testing.T) {
 	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_failed_run_ids")
 	assert.Contains(t, sql, "USING GIN (failed_run_ids)")
 }
+
+// Listing runs across automations orders by started_at alone, which the per-automation index
+// can't serve.
+func TestMigrationIndexesRunsByStartTime(t *testing.T) {
+	sql, err := migrationFS.ReadFile("migrations/3_automation_runs_started_at.sql")
+	require.NoError(t, err)
+
+	assert.Contains(t, string(sql), "CREATE INDEX IF NOT EXISTS idx_automation_runs_started_at")
+	assert.Contains(t, string(sql), "ON automation_runs (started_at DESC, id)")
+}

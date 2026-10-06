@@ -155,6 +155,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       { title: this.$root.i18n.stateDone, value: 'done', key: 'done', sortable: false },
       { title: this.$root.i18n.stateFailed, value: 'failed', key: 'failed', sortable: false },
       { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', key: 'state', sortable: false },
+      { title: this.$root.i18n.actions, value: 'actions', key: 'actions', sortable: false, width: '90px' },
     ],
     automationKinds: [],
 
@@ -912,6 +913,11 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     },
     runItemCount(run, state) {
       return (run.itemCounts || {})[state] || 0;
+    },
+    // Run History only lists finished runs.
+    runMonitorLink(run) {
+      if (['succeeded', 'failed'].includes(run.state)) return { name: 'agentmonitor', query: { run: run.id } };
+      return { name: 'agentmonitor' };
     },
     automationStatus(automation) {
       const history = this.automationRuns[automation.id];

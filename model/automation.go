@@ -159,6 +159,37 @@ type AutomationRunHistory struct {
 	HasMore bool `json:"hasMore" example:"true"`
 }
 
+// AutomationRunFilter selects finished runs across every automation.
+type AutomationRunFilter struct {
+	// Empty for every automation.
+	AutomationId string
+	// Drops succeeded runs that worked no item.
+	HideEmpty bool
+	// Matches automation names, run errors, and item group keys and errors; a run id matches that run.
+	Search string
+	Limit  int
+	Offset int
+	Count  bool
+}
+
+// @Description One finished run, named for the automation it belongs to.
+type AutomationRunListing struct {
+	AutomationRunSummary
+	// The automation's current name; empty once it has been deleted.
+	DisplayName string `json:"displayName" example:"Nightly Alert Triage"`
+	// Indicates the automation has been deleted and only its history remains.
+	AutomationDeleted bool `json:"automationDeleted" example:"false"`
+}
+
+// @Description A page of finished runs across automations, newest first.
+type AutomationRunPage struct {
+	Runs []*AutomationRunListing `json:"runs"`
+	// Every run matching the filter; absent unless it was asked for.
+	Total *int `json:"total,omitempty" example:"120"`
+	// Indicates more runs exist past this page.
+	HasMore bool `json:"hasMore" example:"true"`
+}
+
 const (
 	// The session whose report the automation recorded.
 	AutomationRunOutcomeReport = "report"

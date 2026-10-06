@@ -160,13 +160,30 @@ type AutomationRunQuery struct {
 	AutomationId string
 	// Only runs queued or running.
 	InFlight bool
-	Limit    int
-	Offset   int
+	// Only runs that have ended.
+	Finished bool
+	// Drops succeeded runs that worked no item.
+	HideEmpty bool
+	// Matched case-insensitively against the run's error and its items' group keys and errors.
+	Search string
+	// Also match Search.
+	SearchAutomationIds []string
+	SearchRunId         string
+	Limit               int
+	Offset              int
 }
 
-func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery) ([]*model.AutomationRunRecord, error) {
-	stmt := `SELECT ` + automationRunColumns + ` FROM automation_runs`
-	args := []any{}
+// The items a run last worked or failed, as CountAutomationWorkItemsByRun counts them.
+const runWorkItemsClause = `FROM automation_work_items w
+	WHERE (w.run_id = automation_runs.id OR w.failed_run_ids @> ARRAY[automation_runs.id::text])`
+
+// escapeLike makes value match literally inside an ILIKE pattern escaped by backslash.
+func escapeLike(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(value)
+}
+
+// where renders the query's filters, numbering placeholders after any already in args.
+func (query AutomationRunQuery) where(args []any) (string, []any) {
 	where := []string{}
 
 	if query.AutomationId != "" {
@@ -178,11 +195,67 @@ func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery
 		where = append(where, `state IN `+inFlightRunStates)
 	}
 
-	if len(where) > 0 {
-		stmt += ` WHERE ` + strings.Join(where, ` AND `)
+	if query.Finished {
+		where = append(where, `state NOT IN `+inFlightRunStates)
 	}
 
-	stmt += ` ORDER BY started_at DESC, id`
+	if query.HideEmpty {
+		kept := `state = 'failed'`
+
+		// A run asked for by id shows even when it worked nothing.
+		if query.SearchRunId != "" {
+			args = append(args, query.SearchRunId)
+			kept += fmt.Sprintf(` OR id = $%d::uuid`, len(args))
+		}
+
+		where = append(where, `(`+kept+` OR EXISTS (SELECT 1 `+runWorkItemsClause+`))`)
+	}
+
+	if query.Search != "" {
+		args = append(args, "%"+escapeLike(query.Search)+"%")
+		pattern := len(args)
+
+		matches := []string{
+			fmt.Sprintf(`error ILIKE $%d ESCAPE '\'`, pattern),
+			fmt.Sprintf(`EXISTS (SELECT 1 %s AND (w.group_key ILIKE $%d ESCAPE '\' OR w.error ILIKE $%d ESCAPE '\'))`,
+				runWorkItemsClause, pattern, pattern),
+		}
+
+		if len(query.SearchAutomationIds) > 0 {
+			args = append(args, query.SearchAutomationIds)
+			matches = append(matches, fmt.Sprintf(`automation_id = ANY($%d::uuid[])`, len(args)))
+		}
+
+		if query.SearchRunId != "" {
+			args = append(args, query.SearchRunId)
+			matches = append(matches, fmt.Sprintf(`id = $%d::uuid`, len(args)))
+		}
+
+		where = append(where, `(`+strings.Join(matches, ` OR `)+`)`)
+	}
+
+	if len(where) == 0 {
+		return "", args
+	}
+
+	return ` WHERE ` + strings.Join(where, ` AND `), args
+}
+
+// CountAutomationRuns counts the runs ListAutomationRuns would list, ignoring Limit and Offset.
+func (s *Store) CountAutomationRuns(ctx context.Context, query AutomationRunQuery) (int, error) {
+	where, args := query.where([]any{})
+
+	var count int
+	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM automation_runs`+where, args...).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (s *Store) ListAutomationRuns(ctx context.Context, query AutomationRunQuery) ([]*model.AutomationRunRecord, error) {
+	where, args := query.where([]any{})
+	stmt := `SELECT ` + automationRunColumns + ` FROM automation_runs` + where + ` ORDER BY started_at DESC, id`
 
 	limit := query.Limit
 	if limit <= 0 {
