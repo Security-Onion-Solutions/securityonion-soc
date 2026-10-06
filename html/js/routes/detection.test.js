@@ -951,6 +951,28 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
 });
 
+test('saveDetection - errors go through showRequestError', async () => {
+	const error = { message: 'Request failed with status code 400', response: { status: 400, data: 'Invalid rule' } };
+	resetPapi().mockPapi('put', null, error);
+	comp.detect = { content: "", language: '' };
+	comp.origDetect = { content: "" };
+	comp.revertEnabled = jest.fn();
+	comp.showRequestError = jest.fn();
+
+	await comp.saveDetection(false, false);
+
+	expect(comp.showRequestError).toHaveBeenCalledWith(error);
+	resetPapi();
+});
+
+test('showRequestError - 400 shows body, others show message', () => {
+	comp.showRequestError({ message: 'Request failed with status code 400', response: { status: 400, data: 'missingPublicIdErr' } });
+	expect(comp.$root.errorMessage).toBe(comp.i18n.missingPublicIdErr);
+
+	comp.showRequestError({ message: 'Request failed with status code 500', response: { status: 500, data: 'The request could not be processed.' } });
+	expect(comp.$root.errorMessage).toBe('Request failed with status code 500');
+});
+
 test('validateElastAlert', () => {
 	comp.detect = {
 		language: 'sigma',

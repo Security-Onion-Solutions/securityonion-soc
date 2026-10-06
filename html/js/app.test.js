@@ -366,6 +366,23 @@ test('localizeMessage', () => {
   expect(app.localizeMessage('"single quote"')).toBe("single quote");
 });
 
+test('showError escapes text that is not localized', () => {
+  const oldShowError = app.showError;
+  app.showError = origShowError;
+  try {
+    // a server reason echoing rule content
+    app.showError('Invalid rule: unsupported correlation type "<img src=x onerror=alert(1)>"');
+    expect(app.errorMessage).toBe('Invalid rule: unsupported correlation type &quot;&lt;img src=x onerror=alert(1)&gt;&quot;');
+
+    // our own strings may carry markup
+    app.showError('ERROR_UPSTREAM_SERVICE_ERROR');
+    expect(app.errorMessage).toBe(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
+    expect(app.errorMessage).toContain('<a ');
+  } finally {
+    app.showError = oldShowError;
+  }
+});
+
 test('localizeMessageWithArgs', () => {
   expect(app.localizeMessage('Hello {name}', {name: 'World'})).toBe('Hello World');
   expect(app.localizeMessage('Hello {name}, you have {count} messages', {name: 'John', count: 5})).toBe('Hello John, you have 5 messages');

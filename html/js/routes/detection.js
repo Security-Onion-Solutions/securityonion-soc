@@ -827,7 +827,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 						this.$root.showWarning(this.i18n.detectionSyncBlockedErr);
 						break;
 					default:
-						this.$root.showError(error);
+						this.showRequestError(error);
 						break;
 				}
 
@@ -1390,10 +1390,15 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					this.showSigmaDialog = true;
 				}
 			} catch (error) {
-				this.$root.showError(error);
+				this.showRequestError(error);
 			} finally {
 				this.$root.stopLoading();
 			}
+		},
+		showRequestError(error) {
+			// 400 bodies carry the validation reason
+			const reason = error?.response?.status === 400 ? error.response.data : null;
+			this.$root.showError(typeof reason === 'string' ? reason : error);
 		},
 		cancelConvert() {
 			this.convertedRule = '';

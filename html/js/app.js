@@ -1166,7 +1166,7 @@ $(document).ready(function () {
           $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
           $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
         },
-        localizeMessage(origMsg, vars = null) {
+        localizeMessage(origMsg, vars = null, escapeUnlocalized = false) {
           if (!origMsg) return "";
           var msg = origMsg;
           if (msg.response && msg.response.data) {
@@ -1189,7 +1189,8 @@ $(document).ready(function () {
             if (msg.length > 200) {
               msg = msg.substring(0, 200) + "...";
             }
-            localized = msg;
+            // not one of our strings, so it may quote untrusted content such as rule text
+            localized = escapeUnlocalized ? this.escapeHtml(msg) : msg;
           }
 
           if (vars && typeof vars == 'object') {
@@ -1223,7 +1224,8 @@ $(document).ready(function () {
             return;
           }
           this.error = true;
-          this.errorMessage = this.localizeMessage(msg);
+          // rendered with v-html
+          this.errorMessage = this.localizeMessage(msg, null, true);
           if (this.debug && msg && msg.stack) {
             console.log(msg.stack);
           }
