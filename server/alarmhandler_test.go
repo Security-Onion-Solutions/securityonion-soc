@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	. "github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -24,9 +23,6 @@ import (
 )
 
 func TestGetAlarms(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Alarms = []model.Alarm{
 		{
@@ -63,9 +59,6 @@ func TestGetAlarms(t *testing.T) {
 }
 
 func TestGetAlarmMetrics(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Metrics = []model.AlarmMetricInfo{
 		{Metric: "cpu", TitleKey: "metricsCpuUsage"},
@@ -92,9 +85,6 @@ func TestGetAlarmMetrics(t *testing.T) {
 }
 
 func TestGetAlarmStates(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.States = []model.AlarmState{
 		{AlarmID: "alarm-1", NodeID: "node-1", Status: "alarm"},
@@ -121,9 +111,6 @@ func TestGetAlarmStates(t *testing.T) {
 }
 
 func TestGetAlarmStates_StoreNil(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Alarmstore = nil
 
@@ -145,9 +132,6 @@ func TestGetAlarmStates_StoreNil(t *testing.T) {
 }
 
 func TestGetAlarm(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Alarms = []model.Alarm{
 		{
@@ -184,9 +168,6 @@ func TestGetAlarm(t *testing.T) {
 }
 
 func TestPostAlarm(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Alarmstore = fakeStore
@@ -224,9 +205,6 @@ func TestPostAlarm(t *testing.T) {
 }
 
 func TestPostAlarm_InvalidThreshold(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Err = errors.New("alarm threshold must be a valid number")
 
@@ -256,9 +234,6 @@ func TestPostAlarm_InvalidThreshold(t *testing.T) {
 }
 
 func TestPutAlarm(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Alarms = []model.Alarm{
 		{
@@ -306,9 +281,6 @@ func TestPutAlarm(t *testing.T) {
 }
 
 func TestDeleteAlarm(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Alarms = []model.Alarm{
 		{
@@ -342,9 +314,6 @@ func TestDeleteAlarm(t *testing.T) {
 }
 
 func TestAlarmHandler_PostEvaluate(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	fakeStore := NewFakeAlarmstore()
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Alarmstore = fakeStore
@@ -364,9 +333,6 @@ func TestAlarmHandler_PostEvaluate(t *testing.T) {
 }
 
 func TestRegisterAlarmRoutes_StoreNil(t *testing.T) {
-	defer licensing.Shutdown()
-	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
-
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Alarmstore = nil
 

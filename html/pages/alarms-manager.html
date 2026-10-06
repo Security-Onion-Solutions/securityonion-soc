@@ -130,15 +130,15 @@
               <v-text-field v-model.number="form.durationSeconds" type="number" min="0" :label="i18n.alarmDuration" :hint="i18n.alarmDurationHelp" persistent-hint density="comfortable" data-aid="alarm_form_duration"></v-text-field>
             </v-col>
 
-            <v-col cols="12" sm="6">
+            <v-col cols="12" :sm="notificationsLicensed ? 6 : 12">
               <v-select v-model="form.severity" :items="severityOptions" :label="i18n.alarmSeverity" :rules="[$root.validators.required]" density="comfortable" data-aid="alarm_form_severity"></v-select>
             </v-col>
 
-            <v-col cols="12" sm="6">
+            <v-col v-if="notificationsLicensed" cols="12" sm="6">
               <v-select v-model="form.clearedSeverity" :items="clearedSeverityOptions" :label="i18n.alarmClearedSeverity" :hint="i18n.alarmClearedSeverityHint" persistent-hint density="comfortable" data-aid="alarm_form_cleared_severity"></v-select>
             </v-col>
 
-            <v-col cols="12">
+            <v-col v-if="notificationsLicensed" cols="12">
               <v-autocomplete
                 v-model="form.destinations"
                 :items="destinationOptions"
@@ -155,7 +155,7 @@
               </v-autocomplete>
             </v-col>
 
-            <v-col cols="12">
+            <v-col v-if="notificationsLicensed" cols="12">
               <v-autocomplete
                 v-model="form.recipients"
                 :items="userOptions"

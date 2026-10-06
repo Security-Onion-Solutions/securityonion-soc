@@ -16,6 +16,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
@@ -518,7 +519,7 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 }
 
 func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *model.Alarm, nodeID string, currentValue string, durationSeconds int) {
-	if s.server == nil || s.server.Notifier == nil {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) || s.server == nil || s.server.Notifier == nil {
 		return
 	}
 
@@ -556,7 +557,7 @@ func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *mo
 }
 
 func (s *AlarmstoreImpl) triggerClearedNotification(ctx context.Context, alarm *model.Alarm, nodeID string, currentValue string, durationActiveSeconds int) {
-	if s.server == nil || s.server.Notifier == nil {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) || s.server == nil || s.server.Notifier == nil {
 		return
 	}
 

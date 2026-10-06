@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -302,6 +303,9 @@ func TestAlarmstore_GetAlarmMetrics(t *testing.T) {
 }
 
 func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
 	initialAlarms := []model.Alarm{
 		{
 			ID:              "alarm-1",
@@ -342,7 +346,52 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 	assert.Equal(t, "high", fakeNotifier.InputPayloads[0].Severity)
 }
 
+func TestAlarmstore_EvaluateAlarms_Breach_Unlicensed(t *testing.T) {
+	licensing.Shutdown()
+
+	initialAlarms := []model.Alarm{
+		{
+			ID:              "alarm-1",
+			Name:            "High CPU",
+			Enabled:         true,
+			Metric:          "cpu",
+			Operator:        "gt",
+			Threshold:       "80",
+			DurationSeconds: 0,
+			Severity:        "high",
+			ClearedSeverity: "info",
+		},
+	}
+	alarmsJSON, _ := json.Marshal(initialAlarms)
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{
+			Id:    postgresmetrics.ConfigSettingPostgresMetricsAlarms,
+			Value: string(alarmsJSON),
+		},
+	})
+
+	fakeNotifier := &server.FakeNotifier{}
+	srv := &server.Server{
+		Configstore: cfgStore,
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+		Notifier:    fakeNotifier,
+		Datastore:   &fakeDatastore{nodes: []*model.Node{{Id: "node-1", CpuUsedPct: 85.0}}},
+	}
+	alarmStore := postgresmetrics.NewAlarmstore(srv, nil)
+
+	ctx := context.Background()
+
+	err := alarmStore.EvaluateAlarms(ctx)
+	assert.NoError(t, err)
+
+	// No notification should be dispatched when unlicensed for FEAT_NTF
+	assert.Empty(t, fakeNotifier.InputPayloads)
+}
+
 func TestAlarmstore_EvaluateAlarms_ContainerBreach(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
 	initialAlarms := []model.Alarm{
 		{
 			ID:              "alarm-container-1",

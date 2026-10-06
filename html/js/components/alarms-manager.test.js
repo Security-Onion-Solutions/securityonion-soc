@@ -14,6 +14,7 @@ beforeEach(() => {
 });
 
 test('loadData populates alarms, metrics, states, nodes, destinations and users', async () => {
+  comp.$root.isLicensed = jest.fn(() => true);
   const mockAlarms = [
     {
       id: 'alarm-1',
@@ -270,12 +271,17 @@ test('alarm state helpers and formatting', () => {
   expect(comp.getAlarmStateColor(okAlarm)).toBe('success');
   expect(comp.getAlarmStateColor(disabledAlarm)).toBe('grey');
 
-  expect(comp.getAlarmStateLabel(activeAlarm)).toBe(comp.i18n.alarmActive || 'Alarming');
-  expect(comp.getAlarmStateLabel(okAlarm)).toBe(comp.i18n.alarmCleared || 'OK');
-  expect(comp.getAlarmStateLabel(disabledAlarm)).toBe(comp.i18n.disabled || 'Disabled');
+  expect(comp.getAlarmStateLabel(activeAlarm)).toBe(comp.i18n.alarmActive);
+  expect(comp.getAlarmStateLabel(okAlarm)).toBe(comp.i18n.alarmCleared);
+  expect(comp.getAlarmStateLabel(disabledAlarm)).toBe(comp.i18n.disabled);
 
-  expect(comp.formatCondition(activeAlarm)).toBe('> 80 for >= 2 minutes');
+  expect(comp.formatCondition(activeAlarm)).toBe('> 80 for 2 minutes');
   expect(comp.formatCondition(okAlarm)).toBe('> 80');
+
+  // Localized alarmConditionFor template
+  comp.i18n.alarmConditionFor = 'pendant {duration}';
+  expect(comp.formatCondition(activeAlarm)).toBe('> 80 pendant 2 minutes');
+  delete comp.i18n.alarmConditionFor;
 
   expect(comp.getCurrentValue(activeAlarm)).toBe('92.0');
   expect(comp.getDestinationName('soc-bell')).toBe('SOC Bell');
@@ -361,3 +367,58 @@ test('thresholdHint and booleanThresholdOptions computed properties', () => {
   expect(comp.thresholdHint()).toBe('Varies per metric. Ex: fault');
   expect(comp.selectedMetricType()).toBe('string');
 });
+
+test('notificationsLicensed and tableHeaders filtering based on license', () => {
+  comp.$root = {
+    isUserAdmin: () => true,
+    isLicensed: (feat) => feat === 'ntf',
+    FEAT_NTF: 'ntf',
+  };
+
+  expect(comp.notificationsLicensed()).toBe(true);
+  let headers = comp.tableHeaders();
+  expect(headers.some(h => h.value === 'destinations')).toBe(true);
+  expect(headers.some(h => h.value === 'clearedSeverity')).toBe(true);
+  expect(headers.some(h => h.value === 'actions')).toBe(true);
+
+  // When unlicensed for notifications
+  comp.$root.isLicensed = () => false;
+  expect(comp.notificationsLicensed()).toBe(false);
+  headers = comp.tableHeaders();
+  expect(headers.some(h => h.value === 'destinations')).toBe(false);
+  expect(headers.some(h => h.value === 'clearedSeverity')).toBe(false);
+  expect(headers.some(h => h.value === 'actions')).toBe(true);
+
+  // When non-admin and unlicensed
+  comp.$root.isUserAdmin = () => false;
+  headers = comp.tableHeaders();
+  expect(headers.some(h => h.value === 'destinations')).toBe(false);
+  expect(headers.some(h => h.value === 'clearedSeverity')).toBe(false);
+  expect(headers.some(h => h.value === 'actions')).toBe(false);
+});
+
+test('loadData skips destinations and users when unlicensed for notifications', async () => {
+  comp.$root = {
+    isLicensed: () => false,
+    FEAT_NTF: 'ntf',
+    startLoading: jest.fn(),
+    stopLoading: jest.fn(),
+  };
+
+  const getAlarmsSpy = jest.spyOn(comp, 'getAlarms').mockResolvedValue();
+  const getMetricsSpy = jest.spyOn(comp, 'getMetrics').mockResolvedValue();
+  const getStatesSpy = jest.spyOn(comp, 'getStates').mockResolvedValue();
+  const getNodesSpy = jest.spyOn(comp, 'getNodes').mockResolvedValue();
+  const getDestinationsSpy = jest.spyOn(comp, 'getDestinations').mockResolvedValue();
+  const getUsersSpy = jest.spyOn(comp, 'getUsers').mockResolvedValue();
+
+  await comp.loadData();
+
+  expect(getAlarmsSpy).toHaveBeenCalled();
+  expect(getMetricsSpy).toHaveBeenCalled();
+  expect(getStatesSpy).toHaveBeenCalled();
+  expect(getNodesSpy).toHaveBeenCalled();
+  expect(getDestinationsSpy).not.toHaveBeenCalled();
+  expect(getUsersSpy).not.toHaveBeenCalled();
+});
+

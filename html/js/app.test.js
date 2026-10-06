@@ -1752,3 +1752,77 @@ test('a live agentic push is not republished again by the next settings reload',
 
   expect(handler).not.toHaveBeenCalled();
 });
+
+
+test('loadAlarmStates populates alarmStates and marks alarmStatesLoaded even without notification license', async () => {
+  app.username = 'test@example.com';
+  app.isLicensed = jest.fn(() => false);
+  app.alarmStates = [];
+  app.alarmStatesLoaded = false;
+
+  resetPapi();
+  const mockStates = [{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' }];
+  app.papi.get = jest.fn().mockResolvedValue({ data: mockStates });
+
+  await app.loadAlarmStates();
+
+  expect(app.papi.get).toHaveBeenCalledWith('alarms/states');
+  expect(app.alarmStates).toEqual(mockStates);
+  expect(app.alarmStatesLoaded).toBe(true);
+});
+
+test('loadServerSettings fetches alarm states on initial load and skips subsequent loads when already loaded', async () => {
+  app.username = 'test@example.com';
+  app.alarmStatesLoaded = false;
+  const originalLoadAlarmStates = app.loadAlarmStates;
+  app.loadAlarmStates = jest.fn().mockImplementation(() => {
+    app.alarmStatesLoaded = true;
+    return Promise.resolve();
+  });
+
+  const fakeInfo = {
+    userId: 'user-1',
+    notificationsStarted: false,
+    parameters: {},
+  };
+
+  stubServerSettings({});
+  app.papi.get = jest.fn().mockResolvedValue({ data: fakeInfo });
+
+  // First call: alarm states not yet loaded
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  // Second call: alarm states already loaded, should NOT fetch again
+  app.loadServerSettingsTime = 0;
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  app.loadAlarmStates = originalLoadAlarmStates;
+});
+
+test('openWebsocket onopen reloads alarm states to reconcile state on reconnect', () => {
+  app.loadAlarmStates = jest.fn();
+  app.updateStatus = jest.fn();
+  app.wsUrl = 'ws://localhost/ws';
+  app.socket = null;
+
+  global.WebSocket = jest.fn().mockImplementation(() => {
+    return {
+      readyState: 0,
+      onopen: null,
+      onclose: null,
+      onmessage: null,
+      onerror: null,
+    };
+  });
+
+  app.openWebsocket();
+  expect(app.socket).not.toBeNull();
+  expect(typeof app.socket.onopen).toBe('function');
+
+  app.socket.onopen({});
+
+  expect(app.loadAlarmStates).toHaveBeenCalled();
+  expect(app.connected).toBe(true);
+});

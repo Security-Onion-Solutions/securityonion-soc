@@ -476,24 +476,11 @@ test('metricsNodeId watcher resets metricsContainerId if container not on select
 	expect(comp.updateRoute).toHaveBeenCalled();
 });
 
-test('alarmsEnabled requires historicalMetricsEnabled and notificationsStarted and ntf license', () => {
+test('alarmsEnabled requires historicalMetricsEnabled', () => {
 	comp.historicalMetricsEnabled = true;
-	comp.$root.notificationsStarted = true;
-	comp.$root.isLicensed = jest.fn((feat) => feat === 'ntf');
 	expect(comp.alarmsEnabled()).toBe(true);
 
-	// When notifications not started
-	comp.$root.notificationsStarted = false;
-	expect(comp.alarmsEnabled()).toBe(false);
-
-	// When unlicensed
-	comp.$root.notificationsStarted = true;
-	comp.$root.isLicensed = jest.fn(() => false);
-	expect(comp.alarmsEnabled()).toBe(false);
-
-	// When historical metrics disabled
 	comp.historicalMetricsEnabled = false;
-	comp.$root.isLicensed = jest.fn(() => true);
 	expect(comp.alarmsEnabled()).toBe(false);
 });
 

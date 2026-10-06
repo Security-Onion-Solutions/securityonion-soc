@@ -1517,6 +1517,7 @@ const i18n = {
       ariaAlarmDelete: 'Delete alarm',
       ariaGridAlarms: 'Grid Alarms',
       condition: 'Condition',
+      alarmConditionFor: 'for {duration}',
       targetNode: 'Target Node',
       daySunday: 'Sunday',
       dayMonday: 'Monday',
