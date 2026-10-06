@@ -1345,20 +1345,67 @@ func TestStopAutomationRejectsAnUnknownId(t *testing.T) {
 	}
 }
 
-func TestStopAutomationRequiresConfigWrite(t *testing.T) {
-	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{automationsSetting(t, storedEnabledAutomation(automationTestId, `{}`))}
+// grantAuthorizer allows only the target/operation pairs it was given.
+type grantAuthorizer map[string]bool
 
-	ac := automationCoordinatorAs(cfg, false)
+func (a grantAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation, target string) error {
+	if a[target+"/"+operation] {
+		return nil
+	}
 
-	cancelled := false
-	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
-	defer release()
+	return model.NewUnauthorized("fake-subject", operation, target)
+}
+
+func (a grantAuthorizer) CheckUserOperationAuthorized(userId, operation, target string) error {
+	return a.CheckContextOperationAuthorized(context.Background(), operation, target)
+}
+
+// A stop writes config and acts on runs, so it needs config/write and automations/write.
+func TestStopRequiresConfigAndAutomationsWrite(t *testing.T) {
+	stops := map[string]func(*AssistantCoordinator) error{
+		"one": func(ac *AssistantCoordinator) error {
+			_, err := ac.StopAutomation(automationSaveCtx(), automationTestId)
+			return err
+		},
+		"all": func(ac *AssistantCoordinator) error {
+			_, err := ac.StopAllAutomations(automationSaveCtx())
+			return err
+		},
+	}
+
+	grants := map[string]grantAuthorizer{
+		"config/write only":      {"config/write": true},
+		"automations/write only": {"automations/write": true},
+	}
+
+	for stopName, stop := range stops {
+		for grantName, grant := range grants {
+			t.Run(stopName+" with "+grantName, func(t *testing.T) {
+				ac, cfg, mDB := sweepCoordinator(t, storedEnabledAutomation(automationTestId, `{}`))
+				ac.srv.Authorizer = grant
+
+				cancelled := false
+				release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+				defer release()
+
+				var unauthorized *model.Unauthorized
+				assert.ErrorAs(t, stop(ac), &unauthorized)
+				assert.False(t, cancelled)
+				assert.Empty(t, cfg.updates)
+
+				for _, call := range mDB.Calls {
+					assert.Equal(t, "Migrate", call.Method, "a refused stop must not touch work items")
+				}
+			})
+		}
+	}
+
+	ac, _, mDB := sweepCoordinator(t, storedEnabledAutomation(automationTestId, `{}`))
+	ac.srv.Authorizer = grantAuthorizer{"config/write": true, "automations/write": true}
+	expectStopSweep(mDB, automationTestId, 0)
 
 	_, err := ac.StopAutomation(automationSaveCtx(), automationTestId)
-	assert.Error(t, err)
-	assert.False(t, cancelled)
-	assert.Empty(t, cfg.updates)
+	assert.NoError(t, err)
 }
 
 // Every automation is swept, but only one that was enabled or running counts as stopped, and the

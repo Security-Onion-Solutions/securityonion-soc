@@ -4317,7 +4317,7 @@ func TestDeleteAutomationMapsSystemToForbidden(t *testing.T) {
 }
 
 func TestStopAutomationAnswersWithTheDisabledAutomation(t *testing.T) {
-	r, manager, auth := automationRouter(t, true)
+	r, manager, _ := automationRouter(t, true)
 
 	manager.EXPECT().StopAutomation(gomock.Any(), automationHandlerTestId).
 		Return(&model.Automation{Auditable: model.Auditable{Id: automationHandlerTestId}}, nil)
@@ -4326,7 +4326,6 @@ func TestStopAutomationAnswersWithTheDisabledAutomation(t *testing.T) {
 	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/stop", nil))
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, []string{"config/write"}, auth.asked)
 
 	automation := &model.Automation{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), automation))
@@ -4347,7 +4346,7 @@ func TestStopAutomationMapsMissingToNotFound(t *testing.T) {
 }
 
 func TestStopAllAutomationsReportsHowManyStopped(t *testing.T) {
-	r, manager, auth := automationRouter(t, true)
+	r, manager, _ := automationRouter(t, true)
 
 	manager.EXPECT().StopAllAutomations(gomock.Any()).Return(2, nil)
 
@@ -4355,8 +4354,33 @@ func TestStopAllAutomationsReportsHowManyStopped(t *testing.T) {
 	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/stop", nil))
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, []string{"config/write"}, auth.asked)
 	assert.JSONEq(t, `{"stopped":2}`, w.Body.String())
+}
+
+// The stop routes leave authorization to the manager, which needs both config/write and
+// automations/write; its refusal answers 403.
+func TestStopRoutesAnswerTheManagersRefusalWithForbidden(t *testing.T) {
+	refused := &model.Unauthorized{Subject: "user-1", Operation: "write", Target: "automations"}
+
+	t.Run("one", func(t *testing.T) {
+		r, manager, _ := automationRouter(t, true)
+		manager.EXPECT().StopAutomation(gomock.Any(), automationHandlerTestId).Return(nil, refused)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/stop", nil))
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("all", func(t *testing.T) {
+		r, manager, _ := automationRouter(t, true)
+		manager.EXPECT().StopAllAutomations(gomock.Any()).Return(0, refused)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/stop", nil))
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
 }
 
 // An automation lives in a config setting, so config is the only permission its routes ask
@@ -4378,8 +4402,6 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 		{http.MethodPost, "/assistant/automations", write},
 		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId, write},
 		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId, write},
-		{http.MethodPost, "/assistant/automations/" + automationHandlerTestId + "/stop", write},
-		{http.MethodPost, "/assistant/automations/stop", write},
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", read},
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, read},
 		{http.MethodGet, "/assistant/automations/activity", read},

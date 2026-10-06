@@ -2031,7 +2031,7 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 // @Summary      Stop an Automation
 // @Description  Disable an automation, cancel its in-flight run, and fail the work it has queued or claimed with ERROR_AUTOMATION_STOPPED. Work already writing its results is left to finish. Re-enabling the automation queues the dropped work again.
 // @Tags         Assistant
-// @Security     bearer[config/write]
+// @Security     bearer[config/write, automations/write]
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200 {object} model.Automation "The automation, now disabled"
@@ -2043,11 +2043,6 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 func (h *AssistantHandler) StopAutomation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
 	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
@@ -2057,22 +2052,17 @@ func (h *AssistantHandler) StopAutomation(w http.ResponseWriter, r *http.Request
 }
 
 // @Summary      Stop All Automations
-// @Description  Stop every automation, as POST /connect/assistant/automations/{id}/stop does for one, and report how many were enabled or running.
+// @Description  Disable every automation, cancel each in-flight run, and fail the work each has queued or claimed with ERROR_AUTOMATION_STOPPED, leaving work that is already writing its results to finish. Re-enabling an automation queues its dropped work again. All of the disables are saved in a single write: if that write fails, no automation is disabled and no run is cancelled. Each automation's run is then cancelled and its work failed independently, so a failure on one does not prevent the rest from being stopped; that automation stays disabled with its queued work left in place, and the request answers 500 after every automation has been attempted. A stored automation that cannot be read is skipped and logged.
 // @Tags         Assistant
-// @Security     bearer[config/write]
+// @Security     bearer[config/write, automations/write]
 // @Produce      json
-// @Success      200 {object} map[string]int "How many automations were stopped, under stopped"
+// @Success      200 {object} map[string]int "How many automations were enabled or running, under stopped"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
-// @Failure      500           "Internal SOC error; review SOC logs"
+// @Failure      500           "Internal SOC error, including an automation that could not be stopped; review SOC logs"
 // @Router       /connect/assistant/automations/stop [post]
 func (h *AssistantHandler) StopAllAutomations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
-		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
 
 	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
@@ -2370,7 +2360,11 @@ func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var unauthorized *model.Unauthorized
+
 	switch {
+	case errors.As(err, &unauthorized):
+		web.Respond(w, r, http.StatusForbidden, err)
 	case strings.Contains(err.Error(), "ERROR_AUTOMATION_NOT_FOUND"),
 		strings.Contains(err.Error(), "ERROR_AUTOMATION_RUN_NOT_FOUND"):
 		web.Respond(w, r, http.StatusNotFound, err)

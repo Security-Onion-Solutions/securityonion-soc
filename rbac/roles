@@ -40,5 +40,6 @@ memory-user:       analyst superuser
 memory-admin:      superuser
 memory-monitor:    auditor
 automation-monitor: analyst auditor superuser
+automation-admin:  superuser
 subgrid-admin:     superuser subgrid-superuser
 subgrid-monitor:   subgrid-auditor

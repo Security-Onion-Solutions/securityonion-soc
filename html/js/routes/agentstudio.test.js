@@ -2031,16 +2031,47 @@ test('stopping an automation asks first, then posts and reloads', async () => {
   const post = mockPapi('post', { data: Object.assign({}, builtin, { enabled: false }) });
   mockReload(storedAutomations());
 
-  comp.confirmDelete('stop', builtin);
-  expect(comp.deleteTitle()).toBe(comp.i18n.agentMonitorStopTitle);
-  expect(comp.deleteConfirmText()).toBe(comp.i18n.agentMonitorStopConfirm);
+  comp.confirmStop(builtin);
+  expect(comp.stopDialog).toBe(true);
+  expect(comp.stopTarget).toBe(builtin);
+  expect(comp.confirmDeleteDialog).toBe(false);
 
-  await comp.performDelete();
+  await comp.performStop();
 
   expect(post).toHaveBeenCalledWith('assistant/automations/' + encodeURIComponent(builtin.id) + '/stop');
   expect(comp.$root.showInfo).toHaveBeenCalledWith('Stopped ' + builtin.displayName + '.');
-  expect(comp.confirmDeleteDialog).toBe(false);
+  expect(comp.stopDialog).toBe(false);
+  expect(comp.stopTarget).toBeNull();
   expect(comp.$root.showError).not.toHaveBeenCalled();
+});
+
+test('cancelling a stop posts nothing', () => {
+  seedAutomations();
+  const post = mockPapi('post', {});
+
+  comp.confirmStop(comp.automations[0]);
+  comp.cancelStop();
+
+  expect(comp.stopDialog).toBe(false);
+  expect(comp.stopTarget).toBeNull();
+  expect(post).not.toHaveBeenCalled();
+});
+
+test('stopping an expanded automation disables its draft so saving cannot re-enable it', async () => {
+  seedAutomations();
+  comp.$root.showInfo = jest.fn();
+  const row = comp.automations.find(a => a.id === CRITICAL_ID);
+  comp.automationDrafts[row.id] = JSON.parse(JSON.stringify(row));
+  comp.automationDrafts[row.id].intervalSeconds = 600;
+  mockPapi('post', { data: Object.assign({}, row, { enabled: false }) });
+  mockReload(storedAutomations().map(a => a.id === CRITICAL_ID ? Object.assign({}, a, { enabled: false }) : a));
+
+  await comp.stopAutomation(row);
+
+  const reloaded = comp.automations.find(a => a.id === CRITICAL_ID);
+  expect(comp.automationDrafts[row.id].enabled).toBe(false);
+  expect(comp.automationDrafts[row.id].intervalSeconds).toBe(600);
+  expect(comp.automationPayload(comp.automationDrafts[row.id]).enabled).toBe(reloaded.enabled);
 });
 
 test('a failed delete keeps the automation', async () => {

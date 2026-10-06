@@ -240,10 +240,10 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       try {
         if (target) {
           await this.$root.papi.post('assistant/automations/' + encodeURIComponent(target.id) + '/stop');
-          this.$root.showInfo(this.i18n.agentMonitorStopped.replace('{name}', target.name));
+          this.$root.showInfo(this.i18n.automationStopped.replace('{name}', target.name));
         } else {
           const response = await this.$root.papi.post('assistant/automations/stop');
-          this.$root.showInfo(this.i18n.agentMonitorStoppedAll.replace('{count}', (response.data || {}).stopped || 0));
+          this.$root.showInfo(this.i18n.automationStoppedAll.replace('{count}', (response.data || {}).stopped || 0));
         }
         await this.loadData();
       } catch (error) {

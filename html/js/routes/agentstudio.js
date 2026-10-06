@@ -67,6 +67,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     expandedAutomations: [],
 
     confirmDeleteDialog: false,
+    stopDialog: false,
+    stopTarget: null,
     // { kind: 'agent' | 'automation', item }
     deleteTarget: null,
     creatorNames: {},
@@ -1131,12 +1133,27 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
     },
+    confirmStop(automation) {
+      this.stopTarget = automation;
+      this.stopDialog = true;
+    },
+    cancelStop() {
+      this.stopDialog = false;
+      this.stopTarget = null;
+    },
+    async performStop() {
+      const automation = this.stopTarget;
+      this.cancelStop();
+      if (automation) await this.stopAutomation(automation);
+    },
     async stopAutomation(automation) {
       this.$root.startLoading();
       try {
         await this.$root.papi.post('assistant/automations/' + encodeURIComponent(automation.id) + '/stop');
-        this.$root.showInfo(this.i18n.agentMonitorStopped.replace('{name}', automation.displayName));
+        this.$root.showInfo(this.i18n.automationStopped.replace('{name}', automation.displayName));
         delete this.automationRuns[automation.id];
+        // Otherwise the open draft still says enabled, and saving it would undo the stop.
+        if (this.automationDrafts[automation.id]) this.automationDrafts[automation.id].enabled = false;
         await this.loadAutomations();
       } catch (error) {
         this.$root.showError(error);
@@ -1168,14 +1185,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (target.kind === 'agent') await this.removeAgent(target.item);
       else if (target.kind === 'skill') await this.removeSkill(target.item);
       else if (target.kind === 'automation') await this.removeAutomation(target.item);
-      else if (target.kind === 'stop') await this.stopAutomation(target.item);
     },
     deleteTitle() {
       return ({
         agent: this.i18n.agentStudioDeleteAgentTitle,
         skill: this.i18n.agentStudioDeleteSkillTitle,
         automation: this.i18n.agentStudioDeleteAutomationTitle,
-        stop: this.i18n.agentMonitorStopTitle,
       })[this.deleteTarget.kind];
     },
     deleteConfirmText() {
@@ -1183,7 +1198,6 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         agent: this.i18n.agentStudioDeleteAgentConfirm,
         skill: this.i18n.agentStudioDeleteSkillConfirm,
         automation: this.i18n.agentStudioDeleteAutomationConfirm,
-        stop: this.i18n.agentMonitorStopConfirm,
       })[this.deleteTarget.kind];
     },
     showAddAutomation() {

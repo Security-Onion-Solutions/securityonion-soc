@@ -290,11 +290,24 @@
       <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click.stop="cancelDelete()" data-aid="agentstudio_delete_dialog_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn variant="text" color="error" @click.stop="performDelete()" data-aid="agentstudio_delete_dialog_confirm">{{ deleteTarget.kind === 'stop' ? i18n.agentMonitorStop : i18n.delete }}</v-btn>
+        <v-btn variant="text" color="error" @click.stop="performDelete()" data-aid="agentstudio_delete_dialog_confirm">{{ i18n.delete }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 
+  <v-dialog v-model="stopDialog" persistent max-width="420" data-aid="agentstudio_stop_dialog">
+    <v-card v-if="stopTarget">
+      <v-card-title class="headline" role="heading" aria-level="2" v-text="i18n.automationStopTitle"></v-card-title>
+      <v-card-text v-text="i18n.automationStopConfirm"></v-card-text>
+      <v-card-text class="font-weight-bold" v-text="stopTarget.displayName" data-aid="agentstudio_stop_dialog_name"></v-card-text>
+      <v-card-text v-text="i18n.continue"></v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click.stop="cancelStop()" data-aid="agentstudio_stop_dialog_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" color="error" @click.stop="performStop()" data-aid="agentstudio_stop_dialog_confirm">{{ i18n.automationStop }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 
   <v-dialog v-model="scanHistoricalDialog" persistent width="500px" scrollable data-aid="agentstudio_memoryscan_history_dialog">
     <v-card>
@@ -844,7 +857,7 @@
                           <v-card-actions class="px-4">
                             <v-btn v-if="!automationsReadOnly && automationKind(item.automationKind)" variant="text" color="primary" @click.stop="duplicateAutomation(item)" :data-aid="'agentstudio_automation_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
                             <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('automation', item)" :data-aid="'agentstudio_automation_delete_' + item.id">{{ i18n.delete }}</v-btn>
-                            <v-btn variant="text" color="error" @click.stop="confirmDelete('stop', item)" :data-aid="'agentstudio_automation_stop_' + item.id">{{ i18n.agentMonitorStop }}</v-btn>
+                            <v-btn v-if="$root.canStopAutomations()" variant="text" color="error" @click.stop="confirmStop(item)" :data-aid="'agentstudio_automation_stop_' + item.id">{{ i18n.automationStop }}</v-btn>
                             <v-spacer></v-spacer>
                             <v-btn variant="text" :color="automationDirty(item) && automationValid(draftForAutomation(item)) ? 'primary' : ''" :disabled="!automationDirty(item) || !automationValid(draftForAutomation(item))" @click.stop="saveAutomation(item)" :data-aid="'agentstudio_automation_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>

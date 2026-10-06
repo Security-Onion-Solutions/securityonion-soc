@@ -328,3 +328,47 @@ func TestSubgridPermissionsWithRealRbacFiles(tester *testing.T) {
 		})
 	}
 }
+
+func TestAutomationPermissionsWithRealRbacFiles(tester *testing.T) {
+	auth := NewStaticRbacAuthorizer(server.NewFakeAuthorizedServer(nil))
+	roleFiles := []string{"../../../rbac/permissions", "../../../rbac/roles"}
+	err := auth.Init([]string{}, roleFiles, DEFAULT_SCAN_INTERVAL_MS, "user")
+	assert.NoError(tester, err)
+
+	testCases := []struct {
+		role     string
+		canRead  bool
+		canWrite bool
+	}{
+		{role: "superuser", canRead: true, canWrite: true},
+		{role: "automation-admin", canRead: true, canWrite: true},
+		{role: "analyst", canRead: true, canWrite: false},
+		{role: "auditor", canRead: true, canWrite: false},
+		{role: "automation-monitor", canRead: true, canWrite: false},
+		{role: "limited-analyst", canRead: false, canWrite: false},
+	}
+
+	for _, tc := range testCases {
+		tester.Run(tc.role, func(t *testing.T) {
+			user := model.NewUser()
+			user.Id = "user-" + tc.role
+			auth.AddRoleToUser(user, tc.role)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, user.Id)
+
+			readErr := auth.CheckContextOperationAuthorized(ctx, "read", "automations")
+			if tc.canRead {
+				assert.NoError(t, readErr)
+			} else {
+				assert.Error(t, readErr)
+			}
+
+			writeErr := auth.CheckContextOperationAuthorized(ctx, "write", "automations")
+			if tc.canWrite {
+				assert.NoError(t, writeErr)
+			} else {
+				assert.Error(t, writeErr)
+			}
+		})
+	}
+}

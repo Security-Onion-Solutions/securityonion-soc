@@ -61,6 +61,7 @@ memory/write_self:         memory-user
 memory/write_global:       memory-curator
 memory/write_all:          memory-admin
 automations/read:          automation-monitor
+automations/write:         automation-admin
 
 # Define low-level permission set inheritence relationships
 # Syntax      => roleB: roleA
@@ -78,6 +79,7 @@ node-monitor:       node-admin
 notification-monitor: notification-admin notification-auditor
 query-monitor:      query-admin
 subgrid-monitor:    subgrid-admin
+automation-monitor: automation-admin
 user-monitor:       user-admin
 playbook-monitor:   playbook-admin
 assistant-user:     assistant-admin

@@ -797,6 +797,16 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 	return nil
 }
 
+// checkAutomationControl authorizes stopping automations: config/write for the disable it
+// stores, automations/write for acting on the runs themselves.
+func (ac *AssistantCoordinator) checkAutomationControl(ctx context.Context) error {
+	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return err
+	}
+
+	return ac.srv.CheckAuthorized(ctx, "write", "automations")
+}
+
 // StopAutomation disables an automation, cancels its running run and fails the work it holds,
 // returning the automation as it now stands. Applying work is left to finish, as it is under a
 // params change. Disabling is what keeps the queue clear: the next scan would otherwise
@@ -810,7 +820,7 @@ func (ac *AssistantCoordinator) StopAutomation(ctx context.Context, id string) (
 		return nil, ErrAutomationNotFound
 	}
 
-	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+	if err := ac.checkAutomationControl(ctx); err != nil {
 		return nil, err
 	}
 
@@ -845,13 +855,16 @@ func (ac *AssistantCoordinator) StopAutomation(ctx context.Context, id string) (
 	return automation, err
 }
 
-// StopAllAutomations stops every automation, returning how many were enabled or running.
+// StopAllAutomations stops every readable automation, returning how many were enabled or running.
+// The disables are one write, so either all land or none do and nothing is halted. Each halt is
+// then independent: one that fails leaves that automation disabled with its work in place, and
+// the rest are still halted before the failures are returned.
 func (ac *AssistantCoordinator) StopAllAutomations(ctx context.Context) (int, error) {
 	if ac.srv == nil || ac.srv.Configstore == nil {
 		return 0, ErrConfigstoreUnavailable
 	}
 
-	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+	if err := ac.checkAutomationControl(ctx); err != nil {
 		return 0, err
 	}
 
