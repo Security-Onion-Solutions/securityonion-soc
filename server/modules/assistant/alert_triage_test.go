@@ -1244,6 +1244,18 @@ func TestAlertTriageCheckpointFailures(t *testing.T) {
 		assert.Empty(t, f.alerts.recorded())
 	})
 
+	t.Run("swept by a stop", func(t *testing.T) {
+		f, r := newTriageJob(t)
+
+		ctx, cancel := context.WithCancelCause(context.Background())
+		f.store.sweep = func() { cancel(ErrAutomationStopped) }
+		f.store.applyingErr = database.ErrAutomationWorkItemNotFound
+
+		require.NoError(t, r.workItem(ctx, f.claimed(t)))
+		assert.Equal(t, []string{"session:item-1", "applying:item-1:cancelled"}, f.store.log())
+		assert.Empty(t, f.alerts.recorded())
+	})
+
 	t.Run("vanished on a live run", func(t *testing.T) {
 		f, r := newTriageJob(t)
 		f.store.applyingErr = database.ErrAutomationWorkItemNotFound
@@ -1298,6 +1310,7 @@ func TestAlertTriageInterruptedSessionWritesNothing(t *testing.T) {
 	}{
 		// The session is linked to the item before it starts, and nothing is written after.
 		{"params changed", ErrAutomationParamsChanged, []string{"session:item-1"}},
+		{"stopped", ErrAutomationStopped, []string{"session:item-1"}},
 		{"shutdown", ErrAutomationSchedulerStopped, []string{"session:item-1"}},
 	}
 	for _, tt := range tests {
@@ -1324,6 +1337,18 @@ func TestAlertTriageReportAfterParamsChangeIsRecorded(t *testing.T) {
 		item := f.claimed(t)
 
 		// Every write after the cancel runs detached from it.
+		require.NoError(t, r.workItem(ctx, item))
+		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
+		assert.Equal(t, model.AutomationWorkItemDone, item.State)
+	})
+
+	t.Run("item still held after a stop", func(t *testing.T) {
+		f, r := newTriageJob(t)
+
+		ctx, cancel := context.WithCancelCause(context.Background())
+		f.manager.onRun = func(context.Context) { cancel(ErrAutomationStopped) }
+		item := f.claimed(t)
+
 		require.NoError(t, r.workItem(ctx, item))
 		assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
 		assert.Equal(t, model.AutomationWorkItemDone, item.State)

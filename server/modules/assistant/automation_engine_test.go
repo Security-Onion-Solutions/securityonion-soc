@@ -300,6 +300,41 @@ func TestSaveAutomationInterruptsTheRunningRun(t *testing.T) {
 	})
 }
 
+// A stop closes the live run with its cause, and the disable it wrote keeps the next tick from
+// starting another.
+func TestStopAutomationEndsTheRunAndKeepsItStopped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
+
+		f.kind.executeFunc = func(ctx context.Context, run *AutomationRun) error {
+			<-ctx.Done()
+
+			return nil
+		}
+
+		// The fake records writes without storing them; the next tick has to read the disable.
+		f.cfg.onUpdate = func() { f.cfg.replace(f.cfg.updates[len(f.cfg.updates)-1]) }
+
+		f.startAndWake()
+		require.True(t, f.ac.isAutomationRunning(automationTestId))
+
+		expectStopSweep(f.mDB, automationTestId, 0)
+		_, err := f.ac.StopAutomation(automationSaveCtx(), automationTestId)
+		require.NoError(t, err)
+		synctest.Wait()
+
+		f.ac.wakeAutomationScheduler()
+		synctest.Wait()
+
+		opens, _, closes := f.snapshot()
+		assert.Equal(t, 1, opens)
+		require.Len(t, closes, 1)
+		assert.Equal(t, string(model.AutomationRunFailed), closes[0].state)
+		assert.Equal(t, ErrAutomationStopped.Error(), closes[0].cause)
+		assert.False(t, f.ac.isAutomationRunning(automationTestId))
+	})
+}
+
 func TestStartDueAutomationRunsRequiresAStore(t *testing.T) {
 	f := newBareEngineFixture(t)
 	f.ac.store = nil
@@ -476,7 +511,7 @@ func TestAutomationRunClosesWithADetachedContext(t *testing.T) {
 		}
 
 		f.startAndWake()
-		f.ac.interruptAutomationRun(automationTestId)
+		f.ac.interruptAutomationRun(automationTestId, ErrAutomationParamsChanged)
 		synctest.Wait()
 
 		_, _, closes := f.snapshot()

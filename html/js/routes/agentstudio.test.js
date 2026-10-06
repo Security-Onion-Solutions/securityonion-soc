@@ -2023,6 +2023,26 @@ test('deleting a custom automation asks first and only proceeds on confirm', asy
   expect(comp.automationRuns[CRITICAL_ID]).toBeUndefined();
 });
 
+test('stopping an automation asks first, then posts and reloads', async () => {
+  seedAutomations();
+  comp.$root.showInfo = jest.fn();
+  const builtin = comp.automations[0];
+  comp.automationRuns[builtin.id] = { runs: [] };
+  const post = mockPapi('post', { data: Object.assign({}, builtin, { enabled: false }) });
+  mockReload(storedAutomations());
+
+  comp.confirmDelete('stop', builtin);
+  expect(comp.deleteTitle()).toBe(comp.i18n.agentMonitorStopTitle);
+  expect(comp.deleteConfirmText()).toBe(comp.i18n.agentMonitorStopConfirm);
+
+  await comp.performDelete();
+
+  expect(post).toHaveBeenCalledWith('assistant/automations/' + encodeURIComponent(builtin.id) + '/stop');
+  expect(comp.$root.showInfo).toHaveBeenCalledWith('Stopped ' + builtin.displayName + '.');
+  expect(comp.confirmDeleteDialog).toBe(false);
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+});
+
 test('a failed delete keeps the automation', async () => {
   seedAutomations();
   mockPapi('delete', null, new Error('boom'));

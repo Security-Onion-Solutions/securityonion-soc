@@ -839,3 +839,58 @@ test('table settings persist to local storage', () => {
   expect(comp.sortBy[0]).toEqual({ key: 'automationName', order: 'desc' });
   expect(comp.itemsPerPage).toBe(50);
 });
+
+test('stopping an automation from its row asks first, then posts and reloads', async () => {
+  await load();
+  comp.$root.showInfo = jest.fn();
+  const post = mockPapi('post', { data: {} });
+  const row = itemById('item-ps');
+
+  comp.confirmStop(row);
+  expect(comp.stopDialog).toBe(true);
+  expect(comp.stopTarget).toEqual({ id: TRIAGE_ID, name: 'Alert Triage' });
+
+  await comp.performStop();
+
+  expect(post).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID + '/stop');
+  expect(comp.stopDialog).toBe(false);
+  expect(comp.stopTarget).toBeNull();
+  expect(comp.$root.showInfo).toHaveBeenCalledWith('Stopped Alert Triage.');
+  expect(comp.$root.papi.get).toHaveBeenCalledWith('assistant/automations/activity');
+});
+
+test('stop all posts once and reports how many stopped', async () => {
+  await load();
+  comp.$root.showInfo = jest.fn();
+  const post = mockPapi('post', { data: { stopped: 2 } });
+
+  comp.confirmStop(null);
+  expect(comp.stopTarget).toBeNull();
+  await comp.performStop();
+
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(post).toHaveBeenCalledWith('assistant/automations/stop');
+  expect(comp.$root.showInfo).toHaveBeenCalledWith('Stopped 2 automations.');
+});
+
+test('cancelling a stop posts nothing', async () => {
+  await load();
+  const post = mockPapi('post', { data: {} });
+
+  comp.confirmStop(itemById('item-ps'));
+  comp.cancelStop();
+
+  expect(comp.stopDialog).toBe(false);
+  expect(post).not.toHaveBeenCalled();
+});
+
+test('a failed stop is reported', async () => {
+  await load();
+  mockPapi('post', null, new Error('boom'));
+
+  comp.confirmStop(null);
+  await comp.performStop();
+
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});

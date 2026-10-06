@@ -498,6 +498,36 @@ func (mr *MockAssistantManagerMockRecorder) SendStream(ctx, aiModel, messages an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendStream", reflect.TypeOf((*MockAssistantManager)(nil).SendStream), varargs...)
 }
 
+// StopAllAutomations mocks base method.
+func (m *MockAssistantManager) StopAllAutomations(ctx context.Context) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopAllAutomations", ctx)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopAllAutomations indicates an expected call of StopAllAutomations.
+func (mr *MockAssistantManagerMockRecorder) StopAllAutomations(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopAllAutomations", reflect.TypeOf((*MockAssistantManager)(nil).StopAllAutomations), ctx)
+}
+
+// StopAutomation mocks base method.
+func (m *MockAssistantManager) StopAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopAutomation", ctx, id)
+	ret0, _ := ret[0].(*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopAutomation indicates an expected call of StopAutomation.
+func (mr *MockAssistantManagerMockRecorder) StopAutomation(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopAutomation", reflect.TypeOf((*MockAssistantManager)(nil).StopAutomation), ctx, id)
+}
+
 // ToolInSession mocks base method.
 func (m *MockAssistantManager) ToolInSession(ctx context.Context, toolReq *model.ToolRequest, toolName string) ([]*model.Message, error) {
 	m.ctrl.T.Helper()

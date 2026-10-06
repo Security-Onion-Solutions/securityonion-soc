@@ -57,6 +57,10 @@ var (
 	// The reason recorded on work that outlived the automation it was queued for.
 	ErrAutomationDeleted = errors.New("ERROR_AUTOMATION_DELETED")
 
+	// The cancel cause an operator's stop gives the run, and the reason recorded on the work it
+	// was holding.
+	ErrAutomationStopped = errors.New("ERROR_AUTOMATION_STOPPED")
+
 	// The reason recorded on work whose run stopped without settling it; also what reconcile
 	// writes at startup.
 	ErrAutomationWorkItemInterrupted = errors.New("ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED")
@@ -125,10 +129,18 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 	return run.Srv.AssistantManager.RunAgentSession(ctx, &started)
 }
 
-// automationWriteContext detaches from a params-change cancel, so a finished session is still
-// recorded, but never from a shutdown.
+// sweptByOperator reports whether the run was cancelled by a params change or a stop, both of
+// which sweep the work the run was holding.
+func sweptByOperator(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+
+	return errors.Is(cause, ErrAutomationParamsChanged) || errors.Is(cause, ErrAutomationStopped)
+}
+
+// automationWriteContext detaches from a params-change or stop cancel, so a finished session is
+// still recorded, but never from a shutdown.
 func automationWriteContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if !errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
+	if !sweptByOperator(ctx) {
 		return ctx, func() {}
 	}
 
@@ -471,29 +483,6 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 		return nil, err
 	}
 
-	stored, err := ac.getStoredAutomation(ctx, id)
-
-	if !ac.isBuiltinAutomation(id) {
-		return stored, err
-	}
-
-	if errors.Is(err, ErrAutomationNotFound) {
-		return ac.overlayBuiltinAutomation(id, nil), nil
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return ac.overlayBuiltinAutomation(id, stored), nil
-}
-
-// getStoredAutomation reads the automation as written, without the builtin overlay.
-func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id string) (*model.Automation, error) {
-	if ac.srv == nil || ac.srv.Configstore == nil {
-		return nil, ErrConfigstoreUnavailable
-	}
-
 	if !isAutomationId(id) {
 		return nil, ErrAutomationNotFound
 	}
@@ -503,7 +492,18 @@ func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id stri
 		return nil, err
 	}
 
+	return ac.resolveAutomation(stored, id)
+}
+
+// resolveAutomation finds id in stored as the API presents it: a builtin is overlaid, and one
+// never saved is the builtin as shipped.
+func (ac *AssistantCoordinator) resolveAutomation(stored []json.RawMessage, id string) (*model.Automation, error) {
 	automation := findStoredAutomation(stored, id)
+
+	if ac.isBuiltinAutomation(id) {
+		return ac.overlayBuiltinAutomation(id, automation), nil
+	}
+
 	if automation == nil {
 		return nil, ErrAutomationNotFound
 	}
@@ -565,17 +565,12 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
-	existing, err := ac.stampAutomation(ctx, automation, stored)
+	existing, stored, err := ac.putStoredAutomation(ctx, automation, stored)
 	if err != nil {
 		return err
 	}
 
-	encoded, err := json.Marshal(automation)
-	if err != nil {
-		return err
-	}
-
-	if err := ac.writeStoredAutomations(ctx, replaceStoredAutomation(stored, automation.Id, encoded)); err != nil {
+	if err := ac.writeStoredAutomations(ctx, stored); err != nil {
 		return err
 	}
 
@@ -584,7 +579,7 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	// leaves that stale work in place.
 	// A builtin's params come with the build, so a save never changes what its work was derived from.
 	if existing != nil && !builtin && !jsonEqual(existing.Params, automation.Params) {
-		ac.interruptAutomationRun(automation.Id)
+		ac.interruptAutomationRun(automation.Id, ErrAutomationParamsChanged)
 
 		if ac.store != nil {
 			if err := ac.sweepAutomationWork(ctx, ac.store.FailStaleAutomationWorkItems, automation.Id,
@@ -686,7 +681,24 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 	return existing, nil
 }
 
-// registerAutomationRun records a run's cancel so a params change can reach it, returning the
+// putStoredAutomation stamps automation and puts it into stored, returning the copy it replaced.
+// The caller holds configWriteMu and writes the result back.
+func (ac *AssistantCoordinator) putStoredAutomation(ctx context.Context, automation *model.Automation,
+	stored []json.RawMessage) (*model.Automation, []json.RawMessage, error) {
+	existing, err := ac.stampAutomation(ctx, automation, stored)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	encoded, err := json.Marshal(automation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return existing, replaceStoredAutomation(stored, automation.Id, encoded), nil
+}
+
+// registerAutomationRun records a run's cancel so a params change or stop can reach it, returning the
 // release the engine defers.
 func (ac *AssistantCoordinator) registerAutomationRun(id string, cancel context.CancelCauseFunc) func() {
 	ac.automationRunMu.Lock()
@@ -709,12 +721,12 @@ func (ac *AssistantCoordinator) registerAutomationRun(id string, cancel context.
 // interruptAutomationRun signals the run executing this automation to stop. It does not wait:
 // a config write must not block on an LLM turn. The stale work is finalized immediately after,
 // so a run still unwinding finds nothing left to claim.
-func (ac *AssistantCoordinator) interruptAutomationRun(id string) {
+func (ac *AssistantCoordinator) interruptAutomationRun(id string, cause error) {
 	ac.automationRunMu.Lock()
 	defer ac.automationRunMu.Unlock()
 
 	if cancel := ac.automationRuns[id]; cancel != nil {
-		cancel(ErrAutomationParamsChanged)
+		cancel(cause)
 	}
 }
 
@@ -783,6 +795,141 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 	ac.invalidateAutomations()
 
 	return nil
+}
+
+// StopAutomation disables an automation, cancels its running run and fails the work it holds,
+// returning the automation as it now stands. Applying work is left to finish, as it is under a
+// params change. Disabling is what keeps the queue clear: the next scan would otherwise
+// re-derive the same work.
+func (ac *AssistantCoordinator) StopAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return nil, ErrConfigstoreUnavailable
+	}
+
+	if !isAutomationId(id) {
+		return nil, ErrAutomationNotFound
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return nil, err
+	}
+
+	ac.configWriteMu.Lock()
+	defer ac.configWriteMu.Unlock()
+
+	stored, err := ac.readStoredAutomations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	automation, err := ac.resolveAutomation(stored, id)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, changed, err := ac.disableStoredAutomation(ctx, stored, automation)
+	if err != nil {
+		return nil, err
+	}
+
+	if changed {
+		if err := ac.writeStoredAutomations(ctx, stored); err != nil {
+			return nil, err
+		}
+	}
+
+	err = ac.haltAutomationWork(ctx, id)
+
+	ac.invalidateAutomations()
+
+	return automation, err
+}
+
+// StopAllAutomations stops every automation, returning how many were enabled or running.
+func (ac *AssistantCoordinator) StopAllAutomations(ctx context.Context) (int, error) {
+	if ac.srv == nil || ac.srv.Configstore == nil {
+		return 0, ErrConfigstoreUnavailable
+	}
+
+	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
+		return 0, err
+	}
+
+	ac.configWriteMu.Lock()
+	defer ac.configWriteMu.Unlock()
+
+	automations, _, err := ac.scanAutomations(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	stored, err := ac.readStoredAutomations(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	stopped := 0
+	write := false
+
+	for _, automation := range automations {
+		running := ac.isAutomationRunning(automation.Id)
+
+		var changed bool
+
+		stored, changed, err = ac.disableStoredAutomation(ctx, stored, automation)
+		if err != nil {
+			return 0, err
+		}
+
+		write = write || changed
+
+		if changed || running {
+			stopped++
+		}
+	}
+
+	if write {
+		if err := ac.writeStoredAutomations(ctx, stored); err != nil {
+			return 0, err
+		}
+	}
+
+	errs := []error{}
+	for _, automation := range automations {
+		errs = append(errs, ac.haltAutomationWork(ctx, automation.Id))
+	}
+
+	ac.invalidateAutomations()
+
+	return stopped, errors.Join(errs...)
+}
+
+// disableStoredAutomation clears automation's enabled flag and puts it into stored, reporting
+// whether anything changed. The caller holds configWriteMu and writes stored back.
+func (ac *AssistantCoordinator) disableStoredAutomation(ctx context.Context, stored []json.RawMessage,
+	automation *model.Automation) ([]json.RawMessage, bool, error) {
+	if !automation.Enabled {
+		return stored, false, nil
+	}
+
+	automation.Enabled = false
+
+	_, stored, err := ac.putStoredAutomation(ctx, automation, stored)
+
+	return stored, err == nil, err
+}
+
+// haltAutomationWork cancels the automation's run before sweeping, or the run claims an item
+// the sweep is about to fail.
+func (ac *AssistantCoordinator) haltAutomationWork(ctx context.Context, id string) error {
+	ac.interruptAutomationRun(id, ErrAutomationStopped)
+
+	if ac.store == nil {
+		return nil
+	}
+
+	return ac.sweepAutomationWork(ctx, ac.store.FailStaleAutomationWorkItems, id, ErrAutomationStopped,
+		"assistant: dropped automation work for a stopped automation")
 }
 
 // sweepOrphanedAutomationWork drops the work items left behind by automations that no longer

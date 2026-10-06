@@ -20,12 +20,29 @@
         <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadData()" data-aid="agentmonitor_refresh" :title="i18n.refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
         </v-btn>
+        <v-btn v-if="$root.isUserAdmin()" icon variant="flat" class="circle-button mx-2" @click.stop="confirmStop(null)" data-aid="agentmonitor_stop_all" :title="i18n.agentMonitorStopAll" :aria-label="i18n.agentMonitorStopAll">
+          <v-icon color="error">fa-stop</v-icon>
+        </v-btn>
         <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" data-aid="agentmonitor_docs" :title="i18n.contextualDocsBtn" :aria-label="i18n.contextualDocsBtn">
           <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
     </v-col>
   </v-row>
+
+  <v-dialog v-model="stopDialog" persistent max-width="420" data-aid="agentmonitor_stop_dialog">
+    <v-card>
+      <v-card-title class="headline" role="heading" aria-level="2" v-text="stopTarget ? i18n.agentMonitorStopTitle : i18n.agentMonitorStopAll"></v-card-title>
+      <v-card-text v-text="stopTarget ? i18n.agentMonitorStopConfirm : i18n.agentMonitorStopAllConfirm"></v-card-text>
+      <v-card-text v-if="stopTarget" class="font-weight-bold" v-text="stopTarget.name" data-aid="agentmonitor_stop_dialog_name"></v-card-text>
+      <v-card-text v-text="i18n.continue"></v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click.stop="cancelStop()" data-aid="agentmonitor_stop_dialog_cancel">{{ i18n.cancel }}</v-btn>
+        <v-btn variant="text" color="error" @click.stop="performStop()" data-aid="agentmonitor_stop_dialog_confirm">{{ i18n.agentMonitorStop }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 
   <v-row class="ga-3" data-aid="agentmonitor_pool_stats">
     <v-col>
@@ -156,6 +173,9 @@
                   <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
                 </router-link>
                 <span v-else class="text-disabled" :title="i18n.agentMonitorNotStarted">&mdash;</span>
+                <v-btn v-if="$root.isUserAdmin()" icon variant="text" size="small" class="no-print" @click.stop="confirmStop(item)" data-aid="agentmonitor_stop_automation" :title="i18n.agentMonitorStopTitle" :aria-label="i18n.agentMonitorStopTitle + ' - ' + item.automationName">
+                  <v-icon color="error">fa-stop</v-icon>
+                </v-btn>
               </td>
             </tr>
           </template>

@@ -89,6 +89,9 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     canChat: false,
     showModelThinking: true,
     paused: false,
+    stopDialog: false,
+    // { id, name } of the automation to stop; null stops them all.
+    stopTarget: null,
 
     tickTimer: null,
     now: Date.now(),
@@ -221,6 +224,33 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     reportLoadError(error, background) {
       if (background) console.error('Failed to refresh Agent Monitor:', error);
       else this.$root.showError(error);
+    },
+    confirmStop(item) {
+      this.stopTarget = item ? { id: item.automationId, name: item.automationName } : null;
+      this.stopDialog = true;
+    },
+    cancelStop() {
+      this.stopDialog = false;
+      this.stopTarget = null;
+    },
+    async performStop() {
+      const target = this.stopTarget;
+      this.cancelStop();
+      this.$root.startLoading();
+      try {
+        if (target) {
+          await this.$root.papi.post('assistant/automations/' + encodeURIComponent(target.id) + '/stop');
+          this.$root.showInfo(this.i18n.agentMonitorStopped.replace('{name}', target.name));
+        } else {
+          const response = await this.$root.papi.post('assistant/automations/stop');
+          this.$root.showInfo(this.i18n.agentMonitorStoppedAll.replace('{count}', (response.data || {}).stopped || 0));
+        }
+        await this.loadData();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
     },
     async loadData(background = false) {
       this.now = Date.now();

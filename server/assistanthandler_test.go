@@ -4316,6 +4316,49 @@ func TestDeleteAutomationMapsSystemToForbidden(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
+func TestStopAutomationAnswersWithTheDisabledAutomation(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().StopAutomation(gomock.Any(), automationHandlerTestId).
+		Return(&model.Automation{Auditable: model.Auditable{Id: automationHandlerTestId}}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/stop", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, []string{"config/write"}, auth.asked)
+
+	automation := &model.Automation{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), automation))
+	assert.Equal(t, automationHandlerTestId, automation.Id)
+	assert.False(t, automation.Enabled)
+}
+
+func TestStopAutomationMapsMissingToNotFound(t *testing.T) {
+	r, manager, _ := automationRouter(t, true)
+
+	manager.EXPECT().StopAutomation(gomock.Any(), automationHandlerTestId).
+		Return(nil, errAutomationNotFoundStub)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/stop", nil))
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStopAllAutomationsReportsHowManyStopped(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	manager.EXPECT().StopAllAutomations(gomock.Any()).Return(2, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/stop", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, []string{"config/write"}, auth.asked)
+	assert.JSONEq(t, `{"stopped":2}`, w.Body.String())
+}
+
 // An automation lives in a config setting, so config is the only permission its routes ask
 // for, and the verb has to match the route or a read would gate on write. Checked on arrival:
 // the manager is a strict mock, so a refused request that still reached it would fail the
@@ -4335,6 +4378,8 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 		{http.MethodPost, "/assistant/automations", write},
 		{http.MethodPut, "/assistant/automations/" + automationHandlerTestId, write},
 		{http.MethodDelete, "/assistant/automations/" + automationHandlerTestId, write},
+		{http.MethodPost, "/assistant/automations/" + automationHandlerTestId + "/stop", write},
+		{http.MethodPost, "/assistant/automations/stop", write},
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", read},
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, read},
 		{http.MethodGet, "/assistant/automations/activity", read},

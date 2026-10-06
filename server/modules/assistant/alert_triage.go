@@ -769,13 +769,13 @@ func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePa
 	return payload, result, nil
 }
 
-// gone handles a held item the store no longer has: routine after a params change, which sweeps
-// the run's pending and running work, and a defect otherwise.
+// gone handles a held item the store no longer has: routine after a params change or stop, which
+// sweeps the run's pending and running work, and a defect otherwise.
 func (r *alertTriageRun) gone(ctx context.Context, item *model.AutomationWorkItem) error {
 	logger := log.FromContext(ctx).WithField("workItemId", item.Id)
 
-	if errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
-		logger.Info("alert triage item was swept by a params change; nothing recorded")
+	if sweptByOperator(ctx) {
+		logger.WithField("cause", context.Cause(ctx)).Info("alert triage item was swept by its automation's redefinition or stop; nothing recorded")
 
 		return nil
 	}

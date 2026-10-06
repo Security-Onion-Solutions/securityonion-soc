@@ -1131,6 +1131,19 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
     },
+    async stopAutomation(automation) {
+      this.$root.startLoading();
+      try {
+        await this.$root.papi.post('assistant/automations/' + encodeURIComponent(automation.id) + '/stop');
+        this.$root.showInfo(this.i18n.agentMonitorStopped.replace('{name}', automation.displayName));
+        delete this.automationRuns[automation.id];
+        await this.loadAutomations();
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
     async duplicateAutomation(automation) {
       await this.createAutomation({
         displayName: this.copyName(automation.displayName, this.automations.map(a => a.displayName)),
@@ -1155,12 +1168,14 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (target.kind === 'agent') await this.removeAgent(target.item);
       else if (target.kind === 'skill') await this.removeSkill(target.item);
       else if (target.kind === 'automation') await this.removeAutomation(target.item);
+      else if (target.kind === 'stop') await this.stopAutomation(target.item);
     },
     deleteTitle() {
       return ({
         agent: this.i18n.agentStudioDeleteAgentTitle,
         skill: this.i18n.agentStudioDeleteSkillTitle,
         automation: this.i18n.agentStudioDeleteAutomationTitle,
+        stop: this.i18n.agentMonitorStopTitle,
       })[this.deleteTarget.kind];
     },
     deleteConfirmText() {
@@ -1168,6 +1183,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         agent: this.i18n.agentStudioDeleteAgentConfirm,
         skill: this.i18n.agentStudioDeleteSkillConfirm,
         automation: this.i18n.agentStudioDeleteAutomationConfirm,
+        stop: this.i18n.agentMonitorStopConfirm,
       })[this.deleteTarget.kind];
     },
     showAddAutomation() {

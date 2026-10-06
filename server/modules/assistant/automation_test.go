@@ -1106,12 +1106,12 @@ func expectSweep(mDB *mockdb.MockDB, cause error, failed int) *mock.Call {
 		automationTestId, cause.Error()).Return(mRows, nil)
 }
 
-// paramsChangeCoordinator seeds one stored automation and a store whose sweep is scripted.
-func paramsChangeCoordinator(t *testing.T, storedParams string) (*AssistantCoordinator, *automationConfigstore, *mockdb.MockDB) {
+// sweepCoordinator seeds these stored automations and a store whose sweeps are scripted.
+func sweepCoordinator(t *testing.T, stored ...*model.Automation) (*AssistantCoordinator, *automationConfigstore, *mockdb.MockDB) {
 	t.Helper()
 
 	cfg := &automationConfigstore{}
-	cfg.settings = []*model.Setting{automationsSetting(t, storedAutomationWithParams(automationTestId, storedParams))}
+	cfg.settings = []*model.Setting{automationsSetting(t, stored...)}
 
 	ac := automationCoordinator(cfg)
 
@@ -1119,6 +1119,12 @@ func paramsChangeCoordinator(t *testing.T, storedParams string) (*AssistantCoord
 	ac.store = automationTestStore(mDB)
 
 	return ac, cfg, mDB
+}
+
+func paramsChangeCoordinator(t *testing.T, storedParams string) (*AssistantCoordinator, *automationConfigstore, *mockdb.MockDB) {
+	t.Helper()
+
+	return sweepCoordinator(t, storedAutomationWithParams(automationTestId, storedParams))
 }
 
 func automationWithParams(params string) *model.Automation {
@@ -1251,10 +1257,157 @@ func TestReleasingAnAutomationRunStopsItBeingInterrupted(t *testing.T) {
 	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
 	release()
 
-	ac.interruptAutomationRun(automationTestId)
-	ac.interruptAutomationRun(otherAutomationTestId)
+	ac.interruptAutomationRun(automationTestId, ErrAutomationParamsChanged)
+	ac.interruptAutomationRun(otherAutomationTestId, ErrAutomationParamsChanged)
 
 	assert.False(t, cancelled)
+}
+
+// expectStopSweep scripts the sweep a stop runs, which must take running work as well as pending.
+func expectStopSweep(mDB *mockdb.MockDB, id string, failed int) *mock.Call {
+	return mDB.On("Query", mock.Anything, sqlLike("UPDATE automation_work_items", "state = 'failed'", "('pending', 'running')"),
+		id, ErrAutomationStopped.Error()).Return(rowsYielding(failed), nil)
+}
+
+// The disable is durable before the run is cancelled, and the run is cancelled before the sweep,
+// or it claims an item the sweep is about to fail.
+func TestStopAutomationDisablesThenInterruptsThenSweeps(t *testing.T) {
+	ac, cfg, mDB := sweepCoordinator(t, storedEnabledAutomation(automationTestId, `{}`))
+
+	var order []string
+
+	cfg.onUpdate = func() { order = append(order, "write") }
+	expectStopSweep(mDB, automationTestId, 3).Run(func(mock.Arguments) { order = append(order, "sweep") })
+
+	release := ac.registerAutomationRun(automationTestId, func(cause error) {
+		order = append(order, "cancel")
+		assert.ErrorIs(t, cause, ErrAutomationStopped)
+	})
+	defer release()
+
+	automation, err := ac.StopAutomation(automationSaveCtx(), automationTestId)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"write", "cancel", "sweep"}, order)
+	assert.False(t, automation.Enabled)
+
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
+	assert.False(t, written[0].Enabled)
+	assert.Equal(t, "user-1", written[0].UserId)
+	assert.Equal(t, "Nightly", written[0].DisplayName)
+}
+
+// A disabled automation can still have a run draining its backlog, which is the case a stop is for.
+func TestStopAutomationOnADisabledAutomationStillInterruptsAndSweeps(t *testing.T) {
+	ac, cfg, mDB := sweepCoordinator(t, storedAutomation(automationTestId, "Nightly"))
+
+	expectStopSweep(mDB, automationTestId, 2)
+
+	cancelled := false
+	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+	defer release()
+
+	_, err := ac.StopAutomation(automationSaveCtx(), automationTestId)
+	require.NoError(t, err)
+
+	assert.True(t, cancelled)
+	assert.Empty(t, cfg.updates)
+	mDB.AssertExpectations(t)
+}
+
+func TestStopAutomationDisablesTheBuiltin(t *testing.T) {
+	ac, cfg, mDB := sweepCoordinator(t, storedBuiltinAutomation(true, ""))
+	builtin := seedBuiltinAutomation(ac)
+
+	expectStopSweep(mDB, BuiltinAlertTriageAutomationId, 0)
+
+	automation, err := ac.StopAutomation(automationSaveCtx(), BuiltinAlertTriageAutomationId)
+	require.NoError(t, err)
+	assert.False(t, automation.Enabled)
+
+	written := writtenAutomations(t, cfg.updates[0])
+	require.Len(t, written, 1)
+	assert.False(t, written[0].Enabled)
+	written[0].IsSystem = true
+	assertBuiltinFixedFields(t, builtin, written[0])
+}
+
+func TestStopAutomationRejectsAnUnknownId(t *testing.T) {
+	ac, cfg, mDB := sweepCoordinator(t, storedEnabledAutomation(automationTestId, `{}`))
+
+	_, err := ac.StopAutomation(automationSaveCtx(), otherAutomationTestId)
+	assert.ErrorIs(t, err, ErrAutomationNotFound)
+	assert.Empty(t, cfg.updates)
+
+	for _, call := range mDB.Calls {
+		assert.Equal(t, "Migrate", call.Method, "an unknown automation has no work to drop")
+	}
+}
+
+func TestStopAutomationRequiresConfigWrite(t *testing.T) {
+	cfg := &automationConfigstore{}
+	cfg.settings = []*model.Setting{automationsSetting(t, storedEnabledAutomation(automationTestId, `{}`))}
+
+	ac := automationCoordinatorAs(cfg, false)
+
+	cancelled := false
+	release := ac.registerAutomationRun(automationTestId, func(error) { cancelled = true })
+	defer release()
+
+	_, err := ac.StopAutomation(automationSaveCtx(), automationTestId)
+	assert.Error(t, err)
+	assert.False(t, cancelled)
+	assert.Empty(t, cfg.updates)
+}
+
+// Every automation is swept, but only one that was enabled or running counts as stopped, and the
+// disables land in a single write.
+func TestStopAllAutomationsStopsEveryAutomation(t *testing.T) {
+	const idleId = "5b0c9f6e-2d43-4a8e-b1f7-3c9e8d2a6f10"
+
+	ac, cfg, mDB := sweepCoordinator(t,
+		storedEnabledAutomation(automationTestId, `{}`),
+		storedAutomation(otherAutomationTestId, "Draining"),
+		storedAutomation(idleId, "Idle"))
+
+	expectStopSweep(mDB, automationTestId, 1)
+	expectStopSweep(mDB, otherAutomationTestId, 4)
+	expectStopSweep(mDB, idleId, 0)
+
+	var causes []error
+	release := ac.registerAutomationRun(otherAutomationTestId, func(cause error) { causes = append(causes, cause) })
+	defer release()
+
+	stopped, err := ac.StopAllAutomations(automationSaveCtx())
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, stopped)
+	require.Len(t, cfg.updates, 1)
+
+	for _, automation := range writtenAutomations(t, cfg.updates[0]) {
+		assert.False(t, automation.Enabled, automation.Id)
+	}
+
+	require.Len(t, causes, 1)
+	assert.ErrorIs(t, causes[0], ErrAutomationStopped)
+	mDB.AssertExpectations(t)
+}
+
+func TestStopAllAutomationsReportsASweepFailureAfterStoppingTheRest(t *testing.T) {
+	ac, cfg, mDB := sweepCoordinator(t,
+		storedEnabledAutomation(automationTestId, `{}`),
+		storedEnabledAutomation(otherAutomationTestId, `{}`))
+
+	mDB.On("Query", mock.Anything, mock.Anything, automationTestId, mock.Anything).
+		Return((*mockdb.MockRows)(nil), errors.New("postgres is down"))
+	expectStopSweep(mDB, otherAutomationTestId, 1)
+
+	stopped, err := ac.StopAllAutomations(automationSaveCtx())
+	assert.ErrorContains(t, err, "postgres is down")
+	assert.Equal(t, 2, stopped)
+	assert.Len(t, cfg.updates, 1)
+	mDB.AssertExpectations(t)
 }
 
 func TestDeleteAutomationRejectsAnUnknownId(t *testing.T) {

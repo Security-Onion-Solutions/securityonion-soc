@@ -60,9 +60,11 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/automations", h.GetAutomations)
 		r.Post("/automations", h.CreateAutomation)
 		r.Get("/automations/activity", h.GetAutomationActivity)
+		r.Post("/automations/stop", h.StopAllAutomations)
 		r.Get("/automations/{id}", h.GetAutomation)
 		r.Put("/automations/{id}", h.UpdateAutomation)
 		r.Delete("/automations/{id}", h.DeleteAutomation)
+		r.Post("/automations/{id}/stop", h.StopAutomation)
 		r.Get("/automations/{id}/runs", h.GetAutomationRuns)
 		r.Get("/automations/{id}/runs/{runId}", h.GetAutomationRun)
 
@@ -2024,6 +2026,60 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 	err := h.server.AssistantManager.DeleteAutomation(ctx, urlParamId(r))
 
 	h.respondAutomation(w, r, nil, err)
+}
+
+// @Summary      Stop an Automation
+// @Description  Disable an automation, cancel its in-flight run, and fail the work it has queued or claimed with ERROR_AUTOMATION_STOPPED. Work already writing its results is left to finish. Re-enabling the automation queues the dropped work again.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200 {object} model.Automation "The automation, now disabled"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id}/stop [post]
+func (h *AssistantHandler) StopAutomation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	automation, err := h.server.AssistantManager.StopAutomation(ctx, urlParamId(r))
+	h.respondAutomation(w, r, automation, err)
+}
+
+// @Summary      Stop All Automations
+// @Description  Stop every automation, as POST /connect/assistant/automations/{id}/stop does for one, and report how many were enabled or running.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Produce      json
+// @Success      200 {object} map[string]int "How many automations were stopped, under stopped"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/stop [post]
+func (h *AssistantHandler) StopAllAutomations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	stopped, err := h.server.AssistantManager.StopAllAutomations(ctx)
+	h.respondAutomation(w, r, map[string]int{"stopped": stopped}, err)
 }
 
 // @Summary      List an Automation's Runs
