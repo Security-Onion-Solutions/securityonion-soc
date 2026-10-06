@@ -790,10 +790,8 @@
                                   <v-col cols="12" md="6">
                                     <v-select v-model="draftForAutomation(item).agent" :items="automationAgentChoices(item)" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint :data-aid="'agentstudio_automation_agent_' + item.id"></v-select>
                                   </v-col>
-                                  <!-- The server restores a built-in's interval on save. -->
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-if="item.isSystem" :model-value="item.intervalSeconds" type="number" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" readonly hide-details></v-text-field>
-                                    <v-text-field v-else v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
+                                    <v-text-field v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
                                   </v-col>
                                   <!-- A built-in's userId is its first saver, not a creator. -->
                                   <v-col v-if="!item.isSystem && item.userId" cols="12" md="6">

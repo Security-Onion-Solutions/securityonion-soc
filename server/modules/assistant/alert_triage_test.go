@@ -1541,6 +1541,7 @@ func TestAlertTriageReclaimEndsUnusableCheckpoints(t *testing.T) {
 // definition would make the builtin unsaveable.
 func TestBuiltinAlertTriageDefinitionIsValid(t *testing.T) {
 	ac := &AssistantCoordinator{}
+	ac.automationTickInterval.Store(int64(time.Minute))
 	builtin := seedBuiltinAutomation(ac)
 
 	require.NoError(t, validateAutomation(builtin))

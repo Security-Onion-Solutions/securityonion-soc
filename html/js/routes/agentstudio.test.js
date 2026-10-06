@@ -2117,6 +2117,23 @@ test('editing an automation goes through a draft and commits on save', async () 
   expect(comp.automationDrafts[row.id]).toBeUndefined();
 });
 
+test("a built-in's interval is editable and sent on save", async () => {
+  seedAutomations();
+  const row = comp.automations[0];
+  comp.automationDrafts[row.id] = Object.assign(JSON.parse(JSON.stringify(row)), { intervalSeconds: 120 });
+  comp.expandedAutomations = [row.id];
+  expect(comp.automationDirty(row)).toBe(true);
+
+  const put = mockPapi('put', {});
+  const saved = Object.assign({}, storedAutomations()[0], { intervalSeconds: 120 });
+  mockReload([saved].concat(storedAutomations().slice(1)));
+  await comp.saveAutomation(row);
+
+  expect(put).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID, expect.objectContaining({ intervalSeconds: 120, isSystem: true }));
+  expect(comp.automations[0].intervalSeconds).toBe(120);
+  expect(comp.automationDrafts[row.id]).toBeUndefined();
+});
+
 test('a refused save keeps the editor open with its draft', async () => {
   seedAutomations();
   const row = comp.automations[2];

@@ -256,7 +256,7 @@ func (ac *AssistantCoordinator) setupBuiltinAutomations() {
 			DisplayName:     "Alert Triage",
 			AutomationKind:  alertTriageKindName,
 			Agent:           "Investigator",
-			IntervalSeconds: 60,
+			IntervalSeconds: int(ac.getAutomationTickInterval().Seconds()),
 			Params:          json.RawMessage(`{"groupBy":["source.ip","rule.uuid","destination.ip"]}`),
 		},
 	}
@@ -268,9 +268,13 @@ func (ac *AssistantCoordinator) isBuiltinAutomation(id string) bool {
 	return ok
 }
 
-// overlayBuiltinAutomation is the builtin with stored's Auditable, enabled and agent; a nil stored
-// is the builtin as shipped.
+// overlayBuiltinAutomation is the builtin with stored's Auditable, enabled, agent and interval; a
+// nil stored is the builtin as shipped.
 func (ac *AssistantCoordinator) overlayBuiltinAutomation(id string, stored *model.Automation) *model.Automation {
+	if ac.builtinAutomations[id] == nil {
+		return nil
+	}
+
 	automation := *ac.builtinAutomations[id]
 	automation.Params = bytes.Clone(automation.Params)
 
@@ -281,6 +285,11 @@ func (ac *AssistantCoordinator) overlayBuiltinAutomation(id string, stored *mode
 		// A blank agent is the shipped one.
 		if strings.TrimSpace(stored.Agent) != "" {
 			automation.Agent = stored.Agent
+		}
+
+		// An absent interval is the shipped one; a negative one is left for validation to refuse.
+		if stored.IntervalSeconds != 0 {
+			automation.IntervalSeconds = stored.IntervalSeconds
 		}
 	}
 
