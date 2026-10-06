@@ -87,17 +87,6 @@ describe('notifications.js', () => {
     });
   });
 
-  describe('deepLinkIcon', () => {
-    it('maps the alert link label to the alerts icon', () => {
-      expect(socNotifications.deepLinkIcon('🔔')).toBe('fa-bell');
-    });
-
-    it('returns null for other labels', () => {
-      expect(socNotifications.deepLinkIcon('💬')).toBeNull();
-      expect(socNotifications.deepLinkIcon('View alert')).toBeNull();
-    });
-  });
-
   describe('loadNotifications', () => {
     it('skips loading when username is missing or unlicensed or notifications not started', async () => {
       const mockPapiGet = jest.fn();

@@ -27,7 +27,9 @@ import (
 
 // An emoji rather than text, like the PCAP job links, so the label needs no translation.
 const chatLinkLabel = "💬"
-const alertLinkLabel = "🔔"
+
+// The SOC notification menu renders an "fa-" label as that icon, the one Alerts uses.
+const alertLinkLabel = "fa-bell"
 
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
