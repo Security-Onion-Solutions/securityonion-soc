@@ -289,6 +289,11 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			{SessionId: "grand", ParentSessionId: "child", Tags: rootTags},
 		}
 	}
+	triageTree := []*model.AssistantSession{
+		{SessionId: "root", Type: alertTriageKindName, EntityId: "abc-123"},
+		{SessionId: "child", ParentSessionId: "root"},
+	}
+	alertLink := map[string]string{alertLinkLabel: "/#/alerts?q=_id%3A%22abc-123%22"}
 
 	testCases := []struct {
 		name          string
@@ -300,7 +305,6 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		expectToggle  []string
 		expectedLinks map[string]string
 		sharedNote    bool
-		noStore       bool
 	}{
 		{
 			name:          "top-level chat is shared with its sub-sessions and linked",
@@ -359,9 +363,42 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			name:      "chat stays private and unlinked unless share_chat is set",
 			sessionId: "root",
 			params:    `{"title": "T", "summary": "S", "links": {"View alert": "/#/alerts?q=_id:abc"}}`,
-			noStore:   true,
+			sessions:  tree(),
 			expectedLinks: map[string]string{
 				"View alert": "/#/alerts?q=_id:abc",
+			},
+		},
+		{
+			name:          "alert triage links the alert instead of the chat",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S"}`,
+			sessions:      triageTree,
+			expectedLinks: alertLink,
+		},
+		{
+			name:          "alert triage still shares the chat when asked",
+			sessionId:     "child",
+			params:        `{"title": "T", "summary": "S", "share_chat": true}`,
+			sessions:      triageTree,
+			expectToggle:  []string{"root", "child"},
+			expectedLinks: alertLink,
+			sharedNote:    true,
+		},
+		{
+			name:          "model cannot replace the alert link",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S", "links": {"🚨": "https://evil.example"}}`,
+			sessions:      triageTree,
+			expectedLinks: alertLink,
+		},
+		{
+			name:      "alert triage drops model links to the same alert but keeps others",
+			sessionId: "root",
+			params:    `{"title": "T", "summary": "S", "links": {"View alert": "/#/alerts?q=_id:abc-123", "Encoded": "/#/hunt?q=_id%3A%22abc-123%22", "Rule": "/#/detections?q=rule"}}`,
+			sessions:  triageTree,
+			expectedLinks: map[string]string{
+				alertLinkLabel: alertLink[alertLinkLabel],
+				"Rule":         "/#/detections?q=rule",
 			},
 		},
 		{
@@ -382,7 +419,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 				Config:   &config.ServerConfig{DeveloperEnabled: true},
 			}
 
-			if tc.sessionId != "" && !tc.noStore {
+			if tc.sessionId != "" {
 				store := sessionTreeStore(ctrl, tc.sessions, tc.getErr)
 				if tc.expectToggle != nil {
 					store.EXPECT().ToggleSessionsTag(gomock.Any(), tc.expectToggle, model.SessionTagShared, true).Return(tc.toggleErr)

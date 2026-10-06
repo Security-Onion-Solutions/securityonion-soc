@@ -530,6 +530,8 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 	result, err := r.run.RunAgentSession(ctx, item.Id, &model.AgentSessionRequest{
 		Objective: alertTriageObjective(fields, payload.Count, payload.GroupFilter),
 		Agent:     r.run.Task.Agent,
+		Type:      alertTriageKindName,
+		EntityId:  alert.Id,
 	})
 
 	if shuttingDown(ctx) {
