@@ -1438,6 +1438,12 @@ dfn {
   font-variant-numeric: tabular-nums;
 }
 
+.agentmonitor-action-placeholder {
+  display: inline-flex;
+  justify-content: center;
+  width: 40px;
+}
+
 /* Grows to the viewport bottom, then scrolls; 328px is the surrounding chrome. */
 #agentmonitor-transcript {
   display: flex;

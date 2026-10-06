@@ -169,10 +169,10 @@
               <td class="text-right agentmonitor-elapsed" :title="i18n.agentMonitorInStateHelp">{{ formatElapsed(inStateMs(item)) }}</td>
               <td class="text-right agentmonitor-elapsed">{{ formatElapsed(elapsedMs(item)) }}</td>
               <td>
-                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_watch_item" :title="i18n.agentMonitorWatch" :aria-label="i18n.agentMonitorWatch + ' - ' + item.automationName">
-                  <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
-                </router-link>
-                <span v-else class="text-disabled" :title="i18n.agentMonitorNotStarted">&mdash;</span>
+                <v-btn v-if="liveSessionOf(item)" icon variant="text" size="small" class="no-print" :to="buildSessionLink(item.id, liveSessionOf(item))" data-aid="agentmonitor_watch_item" :title="i18n.agentMonitorWatch" :aria-label="i18n.agentMonitorWatch + ' - ' + item.automationName">
+                  <v-icon class="theme-icon">fa-binoculars</v-icon>
+                </v-btn>
+                <span v-else class="text-disabled agentmonitor-action-placeholder" :title="i18n.agentMonitorNotStarted">&mdash;</span>
                 <v-btn v-if="$root.canStopAutomations()" icon variant="text" size="small" class="no-print" @click.stop="confirmStop(item)" data-aid="agentmonitor_stop_automation" :title="i18n.automationStopTitle" :aria-label="i18n.automationStopTitle + ' - ' + item.automationName">
                   <v-icon color="error">fa-stop</v-icon>
                 </v-btn>
@@ -239,9 +239,9 @@
               <td class="text-right">{{ $root.formatDateTime(item.updateTime) }}</td>
               <td class="text-right">{{ formatElapsed(elapsedMs(item)) }}</td>
               <td>
-                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_open_recent_item" :title="i18n.agentMonitorViewItem" :aria-label="i18n.agentMonitorViewItem + ' - ' + item.automationName">
-                  <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
-                </router-link>
+                <v-btn v-if="liveSessionOf(item)" icon variant="text" size="small" class="no-print" :to="buildSessionLink(item.id, liveSessionOf(item))" data-aid="agentmonitor_open_recent_item" :title="i18n.agentMonitorViewItem" :aria-label="i18n.agentMonitorViewItem + ' - ' + item.automationName">
+                  <v-icon class="theme-icon">fa-binoculars</v-icon>
+                </v-btn>
                 <span v-else class="text-disabled">&mdash;</span>
               </td>
             </tr>
