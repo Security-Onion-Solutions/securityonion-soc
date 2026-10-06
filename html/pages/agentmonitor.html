@@ -207,7 +207,7 @@
             <v-icon v-else data-aid="agentmonitor_history_collapse">fa-angle-up</v-icon>
           </v-btn>
         </v-toolbar>
-        <v-data-table-server v-if="isExpandedSection('agentmonitor-history')" :headers="historyHeaders" :items="historyRuns" :items-length="historyTotal" item-value="id"
+        <v-data-table-server v-if="isExpandedSection('agentmonitor-history')" :headers="historyHeaders" :items="historyRuns" :items-length="historyTotal" :loading="historyLoading" item-value="id"
           v-model:page="historyPage" v-model:items-per-page="historyItemsPerPage" :items-per-page-options="historyItemsPerPageOptions"
           v-model:expanded="expandedRuns" @update:options="onHistoryOptions" :no-data-text="i18n.agentMonitorRunHistoryEmpty" data-aid="agentmonitor_history_table">
           <template #headers="{ columns }">
@@ -243,8 +243,8 @@
                 <v-alert v-if="run.error" type="error" icon="fa-circle-exclamation" variant="tonal" density="compact" class="mb-3" :data-aid="'agentmonitor_history_run_error_' + run.id">
                   {{ i18n.error }}: {{ $root.localizeMessage(run.error) }}
                 </v-alert>
-                <v-progress-linear v-if="runItemsLoading(run)" indeterminate color="primary"></v-progress-linear>
-                <v-data-table v-else-if="runItemsOf(run).length || !run.error" :headers="runItemHeaders" :items="runItemsOf(run)" item-value="id" v-model:expanded="expandedHistoryItems" density="compact"
+                <v-data-table v-if="runItemsLoading(run) || runItemsOf(run).length || !run.error" :headers="runItemHeaders" :items="runItemsOf(run)" item-value="id" v-model:expanded="expandedHistoryItems" density="compact"
+                  :loading="runItemsLoading(run)"
                   :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" :no-data-text="i18n.agentMonitorRunItemsEmpty" data-aid="agentmonitor_history_items_table">
                   <template #headers="{ columns }">
                     <tr>

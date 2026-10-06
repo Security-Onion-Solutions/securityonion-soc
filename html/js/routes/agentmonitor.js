@@ -65,6 +65,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     historySearch: '',
     hideEmptyRuns: true,
     historyLoaded: false,
+    historyLoading: false,
     historyNeedsCount: true,
     // The server pages at most 500.
     historyItemsPerPageOptions: [10, 50, 250],
@@ -357,6 +358,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       const request = ++this.historyRequest;
       const count = this.historyNeedsCount;
       const offset = (this.historyPage - 1) * this.historyItemsPerPage;
+      if (!background) this.historyLoading = true;
       try {
         const response = await this.$root.papi.get('assistant/automations/runs', {
           params: {
@@ -385,6 +387,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         this.openPendingRun();
       } catch (error) {
         this.reportLoadError(error, background);
+      } finally {
+        if (request === this.historyRequest) this.historyLoading = false;
       }
     },
     historyAutomationItems() {

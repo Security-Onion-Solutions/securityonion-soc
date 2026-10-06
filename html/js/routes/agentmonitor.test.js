@@ -340,6 +340,27 @@ test('an uncounted page keeps every run reachable from hasMore', async () => {
   expect(comp.historyTotal).toBe(40);
 });
 
+test('only a load the user asked for shows the run table loading, never the page overlay', async () => {
+  let release;
+  comp.$root.papi.get = jest.fn(() => new Promise(resolve => { release = resolve; }));
+
+  const asked = comp.loadHistory();
+  expect(comp.historyLoading).toBe(true);
+  release({ data: runPage() });
+  await asked;
+  expect(comp.historyLoading).toBe(false);
+
+  const pushed = comp.loadHistory(true);
+  expect(comp.historyLoading).toBe(false);
+  release({ data: runPage() });
+  await pushed;
+
+  comp.$root.papi.get = jest.fn().mockRejectedValue(new Error('down'));
+  await comp.loadHistory();
+  expect(comp.historyLoading).toBe(false);
+  expect(comp.$root.startLoading).not.toHaveBeenCalled();
+});
+
 test('a slower, older page is dropped when a newer one has landed', async () => {
   let release;
   const slow = new Promise(resolve => { release = resolve; });
