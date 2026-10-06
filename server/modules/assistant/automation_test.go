@@ -1386,8 +1386,17 @@ func assertBuiltinFixedFields(t *testing.T, builtin, automation *model.Automatio
 	assert.True(t, automation.IsSystem)
 	assert.Equal(t, builtin.DisplayName, automation.DisplayName)
 	assert.Equal(t, builtin.AutomationKind, automation.AutomationKind)
-	assert.Equal(t, builtin.IntervalSeconds, automation.IntervalSeconds)
 	assert.JSONEq(t, string(builtin.Params), string(automation.Params))
+}
+
+func TestOverlayBuiltinAutomationReturnsNilForAnUnknownId(t *testing.T) {
+	ac := automationCoordinator(&automationConfigstore{})
+	seedBuiltinAutomation(ac)
+
+	assert.NotPanics(t, func() {
+		assert.Nil(t, ac.overlayBuiltinAutomation(automationTestId, nil))
+		assert.Nil(t, ac.overlayBuiltinAutomation(automationTestId, storedAutomation(automationTestId, "Nightly")))
+	})
 }
 
 func TestListAutomationsIncludesTheBuiltinAsShipped(t *testing.T) {
@@ -1403,6 +1412,7 @@ func TestListAutomationsIncludesTheBuiltinAsShipped(t *testing.T) {
 	assertBuiltinFixedFields(t, builtin, automations[0])
 	assert.False(t, automations[0].Enabled, "shipped disabled")
 	assert.Equal(t, builtin.Agent, automations[0].Agent)
+	assert.Equal(t, builtin.IntervalSeconds, automations[0].IntervalSeconds)
 	assert.Nil(t, automations[0].CreateTime)
 	assert.Empty(t, automations[0].UserId)
 }
@@ -1427,6 +1437,7 @@ func TestListAutomationsOverlaysOnlyWhatAStoredBuiltinMayChange(t *testing.T) {
 	assertBuiltinFixedFields(t, builtin, automations[1])
 	assert.True(t, automations[1].Enabled)
 	assert.Equal(t, "Hunter", automations[1].Agent)
+	assert.Equal(t, 7, automations[1].IntervalSeconds)
 	assert.Equal(t, "user-1", automations[1].UserId)
 	require.NotNil(t, automations[1].CreateTime)
 	assert.Equal(t, 2026, automations[1].CreateTime.Year())
@@ -1450,6 +1461,7 @@ func TestListAutomationsRestoresAnUnreadableBuiltin(t *testing.T) {
 
 	assertBuiltinFixedFields(t, builtin, automations[0])
 	assert.False(t, automations[0].Enabled)
+	assert.Equal(t, builtin.IntervalSeconds, automations[0].IntervalSeconds)
 }
 
 // The flag is what a UI locks fields and hides delete on, so a hand-edited entry cannot claim it.
@@ -1471,6 +1483,7 @@ func TestGetAutomationReturnsTheBuiltinAsShippedWithoutAStoredCopy(t *testing.T)
 
 	assertBuiltinFixedFields(t, builtin, automation)
 	assert.False(t, automation.Enabled)
+	assert.Equal(t, builtin.IntervalSeconds, automation.IntervalSeconds)
 
 	// The copy handed out must not alias the definition.
 	automation.Params[0] = ' '
@@ -1490,7 +1503,24 @@ func TestGetAutomationOverlaysAStoredBuiltin(t *testing.T) {
 	assertBuiltinFixedFields(t, builtin, automation)
 	assert.True(t, automation.Enabled)
 	assert.Equal(t, "Hunter", automation.Agent)
+	assert.Equal(t, 7, automation.IntervalSeconds)
 	assert.Equal(t, "user-1", automation.UserId)
+}
+
+func TestGetAutomationFallsBackToTheShippedIntervalWhenTheStoredOneIsAbsent(t *testing.T) {
+	cfg := &automationConfigstore{}
+	stored := storedBuiltinAutomation(true, "Hunter")
+	stored.IntervalSeconds = 0
+	cfg.settings = []*model.Setting{automationsSetting(t, stored)}
+
+	ac := automationCoordinator(cfg)
+	builtin := seedBuiltinAutomation(ac)
+
+	automation, err := ac.GetAutomation(context.Background(), BuiltinAlertTriageAutomationId)
+	require.NoError(t, err)
+
+	assert.True(t, automation.Enabled)
+	assert.Equal(t, builtin.IntervalSeconds, automation.IntervalSeconds)
 }
 
 func TestGetAutomationFallsBackToTheShippedAgentWhenTheStoredOneIsBlank(t *testing.T) {
@@ -1540,6 +1570,7 @@ func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
 	assertBuiltinFixedFields(t, builtin, automation)
 	assert.True(t, automation.Enabled)
 	assert.Equal(t, automationTestAgent, automation.Agent)
+	assert.Equal(t, 7, automation.IntervalSeconds)
 	assert.Equal(t, "user-1", automation.UserId)
 	assert.NotNil(t, automation.CreateTime)
 
@@ -1551,9 +1582,25 @@ func TestSaveAutomationCreatesTheBuiltinUnderItsFixedId(t *testing.T) {
 	stored := written[0]
 	assert.Equal(t, BuiltinAlertTriageAutomationId, stored.Id)
 	assert.Equal(t, builtin.DisplayName, stored.DisplayName)
-	assert.Equal(t, builtin.IntervalSeconds, stored.IntervalSeconds)
+	assert.Equal(t, 7, stored.IntervalSeconds)
 	assert.JSONEq(t, string(builtin.Params), string(stored.Params))
 	assert.True(t, stored.Enabled)
+}
+
+// Zero means the shipped interval, so only a value an admin could not have meant is refused.
+func TestSaveAutomationRefusesANegativeIntervalOnTheBuiltin(t *testing.T) {
+	cfg := &automationConfigstore{}
+	ac := automationCoordinator(cfg)
+	seedBuiltinAutomation(ac)
+
+	err := ac.SaveAutomation(automationSaveCtx(), &model.Automation{
+		Auditable:       model.Auditable{Id: BuiltinAlertTriageAutomationId},
+		IsSystem:        true,
+		IntervalSeconds: -1,
+	})
+
+	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Empty(t, cfg.updates)
 }
 
 // The creator is settled by the builtin's first save; no later edit, enabling included, moves it.
@@ -1656,6 +1703,7 @@ func TestSaveAutomationEnablingTheBuiltinWithAMinimalBodyIsRunnable(t *testing.T
 	assert.True(t, automation.Enabled)
 	assert.Equal(t, "user-2", automation.UserId)
 	assert.Equal(t, builtin.Agent, automation.Agent)
+	assert.Equal(t, builtin.IntervalSeconds, automation.IntervalSeconds)
 	assert.NotNil(t, automation.CreateTime)
 	assert.True(t, automationDue(automation, nil, time.Now()))
 
