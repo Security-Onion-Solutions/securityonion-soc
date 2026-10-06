@@ -193,9 +193,9 @@
           <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorRunHistory }}</v-toolbar-title>
           <v-spacer></v-spacer>
           <template v-if="isExpandedSection('agentmonitor-history')">
-            <v-select v-model="historyAutomationId" :items="historyAutomationItems()" :label="i18n.agentMonitorAutomation" class="mx-2" style="min-width: 160px; max-width: 220px"
+            <v-select v-model="historyAutomationId" :items="historyAutomationItems()" :label="i18n.agentMonitorAutomation" class="toolbar-field no-print" style="max-width: 200px;"
               variant="outlined" density="compact" hide-details @update:model-value="onHistoryFilterChanged()" data-aid="agentmonitor_history_automation"></v-select>
-            <v-text-field v-model="historySearch" :label="i18n.search" :title="i18n.agentMonitorRunHistorySearchHelp" class="mx-2" style="min-width: 200px; max-width: 280px"
+            <v-text-field v-model="historySearch" :label="i18n.search" :title="i18n.agentMonitorRunHistorySearchHelp" class="toolbar-field no-print ml-2" style="max-width: 250px;"
               variant="outlined" density="compact" hide-details clearable
               @keydown.enter="onHistoryFilterChanged()" @click:clear="onHistoryFilterChanged()" data-aid="agentmonitor_history_search"></v-text-field>
             <v-btn icon variant="text" size="small" @click.stop="onHistoryFilterChanged()" :title="i18n.search" :aria-label="i18n.search" data-aid="agentmonitor_history_search_apply">
