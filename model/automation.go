@@ -35,7 +35,7 @@ type Automation struct {
 	// Indicates whether the scheduler runs this automation.
 	Enabled bool `json:"enabled" example:"true"`
 	// How often this automation comes due, in seconds.
-	IntervalSeconds int `json:"intervalSeconds" example:"300"`
+	IntervalSeconds int `json:"intervalSeconds" example:"60"`
 	// Ships with the product: only enabled and agent can be changed, and it cannot be deleted.
 	IsSystem bool `json:"isSystem" example:"false"`
 	// The settings for this automation, matching its kind's paramSchema. Opaque to
