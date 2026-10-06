@@ -27,7 +27,7 @@ import (
 
 // An emoji rather than text, like the PCAP job links, so the label needs no translation.
 const chatLinkLabel = "💬"
-const alertLinkLabel = "🚨"
+const alertLinkLabel = "🔔"
 
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16

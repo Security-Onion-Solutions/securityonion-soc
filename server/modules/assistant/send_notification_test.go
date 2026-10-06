@@ -387,7 +387,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{
 			name:          "model cannot replace the alert link",
 			sessionId:     "root",
-			params:        `{"title": "T", "summary": "S", "links": {"🚨": "https://evil.example"}}`,
+			params:        `{"title": "T", "summary": "S", "links": {"🔔": "https://evil.example"}}`,
 			sessions:      triageTree,
 			expectedLinks: alertLink,
 		},

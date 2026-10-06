@@ -144,6 +144,14 @@ globalThis.socNotifications = {
     return '#';
   },
 
+  // Link labels are plain text for other destinations; in SOC these render as the matching icon.
+  deepLinkIcon(name) {
+    switch (name) {
+      case '🔔': return 'fa-bell';
+    }
+    return null;
+  },
+
   toggleNotificationExpand(notif) {
     if (!notif || !notif.id) return;
     if (!this.expandedNotifications) {
