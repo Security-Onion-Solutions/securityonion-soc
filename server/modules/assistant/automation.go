@@ -256,7 +256,7 @@ func (ac *AssistantCoordinator) setupBuiltinAutomations() {
 			DisplayName:     "Alert Triage",
 			AutomationKind:  alertTriageKindName,
 			Agent:           "Investigator",
-			IntervalSeconds: 60,
+			IntervalSeconds: int(ac.getAutomationTickInterval() / time.Second),
 			Params:          json.RawMessage(`{"groupBy":["source.ip","rule.uuid","destination.ip"]}`),
 		},
 	}

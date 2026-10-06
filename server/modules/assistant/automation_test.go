@@ -114,6 +114,7 @@ func automationCoordinatorAs(cfg *automationConfigstore, authorized bool) *Assis
 			"alert_triage": &fakeAutomationKind{name: "alert_triage"},
 		},
 	}
+	ac.automationTickInterval.Store(int64(time.Minute))
 	seedAutomationAgent(ac)
 
 	return ac
