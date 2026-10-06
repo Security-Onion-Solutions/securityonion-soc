@@ -33,10 +33,12 @@ func TestNotificationModuleLifecycle_Licensed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, srv.Notifier)
 
-	// Verify soc channel registered
-	ch, found := srv.Notifier.GetChannel("soc")
-	assert.True(t, found)
-	assert.Equal(t, "soc", ch.Type())
+	// Verify all channels registered
+	for _, chType := range []string{"soc", "smtp", "generic_webhook", "slack_webhook", "matrix_hookshot_webhook"} {
+		ch, found := srv.Notifier.GetChannel(chType)
+		assert.True(t, found, "channel type %s should be registered", chType)
+		assert.Equal(t, chType, ch.Type())
+	}
 
 	// Verify destinations contain default soc-bell
 	dests := srv.Notifier.GetDestinations()

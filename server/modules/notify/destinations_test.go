@@ -311,6 +311,102 @@ func TestNotifierImpl_Unauthorized(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestNotifierImpl_CreateDestination_SMTPAndWebhookValidation(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	cfgStore := server.NewMemConfigStore([]*model.Setting{})
+	srv := &server.Server{
+		Configstore: cfgStore,
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	registry := NewChannelRegistry()
+	_ = registry.Register(NewSMTPChannel(srv))
+	_ = registry.Register(NewWebhookChannel(srv))
+	_ = registry.Register(NewSlackChannel(srv))
+	_ = registry.Register(NewMatrixChannel(srv))
+
+	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
+	ctx := context.Background()
+
+	// Invalid SMTP params (missing from)
+	_, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "smtp-invalid",
+		Name: "SMTP Invalid",
+		Type: "smtp",
+		Params: map[string]interface{}{
+			"host": "mail.example.com",
+		},
+	})
+	assert.Error(t, err)
+
+	// Valid SMTP destination
+	smtpDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "smtp-valid",
+		Name: "Security Email",
+		Type: "smtp",
+		Params: map[string]interface{}{
+			"host": "mail.example.com",
+			"from": "alerts@example.com",
+			"to":   []string{"oncall@example.com"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.True(t, smtpDest.RecipientsSupported)
+	assert.True(t, smtpDest.AttachmentsSupported)
+	assert.True(t, smtpDest.LinksSupported)
+
+	// Invalid Webhook params (missing URL)
+	_, err = notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "webhook-invalid",
+		Name: "Webhook Invalid",
+		Type: "generic_webhook",
+		Params: map[string]interface{}{
+			"format": "generic",
+		},
+	})
+	assert.Error(t, err)
+
+	// Valid Webhook destination
+	webhookDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "webhook-valid",
+		Name: "Generic Hook",
+		Type: "generic_webhook",
+		Params: map[string]interface{}{
+			"url": "https://example.com/webhook",
+		},
+	})
+	assert.NoError(t, err)
+	assert.False(t, webhookDest.RecipientsSupported)
+	assert.True(t, webhookDest.LinksSupported)
+
+	// Valid Slack destination
+	slackDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "slack-valid",
+		Name: "Slack Alerts",
+		Type: "slack_webhook",
+		Params: map[string]interface{}{
+			"webhookUrl": "https://hooks.slack.com/services/xxx",
+		},
+	})
+	assert.NoError(t, err)
+	assert.False(t, slackDest.RecipientsSupported)
+	assert.True(t, slackDest.LinksSupported)
+
+	// Valid Matrix destination
+	matrixDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "matrix-valid",
+		Name: "Matrix Hookshot",
+		Type: "matrix_hookshot_webhook",
+		Params: map[string]interface{}{
+			"webhookUrl": "https://matrix.example.com/_matrix/hookshot/123",
+		},
+	})
+	assert.NoError(t, err)
+	assert.False(t, matrixDest.RecipientsSupported)
+	assert.True(t, matrixDest.LinksSupported)
+}
+
 func TestNotifierImpl_UnmarshalDestinations_Formats(t *testing.T) {
 	// Map format
 	mapJSON := `{"soc-1":{"id":"soc-1","name":"SOC 1","type":"soc"}}`

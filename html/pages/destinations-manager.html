@@ -63,12 +63,73 @@
       </v-card-title>
       <v-card-text>
         <v-row dense>
-          <v-col cols="12" sm="8">
-            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required data-aid="destination_form_name"></v-text-field>
+          <v-col cols="12" sm="6">
+            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required density="comfortable" data-aid="destination_form_name"></v-text-field>
           </v-col>
-          <v-col cols="12" sm="4">
-            <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType" density="comfortable" :disabled="form.isEdit" data-aid="destination_form_type"></v-select>
+          <v-col cols="12" sm="6">
+            <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType" density="comfortable" :disabled="form.isEdit" @update:model-value="onChannelTypeChange" data-aid="destination_form_type"></v-select>
           </v-col>
+
+          <!-- SMTP Parameters -->
+          <template v-if="form.type === 'smtp'">
+            <v-col cols="12" sm="8">
+              <v-text-field v-model="form.params.host" :label="i18n.smtpHost" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_smtp_host"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4">
+              <v-text-field v-model="form.params.port" :label="i18n.smtpPort" type="number" density="comfortable" data-aid="destination_form_smtp_port"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.params.from" :label="i18n.smtpFrom" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_smtp_from"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.params.to" :label="i18n.smtpTo" density="comfortable" data-aid="destination_form_smtp_to"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.params.username" :label="i18n.smtpUsername" density="comfortable" data-aid="destination_form_smtp_username"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.params.password" :label="i18n.smtpPassword" :type="showPassword ? 'text' : 'password'" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" density="comfortable" data-aid="destination_form_smtp_password"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.params.attachmentMode" :items="attachmentModeOptions" :label="i18n.attachmentMode" density="comfortable" data-aid="destination_form_smtp_attachment_mode"></v-select>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-switch v-model="form.params.useTls" color="primary" inset :label="i18n.smtpUseTls" density="compact" data-aid="destination_form_smtp_use_tls"></v-switch>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_smtp_insecure_skip_verify"></v-switch>
+            </v-col>
+          </template>
+
+          <!-- Generic Webhook Parameters -->
+          <template v-if="form.type === 'generic_webhook'">
+            <v-col cols="12">
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_webhook_url"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_webhook_insecure_skip_verify"></v-switch>
+            </v-col>
+          </template>
+
+          <!-- Slack Webhook Parameters -->
+          <template v-if="form.type === 'slack_webhook'">
+            <v-col cols="12">
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_slack_url"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_slack_insecure_skip_verify"></v-switch>
+            </v-col>
+          </template>
+
+          <!-- Matrix Hookshot Webhook Parameters -->
+          <template v-if="form.type === 'matrix_hookshot_webhook'">
+            <v-col cols="12">
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_matrix_url"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_matrix_insecure_skip_verify"></v-switch>
+            </v-col>
+          </template>
           <v-col cols="12">
             <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="destination_form_enabled"></v-switch>
           </v-col>
@@ -164,10 +225,10 @@
       <v-card-text>
         <v-row dense>
           <v-col cols="12">
-            <v-text-field v-model="sendForm.title" :label="i18n.title" :rules="[$root.validators.required]" maxlength="255" counter="255" required data-aid="send_notification_title"></v-text-field>
+            <v-text-field v-model="sendForm.title" :label="i18n.title" :rules="[$root.validators.required]" maxlength="255" counter="255" required density="comfortable" data-aid="send_notification_title"></v-text-field>
           </v-col>
           <v-col cols="12">
-            <v-textarea v-model="sendForm.summary" :label="i18n.summary" rows="3" maxlength="4000" counter="4000" data-aid="send_notification_summary"></v-textarea>
+            <v-textarea v-model="sendForm.summary" :label="i18n.summary" rows="3" maxlength="4000" counter="4000" density="comfortable" data-aid="send_notification_summary"></v-textarea>
           </v-col>
           <v-col cols="12" sm="6">
             <v-select v-model="sendForm.severity" :items="severityOptions" :label="i18n.severity" density="comfortable" data-aid="send_notification_severity"></v-select>

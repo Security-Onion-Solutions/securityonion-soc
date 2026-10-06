@@ -177,6 +177,146 @@ test('saveDestination updates existing destination', async () => {
   expect(comp.destinationDialog).toBe(false);
 });
 
+test('channelTypeOptions contains soc, smtp, slack_webhook, matrix_hookshot_webhook, and generic_webhook', () => {
+  const opts = typeof comp.channelTypeOptions === 'function' ? comp.channelTypeOptions() : comp.channelTypeOptions;
+  expect(opts.map(opt => opt.value)).toEqual(['soc', 'smtp', 'slack_webhook', 'matrix_hookshot_webhook', 'generic_webhook']);
+});
+
+test('onChannelTypeChange updates recipientsSupported', () => {
+  comp.form.type = 'generic_webhook';
+  comp.onChannelTypeChange('generic_webhook');
+  expect(comp.form.recipientsSupported).toBe(false);
+
+  comp.onChannelTypeChange('slack_webhook');
+  expect(comp.form.recipientsSupported).toBe(false);
+
+  comp.onChannelTypeChange('matrix_hookshot_webhook');
+  expect(comp.form.recipientsSupported).toBe(false);
+
+  comp.onChannelTypeChange('smtp');
+  expect(comp.form.recipientsSupported).toBe(true);
+
+  comp.onChannelTypeChange('soc');
+  expect(comp.form.recipientsSupported).toBe(true);
+});
+
+test('showEditDestination populates slack destination', () => {
+  const dest = {
+    id: 'slack-alerts',
+    name: 'Slack Alerts',
+    type: 'slack_webhook',
+    enabled: true,
+    params: {
+      webhookUrl: 'https://hooks.slack.com/services/123',
+    },
+  };
+  comp.showEditDestination(dest);
+  expect(comp.form.type).toBe('slack_webhook');
+  expect(comp.form.params.webhookUrl).toBe('https://hooks.slack.com/services/123');
+});
+
+test('showEditDestination populates matrix destination', () => {
+  const dest = {
+    id: 'matrix-alerts',
+    name: 'Matrix Alerts',
+    type: 'matrix_hookshot_webhook',
+    enabled: true,
+    params: {
+      webhookUrl: 'https://matrix.example.com/hookshot/123',
+    },
+  };
+  comp.showEditDestination(dest);
+  expect(comp.form.type).toBe('matrix_hookshot_webhook');
+  expect(comp.form.params.webhookUrl).toBe('https://matrix.example.com/hookshot/123');
+});
+
+test('saveDestination creates slack destination with options', async () => {
+  comp.showAddDestination();
+  comp.form.name = 'Slack Alerts Channel';
+  comp.form.type = 'slack_webhook';
+  comp.form.params = {
+    webhookUrl: 'https://hooks.slack.com/services/ABC',
+    insecureSkipVerify: true,
+  };
+
+  const postMock = mockPapi('post', { success: true });
+  mockPapi('get', []);
+  await comp.saveDestination();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/destinations', {
+    id: undefined,
+    name: 'Slack Alerts Channel',
+    type: 'slack_webhook',
+    enabled: true,
+    enableRecipients: undefined,
+    skipIfRecipients: false,
+    scheduleIds: [],
+    severities: [],
+    params: {
+      webhookUrl: 'https://hooks.slack.com/services/ABC',
+      insecureSkipVerify: true,
+    },
+  });
+});
+
+test('saveDestination creates matrix destination with options', async () => {
+  comp.showAddDestination();
+  comp.form.name = 'Matrix Hookshot Channel';
+  comp.form.type = 'matrix_hookshot_webhook';
+  comp.form.params = {
+    webhookUrl: 'https://matrix.example.com/hook',
+    insecureSkipVerify: false,
+  };
+
+  const postMock = mockPapi('post', { success: true });
+  mockPapi('get', []);
+  await comp.saveDestination();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/destinations', {
+    id: undefined,
+    name: 'Matrix Hookshot Channel',
+    type: 'matrix_hookshot_webhook',
+    enabled: true,
+    enableRecipients: undefined,
+    skipIfRecipients: false,
+    scheduleIds: [],
+    severities: [],
+    params: {
+      webhookUrl: 'https://matrix.example.com/hook',
+      insecureSkipVerify: false,
+    },
+  });
+});
+
+test('saveDestination creates generic webhook destination', async () => {
+  comp.showAddDestination();
+  comp.form.name = 'Generic Webhook Channel';
+  comp.form.type = 'generic_webhook';
+  comp.form.params = {
+    webhookUrl: 'https://webhook.example.com/api',
+    insecureSkipVerify: true,
+  };
+
+  const postMock = mockPapi('post', { success: true });
+  mockPapi('get', []);
+  await comp.saveDestination();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/destinations', {
+    id: undefined,
+    name: 'Generic Webhook Channel',
+    type: 'generic_webhook',
+    enabled: true,
+    enableRecipients: undefined,
+    skipIfRecipients: false,
+    scheduleIds: [],
+    severities: [],
+    params: {
+      webhookUrl: 'https://webhook.example.com/api',
+      insecureSkipVerify: true,
+    },
+  });
+});
+
 test('saveDestination ignores empty name', async () => {
   comp.showAddDestination();
   comp.form.name = '';
@@ -328,9 +468,14 @@ test('userOptions correctly maps users', () => {
 test('helpers for channel and severity formatting', () => {
   expect(comp.getChannelIcon('soc')).toBe('fa-envelope');
   expect(comp.getChannelIcon('smtp')).toBe('fa-at');
-  expect(comp.getChannelIcon('slack')).toBe('fab fa-slack');
-  expect(comp.getChannelIcon('matrix')).toBe('fa-comments');
+  expect(comp.getChannelIcon('slack_webhook')).toBe('fab fa-slack');
+  expect(comp.getChannelIcon('matrix_hookshot_webhook')).toBe('fa-comments');
+  expect(comp.getChannelIcon('generic_webhook')).toBe('fa-globe');
   expect(comp.getChannelIcon('other')).toBe('fa-envelope');
+
+  expect(comp.getChannelLabel('slack_webhook')).toBe('Slack Webhook');
+  expect(comp.getChannelLabel('matrix_hookshot_webhook')).toBe('Matrix Hookshot Webhook');
+  expect(comp.getChannelLabel('generic_webhook')).toBe('Generic Webhook');
 
   comp.$root = {
     colorSeverity: (sev) => {
@@ -381,4 +526,28 @@ test('isDestinationScheduleActive and getDestinationScheduleNames evaluations', 
   expect(comp.getDestinationScheduleNames({ scheduleIds: ['sch-1'] })).toEqual(['Work']);
   expect(comp.getDestinationScheduleNames({ scheduleIds: ['sch-1', 'sch-2'] })).toEqual(['Work', 'Disabled']);
   expect(comp.getDestinationScheduleNames(null)).toEqual([]);
+});
+
+test('showPassword defaults to false and resets when opening add/edit destination dialog', () => {
+  expect(comp.showPassword).toBe(false);
+
+  comp.showPassword = true;
+  comp.showAddDestination();
+  expect(comp.showPassword).toBe(false);
+
+  comp.showPassword = true;
+  comp.showEditDestination({ id: 'smtp-1', name: 'SMTP Dest', type: 'smtp' });
+  expect(comp.showPassword).toBe(false);
+});
+
+test('destinations-manager template includes show/hide password toggle for smtp password field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('data-aid="destination_form_smtp_password"');
+  expect(tmpl).toMatch(/:type="showPassword\s*\?\s*'text'\s*:\s*'password'"/);
+  expect(tmpl).toMatch(/:append-inner-icon="showPassword\s*\?\s*'fa-eye-slash'\s*:\s*'fa-eye'"/);
+  expect(tmpl).toMatch(/@click:append-inner="showPassword\s*=\s*!showPassword"/);
 });

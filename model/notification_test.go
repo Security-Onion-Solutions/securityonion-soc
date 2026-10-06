@@ -30,7 +30,6 @@ func TestIsValidDestinationID(t *testing.T) {
 		"soc-bell",
 		"email_alerts-1",
 		"123e4567-e89b-12d3-a456-426614174000",
-		"pagerduty.prod",
 		"custom-123",
 	}
 	for _, id := range validIDs {

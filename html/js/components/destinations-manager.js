@@ -36,6 +36,7 @@ components.push({
         destinationItemsPerPage: 10,
         destinationItemsPerPageOptions: [10, 25, 50, 100],
         destinationSearch: '',
+        showPassword: false,
         destinationDialog: false,
         deleteDestinationDialog: false,
         destinationToDelete: null,
@@ -64,19 +65,34 @@ components.push({
           severities: [],
           params: {},
         },
-        channelTypeOptions: [
-          { title: this.$root?.i18n?.builtinSOCNotifications, value: 'soc' },
-        ],
-        severityOptions: [
-          { title: this.$root?.i18n?.severityCritical, value: 'critical' },
-          { title: this.$root?.i18n?.severityHigh, value: 'high' },
-          { title: this.$root?.i18n?.severityMedium, value: 'medium' },
-          { title: this.$root?.i18n?.severityLow, value: 'low' },
-          { title: this.$root?.i18n?.severityInfo, value: 'info' },
-        ],
       };
     },
     computed: {
+      channelTypeOptions() {
+        return [
+          { title: this.i18n?.builtinSOCNotifications, value: 'soc' },
+          { title: this.i18n?.destinationTypeSMTP, value: 'smtp' },
+          { title: this.i18n?.destinationTypeSlackWebhook, value: 'slack_webhook' },
+          { title: this.i18n?.destinationTypeMatrixHookshotWebhook, value: 'matrix_hookshot_webhook' },
+          { title: this.i18n?.destinationTypeGenericWebhook, value: 'generic_webhook' },
+        ];
+      },
+      attachmentModeOptions() {
+        return [
+          { title: this.i18n?.attachmentModeBoth, value: 'both' },
+          { title: this.i18n?.attachmentModeAttach, value: 'attach' },
+          { title: this.i18n?.attachmentModeLink, value: 'link' },
+        ];
+      },
+      severityOptions() {
+        return [
+          { title: this.i18n?.severityCritical, value: 'critical' },
+          { title: this.i18n?.severityHigh, value: 'high' },
+          { title: this.i18n?.severityMedium, value: 'medium' },
+          { title: this.i18n?.severityLow, value: 'low' },
+          { title: this.i18n?.severityInfo, value: 'info' },
+        ];
+      },
       userOptions() {
         return (this.users || []).map((u) => ({
           title: u.email || u.name || u.id,
@@ -86,8 +102,8 @@ components.push({
       scheduleOptions() {
         return (this.schedules || []).map((s) => {
           const statusSuffix = s.enabled !== false
-            ? ` (${this.$root?.i18n?.enabled})`
-            : ` (${this.$root?.i18n?.disabled})`;
+            ? ` (${this.i18n?.enabled})`
+            : ` (${this.i18n?.disabled})`;
           return {
             title: `${s.name}${statusSuffix}`,
             value: s.id,
@@ -157,15 +173,11 @@ components.push({
             return 'fa-envelope';
           case 'smtp':
             return 'fa-at';
-          case 'slack':
+          case 'slack_webhook':
             return 'fab fa-slack';
-          case 'matrix':
+          case 'matrix_hookshot_webhook':
             return 'fa-comments';
-          case 'msteams':
-            return 'fab fa-microsoft';
-          case 'pagerduty':
-            return 'fa-pager';
-          case 'webhook':
+          case 'generic_webhook':
             return 'fa-globe';
           default:
             return 'fa-envelope';
@@ -185,17 +197,13 @@ components.push({
           case 'soc':
             return this.i18n.builtinSOCNotifications;
           case 'smtp':
-            return 'SMTP';
-          case 'slack':
-            return 'Slack';
-          case 'matrix':
-            return 'Matrix';
-          case 'msteams':
-            return 'MS Teams';
-          case 'pagerduty':
-            return 'PagerDuty';
-          case 'webhook':
-            return 'Webhook';
+            return this.i18n.destinationTypeSMTP;
+          case 'slack_webhook':
+            return this.i18n.destinationTypeSlackWebhook;
+          case 'matrix_hookshot_webhook':
+            return this.i18n.destinationTypeMatrixHookshotWebhook;
+          case 'generic_webhook':
+            return this.i18n.destinationTypeGenericWebhook;
           default:
             return type;
         }
@@ -222,6 +230,7 @@ components.push({
       showAddDestination() {
         this.getSchedules();
         this.loadUsers();
+        this.showPassword = false;
         this.form = {
           isEdit: false,
           valid: false,
@@ -238,10 +247,21 @@ components.push({
         };
         this.destinationDialog = true;
       },
+      onChannelTypeChange(newType) {
+        if (newType === 'soc' || newType === 'smtp') {
+          this.form.recipientsSupported = true;
+          this.form.enableRecipients = true;
+        } else {
+          this.form.recipientsSupported = false;
+          this.form.enableRecipients = false;
+        }
+      },
       showEditDestination(dest) {
         this.getSchedules();
         this.loadUsers();
-        const recipientsSupported = Boolean(dest?.recipientsSupported);
+        this.showPassword = false;
+        const destType = dest?.type || 'soc';
+        const recipientsSupported = Boolean(dest?.recipientsSupported) && (destType === 'soc' || destType === 'smtp');
         const enableRecipients = dest?.enableRecipients !== undefined
           ? Boolean(dest.enableRecipients)
           : recipientsSupported;
@@ -251,7 +271,7 @@ components.push({
           valid: true,
           id: dest?.id,
           name: this.getDestinationName(dest),
-          type: dest?.type || 'soc',
+          type: destType,
           enabled: dest?.enabled !== false,
           recipientsSupported: recipientsSupported,
           enableRecipients: enableRecipients,
@@ -281,16 +301,51 @@ components.push({
           return;
         }
 
+        let params = {};
+        if (this.form.type === 'smtp') {
+          params = {
+            host: this.form.params?.host?.trim() || '',
+            port: parseInt(this.form.params?.port, 10) || 587,
+            from: this.form.params?.from?.trim() || '',
+            to: this.form.params?.to ? (typeof this.form.params.to === 'string' ? this.form.params.to.split(',').map(s => s.trim()).filter(Boolean) : this.form.params.to) : [],
+            username: this.form.params?.username?.trim() || undefined,
+            password: this.form.params?.password || undefined,
+            useTls: Boolean(this.form.params?.useTls),
+            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
+            attachmentMode: this.form.params?.attachmentMode || 'both',
+          };
+        } else if (this.form.type === 'slack_webhook') {
+          params = {
+            webhookUrl: this.form.params?.webhookUrl?.trim() || '',
+            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
+          };
+        } else if (this.form.type === 'matrix_hookshot_webhook') {
+          params = {
+            webhookUrl: this.form.params?.webhookUrl?.trim() || '',
+            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
+          };
+        } else if (this.form.type === 'generic_webhook') {
+          params = {
+            webhookUrl: this.form.params?.webhookUrl?.trim() || '',
+            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
+          };
+        } else if (this.form.type === 'soc') {
+          params = {};
+        } else {
+          params = this.form.params || {};
+        }
+
+        const isRecipientSupported = (this.form.type === 'soc' || this.form.type === 'smtp');
         const payload = {
           id: this.form.id || undefined,
           name: this.form.name.trim(),
           type: this.form.type || 'soc',
           enabled: this.form.enabled !== false,
-          enableRecipients: this.form.recipientsSupported ? Boolean(this.form.enableRecipients) : undefined,
-          skipIfRecipients: Boolean(this.form.skipIfRecipients),
+          enableRecipients: isRecipientSupported ? Boolean(this.form.enableRecipients) : undefined,
+          skipIfRecipients: isRecipientSupported ? Boolean(this.form.skipIfRecipients) : false,
           scheduleIds: Array.isArray(this.form.scheduleIds) ? this.form.scheduleIds.filter(Boolean) : [],
           severities: Array.isArray(this.form.severities) ? this.form.severities : [],
-          params: this.form.params || {},
+          params: params,
         };
 
         this.$root?.startLoading?.();
@@ -344,7 +399,7 @@ components.push({
         }
         this.sendForm = {
           title: defaultTitle,
-          summary: this.i18n.testNotificationSummary || '',
+          summary: this.i18n.testNotificationSummary,
           severity: 'info',
           recipients: [],
           bypassSchedules: false,

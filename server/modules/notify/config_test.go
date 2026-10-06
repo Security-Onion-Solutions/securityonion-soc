@@ -51,7 +51,7 @@ func TestParseConfigCustom(t *testing.T) {
 			},
 			"slack-alerts": map[string]interface{}{
 				"name":    "Slack Alerts",
-				"type":    "slack",
+				"type":    "slack_webhook",
 				"enabled": false,
 				"params": map[string]interface{}{
 					"webhookUrl": "https://hooks.slack.com/services/xxx",
@@ -80,7 +80,7 @@ func TestParseConfigCustom(t *testing.T) {
 	slackDest, ok := parsed.Destinations["slack-alerts"]
 	assert.True(t, ok)
 	assert.Equal(t, "Slack Alerts", slackDest.Name)
-	assert.Equal(t, "slack", slackDest.Type)
+	assert.Equal(t, "slack_webhook", slackDest.Type)
 	assert.False(t, slackDest.Enabled)
 }
 

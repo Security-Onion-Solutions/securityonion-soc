@@ -1172,6 +1172,57 @@ func TestPostSendNotification_TitleTooLong_ReturnsBadRequest(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestPostSendNotification_SendFailure_ReturnsBadRequest_WithErrorNotificationSendFailed(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		sendErr: errors.New("smtp connection refused"),
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"Send Failure Test","summary":"Testing failure handling"}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_NOTIFICATION_SEND_FAILED")
+}
+
+func TestPostSendNotification_DestinationNotFound_ReturnsNotFound_WithErrorDestinationNotFound(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		sendErr: errors.New("destination 'non-existent' not found"),
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"Missing Dest Test","summary":"Testing destination not found"}`
+	r := httptest.NewRequest("POST", "/api/notifications/destinations/non-existent/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "non-existent")
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_DESTINATION_NOT_FOUND")
+}
+
 func TestPostDestination_InvalidID(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")

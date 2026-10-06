@@ -83,10 +83,34 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 		}
 	}
 
-	// Register core SOC channel driver
+	// Register core notification channel drivers
 	socChannel := NewSOCChannel(mod.server, mod.store)
 	if err := mod.registry.Register(socChannel); err != nil {
 		log.WithError(err).Error("Failed to register SOC notification channel")
+		return err
+	}
+
+	smtpChannel := NewSMTPChannel(mod.server)
+	if err := mod.registry.Register(smtpChannel); err != nil {
+		log.WithError(err).Error("Failed to register SMTP notification channel")
+		return err
+	}
+
+	webhookChannel := NewWebhookChannel(mod.server)
+	if err := mod.registry.Register(webhookChannel); err != nil {
+		log.WithError(err).Error("Failed to register Webhook notification channel")
+		return err
+	}
+
+	slackChannel := NewSlackChannel(mod.server)
+	if err := mod.registry.Register(slackChannel); err != nil {
+		log.WithError(err).Error("Failed to register Slack notification channel")
+		return err
+	}
+
+	matrixChannel := NewMatrixChannel(mod.server)
+	if err := mod.registry.Register(matrixChannel); err != nil {
+		log.WithError(err).Error("Failed to register Matrix notification channel")
 		return err
 	}
 

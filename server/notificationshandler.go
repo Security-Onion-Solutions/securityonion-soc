@@ -8,7 +8,6 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -279,12 +278,11 @@ type SendNotificationResponse struct {
 // @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
 // @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
-// @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
+// @Failure      400         "Title is missing, input exceeds maximum length, or notification delivery failed"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Notification module has not been enabled on the server"
-// @Failure      500         "Failed to send notification via channel driver"
 // @Router       /connect/notifications/send [post]
 func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
@@ -399,7 +397,11 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 
 	if sendErr != nil {
 		logger.WithError(sendErr).WithField("destinationId", id).Error("failed to dispatch notification")
-		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("notification delivery failed: %w", sendErr))
+		if strings.Contains(sendErr.Error(), "not found") {
+			web.Respond(w, r, http.StatusNotFound, errors.New("ERROR_DESTINATION_NOT_FOUND"))
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_NOTIFICATION_SEND_FAILED"))
+		}
 		return
 	}
 

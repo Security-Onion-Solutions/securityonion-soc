@@ -51,6 +51,12 @@ const (
 	AttachmentModeBoth   = "both"
 
 	DefaultDestinationSOCBell = "soc-bell"
+
+	ChannelTypeSOC                   = "soc"
+	ChannelTypeSMTP                  = "smtp"
+	ChannelTypeSlackWebhook          = "slack_webhook"
+	ChannelTypeMatrixHookshotWebhook = "matrix_hookshot_webhook"
+	ChannelTypeGenericWebhook        = "generic_webhook"
 )
 
 // DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
@@ -138,8 +144,8 @@ type DestinationConfig struct {
 	ID string `json:"id,omitempty" example:"soc-bell"`
 	// Human-readable display name for this destination (max 50 characters).
 	Name string `json:"name" example:"SOC Notification Bell"`
-	// The channel driver type (e.g. soc, smtp, slack, matrix, msteams, pagerduty, webhook).
-	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,msteams,pagerduty,webhook"`
+	// The channel driver type (e.g. soc, smtp, slack, matrix, webhook).
+	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,webhook"`
 	// Indicates whether this destination is currently active and receiving alerts.
 	Enabled bool `json:"enabled" example:"true"`
 	// The IDs of the reusable activation schedules linked to this destination.
@@ -156,7 +162,34 @@ type DestinationConfig struct {
 	EnableRecipients *bool `json:"enableRecipients,omitempty" example:"true"`
 	// When recipient targeting is not supported or disabled, whether to skip sending targeted notifications.
 	SkipIfRecipients bool `json:"skipIfRecipients,omitempty" example:"false"`
-	// Channel-specific driver parameters (e.g. webhook URLs, hostnames, credentials).
+	// Channel-specific driver parameters:
+	//   - "soc":
+	//       * "storeInPostgres" (bool): Persist notifications in PostgreSQL.
+	//       * "attachmentMode" (string): "link", "attach", or "both".
+	//   - "smtp":
+	//       * "host" (string, required): SMTP server hostname or IP address.
+	//       * "port" (int): SMTP server port (default 25, 587, or 465).
+	//       * "from" (string, required): Sender email address (e.g., "alerts@example.com").
+	//       * "to" ([]string): Default recipient email addresses.
+	//       * "username" (string): SMTP authentication username.
+	//       * "password" (string): SMTP authentication password.
+	//       * "useTls" (bool): Use TLS / STARTTLS.
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//       * "authType" (string): Auth mechanism ("plain", "login", "cram-md5").
+	//       * "attachmentMode" (string): "both", "attach", or "link" (default "both").
+	//   - "slack_webhook":
+	//       * "webhookUrl" (string, required): Slack Incoming Webhook URL (e.g., "https://hooks.slack.com/services/...").
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//   - "matrix_hookshot_webhook":
+	//       * "webhookUrl" (string, required): Matrix Hookshot webhook URL (e.g., "https://matrix.example.com/_matrix/hookshot/...").
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//   - "generic_webhook":
+	//       * "webhookUrl" (string, required): HTTP or HTTPS webhook destination URL.
+	//       * "format" (string): Payload format ("generic", "slack", or "matrix_hookshot", default "generic").
+	//       * "method" (string): HTTP method (default "POST").
+	//       * "headers" (map[string]string): Custom HTTP headers.
+	//       * "timeoutSeconds" (int): Request timeout in seconds (default 15).
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
 	Params map[string]interface{} `json:"params,omitempty"`
 }
 
