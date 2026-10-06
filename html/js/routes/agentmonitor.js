@@ -356,11 +356,12 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     async loadHistory(background = false) {
       const request = ++this.historyRequest;
       const count = this.historyNeedsCount;
+      const offset = (this.historyPage - 1) * this.historyItemsPerPage;
       try {
         const response = await this.$root.papi.get('assistant/automations/runs', {
           params: {
             limit: this.historyItemsPerPage,
-            offset: (this.historyPage - 1) * this.historyItemsPerPage,
+            offset,
             automationId: this.historyAutomationId || '',
             hideEmpty: this.hideEmptyRuns,
             q: (this.historySearch || '').trim(),
@@ -370,9 +371,15 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         if (request !== this.historyRequest) return;
         const page = response.data || {};
         this.historyRuns = (page.runs || []).map(run => Object.assign({}, run, { automationName: run.displayName || run.automationId }));
+        const listed = offset + this.historyRuns.length;
         if (count && typeof page.total === 'number') {
           this.historyTotal = page.total;
           this.historyNeedsCount = false;
+        } else if (!page.hasMore) {
+          this.historyTotal = listed;
+        } else {
+          // Runs finished since the last count shift rows past it.
+          this.historyTotal = Math.max(this.historyTotal, listed + 1);
         }
         this.historyLoaded = true;
         this.openPendingRun();

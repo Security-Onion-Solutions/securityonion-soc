@@ -312,6 +312,34 @@ test('paging keeps the count; a filter change returns to page one and recounts',
   expect(runsCall(get).length).toBe(4);
 });
 
+test('an uncounted page keeps every run reachable from hasMore', async () => {
+  const runs = (n) => Array.from({ length: n }, (_, i) => ({ id: 'run-' + i, itemCounts: {} }));
+  comp.historyNeedsCount = false;
+  comp.historyTotal = 20;
+  comp.historyItemsPerPage = 10;
+
+  comp.historyPage = 2;
+  serve({ 'assistant/automations/runs': { runs: runs(10), hasMore: true } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyPage = 3;
+  serve({ 'assistant/automations/runs': { runs: runs(1), hasMore: false } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyTotal = 40;
+  serve({ 'assistant/automations/runs': { runs: runs(1), hasMore: false } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyTotal = 40;
+  comp.historyPage = 1;
+  serve({ 'assistant/automations/runs': { runs: runs(10), hasMore: true } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(40);
+});
+
 test('a slower, older page is dropped when a newer one has landed', async () => {
   let release;
   const slow = new Promise(resolve => { release = resolve; });
