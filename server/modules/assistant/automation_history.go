@@ -29,7 +29,8 @@ const (
 	defaultAutomationAlertLimit   = 500
 	maxAutomationAlertLimit       = 10000
 	automationThoughtPreviewRunes = 300
-	maxAutomationRunSearchRunes   = 256
+	// Real terms (names, IDs, error codes) are far shorter; this only bounds an abusive pattern.
+	maxAutomationRunSearchRunes = 256
 )
 
 var ErrAutomationRunNotFound = database.ErrAutomationRunNotFound
