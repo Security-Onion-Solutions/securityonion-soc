@@ -16,7 +16,7 @@ const LIMIT_TOKENS_SETTING_ID = 'soc.config.server.modules.assistant.maxSubSessi
 const AUTOMATION_TICK_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds';
 const ALERT_TRIAGE_EPOCH_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.alertTriageEpoch';
 
-// Matches the setting's validation in Config.
+// Matches the soc_soc.yaml regex, which is stricter than the server's parse.
 const ALERT_TRIAGE_EPOCH_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)?$/;
 
 const MEMORY_SETTING_IDS = {
