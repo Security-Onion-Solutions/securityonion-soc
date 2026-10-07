@@ -363,7 +363,7 @@ const huntComponent = {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.safeStringMaxLength = params["safeStringMaxLength"];
       this.queryBaseFilter = params["queryBaseFilter"];
-      this.queries = this.applyQuerySubstitutions(params["queries"]);
+      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => !q.license || this.$root.isLicensed(q.license));
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -1535,6 +1535,7 @@ const huntComponent = {
 
       const customSorts = {
         'event.severity_label': this.sortBySeverity,
+        [this.$root.alertTriageField('assessment')]: this.sortByAssessment,
       };
 
       if (fields && fields.length > 0) {
@@ -1568,6 +1569,17 @@ const huntComponent = {
 
       // compare
       return sevA - sevB;
+    },
+    // Untriaged and unrecognised values, including the localized missing bucket, rank lowest.
+    sortByAssessment(a, b) {
+      const rank = value => this.$root.alertTriageAssessment(value) ? Number(value) : -1;
+      return rank(a) - rank(b);
+    },
+    assessmentChip(item) {
+      return this.$root.alertTriageAssessment(item[this.$root.alertTriageField('assessment')]);
+    },
+    isAssessmentAvailable(field, item) {
+      return field === this.$root.alertTriageField('assessment') && !!this.assessmentChip(item);
     },
     lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
@@ -1671,7 +1683,10 @@ const huntComponent = {
 
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
           group.sortBy = [{ key: 'count', order: 'desc' }];
-          if (this.groupBys.length == 0 && this.groupBySortBy) {
+          if (group.fields[0] === this.$root.alertTriageField('assessment')) {
+            group.sortBy = [{ key: group.fields[0], order: 'desc' }];
+          }
+          if (this.groupBys.length == 0 && this.groupBySortBy && group.headers.some(header => header.value === this.groupBySortBy)) {
             group.sortBy = [{ key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc' }];
           }
 
@@ -3138,7 +3153,7 @@ const huntComponent = {
         if (label.toLowerCase() === 'count') continue;
 
         if (item[field] && !Array.isArray(item[field])) {
-          parts.push(`${label}:"${item[field]}"`);
+          parts.push(`${label}:"${this.subMissing(item[field])}"`);
         }
       }
 
