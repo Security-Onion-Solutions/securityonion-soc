@@ -1355,6 +1355,17 @@ dfn {
   white-space: normal;
 }
 
+/* Sits in an expanded table row too, so it needs the same nowrap undo. */
+.alert-investigation-report {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.alert-investigation-report pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* The .section-panel tab styling bleeds into these nested editor tabs; reset it
    so the tabs/window use the editor card surface instead of a boxed background. */
 .agentstudio-editor .v-tabs,

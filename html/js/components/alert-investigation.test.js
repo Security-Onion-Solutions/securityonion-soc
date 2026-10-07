@@ -4,6 +4,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('../routes/assistant.utils.js');
 require('./alert-investigation.js');
 
 let comp;
@@ -196,6 +197,21 @@ test('a group describes its newest triaged alert when it has one', () => {
   expect(comp.groupNote()).toBe(comp.i18n.aiInvestigationGroupNewestTriaged);
   expect(comp.automatedLink()).toEqual({ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'older' } });
   expect(comp.manualLink({ sessionId: 'copy_1' })).toEqual({ name: 'assistant', params: { sessionId: 'copy_1' }, query: { alert: 'older' } });
+});
+
+test('the report renders mermaid and shows choices as plain text', () => {
+  const formatMarkdown = jest.spyOn(comp.$root, 'formatMarkdown').mockImplementation(text => '<p>' + text + '</p>');
+  const renderMermaid = jest.spyOn(comp.$root, 'renderMermaid').mockImplementation(() => {});
+
+  const html = comp.formatMarkdown('Next?\n1. [[CHOICE]]Acknowledge the alert[[/CHOICE]]');
+
+  expect(formatMarkdown).toHaveBeenCalledWith('Next?\n1. Acknowledge the alert', true);
+  expect(html).not.toContain('[[CHOICE]]');
+  expect(renderMermaid).toHaveBeenCalled();
+  expect(comp.formatMarkdown('')).toBe('');
+
+  formatMarkdown.mockRestore();
+  renderMermaid.mockRestore();
 });
 
 test('links the bucket to the alerts it covers', () => {

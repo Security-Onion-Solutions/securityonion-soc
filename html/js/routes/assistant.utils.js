@@ -581,6 +581,10 @@ globalThis.AssistantUtils = (function() {
         this.sendMessage();
       });
     },
+    stripChoiceMarkers(text) {
+      if (!text || typeof text !== 'string') return text;
+      return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
+    },
     stripNewlines(text) {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
