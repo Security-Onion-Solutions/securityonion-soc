@@ -67,10 +67,10 @@ components.push({
     },
     computed: {
       isSuperuser() {
-        return this.$root.isUserAdmin();
+        return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
       },
       notificationsLicensed() {
-        return this.$root.isLicensed(this.$root.FEAT_NTF);
+        return this.$root?.isLicensed ? this.$root.isLicensed(this.$root.FEAT_NTF) : false;
       },
       tableHeaders() {
         let headers = this.alarmHeaders;

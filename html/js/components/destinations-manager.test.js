@@ -317,6 +317,54 @@ test('saveDestination creates generic webhook destination', async () => {
   });
 });
 
+
+test('saveDestination creates smtp destination with all options and comma-separated recipients', async () => {
+  comp.showAddDestination();
+  comp.form.name = 'SMTP Alerts';
+  comp.form.type = 'smtp';
+  comp.form.enableRecipients = true;
+  comp.form.skipIfRecipients = true;
+  comp.form.scheduleIds = ['sch-1'];
+  comp.form.severities = ['high', 'critical'];
+  comp.form.params = {
+    host: 'smtp.example.com',
+    port: '465',
+    from: 'alerts@example.com',
+    to: 'secops@example.com, oncall@example.com',
+    username: 'socuser',
+    password: 'secretpassword',
+    useTls: true,
+    insecureSkipVerify: true,
+    attachmentMode: 'attach',
+  };
+
+  const postMock = mockPapi('post', { success: true });
+  mockPapi('get', []);
+  await comp.saveDestination();
+
+  expect(postMock).toHaveBeenCalledWith('notifications/destinations', {
+    id: undefined,
+    name: 'SMTP Alerts',
+    type: 'smtp',
+    enabled: true,
+    enableRecipients: true,
+    skipIfRecipients: true,
+    scheduleIds: ['sch-1'],
+    severities: ['high', 'critical'],
+    params: {
+      host: 'smtp.example.com',
+      port: 465,
+      from: 'alerts@example.com',
+      to: ['secops@example.com', 'oncall@example.com'],
+      username: 'socuser',
+      password: 'secretpassword',
+      useTls: true,
+      insecureSkipVerify: true,
+      attachmentMode: 'attach',
+    },
+  });
+});
+
 test('saveDestination ignores empty name', async () => {
   comp.showAddDestination();
   comp.form.name = '';

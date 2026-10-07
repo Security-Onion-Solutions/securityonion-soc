@@ -453,3 +453,53 @@ func TestWebhookChannelSendGeneric_WithBaseUrl_PrefixesRelativeLink(t *testing.T
 	assert.Equal(t, "https://soc.example.com/api/stream/1002", sentPayload.Attachments[0].URL)
 }
 
+
+func TestWebhookChannel_BuildHTTPClient_ProxyAndTLS(t *testing.T) {
+	// 1. Without proxy configuration
+	srvNoProxy := &server.Server{
+		Config: &config.ServerConfig{},
+	}
+	chNoProxy := NewWebhookChannel(srvNoProxy)
+	clientNoProxy := chNoProxy.buildHTTPClient(map[string]interface{}{
+		"insecureSkipVerify": true,
+		"timeoutSeconds":     30,
+	})
+	require.NotNil(t, clientNoProxy)
+	assert.Equal(t, 30*time.Second, clientNoProxy.Timeout)
+	transportNoProxy, ok := clientNoProxy.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.True(t, transportNoProxy.TLSClientConfig.InsecureSkipVerify)
+
+	// 2. With proxy configured on server
+	proxyURLStr := "http://proxy.corp.example.com:3128"
+	srvWithProxy := &server.Server{
+		Config: &config.ServerConfig{
+			Proxy: proxyURLStr,
+		},
+	}
+	chWithProxy := NewWebhookChannel(srvWithProxy)
+	clientWithProxy := chWithProxy.buildHTTPClient(nil)
+	require.NotNil(t, clientWithProxy)
+	assert.Equal(t, 15*time.Second, clientWithProxy.Timeout) // default timeout
+	transportWithProxy, ok := clientWithProxy.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.False(t, transportWithProxy.TLSClientConfig.InsecureSkipVerify)
+	require.NotNil(t, transportWithProxy.Proxy)
+
+	req, _ := http.NewRequest("GET", "https://example.com", nil)
+	resolvedProxy, err := transportWithProxy.Proxy(req)
+	require.NoError(t, err)
+	require.NotNil(t, resolvedProxy)
+	assert.Equal(t, proxyURLStr, resolvedProxy.String())
+
+	// 3. With invalid proxy string (gracefully handled)
+	srvInvalidProxy := &server.Server{
+		Config: &config.ServerConfig{
+			Proxy: "%invalid-url",
+		},
+	}
+	chInvalidProxy := NewWebhookChannel(srvInvalidProxy)
+	clientInvalidProxy := chInvalidProxy.buildHTTPClient(nil)
+	require.NotNil(t, clientInvalidProxy)
+}
+

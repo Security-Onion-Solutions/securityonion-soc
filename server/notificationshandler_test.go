@@ -1222,6 +1222,30 @@ func TestPostSendNotification_DestinationNotFound_ReturnsNotFound_WithErrorDesti
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "ERROR_DESTINATION_NOT_FOUND")
 }
+func TestPostSendNotification_DownstreamNotFound_ReturnsBadRequest_WithErrorNotificationSendFailed(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	srv := NewFakeAuthorizedServer(nil)
+	fakeNotif := &fakeTestNotifier{
+		sendErr: errors.New("webhook endpoint returned HTTP 404: 404 page not found"),
+	}
+	srv.Notifier = fakeNotif
+	h := NewNotificationHandler(srv)
+
+	bodyJSON := `{"title":"Downstream 404 Test","summary":"Downstream returned not found"}`
+	r := httptest.NewRequest("POST", "/api/notifications/send", bytes.NewBufferString(bodyJSON))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostSendNotification(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "ERROR_NOTIFICATION_SEND_FAILED")
+}
+
 
 func TestPostDestination_InvalidID(t *testing.T) {
 	defer licensing.Shutdown()

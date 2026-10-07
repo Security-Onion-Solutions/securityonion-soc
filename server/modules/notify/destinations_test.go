@@ -429,3 +429,41 @@ func TestNotifierImpl_UnmarshalDestinations_Formats(t *testing.T) {
 	_, err = unmarshalDestinations("invalid not json")
 	assert.Error(t, err)
 }
+
+func TestNotifierImpl_CreateAndUpdateDestination_InvalidChannelType(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	cfgStore := server.NewMemConfigStore([]*model.Setting{})
+	srv := &server.Server{
+		Configstore: cfgStore,
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	registry := NewChannelRegistry()
+	_ = registry.Register(NewSOCChannel(srv, nil))
+	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
+	ctx := context.Background()
+
+	// 1. Create with unsupported channel type
+	_, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		Name: "Unsupported Channel Dest",
+		Type: "unknown_driver",
+	})
+	assert.ErrorIs(t, err, server.ErrInvalidChannelType)
+
+	// 2. Create valid soc destination first
+	validDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "dest-update-test",
+		Name: "Valid SOC Dest",
+		Type: "soc",
+	})
+	assert.NoError(t, err)
+
+	// 3. Update with unsupported channel type
+	_, err = notifier.UpdateDestination(ctx, validDest.ID, &model.DestinationConfig{
+		Name: "Updated Dest",
+		Type: "bogus_driver",
+	})
+	assert.ErrorIs(t, err, server.ErrInvalidChannelType)
+}
+

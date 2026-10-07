@@ -83,7 +83,7 @@ func (n *NotifierImpl) Send(ctx context.Context, payload *model.NotificationPayl
 	for _, destName := range targetDests {
 		destCfg, found := destinationsMap[destName]
 		if !found {
-			err := fmt.Errorf("destination '%s' not found", destName)
+			err := fmt.Errorf("%w: destination '%s' not found", server.ErrDestinationNotFound, destName)
 			log.WithError(err).Warn("Failed to send notification")
 			errs = append(errs, err)
 			continue

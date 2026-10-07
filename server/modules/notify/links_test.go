@@ -79,8 +79,53 @@ func TestResolveOutboundPayload(t *testing.T) {
 
 	// Nil cases
 	assert.Nil(t, ResolveOutboundPayload(srv, nil))
-	assert.Same(t, payload, ResolveOutboundPayload(nil, payload))
 
 	srvEmpty := &server.Server{Config: &config.ServerConfig{BaseUrl: "/"}}
-	assert.Same(t, payload, ResolveOutboundPayload(srvEmpty, payload))
+	resolvedEmpty := ResolveOutboundPayload(srvEmpty, payload)
+	assert.Equal(t, "/#/job/123", resolvedEmpty.Links["View"])
+	assert.Equal(t, "https://external.com", resolvedEmpty.Links["Ext"])
+}
+
+func TestResolveOutboundPayload_SanitizesUnsafeLinks(t *testing.T) {
+	srv := &server.Server{
+		Config: &config.ServerConfig{
+			BaseUrl: "https://soc.example.com/",
+		},
+	}
+
+	payload := &model.NotificationPayload{
+		Title: "Test Unsafe",
+		Links: map[string]string{
+			"Safe":   "/#/job/123",
+			"BadJS":  "javascript:alert('xss')",
+			"BadVBS": "vbscript:msgbox('hi')",
+			"BadDat": "data:text/html,<script>alert(1)</script>",
+		},
+		Attachments: []model.Attachment{
+			{Filename: "good.pcap", URL: "/api/stream/123"},
+			{Filename: "bad.pcap", URL: "javascript:alert(1)"},
+			{Filename: "data.pcap", URL: "data:text/plain;base64,abc"},
+		},
+	}
+
+	resolved := ResolveOutboundPayload(srv, payload)
+	assert.NotNil(t, resolved)
+	assert.Equal(t, "https://soc.example.com/#/job/123", resolved.Links["Safe"])
+	assert.NotContains(t, resolved.Links, "BadJS")
+	assert.NotContains(t, resolved.Links, "BadVBS")
+	assert.NotContains(t, resolved.Links, "BadDat")
+
+	assert.Len(t, resolved.Attachments, 1)
+	assert.Equal(t, "good.pcap", resolved.Attachments[0].Filename)
+	assert.Equal(t, "https://soc.example.com/api/stream/123", resolved.Attachments[0].URL)
+
+	// Even when srv is nil, unsafe links must be stripped
+	resolvedNilSrv := ResolveOutboundPayload(nil, payload)
+	assert.NotNil(t, resolvedNilSrv)
+	assert.Equal(t, "/#/job/123", resolvedNilSrv.Links["Safe"])
+	assert.NotContains(t, resolvedNilSrv.Links, "BadJS")
+	assert.NotContains(t, resolvedNilSrv.Links, "BadVBS")
+	assert.NotContains(t, resolvedNilSrv.Links, "BadDat")
+	assert.Len(t, resolvedNilSrv.Attachments, 1)
+	assert.Equal(t, "/api/stream/123", resolvedNilSrv.Attachments[0].URL)
 }

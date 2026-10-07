@@ -199,6 +199,10 @@ func (n *NotifierImpl) CreateDestination(ctx context.Context, dest *model.Destin
 		dest.Type = "soc"
 	}
 
+	if !model.IsValidChannelType(dest.Type) {
+		return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+	}
+
 	if dest.ID == "" {
 		dest.ID = uuid.NewString()
 	} else if !model.IsValidDestinationID(dest.ID) {
@@ -206,7 +210,11 @@ func (n *NotifierImpl) CreateDestination(ctx context.Context, dest *model.Destin
 	}
 
 	if n.registry != nil {
-		if ch, found := n.registry.Get(dest.Type); found {
+		ch, found := n.registry.Get(dest.Type)
+		if !found && len(n.registry.RegisteredTypes()) > 0 {
+			return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+		}
+		if found {
 			if err := ch.ValidateConfig(dest.Params); err != nil {
 				return nil, fmt.Errorf("invalid channel parameters: %w", err)
 			}
@@ -255,10 +263,18 @@ func (n *NotifierImpl) UpdateDestination(ctx context.Context, id string, dest *m
 		dest.Type = "soc"
 	}
 
+	if !model.IsValidChannelType(dest.Type) {
+		return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+	}
+
 	dest.ID = id
 
 	if n.registry != nil {
-		if ch, found := n.registry.Get(dest.Type); found {
+		ch, found := n.registry.Get(dest.Type)
+		if !found && len(n.registry.RegisteredTypes()) > 0 {
+			return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+		}
+		if found {
 			if err := ch.ValidateConfig(dest.Params); err != nil {
 				return nil, fmt.Errorf("invalid channel parameters: %w", err)
 			}

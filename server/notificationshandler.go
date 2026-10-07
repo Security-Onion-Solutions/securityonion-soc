@@ -81,7 +81,7 @@ func (h *NotificationHandler) respondError(w http.ResponseWriter, r *http.Reques
 	} else if errors.Is(err, ErrDestinationNotFound) || strings.Contains(errStr, "not found") {
 		web.Respond(w, r, http.StatusNotFound, err)
 	} else if errors.Is(err, ErrInvalidDestinationID) || errors.Is(err, ErrDuplicateDestinationID) ||
-		errors.Is(err, ErrCannotDeleteDefaultDestination) ||
+		errors.Is(err, ErrCannotDeleteDefaultDestination) || errors.Is(err, ErrInvalidChannelType) ||
 		strings.Contains(errStr, "invalid") || strings.Contains(errStr, "already exists") ||
 		strings.Contains(errStr, "cannot delete") || strings.Contains(errStr, "exceeds") ||
 		strings.Contains(errStr, "required") {
@@ -397,7 +397,7 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 
 	if sendErr != nil {
 		logger.WithError(sendErr).WithField("destinationId", id).Error("failed to dispatch notification")
-		if strings.Contains(sendErr.Error(), "not found") {
+		if errors.Is(sendErr, ErrDestinationNotFound) || (strings.Contains(sendErr.Error(), "destination '") && strings.Contains(sendErr.Error(), "not found")) {
 			web.Respond(w, r, http.StatusNotFound, errors.New("ERROR_DESTINATION_NOT_FOUND"))
 		} else {
 			web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_NOTIFICATION_SEND_FAILED"))

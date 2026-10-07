@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
@@ -174,30 +175,9 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 		}
 	}
 
-	insecureSkipVerify := false
-	if skipVal, ok := params["insecureSkipVerify"]; ok {
-		insecureSkipVerify, _ = skipVal.(bool)
-	} else if skipVal, ok := params["skipVerify"]; ok {
-		insecureSkipVerify, _ = skipVal.(bool)
-	}
-
 	client := c.client
 	if client == nil {
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureSkipVerify,
-			},
-		}
-		timeout := 15 * time.Second
-		if timeoutVal, ok := params["timeoutSeconds"]; ok {
-			if t, err := parsePort(timeoutVal); err == nil && t > 0 {
-				timeout = time.Duration(t) * time.Second
-			}
-		}
-		client = &http.Client{
-			Transport: transport,
-			Timeout:   timeout,
-		}
+		client = c.buildHTTPClient(params)
 	}
 
 	resp, err := client.Do(req)
@@ -212,6 +192,53 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 	}
 
 	return nil
+}
+
+func (c *WebhookChannel) buildHTTPClient(params map[string]interface{}) *http.Client {
+	insecureSkipVerify := false
+	if params != nil {
+		if skipVal, ok := params["insecureSkipVerify"]; ok {
+			insecureSkipVerify, _ = skipVal.(bool)
+		} else if skipVal, ok := params["skipVerify"]; ok {
+			insecureSkipVerify, _ = skipVal.(bool)
+		}
+	}
+
+	var transport *http.Transport
+	if defaultTransport, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = defaultTransport.Clone()
+	} else {
+		transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		}
+	}
+
+	transport.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: insecureSkipVerify,
+	}
+
+	if c.server != nil && c.server.Config != nil && c.server.Config.Proxy != "" {
+		p, err := url.Parse(c.server.Config.Proxy)
+		if err != nil {
+			log.WithError(err).WithField("proxy", c.server.Config.Proxy).Error("unable to parse proxy URL, not using proxy")
+		} else {
+			transport.Proxy = http.ProxyURL(p)
+		}
+	}
+
+	timeout := 15 * time.Second
+	if params != nil {
+		if timeoutVal, ok := params["timeoutSeconds"]; ok {
+			if t, err := parsePort(timeoutVal); err == nil && t > 0 {
+				timeout = time.Duration(t) * time.Second
+			}
+		}
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+	}
 }
 
 func (c *WebhookChannel) resolveFormat(params map[string]interface{}) string {

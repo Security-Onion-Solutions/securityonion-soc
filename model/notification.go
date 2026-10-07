@@ -59,6 +59,16 @@ const (
 	ChannelTypeGenericWebhook        = "generic_webhook"
 )
 
+// IsValidChannelType checks if the provided channel driver type is supported.
+func IsValidChannelType(t string) bool {
+	switch t {
+	case ChannelTypeSOC, ChannelTypeSMTP, ChannelTypeSlackWebhook, ChannelTypeMatrixHookshotWebhook, ChannelTypeGenericWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
 // DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
 // The Name field is left empty so the client side can determine the localized display name.
 func DefaultDestinationSOCBellConfig() DestinationConfig {
@@ -144,8 +154,8 @@ type DestinationConfig struct {
 	ID string `json:"id,omitempty" example:"soc-bell"`
 	// Human-readable display name for this destination (max 50 characters).
 	Name string `json:"name" example:"SOC Notification Bell"`
-	// The channel driver type (e.g. soc, smtp, slack, matrix, webhook).
-	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,webhook"`
+	// The channel driver type (e.g. soc, smtp, slack_webhook, matrix_hookshot_webhook, generic_webhook).
+	Type string `json:"type" example:"soc" enums:"soc,smtp,slack_webhook,matrix_hookshot_webhook,generic_webhook"`
 	// Indicates whether this destination is currently active and receiving alerts.
 	Enabled bool `json:"enabled" example:"true"`
 	// The IDs of the reusable activation schedules linked to this destination.
