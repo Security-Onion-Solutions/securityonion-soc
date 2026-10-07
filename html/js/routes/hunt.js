@@ -352,6 +352,15 @@ const huntComponent = {
       this.assistantEnabled = params["enabled"];
       this.investigationMsg = params["investigationPrompt"];
     },
+    // An OAI query needs the agentic assistant running too, since only its automations write the
+    // fields such queries group on.
+    isAgenticEnabled(query) {
+      if (!query.license) return true;
+      if (!this.$root.isLicensed(query.license)) return false;
+      if (query.license !== this.$root.FEAT_OAI) return true;
+      const assistant = this.$root.parameters.assistant;
+      return !!(assistant && assistant.enabled && assistant.agentic);
+    },
     async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
@@ -363,7 +372,7 @@ const huntComponent = {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.safeStringMaxLength = params["safeStringMaxLength"];
       this.queryBaseFilter = params["queryBaseFilter"];
-      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => !q.license || this.$root.isLicensed(q.license));
+      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => this.isAgenticEnabled(q));
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -3152,7 +3161,7 @@ const huntComponent = {
 
         if (label.toLowerCase() === 'count') continue;
 
-        if (item[field] && !Array.isArray(item[field])) {
+        if (item[field] != null && item[field] !== '' && !Array.isArray(item[field])) {
           parts.push(`${label}:"${this.subMissing(item[field])}"`);
         }
       }

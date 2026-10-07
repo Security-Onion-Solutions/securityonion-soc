@@ -390,7 +390,7 @@ test('applyQuerySubstitutions', () => {
   expect(newQueries[1].query).toBe('bar:123');
 });
 
-test('initHunt shows a licensed query only on a grid with that license', async () => {
+test('initHunt shows a licensed query only on a grid where it is available', async () => {
   comp.$root.user = { id: '123' };
   comp.hunt = jest.fn();
   const params = () => ({
@@ -407,9 +407,29 @@ test('initHunt shows a licensed query only on a grid with that license', async (
   expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
 
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
   await comp.initHunt(params());
   expect(comp.queries.map(q => q.name)).toEqual(['Default', 'By Assessment']);
   expect(comp.query).toBe('* | groupby rule.name');
+  delete comp.$root.parameters.assistant;
+});
+
+test('isAgenticEnabled', () => {
+  comp.$root.isLicensed = jest.fn(feat => feat !== 'ttr');
+
+  expect(comp.isAgenticEnabled({ query: '*' })).toBe(true);
+  expect(comp.isAgenticEnabled({ query: '*', license: 'ttr' })).toBe(false);
+  expect(comp.isAgenticEnabled({ query: '*', license: 'rpt' })).toBe(true);
+
+  const oai = { query: '*', license: 'oai' };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: false, agentic: true };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: false };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  expect(comp.isAgenticEnabled(oai)).toBe(true);
+  delete comp.$root.parameters.assistant;
 });
 
 test('lookupSocIds', () => {
@@ -537,6 +557,7 @@ test('populateGroupByTables sorts an assessment group by assessment', () => {
   comp.populateGroupByTables(metrics);
   expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'event.so_alerttriage.assessment', order: 'desc' }]);
   expect(comp.groupBys[0].headers[1]).toMatchObject({ title: 'AI Assessment', value: 'event.so_alerttriage.assessment', sort: comp.sortByAssessment });
+  expect(comp.groupBys[0].data[0]['event.so_alerttriage.assessment']).toBe(10);
   expect(comp.groupBys[0].data[2]['event.so_alerttriage.assessment']).toBe(comp.i18n.__missing__);
 
   // A sort saved from a view without this column does not apply.
@@ -1987,6 +2008,7 @@ test('sortByAssessment ranks likely malicious highest and untriaged lowest', () 
   expect(ranked.slice(3)).toEqual([10, 50, 90]);
   expect(comp.sortByAssessment(50, 50)).toBe(0);
   expect(comp.sortByAssessment(comp.i18n.__missing__, 10)).toBeLessThan(0);
+  expect(comp.sortByAssessment('90', '50')).toBeGreaterThan(0);
 });
 
 test('assessmentChip', () => {
@@ -2327,6 +2349,16 @@ test('fetchNewestEvent searches the missing bucket by its marker, not its label'
   await comp.fetchNewestEvent({ 'event.so_alerttriage.assessment': comp.i18n.__missing__, 'rule.name': 'A', count: 3 });
 
   expect(eventSearch.mock.calls[0][1].params.query).toContain('event.so_alerttriage.assessment:"__missing__" AND rule.name:"A"');
+});
+
+test('fetchNewestEvent filters on a zero group value', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.filterToggles = [];
+  comp.queryBaseFilter = 'tags:alert';
+
+  await comp.fetchNewestEvent({ 'source.port': 0, 'rule.name': 'A', count: 3 });
+
+  expect(eventSearch.mock.calls[0][1].params.query).toContain('source.port:"0" AND rule.name:"A"');
 });
 
 test('isComplexQuery', () => {
