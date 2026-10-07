@@ -109,7 +109,7 @@ func (store *ElasticAssistantstore) AlertTriageUpdate(ctx context.Context, updat
 	log.FromContext(ctx).WithFields(log.Fields{
 		"automationRunId":       update.RunId,
 		"sessionId":             update.SessionId,
-		"assessment":            update.Assessment,
+		"alertTriageAssessment": update.Assessment,
 		"failedUpdateCount":     update.Failed,
 		"successfulUpdateCount": update.Count,
 		"isAsync":               criteria.Asynchronous,
