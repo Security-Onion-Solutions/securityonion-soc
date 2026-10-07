@@ -8,9 +8,6 @@ loadPageTemplate('page-agentmonitor', 'pages/agentmonitor.html');
 
 const MONITOR_TICK_MS = 1000;
 
-// One details request per run, so this caps the cost of a load.
-const MONITOR_RECENT_RUNS = 5;
-
 // Matches the backend's agentStreamFlushIntervalMs; refetching faster finds nothing new.
 const MONITOR_TRANSCRIPT_REFRESH_MS = 1000;
 
@@ -58,8 +55,30 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     schedulerRunning: true,
     pool: emptyPool(),
     items: [],
-    recent: [],
     automations: [],
+
+    historyRuns: [],
+    historyTotal: 0,
+    historyPage: 1,
+    historyItemsPerPage: 10,
+    historyAutomationId: '',
+    historySearch: '',
+    hideEmptyRuns: true,
+    historyLoaded: false,
+    historyLoading: false,
+    historyNeedsCount: true,
+    // The server pages at most 500.
+    historyItemsPerPageOptions: [10, 50, 250],
+    // Discards out-of-order responses.
+    historyRequest: 0,
+    expandedRuns: [],
+    // From a ?run= link.
+    linkedRunId: '',
+    pendingRunId: '',
+    // runId -> { items, loading }
+    runItems: {},
+    showOptionsDialog: false,
+
     sessionStarts: {},
     missingSessions: [],
     inFlightRunIds: [],
@@ -81,7 +100,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     selectedItemId: '',
     selectedSessionId: '',
     expandedItems: [],
-    expandedRecent: [],
+    expandedHistoryItems: [],
     itemTabs: {},
 
     collapsedSections: [],
@@ -116,10 +135,18 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       { title: 'key', value: 'key' },
       { title: 'value', value: 'value' },
     ],
-    rightShiftedHeaders: ['attempts', 'createTime', 'updateTime', 'attempt', 'duration'],
-    recentHeaders: [
+    rightShiftedHeaders: ['attempts', 'createTime', 'updateTime', 'attempt', 'duration', 'startTime', 'done', 'failed'],
+    historyHeaders: [
       { title: '', value: 'expand', sortable: false, width: '48px' },
-      { title: this.$root.i18n.agentMonitorAutomation, value: 'automationName' },
+      { title: this.$root.i18n.agentMonitorAutomation, value: 'automationName', sortable: false },
+      { title: this.$root.i18n.agentMonitorStarted, value: 'startTime', sortable: false, width: '200px' },
+      { title: this.$root.i18n.duration, value: 'duration', sortable: false, width: '110px' },
+      { title: this.$root.i18n.stateDone, value: 'done', sortable: false, width: '90px' },
+      { title: this.$root.i18n.stateFailed, value: 'failed', sortable: false, width: '90px' },
+      { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', sortable: false, width: '120px' },
+    ],
+    runItemHeaders: [
+      { title: '', value: 'expand', sortable: false, width: '48px' },
       { title: this.$root.i18n.agentMonitorGroup, value: 'groupKey', sortable: false },
       { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', width: '120px' },
       { title: this.$root.i18n.error, value: 'error', sortable: false },
@@ -136,6 +163,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     '$route': 'applyRoute',
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
+    'historyItemsPerPage': 'saveLocalSettings',
+    'hideEmptyRuns': 'saveLocalSettings',
     // Changes pushed while disconnected were missed.
     '$root.connected'(connected) {
       if (connected && this.agentic && !this.paused) this.loadActivity(true);
@@ -185,24 +214,52 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.$root.stopLoading();
     },
     applyRoute() {
-      const params = (this.$route || {}).params || {};
+      const route = this.$route || {};
+      const params = route.params || {};
       this.selectedItemId = params.itemId || '';
       this.selectedSessionId = params.sessionId || '';
       if (this.selectedItemId && !this.selectedSessionId && !this.expandedItems.includes(this.selectedItemId)) {
         this.expandedItems = [this.selectedItemId];
       }
       if (this.selectedSessionId) this.loadTranscript(this.selectedSessionId);
+      this.applyRunLink((route.query || {}).run);
+    },
+    // Agent Studio's Activity tab links runs here.
+    applyRunLink(runId) {
+      if (!runId || runId === this.linkedRunId) return;
+      this.linkedRunId = runId;
+      this.pendingRunId = runId;
+      this.historySearch = runId;
+      const collapsed = this.collapsedSections.indexOf('agentmonitor-history');
+      if (collapsed !== -1) {
+        this.collapsedSections.splice(collapsed, 1);
+        this.saveLocalSettings();
+      }
+      // Otherwise the table's first options event loads it.
+      if (this.historyLoaded) this.onHistoryFilterChanged();
+    },
+    openPendingRun() {
+      if (!this.pendingRunId) return;
+      const run = this.historyRuns.find(r => r.id === this.pendingRunId);
+      this.pendingRunId = '';
+      if (!run) return;
+      if (!this.expandedRuns.includes(run.id)) this.expandedRuns.push(run.id);
+      this.loadRunItems(run);
     },
     saveLocalSettings() {
       localStorage['settings.agentmonitor.sortBy'] = this.sortBy[0].key;
       localStorage['settings.agentmonitor.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.agentmonitor.itemsPerPage'] = this.itemsPerPage;
+      localStorage['settings.agentmonitor.historyItemsPerPage'] = this.historyItemsPerPage;
+      localStorage['settings.agentmonitor.hideEmptyRuns'] = this.hideEmptyRuns;
       localStorage['settings.agentmonitor.collapsedSections'] = JSON.stringify(this.collapsedSections);
     },
     loadLocalSettings() {
       if (localStorage['settings.agentmonitor.sortBy']) this.sortBy[0].key = localStorage['settings.agentmonitor.sortBy'];
       if (localStorage['settings.agentmonitor.sortDesc']) this.sortBy[0].order = localStorage['settings.agentmonitor.sortDesc'];
       if (localStorage['settings.agentmonitor.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentmonitor.itemsPerPage']);
+      if (localStorage['settings.agentmonitor.historyItemsPerPage']) this.historyItemsPerPage = parseInt(localStorage['settings.agentmonitor.historyItemsPerPage']);
+      if (localStorage['settings.agentmonitor.hideEmptyRuns']) this.hideEmptyRuns = localStorage['settings.agentmonitor.hideEmptyRuns'] === 'true';
       if (localStorage['settings.agentmonitor.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.agentmonitor.collapsedSections']);
     },
     toggleShowSection(item) {
@@ -224,9 +281,21 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     async loadData(background = false) {
       this.now = Date.now();
-      const loads = [this.loadActivity(background), this.loadRecent(background)];
+      const loads = [this.loadActivity(background), this.loadAutomations(background)];
+      // Until then, the table's first options event loads it.
+      if (this.historyLoaded) {
+        this.historyNeedsCount = true;
+        loads.push(this.loadHistory(background));
+      }
       if (this.selectedSessionId) loads.push(this.loadTranscript(this.selectedSessionId, background));
       await Promise.all(loads);
+    },
+    async loadAutomations(background = false) {
+      try {
+        this.automations = (await this.$root.papi.get('assistant/automations')).data || [];
+      } catch (error) {
+        this.reportLoadError(error, background);
+      }
     },
     async loadActivity(background = false) {
       if (this.activityLoading) return;
@@ -274,56 +343,105 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       const runIds = (activity.runs || []).map(run => run.id);
       const finished = this.inFlightRunIds.some(id => !runIds.includes(id));
       this.inFlightRunIds = runIds;
-      if (finished) this.loadRecent(true);
+      // A search holds still. No recount: that walks the whole history, per open tab, whenever a run ends.
+      if (finished && this.historyLoaded && !(this.historySearch || '').trim()) this.loadHistory(true);
     },
-    async loadRecent(background = false) {
+    onHistoryOptions(options) {
+      this.historyPage = options.page;
+      this.historyItemsPerPage = options.itemsPerPage;
+      this.loadHistory();
+    },
+    // Off page one, the resulting page change reloads.
+    onHistoryFilterChanged() {
+      this.historyNeedsCount = true;
+      if (this.historyPage === 1) this.loadHistory();
+      else this.historyPage = 1;
+    },
+    async loadHistory(background = false) {
+      const request = ++this.historyRequest;
+      const count = this.historyNeedsCount;
+      const offset = (this.historyPage - 1) * this.historyItemsPerPage;
+      if (!background) this.historyLoading = true;
       try {
-        const automations = (await this.$root.papi.get('assistant/automations')).data || [];
-        this.automations = automations;
-
-        const histories = await Promise.all(automations.map(a => this.$root.papi.get(
-          'assistant/automations/' + encodeURIComponent(a.id) + '/runs', { params: { limit: MONITOR_RECENT_RUNS } })));
-        const runs = histories
-          .flatMap(response => (response.data || {}).runs || [])
-          .filter(run => ['succeeded', 'failed'].includes(run.state) && this.runItemTotal(run) > 0)
-          .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
-          .slice(0, MONITOR_RECENT_RUNS);
-
-        // Alerts aren't shown; 0 would fetch the server default of 500.
-        const details = await Promise.all(runs.map(run => this.$root.papi.get(
-          'assistant/automations/' + encodeURIComponent(run.automationId) + '/runs/' + encodeURIComponent(run.id),
-          { params: { alertLimit: 1 } })));
-        this.applyRecent(details.map(response => response.data || {}));
+        const response = await this.$root.papi.get('assistant/automations/runs', {
+          params: {
+            limit: this.historyItemsPerPage,
+            offset,
+            automationId: this.historyAutomationId || '',
+            hideEmpty: this.hideEmptyRuns,
+            q: (this.historySearch || '').trim(),
+            count,
+          },
+        });
+        if (request !== this.historyRequest) return;
+        const page = response.data || {};
+        this.historyRuns = (page.runs || []).map(run => Object.assign({}, run, { automationName: run.displayName || run.automationId }));
+        const listed = offset + this.historyRuns.length;
+        if (count && typeof page.total === 'number') {
+          this.historyTotal = page.total;
+          this.historyNeedsCount = false;
+        } else if (!page.hasMore) {
+          this.historyTotal = listed;
+        } else {
+          // Runs finished since the last count shift rows past it.
+          this.historyTotal = Math.max(this.historyTotal, listed + 1);
+        }
+        this.historyLoaded = true;
+        this.openPendingRun();
       } catch (error) {
         this.reportLoadError(error, background);
+      } finally {
+        if (request === this.historyRequest) this.historyLoading = false;
       }
     },
-    runItemTotal(run) {
-      const counts = run.itemCounts || {};
-      return (counts.done || 0) + (counts.failed || 0);
+    historyAutomationItems() {
+      return [{ title: this.i18n.all, value: '' }].concat(this.automations.map(a => ({ title: a.displayName, value: a.id })));
     },
-    applyRecent(detailsList) {
-      const rows = [];
-      const seen = new Set();
-      const starts = {};
-      const missing = [];
-      for (const details of detailsList) {
+    async onToggleRun(run, isExpanded, toggleExpand, internalItem) {
+      toggleExpand(internalItem);
+      if (!isExpanded && !(await this.loadRunItems(run))) toggleExpand(internalItem);
+    },
+    // A finished run's items never change.
+    async loadRunItems(run) {
+      if (this.runItems[run.id]) return true;
+      this.runItems[run.id] = { items: [], loading: true };
+      try {
+        // Alerts aren't shown; 0 would fetch the server default of 500.
+        const response = await this.$root.papi.get(
+          'assistant/automations/' + encodeURIComponent(run.automationId) + '/runs/' + encodeURIComponent(run.id),
+          { params: { alertLimit: 1 } });
+        const details = response.data || {};
         for (const session of details.sessions || []) {
-          if (session.createTime) starts[session.sessionId] = session.createTime;
-          if (session.missing) missing.push(session.sessionId);
+          if (session.createTime) this.sessionStarts[session.sessionId] = session.createTime;
+          if (session.missing && !this.missingSessions.includes(session.sessionId)) this.missingSessions.push(session.sessionId);
         }
-        // A retried item appears in both runs; the newer run comes first.
-        for (const item of details.items || []) {
-          if (!this.isTerminal(item.state) || seen.has(item.id)) continue;
-          seen.add(item.id);
-          rows.push(Object.assign({}, item, { automationName: details.displayName || details.automationId }));
-        }
+        const items = (details.items || [])
+          .map(item => Object.assign({}, item, { automationName: run.automationName }))
+          .sort((a, b) => new Date(b.updateTime) - new Date(a.updateTime));
+        this.runItems[run.id] = { items, loading: false };
+        this.initItemTabs(items);
+        return true;
+      } catch (error) {
+        delete this.runItems[run.id];
+        this.$root.showError(error);
+        return false;
       }
-      rows.sort((a, b) => new Date(b.updateTime) - new Date(a.updateTime));
-      this.recent = rows;
-      this.sessionStarts = starts;
-      this.missingSessions = missing;
-      this.initItemTabs(rows);
+    },
+    runItemsOf(run) {
+      return (this.runItems[run.id] || {}).items || [];
+    },
+    runItemsLoading(run) {
+      return !!(this.runItems[run.id] || {}).loading;
+    },
+    historyItems() {
+      return Object.values(this.runItems).flatMap(entry => entry.items);
+    },
+    runItemCount(run, state) {
+      return (run.itemCounts || {})[state] || 0;
+    },
+    runDurationMs(run) {
+      if (!run.startTime || !run.endTime) return 0;
+      return Math.max(0, new Date(run.endTime).getTime() - new Date(run.startTime).getTime());
     },
     initItemTabs(rows) {
       rows.forEach(i => { if (!this.itemTabs[i.id]) this.itemTabs[i.id] = 'details'; });
@@ -410,7 +528,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     selectedItem() {
       if (!this.selectedItemId) return null;
-      return this.items.concat(this.recent).find(i => i.id === this.selectedItemId) || null;
+      return this.items.concat(this.historyItems()).find(i => i.id === this.selectedItemId) || null;
     },
     watchedSessionId() {
       return this.selectedSessionId;
@@ -515,6 +633,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         applying: this.i18n.stateApplying,
         done: this.i18n.stateDone,
         failed: this.i18n.stateFailed,
+        succeeded: this.i18n.completed,
       })[state] || state;
     },
     stateColor(state) {

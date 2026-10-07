@@ -327,6 +327,21 @@ func (mr *MockAssistantManagerMockRecorder) Health(ctx, aiModel any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx, aiModel)
 }
 
+// ListAutomationRuns mocks base method.
+func (m *MockAssistantManager) ListAutomationRuns(ctx context.Context, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAutomationRuns", ctx, filter)
+	ret0, _ := ret[0].(*model.AutomationRunPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAutomationRuns indicates an expected call of ListAutomationRuns.
+func (mr *MockAssistantManagerMockRecorder) ListAutomationRuns(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAutomationRuns", reflect.TypeOf((*MockAssistantManager)(nil).ListAutomationRuns), ctx, filter)
+}
+
 // ListAutomations mocks base method.
 func (m *MockAssistantManager) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
 	m.ctrl.T.Helper()

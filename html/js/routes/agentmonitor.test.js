@@ -89,6 +89,15 @@ const runDetails = () => ({
   ],
 });
 
+const runPage = () => ({
+  runs: [{
+    id: 'run-1', automationId: TRIAGE_ID, displayName: 'Alert Triage', state: 'succeeded',
+    startTime: ago(600000), endTime: ago(240000), itemCounts: { done: 1, failed: 1 },
+  }],
+  total: 1,
+  hasMore: false,
+});
+
 const session = () => ({
   session: { sessionId: 's-ps', model: 'Investigator' },
   history: [
@@ -120,6 +129,7 @@ const serve = (overrides = {}) => {
   const responses = Object.assign({
     'assistant/automations/activity': activity(),
     'assistant/automations': automations(),
+    'assistant/automations/runs': runPage(),
     ['assistant/automations/' + TRIAGE_ID + '/runs']: runHistory(),
     ['assistant/automations/' + TRIAGE_ID + '/runs/run-1']: runDetails(),
     'assistant/sessions/s-ps': session(),
@@ -135,12 +145,17 @@ const serve = (overrides = {}) => {
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// Mimics the runs table mounting and its first run expanding.
 const load = async (params = agenticParams()) => {
   comp.initAssistant(params);
   await settle();
+  if (!comp.assistantEnabled || !comp.agentic) return;
+  comp.onHistoryOptions({ page: 1, itemsPerPage: 10 });
+  await settle();
+  if (comp.historyRuns.length) await comp.loadRunItems(comp.historyRuns[0]);
 };
 
-const itemById = (id) => comp.items.concat(comp.recent).find(i => i.id === id);
+const itemById = (id) => comp.items.concat(comp.historyItems()).find(i => i.id === id);
 
 const httpError = (status) => Object.assign(new Error('HTTP ' + status), { response: { status } });
 
@@ -247,64 +262,218 @@ test('a deleted automation\'s work shows by its id', () => {
   expect(comp.items[0].automationName).toBe(TRIAGE_ID);
 });
 
-test('recently finished is the finished items of the newest runs that did work', async () => {
+const runsCall = (get) => get.mock.calls.filter(call => call[0] === 'assistant/automations/runs');
+
+test('run history is a server-paged list of finished runs, counted on its first load', async () => {
   const get = serve();
   await load();
 
-  expect(get).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID + '/runs', { params: { limit: 5 } });
-  expect(get).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID + '/runs/run-1', { params: { alertLimit: 1 } });
-  expect(get).not.toHaveBeenCalledWith(expect.stringContaining('run-idle'), expect.anything());
-  expect(get).not.toHaveBeenCalledWith(expect.stringContaining('runs/run-live'), expect.anything());
-
-  expect(comp.recent.map(i => i.id)).toEqual(['item-mimi', 'item-dns']);
-  expect(comp.recent[0].automationName).toBe('Alert Triage');
+  expect(runsCall(get)).toEqual([['assistant/automations/runs', {
+    params: { limit: 10, offset: 0, automationId: '', hideEmpty: true, q: '', count: true },
+  }]]);
+  expect(comp.historyRuns.map(r => r.id)).toEqual(['run-1']);
+  expect(comp.historyRuns[0].automationName).toBe('Alert Triage');
+  expect(comp.historyTotal).toBe(1);
+  expect(comp.runDurationMs(comp.historyRuns[0])).toBe(360000);
+  expect(comp.runItemCount(comp.historyRuns[0], 'failed')).toBe(1);
 });
 
-test('recently finished caps the runs it opens, newest first', async () => {
-  const runs = [];
-  for (let i = 0; i < 12; i++) {
-    runs.push({ id: 'run-' + i, automationId: TRIAGE_ID, state: 'succeeded', startTime: ago(i * 60000), itemCounts: { done: 1 } });
-  }
-  const overrides = { ['assistant/automations/' + TRIAGE_ID + '/runs']: { runs } };
-  runs.forEach(run => { overrides['assistant/automations/' + TRIAGE_ID + '/runs/' + run.id] = { items: [] }; });
-  const get = serve(overrides);
+test('a deleted automation\'s runs show by its id', async () => {
+  serve({ 'assistant/automations/runs': { runs: [Object.assign(runPage().runs[0], { displayName: '' })], total: 1 } });
 
-  await comp.loadRecent();
+  await comp.loadHistory();
 
-  const opened = get.mock.calls.map(call => call[0]).filter(url => /runs\/run-/.test(url));
-  expect(opened.length).toBe(5);
-  expect(opened[0]).toContain('run-0');
-  expect(opened).not.toContain('assistant/automations/' + TRIAGE_ID + '/runs/run-11');
+  expect(comp.historyRuns[0].automationName).toBe(TRIAGE_ID);
 });
 
-test('a failed item a later run retried is listed once, from the newer run', () => {
-  const older = runDetails();
-  const newer = runDetails();
-  newer.items[1].error = 'newer';
+test('paging keeps the count; a filter change returns to page one and recounts', async () => {
+  const get = serve();
+  await load();
 
-  comp.applyRecent([newer, older]);
+  comp.onHistoryOptions({ page: 3, itemsPerPage: 50 });
+  await settle();
+  expect(runsCall(get).pop()[1].params).toMatchObject({ limit: 50, offset: 100, count: false });
 
-  expect(comp.recent.filter(i => i.id === 'item-dns').length).toBe(1);
-  expect(itemById('item-dns').error).toBe('newer');
+  comp.historySearch = '  10.0.0.1 ';
+  comp.historyAutomationId = TRIAGE_ID;
+  comp.hideEmptyRuns = false;
+  comp.onHistoryFilterChanged();
+  await settle();
+  expect(comp.historyPage).toBe(1);
+  // Off page one, the resulting page change reloads.
+  expect(runsCall(get).length).toBe(2);
+
+  comp.onHistoryOptions({ page: 1, itemsPerPage: 50 });
+  await settle();
+  expect(runsCall(get).pop()[1].params).toEqual({ limit: 50, offset: 0, automationId: TRIAGE_ID, hideEmpty: false, q: '10.0.0.1', count: true });
+
+  comp.onHistoryFilterChanged();
+  await settle();
+  expect(runsCall(get).length).toBe(4);
 });
 
-test('recently finished shows when each item finished as well as how long it took', () => {
-  const values = comp.recentHeaders.map(h => h.value);
+test('an uncounted page keeps every run reachable from hasMore', async () => {
+  const runs = (n) => Array.from({ length: n }, (_, i) => ({ id: 'run-' + i, itemCounts: {} }));
+  comp.historyNeedsCount = false;
+  comp.historyTotal = 20;
+  comp.historyItemsPerPage = 10;
+
+  comp.historyPage = 2;
+  serve({ 'assistant/automations/runs': { runs: runs(10), hasMore: true } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyPage = 3;
+  serve({ 'assistant/automations/runs': { runs: runs(1), hasMore: false } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyTotal = 40;
+  serve({ 'assistant/automations/runs': { runs: runs(1), hasMore: false } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(21);
+
+  comp.historyTotal = 40;
+  comp.historyPage = 1;
+  serve({ 'assistant/automations/runs': { runs: runs(10), hasMore: true } });
+  await comp.loadHistory();
+  expect(comp.historyTotal).toBe(40);
+});
+
+test('only a load the user asked for shows the run table loading, never the page overlay', async () => {
+  let release;
+  comp.$root.papi.get = jest.fn(() => new Promise(resolve => { release = resolve; }));
+
+  const asked = comp.loadHistory();
+  expect(comp.historyLoading).toBe(true);
+  release({ data: runPage() });
+  await asked;
+  expect(comp.historyLoading).toBe(false);
+
+  const pushed = comp.loadHistory(true);
+  expect(comp.historyLoading).toBe(false);
+  release({ data: runPage() });
+  await pushed;
+
+  comp.$root.papi.get = jest.fn().mockRejectedValue(new Error('down'));
+  await comp.loadHistory();
+  expect(comp.historyLoading).toBe(false);
+  expect(comp.$root.startLoading).not.toHaveBeenCalled();
+});
+
+test('a slower, older page is dropped when a newer one has landed', async () => {
+  let release;
+  const slow = new Promise(resolve => { release = resolve; });
+  comp.$root.papi.get = jest.fn()
+    .mockImplementationOnce(() => slow)
+    .mockResolvedValueOnce({ data: { runs: [{ id: 'newer', itemCounts: {} }], total: 1 } });
+
+  const first = comp.loadHistory();
+  await comp.loadHistory();
+  release({ data: { runs: [{ id: 'older', itemCounts: {} }], total: 9 } });
+  await first;
+
+  expect(comp.historyRuns.map(r => r.id)).toEqual(['newer']);
+  expect(comp.historyTotal).toBe(1);
+});
+
+test('a run\'s items load once, when it first expands, newest first', async () => {
+  const get = serve();
+  await comp.loadHistory();
+  const run = comp.historyRuns[0];
+  const toggleExpand = jest.fn();
+
+  await comp.onToggleRun(run, false, toggleExpand, 'row');
+  await comp.onToggleRun(run, true, toggleExpand, 'row');
+  await comp.onToggleRun(run, false, toggleExpand, 'row');
+
+  const opened = get.mock.calls.filter(call => call[0].endsWith('/runs/run-1'));
+  expect(opened).toEqual([['assistant/automations/' + TRIAGE_ID + '/runs/run-1', { params: { alertLimit: 1 } }]]);
+  expect(toggleExpand).toHaveBeenCalledTimes(3);
+  expect(comp.runItemsOf(run).map(i => i.id)).toEqual(['item-mimi', 'item-dns']);
+  expect(itemById('item-dns').automationName).toBe('Alert Triage');
+  expect(comp.itemTabs['item-dns']).toBe('details');
+});
+
+test('a run whose items fail to load collapses again', async () => {
+  serve({ ['assistant/automations/' + TRIAGE_ID + '/runs/run-1']: new Error('down') });
+  await comp.loadHistory();
+  const toggleExpand = jest.fn();
+
+  await comp.onToggleRun(comp.historyRuns[0], false, toggleExpand, 'row');
+
+  expect(toggleExpand).toHaveBeenCalledTimes(2);
+  expect(comp.$root.showError).toHaveBeenCalled();
+  expect(comp.runItemsLoading(comp.historyRuns[0])).toBe(false);
+});
+
+test('a run\'s items show when each finished as well as how long it took', () => {
+  const values = comp.runItemHeaders.map(h => h.value);
 
   expect(values).toContain('updateTime');
   expect(values).toContain('duration');
   expect(values.indexOf('updateTime')).toBeLessThan(values.indexOf('duration'));
 });
 
-test('a run leaving the in-flight list reloads recently finished', async () => {
-  await load();
+test('a link to a run searches for it, shows the section and opens the run', async () => {
+  comp.$route.query = { run: 'run-1' };
+  comp.collapsedSections = ['agentmonitor-history'];
+  localStorage['settings.agentmonitor.collapsedSections'] = JSON.stringify(['agentmonitor-history']);
   const get = serve();
+
+  await load();
+
+  expect(runsCall(get)[0][1].params).toMatchObject({ q: 'run-1', offset: 0, count: true });
+  expect(comp.isExpandedSection('agentmonitor-history')).toBe(true);
+  expect(comp.expandedRuns).toEqual(['run-1']);
+  expect(comp.runItemsOf(comp.historyRuns[0]).map(i => i.id)).toEqual(['item-mimi', 'item-dns']);
+
+  // Later route changes re-apply the same link without clobbering the search.
+  comp.historySearch = '';
+  comp.applyRoute();
+  expect(comp.historySearch).toBe('');
+});
+
+test('a link to another run while the page is open searches again from page one', async () => {
+  await load();
+  comp.historyPage = 1;
+  const get = serve();
+
+  comp.$route.query = { run: 'run-2' };
+  comp.applyRoute();
+  await settle();
+
+  expect(runsCall(get).pop()[1].params).toMatchObject({ q: 'run-2', offset: 0, count: true });
+  expect(comp.pendingRunId).toBe('');
+  expect(comp.expandedRuns).toEqual([]);
+});
+
+test('the automation filter lists every automation after All', async () => {
+  await load();
+
+  expect(comp.historyAutomationItems()).toEqual([
+    { title: comp.i18n.all, value: '' },
+    { title: 'Alert Triage', value: TRIAGE_ID },
+  ]);
+});
+
+test('a run leaving the in-flight list reloads run history without recounting it, and not under a search', async () => {
+  await load();
+  let get = serve();
 
   comp.applyActivity(Object.assign(activity(), { runs: [] }));
   await settle();
 
-  expect(get).toHaveBeenCalledWith('assistant/automations');
+  expect(runsCall(get).pop()[1].params.count).toBe(false);
   expect(comp.items).toEqual([]);
+
+  comp.applyActivity(activity());
+  comp.historySearch = 'mimikatz';
+  get = serve();
+  comp.applyActivity(Object.assign(activity(), { runs: [] }));
+  await settle();
+
+  expect(runsCall(get)).toEqual([]);
 });
 
 test('a load the user asked for reports failure; a background refresh only logs it', async () => {
@@ -316,6 +485,20 @@ test('a load the user asked for reports failure; a background refresh only logs 
   await comp.loadActivity(true);
   expect(comp.$root.showError).toHaveBeenCalledTimes(1);
   expect(console.error).toHaveBeenCalled();
+});
+
+test('a failed automations load keeps the list it had, and only a requested one reports it', async () => {
+  serve();
+  await comp.loadAutomations();
+  serve({ 'assistant/automations': new Error('down') });
+
+  await comp.loadAutomations(true);
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(console.error).toHaveBeenCalled();
+
+  await comp.loadAutomations();
+  expect(comp.$root.showError).toHaveBeenCalledTimes(1);
+  expect(comp.automations.map(a => a.id)).toEqual([TRIAGE_ID]);
 });
 
 test('a refresh keeps what it had when it fails', async () => {
@@ -790,6 +973,15 @@ test('the refresh button reloads everything, including the watched transcript', 
   expect(urls).toContain('assistant/sessions/s-ps');
 });
 
+test('the refresh button recounts run history once it has loaded', async () => {
+  await load();
+  const get = serve();
+
+  await comp.loadData();
+
+  expect(runsCall(get).pop()[1].params.count).toBe(true);
+});
+
 test('the tick timer is started on load and cleared on unmount', async () => {
   jest.useFakeTimers();
   try {
@@ -816,15 +1008,15 @@ test('watching a session is a real URL, not page state', () => {
 });
 
 test('sections collapse and the choice persists', () => {
-  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(true);
+  expect(comp.isExpandedSection('agentmonitor-history')).toBe(true);
 
-  comp.toggleShowSection('agentmonitor-recent');
-  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(false);
+  comp.toggleShowSection('agentmonitor-history');
+  expect(comp.isExpandedSection('agentmonitor-history')).toBe(false);
   expect(comp.isExpandedSection('agentmonitor-inflight')).toBe(true, 'sections collapse independently');
 
   comp.collapsedSections = [];
   comp.loadLocalSettings();
-  expect(comp.isExpandedSection('agentmonitor-recent')).toBe(false);
+  expect(comp.isExpandedSection('agentmonitor-history')).toBe(false);
 });
 
 test('table settings persist to local storage', () => {
@@ -838,4 +1030,19 @@ test('table settings persist to local storage', () => {
 
   expect(comp.sortBy[0]).toEqual({ key: 'automationName', order: 'desc' });
   expect(comp.itemsPerPage).toBe(50);
+});
+
+test('hiding empty runs persists, including when turned off', () => {
+  comp.hideEmptyRuns = false;
+  comp.saveLocalSettings();
+
+  comp.hideEmptyRuns = true;
+  comp.loadLocalSettings();
+  expect(comp.hideEmptyRuns).toBe(false);
+
+  comp.hideEmptyRuns = true;
+  comp.saveLocalSettings();
+  comp.hideEmptyRuns = false;
+  comp.loadLocalSettings();
+  expect(comp.hideEmptyRuns).toBe(true);
 });
