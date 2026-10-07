@@ -237,6 +237,12 @@ func (ac *AssistantCoordinator) reloadAlertTriageEpoch(ctx context.Context) {
 	ac.alertTriageEpoch.Store(next.UnixNano())
 }
 
+func (ac *AssistantCoordinator) exposeAutomationSettings() {
+	params := &ac.srv.Config.ClientParams.AssistantParams
+	params.AutomationTickIntervalSeconds = int(ac.getAutomationTickInterval() / time.Second)
+	params.AlertTriageEpoch = ac.getAlertTriageEpoch().Format(time.RFC3339)
+}
+
 // automationWorker ticks on the interval and on every wake.
 func (ac *AssistantCoordinator) automationWorker(s *automationScheduler) {
 	defer close(s.done)

@@ -620,6 +620,7 @@ func TestAlertTriageEpochHotReload(t *testing.T) {
 
 	f.ac.OnConfigSettingUpdated(context.Background(), epoch, false)
 	assert.True(t, f.ac.getAlertTriageEpoch().Equal(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)))
+	assert.Equal(t, "2026-10-01T12:00:00Z", f.ac.srv.Config.ClientParams.AssistantParams.AlertTriageEpoch, "the Agent Studio sees it in UTC")
 
 	epoch.Value = "yesterday"
 	f.ac.OnConfigSettingUpdated(context.Background(), epoch, false)
@@ -647,6 +648,7 @@ func TestAutomationTickIntervalHotReload(t *testing.T) {
 		synctest.Wait()
 
 		assert.Equal(t, time.Minute, f.ac.getAutomationTickInterval())
+		assert.Equal(t, 60, f.ac.srv.Config.ClientParams.AssistantParams.AutomationTickIntervalSeconds)
 		_, ticks, _ := f.snapshot()
 		assert.Equal(t, 1, ticks, "a changed interval ticks now")
 
@@ -669,6 +671,7 @@ func TestAutomationTickIntervalHotReload(t *testing.T) {
 		synctest.Wait()
 
 		assert.Equal(t, time.Hour, f.ac.getAutomationTickInterval(), "a removed setting restores the Init value")
+		assert.Equal(t, 3600, f.ac.srv.Config.ClientParams.AssistantParams.AutomationTickIntervalSeconds)
 		_, ticks, _ = f.snapshot()
 		assert.Equal(t, 3, ticks, "the restored interval ticks now")
 	})

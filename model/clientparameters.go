@@ -203,6 +203,10 @@ type AssistantParameters struct {
 	// without fetching every setting. 0 disables the limit.
 	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
 	MaxSubSessionTokens int `json:"maxSubSessionTokens" example:"100000"`
+	// How often the automation scheduler checks what is due.
+	AutomationTickIntervalSeconds int `json:"automationTickIntervalSeconds" example:"60"`
+	// The earliest alert time Alert Triage considers, in RFC3339.
+	AlertTriageEpoch string `json:"alertTriageEpoch" example:"2026-09-24T00:00:00Z"`
 }
 
 type MemoryParameters struct {

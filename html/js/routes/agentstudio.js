@@ -13,6 +13,11 @@ loadPageTemplate('page-agentstudio', 'pages/agentstudio.html');
 
 const LIMIT_DEPTH_SETTING_ID = 'soc.config.server.modules.assistant.maxDelegationDepth';
 const LIMIT_TOKENS_SETTING_ID = 'soc.config.server.modules.assistant.maxSubSessionTokens';
+const AUTOMATION_TICK_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds';
+const ALERT_TRIAGE_EPOCH_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.alertTriageEpoch';
+
+// Matches the setting's validation in Config.
+const ALERT_TRIAGE_EPOCH_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
 const MEMORY_SETTING_IDS = {
   useMemory: 'soc.config.server.modules.assistant.useMemory',
@@ -97,6 +102,10 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     maxSubSessionTokens: 0,
     savedMaxDelegationDepth: 0,
     savedMaxSubSessionTokens: 0,
+    automationTickSeconds: 0,
+    alertTriageEpoch: '',
+    savedAutomationTickSeconds: 0,
+    savedAlertTriageEpoch: '',
     memoryOptions: {},
     savedMemoryOptions: {},
 
@@ -265,13 +274,20 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     applyLimits(params) {
       this.savedMaxDelegationDepth = params.maxDelegationDepth || 0;
       this.savedMaxSubSessionTokens = params.maxSubSessionTokens || 0;
+      this.savedAutomationTickSeconds = params.automationTickIntervalSeconds || 0;
+      this.savedAlertTriageEpoch = params.alertTriageEpoch || '';
       this.savedMemoryOptions = Object.assign({}, params.memoryParams || {});
       this.staleMemoryCount = (params.memoryParams || {}).staleMemoryCount || 0;
       if (!this.showOptionsDialog) {
-        this.maxDelegationDepth = this.savedMaxDelegationDepth;
-        this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
-        this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
+        this.resetOptions();
       }
+    },
+    resetOptions() {
+      this.maxDelegationDepth = this.savedMaxDelegationDepth;
+      this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
+      this.automationTickSeconds = this.savedAutomationTickSeconds;
+      this.alertTriageEpoch = this.savedAlertTriageEpoch;
+      this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
     },
     // The server pushes agentic changes over the websocket, so a save just waits for
     // that push to land in $root.parameters before rebuilding the rows from it.
@@ -444,9 +460,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       return { name: s.name, enabled: !!s.enabled, tools: s.tools || [], persona: s.persona || '' };
     },
     showOptions() {
-      this.maxDelegationDepth = this.savedMaxDelegationDepth;
-      this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
-      this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
+      this.resetOptions();
       this.showOptionsDialog = true;
     },
     dirtyMemoryOptions() {
@@ -457,7 +471,21 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     optionsDirty() {
       return this.maxDelegationDepth !== this.savedMaxDelegationDepth ||
         this.maxSubSessionTokens !== this.savedMaxSubSessionTokens ||
+        this.automationTickSeconds !== this.savedAutomationTickSeconds ||
+        this.alertTriageEpoch !== this.savedAlertTriageEpoch ||
         this.dirtyMemoryOptions().length > 0;
+    },
+    automationTickValid() {
+      return Number.isInteger(this.automationTickSeconds) && this.automationTickSeconds > 0;
+    },
+    alertTriageEpochValid() {
+      return ALERT_TRIAGE_EPOCH_PATTERN.test(this.alertTriageEpoch || '');
+    },
+    optionsValid() {
+      return !this.agentic || (this.automationTickValid() && this.alertTriageEpochValid());
+    },
+    automationIntervalHelp() {
+      return this.i18n.agentStudioAutomationIntervalHelp.replace('{seconds}', this.savedAutomationTickSeconds || 60);
     },
     // These are plain scalar settings with no merge concerns, so they go straight
     // to config; saving any of them triggers a reload and a push.
@@ -470,11 +498,19 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         if (this.maxSubSessionTokens !== this.savedMaxSubSessionTokens) {
           await this.saveLimit(LIMIT_TOKENS_SETTING_ID, this.maxSubSessionTokens);
         }
+        if (this.automationTickSeconds !== this.savedAutomationTickSeconds) {
+          await this.saveLimit(AUTOMATION_TICK_SETTING_ID, this.automationTickSeconds);
+        }
+        if (this.alertTriageEpoch !== this.savedAlertTriageEpoch) {
+          await this.saveLimit(ALERT_TRIAGE_EPOCH_SETTING_ID, this.alertTriageEpoch);
+        }
         for (const [settingId, value] of this.dirtyMemoryOptions()) {
           await this.saveLimit(settingId, value);
         }
         this.savedMaxDelegationDepth = this.maxDelegationDepth;
         this.savedMaxSubSessionTokens = this.maxSubSessionTokens;
+        this.savedAutomationTickSeconds = this.automationTickSeconds;
+        this.savedAlertTriageEpoch = this.alertTriageEpoch;
         this.savedMemoryOptions = Object.assign({}, this.memoryOptions);
         this.showOptionsDialog = false;
       } catch (error) {

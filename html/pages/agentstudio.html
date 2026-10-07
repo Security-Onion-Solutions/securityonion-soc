@@ -15,6 +15,19 @@
             </v-col>
           </v-row>
           <div class="text-body-small text-medium-emphasis mt-3" v-text="i18n.agentStudioOptionsHelp"></div>
+
+          <v-divider class="my-4"></v-divider>
+          <div class="text-overline mb-4">{{ i18n.agentStudioAutomations }}</div>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field v-model.number="automationTickSeconds" type="number" min="1" :label="i18n.agentStudioAutomationTickInterval" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock"
+                :hint="i18n.agentStudioAutomationTickIntervalHelp" persistent-hint :error="!automationTickValid()" data-aid="agentstudio_options_tick_interval"></v-text-field>
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field v-model.trim="alertTriageEpoch" :label="i18n.agentStudioAlertTriageEpoch" prepend-inner-icon="fa-calendar"
+                :hint="i18n.agentStudioAlertTriageEpochHelp" persistent-hint :error="!alertTriageEpochValid()" data-aid="agentstudio_options_alert_triage_epoch"></v-text-field>
+            </v-col>
+          </v-row>
         </template>
 
         <v-divider v-if="agentic" class="my-4"></v-divider>
@@ -112,7 +125,7 @@
         </v-btn>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="showOptionsDialog = false" data-aid="agentstudio_options_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn variant="text" :color="optionsDirty() ? 'primary' : ''" :disabled="!optionsDirty()" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
+        <v-btn variant="text" :color="optionsDirty() && optionsValid() ? 'primary' : ''" :disabled="!optionsDirty() || !optionsValid()" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -264,7 +277,7 @@
             <v-select v-model="newAutomation.agent" :items="automationAgentItems()" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint data-aid="agentstudio_new_automation_agent"></v-select>
           </v-col>
           <v-col cols="12" md="6">
-            <v-text-field v-model.number="newAutomation.intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint data-aid="agentstudio_new_automation_interval"></v-text-field>
+            <v-text-field v-model.number="newAutomation.intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="automationIntervalHelp()" persistent-hint data-aid="agentstudio_new_automation_interval"></v-text-field>
           </v-col>
           <v-col v-for="field in automationKindFields(newAutomation.automationKind)" :key="field.key" cols="12" :md="field.type === 'integer' || field.type === 'number' ? 6 : 12">
             <automation-param-field :field="field" :params="newAutomation.params"></automation-param-field>
@@ -791,7 +804,7 @@
                                     <v-select v-model="draftForAutomation(item).agent" :items="automationAgentChoices(item)" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint :data-aid="'agentstudio_automation_agent_' + item.id"></v-select>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="i18n.agentStudioAutomationIntervalHelp" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
+                                    <v-text-field v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="automationIntervalHelp()" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
                                   </v-col>
                                   <!-- A built-in's userId is its first saver, not a creator. -->
                                   <v-col v-if="!item.isSystem && item.userId" cols="12" md="6">

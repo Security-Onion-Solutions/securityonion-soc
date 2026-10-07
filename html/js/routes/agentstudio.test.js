@@ -867,6 +867,59 @@ test('options save writes only the limits that changed', async () => {
   expect(comp.optionsDirty()).toBe(false);
 });
 
+test('options save writes the automation settings that changed', async () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 60;
+  params.alertTriageEpoch = '2026-09-24T00:00:00Z';
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  comp.showOptions();
+  expect(comp.automationTickSeconds).toBe(60);
+  expect(comp.alertTriageEpoch).toBe('2026-09-24T00:00:00Z');
+  expect(comp.optionsDirty()).toBe(false);
+
+  comp.automationTickSeconds = 30;
+  comp.alertTriageEpoch = '2026-01-01T00:00:00Z';
+  await comp.persistOptions();
+
+  expect(put.mock.calls.map(call => [call[1].id, call[1].value])).toEqual([
+    ['soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds', '30'],
+    ['soc.config.server.modules.assistant.automationSettings.alertTriageEpoch', '2026-01-01T00:00:00Z'],
+  ]);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+test('options cannot be saved with an invalid check interval or alert triage start', () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 60;
+  params.alertTriageEpoch = '2026-09-24T00:00:00Z';
+  comp.initAssistant(params);
+  comp.showOptions();
+  expect(comp.optionsValid()).toBe(true);
+
+  for (const tick of [0, -5, 1.5, '']) {
+    comp.automationTickSeconds = tick;
+    expect(comp.optionsValid()).toBe(false);
+  }
+  comp.automationTickSeconds = 60;
+
+  for (const epoch of ['', 'yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
+    comp.alertTriageEpoch = epoch;
+    expect(comp.optionsValid()).toBe(false);
+  }
+  comp.alertTriageEpoch = '2026-09-24T00:00:00.5Z';
+  expect(comp.optionsValid()).toBe(true);
+});
+
+test('the interval hint names the scheduler\'s check interval', () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 30;
+  comp.initAssistant(params);
+
+  expect(comp.automationIntervalHelp()).toContain('30-second check interval');
+});
+
 test('a failed options save keeps the dialog open', async () => {
   comp.initAssistant(agenticParams());
   mockPapi('put', null, new Error('nope'));
