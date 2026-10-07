@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
@@ -27,6 +29,8 @@ const (
 	defaultAutomationAlertLimit   = 500
 	maxAutomationAlertLimit       = 10000
 	automationThoughtPreviewRunes = 300
+	// Real terms (names, IDs, error codes) are far shorter; this only bounds an abusive pattern.
+	maxAutomationRunSearchRunes = 256
 )
 
 var ErrAutomationRunNotFound = database.ErrAutomationRunNotFound
@@ -38,6 +42,7 @@ type automationHistoryStore interface {
 	ListAutomationWorkItems(ctx context.Context, runId string) ([]*model.AutomationWorkItem, error)
 	CountOpenAutomationWorkItems(ctx context.Context, automationId string) (map[model.AutomationWorkItemState]int, error)
 	CountAutomationWorkItemsByRun(ctx context.Context, runIds []string) (map[string]map[model.AutomationWorkItemState]int, error)
+	CountAutomationRuns(ctx context.Context, query database.AutomationRunQuery) (int, error)
 }
 
 func (ac *AssistantCoordinator) GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error) {
@@ -74,6 +79,118 @@ func (ac *AssistantCoordinator) GetAutomationRunDetails(ctx context.Context, aut
 	}
 
 	return ac.automationRunDetails(ctx, ac.store, automationId, runId, alertLimit)
+}
+
+// ListAutomationRuns pages through finished runs across every automation, newest first.
+func (ac *AssistantCoordinator) ListAutomationRuns(ctx context.Context, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
+	if err := ac.srv.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		return nil, err
+	}
+
+	if ac.store == nil {
+		return nil, ErrNoDatabase
+	}
+
+	return ac.automationRunPage(ctx, ac.store, filter)
+}
+
+func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store automationHistoryStore, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
+	if filter.AutomationId != "" && !isAutomationId(filter.AutomationId) {
+		return nil, ErrAutomationNotFound
+	}
+
+	search := strings.TrimSpace(filter.Search)
+	if utf8.RuneCountInString(search) > maxAutomationRunSearchRunes {
+		return nil, fmt.Errorf("%w: search must be at most %d characters", ErrInvalidAutomationParams, maxAutomationRunSearchRunes)
+	}
+
+	automations, unreadable, err := ac.scanAutomations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Names live in config, not the database, so a name match becomes ids.
+	names := map[string]string{}
+	searchIds := []string{}
+	needle := strings.ToLower(search)
+
+	for _, automation := range automations {
+		names[automation.Id] = automation.DisplayName
+
+		if search != "" && strings.Contains(strings.ToLower(automation.DisplayName), needle) {
+			searchIds = append(searchIds, automation.Id)
+		}
+	}
+
+	searchRunId := ""
+	if id, err := uuid.Parse(search); err == nil {
+		searchRunId = id.String()
+	}
+
+	limit := clampAutomationLimit(filter.Limit, defaultAutomationRunPageSize, maxAutomationRunPageSize)
+
+	query := database.AutomationRunQuery{
+		AutomationId:        filter.AutomationId,
+		Finished:            true,
+		HideEmpty:           filter.HideEmpty,
+		Search:              search,
+		SearchAutomationIds: searchIds,
+		SearchRunId:         searchRunId,
+		Limit:               limit + 1,
+		Offset:              max(filter.Offset, 0),
+	}
+
+	runs, err := store.ListAutomationRuns(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	hasMore := len(runs) > limit
+	if hasMore {
+		runs = runs[:limit]
+	}
+
+	runIds := make([]string, len(runs))
+	for i, run := range runs {
+		runIds[i] = run.Id
+	}
+
+	counts, err := store.CountAutomationWorkItemsByRun(ctx, runIds)
+	if err != nil {
+		return nil, err
+	}
+
+	page := &model.AutomationRunPage{
+		Runs:    make([]*model.AutomationRunListing, 0, len(runs)),
+		HasMore: hasMore,
+	}
+
+	if filter.Count {
+		total, err := store.CountAutomationRuns(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+
+		page.Total = &total
+	}
+
+	for _, run := range runs {
+		itemCounts := counts[run.Id]
+		if itemCounts == nil {
+			itemCounts = map[model.AutomationWorkItemState]int{}
+		}
+
+		name, defined := names[run.AutomationId]
+
+		page.Runs = append(page.Runs, &model.AutomationRunListing{
+			AutomationRunSummary: model.AutomationRunSummary{AutomationRunRecord: *run, ItemCounts: itemCounts},
+			DisplayName:          name,
+			// An unreadable stored entry may be the one this run belongs to.
+			AutomationDeleted: !defined && unreadable == 0,
+		})
+	}
+
+	return page, nil
 }
 
 func (ac *AssistantCoordinator) automationRunHistory(ctx context.Context, store automationHistoryStore, automationId string, limit, offset int) (*model.AutomationRunHistory, error) {

@@ -20,12 +20,28 @@
         <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="loadData()" data-aid="agentmonitor_refresh" :title="i18n.refresh" :aria-label="i18n.ariaReloadData">
           <v-icon>fa-sync</v-icon>
         </v-btn>
+        <v-btn icon variant="flat" class="circle-button mx-2" @click="showOptionsDialog = true" data-aid="agentmonitor_options_button" :title="i18n.options" :aria-label="i18n.options">
+          <v-icon>fa-gear</v-icon>
+        </v-btn>
         <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" data-aid="agentmonitor_docs" :title="i18n.contextualDocsBtn" :aria-label="i18n.contextualDocsBtn">
           <v-icon>fa-circle-question</v-icon>
         </v-btn>
       </v-toolbar>
     </v-col>
   </v-row>
+
+  <v-dialog v-model="showOptionsDialog" max-width="540">
+    <v-card class="options-dialog">
+      <v-card-title role="heading" aria-level="2">{{ i18n.options }}</v-card-title>
+      <v-card-text data-aid="agentmonitor_options">
+        <v-switch v-model="hideEmptyRuns" density="compact" hide-details class="my-0" color="primary" :label="i18n.agentMonitorHideEmptyRuns" @update:model-value="onHistoryFilterChanged()" data-aid="agentmonitor_hide_empty_runs"></v-switch>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn variant="text" @click="showOptionsDialog = false" data-aid="agentmonitor_options_close">{{ i18n.close }}</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 
   <v-row class="ga-3" data-aid="agentmonitor_pool_stats">
     <v-col>
@@ -172,69 +188,113 @@
     </v-row>
 
     <v-row>
-      <v-col id="agentmonitor-recent" class="section-panel" data-aid="agentmonitor_recent_section">
+      <v-col id="agentmonitor-history" class="section-panel" data-aid="agentmonitor_history_section">
         <v-toolbar density="compact" variant="flat">
-          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorRecent }}</v-toolbar-title>
+          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorRunHistory }}</v-toolbar-title>
           <v-spacer></v-spacer>
-          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentmonitor-recent')" data-aid="agentmonitor_recent_toggle" :aria-expanded="isExpandedSection('agentmonitor-recent')" :aria-label="i18n.agentMonitorRecent">
-            <v-icon v-if="!isExpandedSection('agentmonitor-recent')" data-aid="agentmonitor_recent_expand">fa-angle-down</v-icon>
-            <v-icon v-else data-aid="agentmonitor_recent_collapse">fa-angle-up</v-icon>
+          <template v-if="isExpandedSection('agentmonitor-history')">
+            <v-select v-model="historyAutomationId" :items="historyAutomationItems()" :label="i18n.agentMonitorAutomation" class="toolbar-field no-print" style="max-width: 200px;"
+              variant="outlined" density="compact" hide-details @update:model-value="onHistoryFilterChanged()" data-aid="agentmonitor_history_automation"></v-select>
+            <v-text-field v-model="historySearch" :label="i18n.search" :title="i18n.agentMonitorRunHistorySearchHelp" class="toolbar-field no-print ml-2" style="max-width: 250px;"
+              variant="outlined" density="compact" hide-details clearable
+              @keydown.enter="onHistoryFilterChanged()" @click:clear="onHistoryFilterChanged()" data-aid="agentmonitor_history_search"></v-text-field>
+            <v-btn icon variant="text" size="small" @click.stop="onHistoryFilterChanged()" :title="i18n.search" :aria-label="i18n.search" data-aid="agentmonitor_history_search_apply">
+              <v-icon class="theme-icon">fa-magnifying-glass</v-icon>
+            </v-btn>
+          </template>
+          <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentmonitor-history')" data-aid="agentmonitor_history_toggle" :aria-expanded="isExpandedSection('agentmonitor-history')" :aria-label="i18n.agentMonitorRunHistory">
+            <v-icon v-if="!isExpandedSection('agentmonitor-history')" data-aid="agentmonitor_history_expand">fa-angle-down</v-icon>
+            <v-icon v-else data-aid="agentmonitor_history_collapse">fa-angle-up</v-icon>
           </v-btn>
         </v-toolbar>
-        <v-data-table v-if="isExpandedSection('agentmonitor-recent')" :headers="recentHeaders" :items="recent" item-value="id" v-model:expanded="expandedRecent"
-          :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" :no-data-text="i18n.agentMonitorRecentEmpty" data-aid="agentmonitor_recent_table">
-          <template #headers="{ columns, isSorted, getSortIcon, toggleSort }">
+        <v-data-table-server v-if="isExpandedSection('agentmonitor-history')" :headers="historyHeaders" :items="historyRuns" :items-length="historyTotal" :loading="historyLoading" item-value="id"
+          v-model:page="historyPage" v-model:items-per-page="historyItemsPerPage" :items-per-page-options="historyItemsPerPageOptions"
+          v-model:expanded="expandedRuns" @update:options="onHistoryOptions" :no-data-text="i18n.agentMonitorRunHistoryEmpty" data-aid="agentmonitor_history_table">
+          <template #headers="{ columns }">
             <tr>
               <template v-for="header in columns" :key="header.key">
-                <th :class="[{'is-sorted': isSorted(header)}, rightShiftedHeaders.includes(header?.value) ? 'text-right' : '']" :data-aid="'agentmonitor_recent_header_' + header?.value?.toLowerCase()" :aria-sort="isSorted(header) ? (getSortIcon(header) === '$sortAsc' ? 'ascending' : 'descending') : 'none'" scope="col">
-                  <span @click="toggleSort(header)">{{ header.title }}</span>
-                  <template v-if="isSorted(header)">
-                    <v-icon>{{ getSortIcon(header) === '$sortAsc' ? 'fa-caret-up' : 'fa-caret-down' }}</v-icon>
-                  </template>
-                </th>
+                <th :class="rightShiftedHeaders.includes(header?.value) ? 'text-right' : ''" :data-aid="'agentmonitor_history_header_' + header?.value?.toLowerCase()" scope="col">{{ header.title }}</th>
               </template>
             </tr>
           </template>
           <template #item="{ item, isExpanded, toggleExpand, internalItem }">
-            <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+            <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}" :data-aid="'agentmonitor_history_run_' + item.id">
               <td>
-                <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentMonitorItemDetails" data-aid="agentmonitor_recent_expand_row">
+                <v-btn icon variant="text" size="small" @click.stop="onToggleRun(item, isExpanded(internalItem), toggleExpand, internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentMonitorRunDetails" data-aid="agentmonitor_history_expand_run">
                   <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
                   <v-icon v-else>fa-angle-right</v-icon>
                 </v-btn>
               </td>
               <td>{{ item.automationName }}</td>
+              <td class="text-right">{{ $root.formatDateTime(item.startTime) }}</td>
+              <td class="text-right agentmonitor-elapsed">{{ formatElapsed(runDurationMs(item)) }}</td>
+              <td class="text-right">{{ runItemCount(item, 'done') }}</td>
+              <td class="text-right">{{ runItemCount(item, 'failed') }}</td>
               <td>
-                <span v-if="item.groupKey" :title="item.groupKey">{{ item.groupKey }}</span>
-                <span v-else class="text-disabled">&mdash;</span>
-              </td>
-              <td>
-                <v-chip size="small" :color="stateColor(item.state)" :variant="stateColor(item.state) ? 'flat' : 'tonal'">{{ stateLabel(item.state) }}</v-chip>
-              </td>
-              <td>
-                <span v-if="item.error" :title="item.error">{{ item.error }}</span>
-                <span v-else class="text-disabled">&mdash;</span>
-              </td>
-              <td class="text-right">{{ item.attempts }}</td>
-              <td class="text-right">{{ $root.formatDateTime(item.updateTime) }}</td>
-              <td class="text-right">{{ formatElapsed(elapsedMs(item)) }}</td>
-              <td>
-                <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_open_recent_item" :title="i18n.agentMonitorViewItem" :aria-label="i18n.agentMonitorViewItem + ' - ' + item.automationName">
-                  <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
-                </router-link>
-                <span v-else class="text-disabled">&mdash;</span>
+                <v-chip size="small" :color="stateColor(item.state)" :variant="stateColor(item.state) ? 'flat' : 'tonal'" :title="item.error || ''">{{ stateLabel(item.state) }}</v-chip>
               </td>
             </tr>
           </template>
 
-          <template #expanded-row="{ item }">
-            <tr class="expanded-row" data-aid="agentmonitor_recent_expanded">
-              <td :colspan="recentHeaders.length" class="px-0">
-                <agentmonitor-item :item="item"></agentmonitor-item>
+          <template #expanded-row="{ item: run }">
+            <tr class="expanded-row" :data-aid="'agentmonitor_history_run_items_' + run.id">
+              <td :colspan="historyHeaders.length" class="px-4 pb-4">
+                <div class="text-body-small text-medium-emphasis py-2" :data-aid="'agentmonitor_history_run_id_' + run.id">{{ i18n.agentMonitorRunId }}: {{ run.id }}</div>
+                <v-alert v-if="run.error" type="error" icon="fa-circle-exclamation" variant="tonal" density="compact" class="mb-3" :data-aid="'agentmonitor_history_run_error_' + run.id">
+                  {{ i18n.error }}: {{ $root.localizeMessage(run.error) }}
+                </v-alert>
+                <v-data-table v-if="runItemsLoading(run) || runItemsOf(run).length || !run.error" :headers="runItemHeaders" :items="runItemsOf(run)" item-value="id" v-model:expanded="expandedHistoryItems" density="compact"
+                  :loading="runItemsLoading(run)"
+                  :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage" :no-data-text="i18n.agentMonitorRunItemsEmpty" data-aid="agentmonitor_history_items_table">
+                  <template #headers="{ columns }">
+                    <tr>
+                      <template v-for="header in columns" :key="header.key">
+                        <th :class="rightShiftedHeaders.includes(header?.value) ? 'text-right' : ''" :data-aid="'agentmonitor_history_item_header_' + header?.value?.toLowerCase()" scope="col">{{ header.title }}</th>
+                      </template>
+                    </tr>
+                  </template>
+                  <template #item="{ item, isExpanded, toggleExpand, internalItem }">
+                    <tr :class="{'seamless-expanded-row': isExpanded(internalItem), 'main-row': true}">
+                      <td>
+                        <v-btn icon variant="text" size="small" @click.stop="toggleExpand(internalItem)" :aria-expanded="isExpanded(internalItem)" :aria-label="i18n.agentMonitorItemDetails" data-aid="agentmonitor_history_expand_row">
+                          <v-icon v-if="isExpanded(internalItem)">fa-angle-down</v-icon>
+                          <v-icon v-else>fa-angle-right</v-icon>
+                        </v-btn>
+                      </td>
+                      <td>
+                        <span v-if="item.groupKey" :title="item.groupKey">{{ item.groupKey }}</span>
+                        <span v-else class="text-disabled">&mdash;</span>
+                      </td>
+                      <td>
+                        <v-chip size="small" :color="stateColor(item.state)" :variant="stateColor(item.state) ? 'flat' : 'tonal'">{{ stateLabel(item.state) }}</v-chip>
+                      </td>
+                      <td>
+                        <span v-if="item.error" :title="item.error">{{ $root.localizeMessage(item.error) }}</span>
+                        <span v-else class="text-disabled">&mdash;</span>
+                      </td>
+                      <td class="text-right">{{ item.attempts }}</td>
+                      <td class="text-right">{{ $root.formatDateTime(item.updateTime) }}</td>
+                      <td class="text-right">{{ formatElapsed(elapsedMs(item)) }}</td>
+                      <td>
+                        <router-link v-if="liveSessionOf(item)" :to="buildSessionLink(item.id, liveSessionOf(item))" class="no-print" style="text-decoration: none" data-aid="agentmonitor_open_history_item" :title="i18n.agentMonitorViewItem" :aria-label="i18n.agentMonitorViewItem + ' - ' + item.automationName">
+                          <v-icon class="mr-2 theme-icon">fa-binoculars</v-icon>
+                        </router-link>
+                        <span v-else class="text-disabled">&mdash;</span>
+                      </td>
+                    </tr>
+                  </template>
+                  <template #expanded-row="{ item }">
+                    <tr class="expanded-row" data-aid="agentmonitor_history_expanded">
+                      <td :colspan="runItemHeaders.length" class="px-0">
+                        <agentmonitor-item :item="item"></agentmonitor-item>
+                      </td>
+                    </tr>
+                  </template>
+                </v-data-table>
               </td>
             </tr>
           </template>
-        </v-data-table>
+        </v-data-table-server>
       </v-col>
     </v-row>
   </template>

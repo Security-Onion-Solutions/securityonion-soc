@@ -41,6 +41,14 @@ type fakeHistoryStore struct {
 	listQuery  database.AutomationRunQuery
 	listedRun  string
 	countedIds []string
+	total      int
+	totalQuery *database.AutomationRunQuery
+}
+
+func (f *fakeHistoryStore) CountAutomationRuns(_ context.Context, query database.AutomationRunQuery) (int, error) {
+	f.totalQuery = &query
+
+	return f.total, nil
 }
 
 func (f *fakeHistoryStore) GetAutomationRun(context.Context, string) (*model.AutomationRunRecord, error) {
@@ -218,8 +226,9 @@ func TestAutomationHistoryAndActivityRequireAutomationsRead(t *testing.T) {
 	_, historyErr := ac.GetAutomationRunHistory(context.Background(), automationTestId, 0, 0)
 	_, detailsErr := ac.GetAutomationRunDetails(context.Background(), automationTestId, historyRunId, 0)
 	_, activityErr := ac.GetAutomationActivity(context.Background())
+	_, pageErr := ac.ListAutomationRuns(context.Background(), &model.AutomationRunFilter{})
 
-	for _, err := range []error{historyErr, detailsErr, activityErr} {
+	for _, err := range []error{historyErr, detailsErr, activityErr, pageErr} {
 		var unauthorized *model.Unauthorized
 		require.ErrorAs(t, err, &unauthorized)
 		assert.Equal(t, "read", unauthorized.Operation)
@@ -283,6 +292,95 @@ func TestAutomationRunHistoryPagesWithHasMore(t *testing.T) {
 	_, err = f.ac.automationRunHistory(context.Background(), f.store, automationTestId, 99999, 0)
 	require.NoError(t, err)
 	assert.Equal(t, maxAutomationRunPageSize+1, f.store.listQuery.Limit)
+}
+
+func TestAutomationRunPageNamesEachRunsAutomation(t *testing.T) {
+	f := newHistoryFixture(t)
+	orphan := historyRun(historyOtherRunId, model.AutomationRunFailed)
+	orphan.AutomationId = "9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a"
+	f.store.runs = []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunSucceeded), orphan, historyRun("extra", model.AutomationRunSucceeded)}
+	f.store.counts = map[string]map[model.AutomationWorkItemState]int{historyRunId: {model.AutomationWorkItemFailed: 2}}
+
+	page, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{HideEmpty: true, Limit: 2, Offset: -3})
+	require.NoError(t, err)
+
+	assert.Equal(t, database.AutomationRunQuery{Finished: true, HideEmpty: true, SearchAutomationIds: []string{}, Limit: 3}, f.store.listQuery)
+	assert.Equal(t, []string{historyRunId, historyOtherRunId}, f.store.countedIds)
+	assert.True(t, page.HasMore)
+	assert.Nil(t, page.Total, "counting is opt-in")
+	assert.Nil(t, f.store.totalQuery)
+
+	require.Len(t, page.Runs, 2)
+	assert.Equal(t, "Nightly", page.Runs[0].DisplayName)
+	assert.False(t, page.Runs[0].AutomationDeleted)
+	assert.Equal(t, map[model.AutomationWorkItemState]int{model.AutomationWorkItemFailed: 2}, page.Runs[0].ItemCounts)
+
+	assert.Empty(t, page.Runs[1].DisplayName)
+	assert.True(t, page.Runs[1].AutomationDeleted)
+	assert.NotNil(t, page.Runs[1].ItemCounts)
+}
+
+func TestAutomationRunPageDoesNotCallAnUnmatchedRunDeletedWhileAnEntryIsUnreadable(t *testing.T) {
+	f := newHistoryFixture(t)
+	nightly, err := json.Marshal(historyAutomation(automationTestId, "Nightly", `{}`))
+	require.NoError(t, err)
+	f.cfg.settings = []*model.Setting{rawAutomationsSetting(string(nightly), `{"id": "not-a-uuid"}`)}
+
+	orphan := historyRun(historyOtherRunId, model.AutomationRunFailed)
+	orphan.AutomationId = "9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a"
+	f.store.runs = []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunSucceeded), orphan}
+
+	page, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{})
+	require.NoError(t, err)
+
+	require.Len(t, page.Runs, 2)
+	assert.Equal(t, "Nightly", page.Runs[0].DisplayName)
+	assert.Empty(t, page.Runs[1].DisplayName)
+	assert.False(t, page.Runs[1].AutomationDeleted)
+}
+
+func TestAutomationRunPageSearchesNamesAndCounts(t *testing.T) {
+	f := newHistoryFixture(t)
+	f.store.total = 42
+
+	page, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{AutomationId: automationTestId, Search: "  NIGHT ", Count: true})
+	require.NoError(t, err)
+
+	assert.Equal(t, "NIGHT", f.store.listQuery.Search)
+	assert.Equal(t, []string{automationTestId}, f.store.listQuery.SearchAutomationIds)
+	assert.Empty(t, f.store.listQuery.SearchRunId)
+	assert.Equal(t, automationTestId, f.store.listQuery.AutomationId)
+	require.NotNil(t, page.Total)
+	assert.Equal(t, 42, *page.Total)
+	require.NotNil(t, f.store.totalQuery)
+	assert.Equal(t, f.store.listQuery, *f.store.totalQuery)
+}
+
+// The id is canonicalized, so an upper-case paste matches.
+func TestAutomationRunPageSearchesARunId(t *testing.T) {
+	f := newHistoryFixture(t)
+
+	_, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{Search: strings.ToUpper(historyRunId)})
+	require.NoError(t, err)
+
+	assert.Equal(t, historyRunId, f.store.listQuery.SearchRunId)
+	assert.Equal(t, strings.ToUpper(historyRunId), f.store.listQuery.Search)
+}
+
+func TestAutomationRunPageRejectsBadFilters(t *testing.T) {
+	f := newHistoryFixture(t)
+
+	_, err := f.ac.ListAutomationRuns(context.Background(), &model.AutomationRunFilter{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	_, err = f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{AutomationId: "not-a-uuid"})
+	assert.ErrorIs(t, err, ErrAutomationNotFound)
+
+	_, err = f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{Search: strings.Repeat("é", maxAutomationRunSearchRunes+1)})
+	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+
+	_, err = f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{Search: strings.Repeat("é", maxAutomationRunSearchRunes)})
+	assert.NoError(t, err, "the cap counts characters, not bytes")
 }
 
 // A deleted automation keeps its history; only its name is gone.

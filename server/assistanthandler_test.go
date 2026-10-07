@@ -4338,6 +4338,7 @@ func TestAutomationRoutesRefuseAnUnauthorizedRequestor(t *testing.T) {
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs", read},
 		{http.MethodGet, "/assistant/automations/" + automationHandlerTestId + "/runs/" + automationHandlerTestRunId, read},
 		{http.MethodGet, "/assistant/automations/activity", read},
+		{http.MethodGet, "/assistant/automations/runs", read},
 	}
 
 	for _, c := range cases {
@@ -4388,6 +4389,56 @@ func TestGetAutomationRunsMapsErrors(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/"+automationHandlerTestId+"/runs", nil))
+
+			assert.Equal(t, c.wantStatus, w.Code)
+		})
+	}
+}
+
+// /automations/runs must not be read as the runs of an automation whose id is "runs".
+func TestGetAllAutomationRunsPassesTheFilter(t *testing.T) {
+	r, manager, auth := automationRouter(t, true)
+
+	total := 3
+	manager.EXPECT().ListAutomationRuns(gomock.Any(), &model.AutomationRunFilter{
+		AutomationId: automationHandlerTestId,
+		HideEmpty:    true,
+		Search:       "10.0.0.1 OR x",
+		Limit:        25,
+		Offset:       50,
+		Count:        true,
+	}).Return(&model.AutomationRunPage{Runs: []*model.AutomationRunListing{{DisplayName: "Nightly"}}, Total: &total}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/runs?automationId="+automationHandlerTestId+
+		"&hideEmpty=true&q=10.0.0.1%20OR%20x&limit=25&offset=50&count=true", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"Nightly"`)
+	assert.Contains(t, w.Body.String(), `"total":3`)
+	assert.Equal(t, []string{"automations/read"}, auth.asked)
+}
+
+func TestGetAllAutomationRunsMapsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "found", err: nil, wantStatus: http.StatusOK},
+		{name: "bad automation", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "search too long", err: errors.New("ERROR_AUTOMATION_PARAMS_INVALID: search must be at most 256 characters"), wantStatus: http.StatusBadRequest},
+		{name: "broken", err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, manager, _ := automationRouter(t, true)
+			manager.EXPECT().ListAutomationRuns(gomock.Any(), &model.AutomationRunFilter{}).
+				Return(&model.AutomationRunPage{}, c.err)
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations/runs", nil))
 
 			assert.Equal(t, c.wantStatus, w.Code)
 		})

@@ -830,6 +830,11 @@
                                   <template #item.state="{ item: run }">
                                     <v-chip size="x-small" :color="automationStatusColor(run.state)" :variant="automationStatusColor(run.state) ? 'flat' : 'tonal'" :title="run.error || ''">{{ automationStatusLabel(run.state) }}</v-chip>
                                   </template>
+                                  <template #item.actions="{ item: run }">
+                                    <v-btn icon variant="text" size="small" class="no-print" :to="runMonitorLink(run)" :title="i18n.agentStudioViewInAgentMonitor" :aria-label="i18n.agentStudioViewInAgentMonitor" :data-aid="'agentstudio_automation_run_monitor_' + run.id">
+                                      <v-icon class="theme-icon">fa-display</v-icon>
+                                    </v-btn>
+                                  </template>
                                 </v-data-table>
                                 <div v-else-if="automationRuns[item.id] && !automationRuns[item.id].loading" class="text-body-small text-medium-emphasis">{{ i18n.agentStudioAutomationRunsEmpty }}</div>
                                 <div v-if="automationHistory(item).hasMore" class="text-xs-center pt-2">

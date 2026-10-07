@@ -1803,6 +1803,13 @@ test('run rows count their done and failed items', () => {
   expect(comp.runItemCount({}, 'failed')).toBe(0);
 });
 
+test('a finished run opens in Agent Monitor\'s run history; one still going opens In Flight', () => {
+  expect(comp.runMonitorLink({ id: 'run-1', state: 'failed' })).toEqual({ name: 'agentmonitor', query: { run: 'run-1' } });
+  expect(comp.runMonitorLink({ id: 'run-2', state: 'succeeded' })).toEqual({ name: 'agentmonitor', query: { run: 'run-2' } });
+  expect(comp.runMonitorLink({ id: 'run-3', state: 'running' })).toEqual({ name: 'agentmonitor' });
+  expect(comp.runMonitorLink({ id: 'run-4', state: 'queued' })).toEqual({ name: 'agentmonitor' });
+});
+
 test('an agent can be opened in Onion AI on a new session', () => {
   comp.initAssistant(agenticParams());
 
