@@ -239,7 +239,7 @@ func (ac *AssistantCoordinator) reloadAlertTriageEpoch(ctx context.Context) {
 
 func (ac *AssistantCoordinator) exposeAutomationSettings() {
 	params := &ac.srv.Config.ClientParams.AssistantParams
-	params.AutomationTickIntervalSeconds = int(ac.getAutomationTickInterval() / time.Second)
+	params.AutomationTickIntervalSeconds = int(ac.getAutomationTickInterval().Seconds())
 	params.AlertTriageEpoch = ac.getAlertTriageEpoch().Format(time.RFC3339)
 }
 

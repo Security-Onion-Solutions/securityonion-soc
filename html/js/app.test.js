@@ -1449,6 +1449,27 @@ graph TD
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
 });
 
+test('formatMarkdownMermaid', () => {
+  const formatMarkdown = jest.spyOn(app, 'formatMarkdown').mockImplementation(text => '<p>' + text + '</p>');
+  const renderMermaid = jest.spyOn(app, 'renderMermaid').mockImplementation(() => {});
+
+  expect(app.formatMarkdownMermaid('```mermaid\nA[Start: Begin]\n```')).toBe('<p>```mermaid\nA[Start∶ Begin]\n```</p>');
+  expect(formatMarkdown).toHaveBeenCalledWith('```mermaid\nA[Start∶ Begin]\n```', true);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('streaming', false);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('```mermaid\nAlice->>Bob: Hello\n```', true, false);
+  expect(formatMarkdown).toHaveBeenLastCalledWith('```mermaid\nAlice->>Bob: Hello\n```', true);
+
+  expect(app.formatMarkdownMermaid('')).toBe('');
+  expect(app.formatMarkdownMermaid(null)).toBe('');
+
+  formatMarkdown.mockRestore();
+  renderMermaid.mockRestore();
+});
+
 test('verifyRuleSyntax - implementation', () => {
   const _old = app.ruleValidators;
 	app.ruleValidators = {

@@ -488,7 +488,7 @@ const i18n = {
       agentStudioAutomationInterval: 'Interval',
       agentStudioAutomationIntervalHelp: 'Time between run starts. Rounds up to a multiple of the {seconds}-second check interval.',
       agentStudioAutomationTickInterval: 'Check Interval',
-      agentStudioAutomationTickIntervalHelp: 'How often automations are checked to see if they are due.',
+      agentStudioAutomationTickIntervalHelp: 'How often automations are checked to see if they are due. Also the default interval for new automations.',
       agentStudioAlertTriageEpoch: 'Alert Triage Start',
       agentStudioAlertTriageEpochHelp: 'Older alerts are never triaged. UTC, e.g. 2026-09-24T00:00:00Z. Clear to reset.',
       agentStudioAlertTriageEpochInvalid: 'Use UTC, e.g. 2026-09-24T00:00:00Z.',

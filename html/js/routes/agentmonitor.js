@@ -186,14 +186,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     approveTool() {},
     rejectTool() {},
 
-    // Assistant formatMarkdown without the choice buttons.
     formatMarkdown(text) {
-      if (!text) return '';
-      text = AssistantUtils.stripChoiceMarkers(text);
-      const prepared = this.$root.performMermaidRegexes ? this.$root.performMermaidRegexes(text) : text;
-      const html = this.$root.formatMarkdown(prepared, true);
-      if (this.$root.renderMermaid) this.$nextTick(() => this.$root.renderMermaid());
-      return html;
+      return this.$root.formatMarkdownMermaid(AssistantUtils.stripChoiceMarkers(text));
     },
 
     reload() {

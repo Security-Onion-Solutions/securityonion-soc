@@ -1082,6 +1082,13 @@ $(document).ready(function () {
           text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
           return text
         },
+        // clean breaks some valid Mermaid; skip it for human-written text.
+        formatMarkdownMermaid(text, render = true, clean = true) {
+          if (!text) return '';
+          const md = this.formatMarkdown(clean ? this.performMermaidRegexes(text) : text, true);
+          if (render) this.$nextTick(() => this.renderMermaid());
+          return md;
+        },
         colorSeverity(value) {
           const val = (value || '').toLowerCase();
           if (val == "low_false" || val == "low") return "yellow";

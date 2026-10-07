@@ -211,11 +211,7 @@ components.push({
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());
       },
       formatMarkdown(text) {
-        if (!text) return '';
-        const prepared = this.$root.performMermaidRegexes(AssistantUtils.stripChoiceMarkers(text));
-        const html = this.$root.formatMarkdown(prepared, true);
-        this.$nextTick(() => this.$root.renderMermaid());
-        return html;
+        return this.$root.formatMarkdownMermaid(AssistantUtils.stripChoiceMarkers(text));
       },
     },
   }
