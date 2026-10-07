@@ -418,6 +418,8 @@ func TestRunAgentSession_MintsSessionIdAndStampsTags(t *testing.T) {
 	f := newHeadlessFixture(t, ctrl, sseText("done"))
 	req := baseRequest()
 	req.Tags = []string{"run:abc", "shared", ""}
+	req.Type = "alert_triage"
+	req.EntityId = "alert-1"
 
 	res, err := f.ac.RunAgentSession(userCtx(), req)
 	require.NoError(t, err)
@@ -429,6 +431,8 @@ func TestRunAgentSession_MintsSessionIdAndStampsTags(t *testing.T) {
 	assert.Equal(t, []string{"automation", "shared", "run:abc"}, sess.Tags)
 	assert.Equal(t, "Hunter", sess.Model)
 	assert.Equal(t, "investigate alert 42", sess.Title)
+	assert.Equal(t, "alert_triage", sess.Type)
+	assert.Equal(t, "alert-1", sess.EntityId)
 }
 
 func TestRunAgentSession_CreatesTheRequestedSessionId(t *testing.T) {
