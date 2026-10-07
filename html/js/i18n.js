@@ -1050,6 +1050,7 @@ const i18n = {
       featureRequiresAppliance: 'Feature Unavailable',
       features: 'Features',
       fetchLimit: 'Fetch Limit',
+      'field_event.so_alerttriage.assessment': 'AI Assessment',
       'field_so_case.assigneeId': 'Assignee',
       'field_so_case.createTime': 'Create Date',
       'field_so_case.severity': 'Severity',

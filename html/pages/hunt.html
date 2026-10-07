@@ -403,7 +403,7 @@
 													<div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
 												</td>
 												<td v-for="field in group.headers.slice(getGroupByFieldStartIndex())" :key="field.value" tabindex="0" @keydown.enter="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])">
-													<div :id="'quickaction_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])" :data-aid="'groups_quickaction_' + category">{{ item[field.value] }}<span class="resolved-host" v-if="$root.tryResolveAlias(field.value, item[field.value])"> - {{ $root.tryResolveAlias(field.value, item[field.value]) }}</span></div>
+													<div :id="'quickaction_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])" :data-aid="'groups_quickaction_' + category"><v-chip v-if="field.value === 'event.so_alerttriage.assessment' && assessmentChip(item)" :color="assessmentChip(item).color" size="small" variant="flat" data-aid="groups_assessment">{{ assessmentChip(item).label }}</v-chip><template v-else>{{ item[field.value] }}<span class="resolved-host" v-if="$root.tryResolveAlias(field.value, item[field.value])"> - {{ $root.tryResolveAlias(field.value, item[field.value]) }}</span></template></div>
 												</td>
 											</tr>
 										</template>
