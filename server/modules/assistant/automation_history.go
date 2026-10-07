@@ -103,7 +103,7 @@ func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store aut
 		return nil, fmt.Errorf("%w: search must be at most %d characters", ErrInvalidAutomationParams, maxAutomationRunSearchRunes)
 	}
 
-	automations, _, err := ac.scanAutomations(ctx)
+	automations, unreadable, err := ac.scanAutomations(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,8 @@ func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store aut
 		page.Runs = append(page.Runs, &model.AutomationRunListing{
 			AutomationRunSummary: model.AutomationRunSummary{AutomationRunRecord: *run, ItemCounts: itemCounts},
 			DisplayName:          name,
-			AutomationDeleted:    !defined,
+			// An unreadable stored entry may be the one this run belongs to.
+			AutomationDeleted: !defined && unreadable == 0,
 		})
 	}
 

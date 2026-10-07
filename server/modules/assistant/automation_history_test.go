@@ -320,6 +320,25 @@ func TestAutomationRunPageNamesEachRunsAutomation(t *testing.T) {
 	assert.NotNil(t, page.Runs[1].ItemCounts)
 }
 
+func TestAutomationRunPageDoesNotCallAnUnmatchedRunDeletedWhileAnEntryIsUnreadable(t *testing.T) {
+	f := newHistoryFixture(t)
+	nightly, err := json.Marshal(historyAutomation(automationTestId, "Nightly", `{}`))
+	require.NoError(t, err)
+	f.cfg.settings = []*model.Setting{rawAutomationsSetting(string(nightly), `{"id": "not-a-uuid"}`)}
+
+	orphan := historyRun(historyOtherRunId, model.AutomationRunFailed)
+	orphan.AutomationId = "9e8d7c6b-5a49-4382-9170-6f5e4d3c2b1a"
+	f.store.runs = []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunSucceeded), orphan}
+
+	page, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{})
+	require.NoError(t, err)
+
+	require.Len(t, page.Runs, 2)
+	assert.Equal(t, "Nightly", page.Runs[0].DisplayName)
+	assert.Empty(t, page.Runs[1].DisplayName)
+	assert.False(t, page.Runs[1].AutomationDeleted)
+}
+
 func TestAutomationRunPageSearchesNamesAndCounts(t *testing.T) {
 	f := newHistoryFixture(t)
 	f.store.total = 42
