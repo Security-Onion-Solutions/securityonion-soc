@@ -486,7 +486,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       return ALERT_TRIAGE_EPOCH_PATTERN.test(value || '') || this.i18n.agentStudioAlertTriageEpochInvalid;
     },
     automationIntervalHelp() {
-      return this.i18n.agentStudioAutomationIntervalHelp.replace('{seconds}', this.savedAutomationTickSeconds || 60);
+      return this.i18n.agentStudioAutomationIntervalHelp.replace('{seconds}', this.savedAutomationTickSeconds);
     },
     // These are plain scalar settings with no merge concerns, so they go straight
     // to config; saving any of them triggers a reload and a push.
