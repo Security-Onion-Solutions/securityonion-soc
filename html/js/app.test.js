@@ -1647,6 +1647,29 @@ test('validator: maxLength factory', () => {
   expect(v5('abcdef')).toBe(_i18n.ruleMaxLen);
 });
 
+test('validator: minValue factory', () => {
+  const v0 = app.validators.minValue(0);
+  const message = _i18n.ruleMinValue.replace('{limit}', 0);
+  expect(v0(0)).toBe(true);
+  expect(v0(0.5)).toBe(true);
+  expect(v0('3')).toBe(true);
+  expect(v0(-1)).toBe(message);
+  expect(v0('')).toBe(message);
+  expect(v0(null)).toBe(message);
+  expect(v0('abc')).toBe(message);
+});
+
+test('validator: maxValue factory', () => {
+  const v1 = app.validators.maxValue(1);
+  const message = _i18n.ruleMaxValue.replace('{limit}', 1);
+  expect(v1(1)).toBe(true);
+  expect(v1(0.25)).toBe(true);
+  expect(v1(1.5)).toBe(message);
+  expect(v1('')).toBe(message);
+  expect(v1(null)).toBe(message);
+  expect(v1('abc')).toBe(message);
+});
+
 test('validator: fileSizeLimit factory', () => {
   const formatFn = (n) => n + ' bytes';
   const v = app.validators.fileSizeLimit(1000, formatFn);

@@ -106,6 +106,13 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     alertTriageEpoch: '',
     savedAutomationTickSeconds: 0,
     savedAlertTriageEpoch: '',
+    // Null until validated, which Save treats as valid.
+    optionsFormValid: null,
+    optionRules: {
+      nonNegative: [this.$root.validators.number, this.$root.validators.minValue(0)],
+      positive: [this.$root.validators.number, this.$root.validators.minValue(1)],
+      fraction: [this.$root.validators.minValue(0), this.$root.validators.maxValue(1)],
+    },
     memoryOptions: {},
     savedMemoryOptions: {},
 
@@ -475,14 +482,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.alertTriageEpoch !== this.savedAlertTriageEpoch ||
         this.dirtyMemoryOptions().length > 0;
     },
-    automationTickValid() {
-      return Number.isInteger(this.automationTickSeconds) && this.automationTickSeconds > 0;
-    },
-    alertTriageEpochValid() {
-      return ALERT_TRIAGE_EPOCH_PATTERN.test(this.alertTriageEpoch || '');
-    },
-    optionsValid() {
-      return !this.agentic || (this.automationTickValid() && this.alertTriageEpochValid());
+    alertTriageEpochRule(value) {
+      return ALERT_TRIAGE_EPOCH_PATTERN.test(value || '') || this.i18n.agentStudioAlertTriageEpochInvalid;
     },
     automationIntervalHelp() {
       return this.i18n.agentStudioAutomationIntervalHelp.replace('{seconds}', this.savedAutomationTickSeconds || 60);

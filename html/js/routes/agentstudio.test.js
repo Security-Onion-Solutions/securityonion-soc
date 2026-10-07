@@ -890,26 +890,28 @@ test('options save writes the automation settings that changed', async () => {
   expect(comp.optionsDirty()).toBe(false);
 });
 
-test('options cannot be saved with an invalid check interval or alert triage start', () => {
-  const params = agenticParams();
-  params.automationTickIntervalSeconds = 60;
-  params.alertTriageEpoch = '2026-09-24T00:00:00Z';
-  comp.initAssistant(params);
-  comp.showOptions();
-  expect(comp.optionsValid()).toBe(true);
+const passes = (rules, value) => rules.every(rule => rule(value) === true);
 
-  for (const tick of [0, -5, 1.5, '']) {
-    comp.automationTickSeconds = tick;
-    expect(comp.optionsValid()).toBe(false);
+test('the option rules accept only their ranges', () => {
+  const { nonNegative, positive, fraction } = comp.optionRules;
+
+  for (const value of [0, 5, '3']) expect(passes(nonNegative, value)).toBe(true);
+  for (const value of [-1, 1.5, '']) expect(passes(nonNegative, value)).toBe(false);
+
+  for (const value of [1, 60]) expect(passes(positive, value)).toBe(true);
+  for (const value of [0, -5, 1.5, '']) expect(passes(positive, value)).toBe(false);
+
+  for (const value of [0, 0.5, 1]) expect(passes(fraction, value)).toBe(true);
+  for (const value of [-0.1, 1.5, '']) expect(passes(fraction, value)).toBe(false);
+});
+
+test('the alert triage start must be a UTC timestamp', () => {
+  for (const epoch of ['2026-09-24T00:00:00Z', '2026-09-24T00:00:00.5Z']) {
+    expect(comp.alertTriageEpochRule(epoch)).toBe(true);
   }
-  comp.automationTickSeconds = 60;
-
   for (const epoch of ['', 'yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
-    comp.alertTriageEpoch = epoch;
-    expect(comp.optionsValid()).toBe(false);
+    expect(comp.alertTriageEpochRule(epoch)).toBe(comp.i18n.agentStudioAlertTriageEpochInvalid);
   }
-  comp.alertTriageEpoch = '2026-09-24T00:00:00.5Z';
-  expect(comp.optionsValid()).toBe(true);
 });
 
 test('the interval hint names the scheduler\'s check interval', () => {

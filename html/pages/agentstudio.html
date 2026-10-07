@@ -5,13 +5,14 @@
     <v-card class="pa-2">
       <v-card-title role="heading" aria-level="2">{{ i18n.configSettings }}</v-card-title>
       <v-card-text data-aid="agentstudio_options">
+        <v-form v-model="optionsFormValid" @submit.prevent>
         <template v-if="agentic">
           <v-row>
             <v-col cols="6">
-              <v-text-field v-model.number="maxDelegationDepth" type="number" min="0" :label="i18n.agentStudioMaxDepth" prepend-inner-icon="fa-layer-group" hide-details data-aid="agentstudio_options_depth"></v-text-field>
+              <v-text-field v-model.number="maxDelegationDepth" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMaxDepth" prepend-inner-icon="fa-layer-group" hide-details="auto" data-aid="agentstudio_options_depth"></v-text-field>
             </v-col>
             <v-col cols="6">
-              <v-text-field v-model.number="maxSubSessionTokens" type="number" min="0" :label="i18n.agentStudioMaxSubTokens" prepend-inner-icon="fa-coins" hide-details data-aid="agentstudio_options_tokens"></v-text-field>
+              <v-text-field v-model.number="maxSubSessionTokens" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMaxSubTokens" prepend-inner-icon="fa-coins" hide-details="auto" data-aid="agentstudio_options_tokens"></v-text-field>
             </v-col>
           </v-row>
           <div class="text-body-small text-medium-emphasis mt-3" v-text="i18n.agentStudioOptionsHelp"></div>
@@ -21,11 +22,11 @@
           <v-row>
             <v-col cols="12" md="6">
               <v-text-field v-model.number="automationTickSeconds" type="number" min="1" :label="i18n.agentStudioAutomationTickInterval" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock"
-                :hint="i18n.agentStudioAutomationTickIntervalHelp" persistent-hint :error="!automationTickValid()" data-aid="agentstudio_options_tick_interval"></v-text-field>
+                :hint="i18n.agentStudioAutomationTickIntervalHelp" persistent-hint :rules="optionRules.positive" data-aid="agentstudio_options_tick_interval"></v-text-field>
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field v-model.trim="alertTriageEpoch" :label="i18n.agentStudioAlertTriageEpoch" prepend-inner-icon="fa-calendar"
-                :hint="i18n.agentStudioAlertTriageEpochHelp" persistent-hint :error="!alertTriageEpochValid()" data-aid="agentstudio_options_alert_triage_epoch"></v-text-field>
+                :hint="i18n.agentStudioAlertTriageEpochHelp" persistent-hint :rules="[alertTriageEpochRule]" data-aid="agentstudio_options_alert_triage_epoch"></v-text-field>
             </v-col>
           </v-row>
         </template>
@@ -40,13 +41,13 @@
             <v-switch v-model="memoryOptions.useMemoryScanner" @change="onChangeUseMemoryScanner(memoryOptions.useMemoryScanner)" color="primary" density="compact" inset :label="i18n.agentStudioMemoryScanner" :hint="i18n.agentStudioMemoryScannerHelp" persistent-hint data-aid="agentstudio_options_use_scanner"></v-switch>
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model.number="memoryOptions.scanIntervalSeconds" type="number" min="1" :label="i18n.agentStudioMemoryScanInterval" :title="i18n.agentStudioMemoryScanIntervalHelp" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock" hide-details data-aid="agentstudio_options_scan_interval"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.scanIntervalSeconds" type="number" min="1" :rules="optionRules.positive" :label="i18n.agentStudioMemoryScanInterval" :title="i18n.agentStudioMemoryScanIntervalHelp" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock" hide-details="auto" data-aid="agentstudio_options_scan_interval"></v-text-field>
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model.number="memoryOptions.memoryProximityThreshold" type="number" min="0" max="1" step="0.05" :label="i18n.agentStudioMemoryProximity" hide-details data-aid="agentstudio_options_memory_proximity"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.memoryProximityThreshold" type="number" min="0" max="1" step="0.05" :rules="optionRules.fraction" :label="i18n.agentStudioMemoryProximity" hide-details="auto" data-aid="agentstudio_options_memory_proximity"></v-text-field>
           </v-col>
           <v-col cols="12" md="4">
-            <v-text-field v-model.number="memoryOptions.messageProximityThreshold" type="number" min="0" max="1" step="0.05" :label="i18n.agentStudioMessageProximity" hide-details data-aid="agentstudio_options_message_proximity"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.messageProximityThreshold" type="number" min="0" max="1" step="0.05" :rules="optionRules.fraction" :label="i18n.agentStudioMessageProximity" hide-details="auto" data-aid="agentstudio_options_message_proximity"></v-text-field>
           </v-col>
         </v-row>
         <div class="text-body-small text-medium-emphasis mt-2 mb-6" v-text="i18n.agentStudioMemoryThresholdHelp"></div>
@@ -87,12 +88,12 @@
         <v-row class="my-2">
           <v-col cols="6">
             <div class="text-overline my-4">{{ i18n.agentStudioMemoryExtractBatchSize }}</div>
-            <v-text-field v-model.number="memoryOptions.memoryExtractBatchSize" type="number" min="1" :label="i18n.agentStudioMemoryExtractBatchSizeLabel" hide-details data-aid="agentstudio_options_memory_extract_batch_size"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.memoryExtractBatchSize" type="number" min="1" :rules="optionRules.positive" :label="i18n.agentStudioMemoryExtractBatchSizeLabel" hide-details="auto" data-aid="agentstudio_options_memory_extract_batch_size"></v-text-field>
             <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryExtractBatchSizeHelp"></div>
           </v-col>
           <v-col cols="6">
             <div class="text-overline my-4">{{ i18n.agentStudioMemoryMaxRetries }}</div>
-            <v-text-field v-model.number="memoryOptions.maxMemoryRetries" type="number" min="0" :label="i18n.agentStudioMemoryMaxRetriesLabel" hide-details data-aid="agentstudio_options_max_memory_retries"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.maxMemoryRetries" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMemoryMaxRetriesLabel" hide-details="auto" data-aid="agentstudio_options_max_memory_retries"></v-text-field>
             <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryMaxRetriesHelp"></div>
           </v-col>
         </v-row>
@@ -100,23 +101,24 @@
         <div class="text-overline mb-4 mt-2">{{ i18n.agentStudioMemoryIncludeLimits }}</div>
         <v-row>
           <v-col cols="6">
-            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToInclude" type="number" min="0" :label="i18n.agentStudioMemoryScopeUser" hide-details data-aid="agentstudio_options_max_user_include"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToInclude" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMemoryScopeUser" hide-details="auto" data-aid="agentstudio_options_max_user_include"></v-text-field>
           </v-col>
           <v-col cols="6">
-            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToInclude" type="number" min="0" :label="i18n.agentStudioMemoryScopeGlobal" hide-details data-aid="agentstudio_options_max_global_include"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToInclude" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMemoryScopeGlobal" hide-details="auto" data-aid="agentstudio_options_max_global_include"></v-text-field>
           </v-col>
         </v-row>
 
         <div class="text-overline my-4">{{ i18n.agentStudioMemoryReconcileLimits }}</div>
         <v-row>
           <v-col cols="6">
-            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToReconcile" type="number" min="0" :label="i18n.agentStudioMemoryScopeUser" hide-details data-aid="agentstudio_options_max_user_reconcile"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.maxUserMemoriesToReconcile" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMemoryScopeUser" hide-details="auto" data-aid="agentstudio_options_max_user_reconcile"></v-text-field>
           </v-col>
           <v-col cols="6">
-            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToReconcile" type="number" min="0" :label="i18n.agentStudioMemoryScopeGlobal" hide-details data-aid="agentstudio_options_max_global_reconcile"></v-text-field>
+            <v-text-field v-model.number="memoryOptions.maxGlobalMemoriesToReconcile" type="number" min="0" :rules="optionRules.nonNegative" :label="i18n.agentStudioMemoryScopeGlobal" hide-details="auto" data-aid="agentstudio_options_max_global_reconcile"></v-text-field>
           </v-col>
         </v-row>
         <div class="text-body-small text-medium-emphasis mt-2" v-text="i18n.agentStudioMemoryLimitsHelp"></div>
+        </v-form>
       </v-card-text>
       <v-card-actions>
         <v-btn variant="text" class="ml-2" color="primary" @click.stop="showPersonaDialog = true" data-aid="agentstudio_options_personas">
@@ -125,7 +127,7 @@
         </v-btn>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="showOptionsDialog = false" data-aid="agentstudio_options_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn variant="text" :color="optionsDirty() && optionsValid() ? 'primary' : ''" :disabled="!optionsDirty() || !optionsValid()" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
+        <v-btn variant="text" :color="optionsDirty() && optionsFormValid !== false ? 'primary' : ''" :disabled="!optionsDirty() || optionsFormValid === false" @click="persistOptions()" data-aid="agentstudio_options_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
