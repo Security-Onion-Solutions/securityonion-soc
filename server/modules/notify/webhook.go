@@ -135,6 +135,8 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 		return fmt.Errorf("invalid webhook config: %w", err)
 	}
 
+	payload = ResolveOutboundPayload(c.server, payload)
+
 	targetURL := extractWebhookURL(params)
 	format := normalizeFormat(c.resolveFormat(params))
 
@@ -264,7 +266,7 @@ func (c *WebhookChannel) formatPayload(format string, params map[string]interfac
 }
 
 type slackAttachmentField struct {
-	Title string `json:"title"`
+	Title string `json:"title,omitempty"`
 	Value string `json:"value"`
 	Short bool   `json:"short"`
 }
@@ -276,13 +278,14 @@ type slackAction struct {
 }
 
 type slackAttachment struct {
-	Color   string                 `json:"color,omitempty"`
-	Title   string                 `json:"title,omitempty"`
-	Text    string                 `json:"text,omitempty"`
-	Fields  []slackAttachmentField `json:"fields,omitempty"`
-	Actions []slackAction          `json:"actions,omitempty"`
-	Ts      int64                  `json:"ts,omitempty"`
-	Footer  string                 `json:"footer,omitempty"`
+	Color    string                 `json:"color,omitempty"`
+	Title    string                 `json:"title,omitempty"`
+	Text     string                 `json:"text,omitempty"`
+	Fields   []slackAttachmentField `json:"fields,omitempty"`
+	Actions  []slackAction          `json:"actions,omitempty"`
+	Ts       int64                  `json:"ts,omitempty"`
+	Footer   string                 `json:"footer,omitempty"`
+	MrkdwnIn []string               `json:"mrkdwn_in,omitempty"`
 }
 
 type slackMessage struct {
@@ -308,9 +311,10 @@ func formatSlackPayload(params map[string]interface{}, payload *model.Notificati
 	}
 
 	att := slackAttachment{
-		Color:  color,
-		Text:   attText,
-		Footer: NOTIFICATION_ATTRIBUTION,
+		Color:    color,
+		Text:     attText,
+		Footer:   NOTIFICATION_ATTRIBUTION,
+		MrkdwnIn: []string{"text", "fields"},
 	}
 
 	if !payload.Timestamp.IsZero() {
@@ -334,6 +338,31 @@ func formatSlackPayload(params map[string]interface{}, payload *model.Notificati
 				Title: k,
 				Value: payload.Fields[k],
 				Short: true,
+			})
+		}
+	}
+
+	if len(payload.Links) > 0 {
+		keys := make([]string, 0, len(payload.Links))
+		for k := range payload.Links {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var linkParts []string
+		for _, k := range keys {
+			u := payload.Links[k]
+			if u != "" {
+				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+					linkParts = append(linkParts, fmt.Sprintf("<%s|%s>", u, k))
+				} else {
+					linkParts = append(linkParts, fmt.Sprintf("%s: %s", k, u))
+				}
+			}
+		}
+		if len(linkParts) > 0 {
+			att.Fields = append(att.Fields, slackAttachmentField{
+				Value: strings.Join(linkParts, "   "),
+				Short: false,
 			})
 		}
 	}

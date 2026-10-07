@@ -156,6 +156,8 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 		return fmt.Errorf("invalid smtp config: %w", err)
 	}
 
+	payload = ResolveOutboundPayload(c.server, payload)
+
 	host, _ := params["host"].(string)
 	host = strings.TrimSpace(host)
 
@@ -202,18 +204,23 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 		attachmentMode = modeVal
 	}
 
-	// Resolve recipients
+	// Resolve recipients: if recipients have been targeted in the payload, deliver
+	// specifically to them and DO NOT include the destination's default recipient address (params["to"]).
+	// Only use params["to"] when no recipients are targeted.
 	var recipients []string
-	if toVal, ok := params["to"]; ok && toVal != nil {
-		recipients = append(recipients, parseStringSlice(toVal)...)
-	}
-
-	// Add payload recipients if valid emails
-	for _, rec := range payload.Recipients {
-		rec = strings.TrimSpace(rec)
-		if strings.Contains(rec, "@") {
-			recipients = append(recipients, rec)
+	if len(payload.Recipients) > 0 {
+		for _, rec := range payload.Recipients {
+			rec = strings.TrimSpace(rec)
+			if strings.Contains(rec, "@") {
+				recipients = append(recipients, rec)
+			} else if c.server != nil && c.server.Userstore != nil && rec != "" {
+				if u, err := c.server.Userstore.GetUserById(ctx, rec); err == nil && u != nil && strings.TrimSpace(u.Email) != "" {
+					recipients = append(recipients, strings.TrimSpace(u.Email))
+				}
+			}
 		}
+	} else if toVal, ok := params["to"]; ok && toVal != nil {
+		recipients = parseStringSlice(toVal)
 	}
 
 	recipients = deduplicateAddresses(recipients)
@@ -270,14 +277,29 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 		return fmt.Errorf("smtp MAIL FROM failed: %w", err)
 	}
 
+	var acceptedRecipients []string
+	var rcptErrors []error
+	seenRcpt := make(map[string]bool)
 	for _, toAddr := range recipients {
 		parsedTo, err := mail.ParseAddress(toAddr)
 		if err == nil && parsedTo.Address != "" {
 			toAddr = parsedTo.Address
 		}
-		if err := client.Rcpt(toAddr); err != nil {
-			return fmt.Errorf("smtp RCPT TO <%s> failed: %w", toAddr, err)
+		lowerAddr := strings.ToLower(toAddr)
+		if seenRcpt[lowerAddr] {
+			continue
 		}
+		seenRcpt[lowerAddr] = true
+		if err := client.Rcpt(toAddr); err != nil {
+			log.WithError(err).WithField("recipient", toAddr).Warn("SMTP server rejected recipient")
+			rcptErrors = append(rcptErrors, fmt.Errorf("RCPT TO <%s>: %w", toAddr, err))
+		} else {
+			acceptedRecipients = append(acceptedRecipients, toAddr)
+		}
+	}
+
+	if len(acceptedRecipients) == 0 {
+		return fmt.Errorf("all recipients rejected by SMTP server: %w", errors.Join(rcptErrors...))
 	}
 
 	writer, err := client.Data()
@@ -418,9 +440,12 @@ func deduplicateAddresses(addrs []string) []string {
 		if cleaned == "" {
 			continue
 		}
-		lower := strings.ToLower(cleaned)
-		if !seen[lower] {
-			seen[lower] = true
+		target := strings.ToLower(cleaned)
+		if parsed, err := mail.ParseAddress(cleaned); err == nil && parsed.Address != "" {
+			target = strings.ToLower(parsed.Address)
+		}
+		if !seen[target] {
+			seen[target] = true
 			result = append(result, cleaned)
 		}
 	}

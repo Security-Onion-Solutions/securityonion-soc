@@ -13,10 +13,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -170,10 +173,11 @@ func TestWebhookChannelSendSlack(t *testing.T) {
 	att := slackMsg.Attachments[0]
 	assert.Equal(t, "#DC2626", att.Color)
 	assert.Equal(t, "*[CRITICAL] Database High CPU*\n\nPostgreSQL CPU usage reached 98%", att.Text)
+	assert.Equal(t, []string{"text", "fields"}, att.MrkdwnIn)
 	assert.Contains(t, att.Footer, "Security Onion • SOC")
 
 	// Fields verify (severity is removed as it's in the title)
-	var hasSev, hasHost bool
+	var hasSev, hasHost, hasLink bool
 	for _, f := range att.Fields {
 		if f.Title == "Severity" {
 			hasSev = true
@@ -181,9 +185,19 @@ func TestWebhookChannelSendSlack(t *testing.T) {
 		if f.Title == "host" && f.Value == "db-primary" {
 			hasHost = true
 		}
+		if strings.Contains(f.Value, "View Grid") {
+			hasLink = true
+			assert.False(t, f.Short)
+		}
 	}
 	assert.False(t, hasSev)
 	assert.True(t, hasHost)
+	assert.True(t, hasLink)
+
+	// Verify links field appears after payload fields
+	require.Len(t, att.Fields, 2)
+	assert.Equal(t, "host", att.Fields[0].Title)
+	assert.Contains(t, att.Fields[1].Value, "<https://soc.example.com/#/grid|View Grid>")
 
 	// Actions verify
 	require.Len(t, att.Actions, 1)
@@ -240,6 +254,73 @@ func TestWebhookChannelSendMatrixHookshot(t *testing.T) {
 	assert.Contains(t, hookshotMsg.HTML, "<sub><font color=\"#737373\">Security Onion • SOC • detection</font></sub>")
 }
 
+
+func TestWebhookChannelSendSlackAbsoluteLinks(t *testing.T) {
+	mock := &mockHTTPClient{}
+	slackCh := NewSlackChannel(nil)
+	slackCh.client = mock
+
+	payload := &model.NotificationPayload{
+		Title:    "PCAP #1002",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"🌐": "https://soc.example.com/#/job/1002",
+			"⬇": "https://soc.example.com/api/stream/1002?ext=pcap",
+		},
+	}
+
+	params := map[string]interface{}{
+		"webhookUrl": "https://hooks.slack.com/services/T00/B00/X00",
+	}
+
+	err := slackCh.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+
+	var slackMsg slackMessage
+	err = json.Unmarshal(mock.lastBody, &slackMsg)
+	require.NoError(t, err)
+
+	att := slackMsg.Attachments[0]
+	assert.NotContains(t, att.Text, "<https://soc.example.com")
+	require.NotEmpty(t, att.Fields)
+	linkField := att.Fields[len(att.Fields)-1]
+	assert.Contains(t, linkField.Value, "<https://soc.example.com/api/stream/1002?ext=pcap|⬇>")
+	assert.Contains(t, linkField.Value, "<https://soc.example.com/#/job/1002|🌐>")
+}
+
+func TestWebhookChannelSendSlackWithRelativeLinkNoBaseUrl_NoCorruptedHtmlChars(t *testing.T) {
+	mock := &mockHTTPClient{}
+	slackCh := NewSlackChannel(nil)
+	slackCh.client = mock
+
+	payload := &model.NotificationPayload{
+		Title:    "PCAP #1002",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"🌐": "/#/job/1002",
+		},
+	}
+
+	params := map[string]interface{}{
+		"webhookUrl": "https://hooks.slack.com/services/T00/B00/X00",
+	}
+
+	err := slackCh.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+
+	var slackMsg slackMessage
+	err = json.Unmarshal(mock.lastBody, &slackMsg)
+	require.NoError(t, err)
+
+	att := slackMsg.Attachments[0]
+	assert.NotContains(t, att.Text, "🌐")
+	require.NotEmpty(t, att.Fields)
+	linkField := att.Fields[len(att.Fields)-1]
+	// When URL is not absolute, it should NOT output <relative_url|label> which Slack shows as raw HTML chars
+	assert.NotContains(t, linkField.Value, "</#/")
+	assert.Contains(t, linkField.Value, "🌐: /#/job/1002")
+}
+
 func TestWebhookChannelSendErrors(t *testing.T) {
 	mock := &mockHTTPClient{
 		respStatus: 500,
@@ -265,3 +346,110 @@ func TestWebhookChannelSendErrors(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "webhook request failed")
 }
+
+func TestWebhookChannelSendSlack_WithBaseUrl_PrefixesRelativeLink(t *testing.T) {
+	mock := &mockHTTPClient{respStatus: 200}
+	srv := &server.Server{
+		Config: &config.ServerConfig{
+			BaseUrl: "https://soc.example.com/",
+		},
+	}
+	slackCh := NewSlackChannel(srv)
+	slackCh.client = mock
+
+	payload := &model.NotificationPayload{
+		Title:    "PCAP #1002",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"🌐": "/#/job/1002",
+		},
+	}
+
+	params := map[string]interface{}{
+		"webhookUrl": "https://hooks.slack.com/services/T00/B00/X00",
+	}
+
+	err := slackCh.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+
+	var slackMsg slackMessage
+	err = json.Unmarshal(mock.lastBody, &slackMsg)
+	require.NoError(t, err)
+
+	att := slackMsg.Attachments[0]
+	// With BaseUrl set, relative link should be prefixed and formatted as <url|label> in fields
+	assert.NotContains(t, att.Text, "<https://soc.example.com")
+	require.NotEmpty(t, att.Fields)
+	linkField := att.Fields[len(att.Fields)-1]
+	assert.Contains(t, linkField.Value, "<https://soc.example.com/#/job/1002|🌐>")
+}
+
+func TestWebhookChannelSendMatrix_WithBaseUrl_PrefixesRelativeLink(t *testing.T) {
+	mock := &mockHTTPClient{respStatus: 200}
+	srv := &server.Server{
+		Config: &config.ServerConfig{
+			BaseUrl: "https://soc.example.com/",
+		},
+	}
+	matrixCh := NewMatrixChannel(srv)
+	matrixCh.client = mock
+
+	payload := &model.NotificationPayload{
+		Title:    "PCAP #1002",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"🌐": "/#/job/1002",
+		},
+	}
+
+	params := map[string]interface{}{
+		"webhookUrl": "https://matrix.example.com/hookshot",
+	}
+
+	err := matrixCh.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+
+	var hookshotMsg matrixHookshotMessage
+	err = json.Unmarshal(mock.lastBody, &hookshotMsg)
+	require.NoError(t, err)
+
+	assert.Contains(t, hookshotMsg.Text, "[🌐](https://soc.example.com/#/job/1002)")
+	assert.Contains(t, hookshotMsg.HTML, "<a href=\"https://soc.example.com/#/job/1002\">🌐</a>")
+}
+
+func TestWebhookChannelSendGeneric_WithBaseUrl_PrefixesRelativeLink(t *testing.T) {
+	mock := &mockHTTPClient{respStatus: 200}
+	srv := &server.Server{
+		Config: &config.ServerConfig{
+			BaseUrl: "https://soc.example.com/",
+		},
+	}
+	ch := NewWebhookChannel(srv)
+	ch.client = mock
+
+	payload := &model.NotificationPayload{
+		Title:    "PCAP #1002",
+		Severity: model.NotificationSeverityInfo,
+		Links: map[string]string{
+			"🌐": "/#/job/1002",
+		},
+		Attachments: []model.Attachment{
+			{Filename: "data.pcap", URL: "/api/stream/1002"},
+		},
+	}
+
+	params := map[string]interface{}{
+		"url": "https://example.com/generic-hook",
+	}
+
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+
+	var sentPayload model.NotificationPayload
+	err = json.Unmarshal(mock.lastBody, &sentPayload)
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://soc.example.com/#/job/1002", sentPayload.Links["🌐"])
+	assert.Equal(t, "https://soc.example.com/api/stream/1002", sentPayload.Attachments[0].URL)
+}
+

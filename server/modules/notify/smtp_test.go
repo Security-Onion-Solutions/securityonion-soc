@@ -16,7 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -245,6 +247,98 @@ func TestSMTPChannelSendWithPayloadRecipients(t *testing.T) {
 	assert.Equal(t, []string{"targeted@example.com"}, mockClient.rcptTo)
 }
 
+func TestSMTPChannelSendTargetedExcludesParamsTo(t *testing.T) {
+	mockClient := &mockSMTPClient{}
+
+	ch := NewSMTPChannel(nil)
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		return mockClient, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title:      "Targeted Alert",
+		Severity:   model.NotificationSeverityInfo,
+		Recipients: []string{"analyst@example.com"},
+	}
+
+	params := map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "alerts@example.com",
+		"to":   []string{"general-team@example.com", "other@example.com"},
+	}
+
+	// Targeted notification must only be sent to the targeted recipient; default destination "to" must NOT be included
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"analyst@example.com"}, mockClient.rcptTo)
+}
+
+func TestSMTPChannelPartialRcptFailureProceedsWithAccepted(t *testing.T) {
+	mockClient := &mockSMTPClient{}
+
+	ch := NewSMTPChannel(nil)
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		return &selectiveRcptMockClient{
+			mockSMTPClient: mockClient,
+			failAddress:    "onionuser@somewhere.invalid",
+		}, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title:      "Targeted Alert",
+		Severity:   model.NotificationSeverityInfo,
+		Recipients: []string{"valid-user@example.com", "onionuser@somewhere.invalid"},
+	}
+
+	params := map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "alerts@example.com",
+		"to":   []string{"default-dest@example.com"},
+	}
+
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"valid-user@example.com"}, mockClient.rcptTo)
+}
+
+type selectiveRcptMockClient struct {
+	*mockSMTPClient
+	failAddress string
+}
+
+func (s *selectiveRcptMockClient) Rcpt(to string) error {
+	if to == s.failAddress {
+		return errors.New("550 invalid domain")
+	}
+	return s.mockSMTPClient.Rcpt(to)
+}
+
+func TestSMTPChannelDeduplicateAddressesWithDisplayNames(t *testing.T) {
+	mockClient := &mockSMTPClient{}
+
+	ch := NewSMTPChannel(nil)
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		return mockClient, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title:      "Untargeted Alert",
+		Severity:   model.NotificationSeverityInfo,
+	}
+
+	params := map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "alerts@example.com",
+		"to":   []string{"Analyst <analyst@example.com>", "analyst@example.com", "ANALYST@EXAMPLE.COM"},
+	}
+
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.Len(t, mockClient.rcptTo, 1)
+	assert.Equal(t, "analyst@example.com", mockClient.rcptTo[0])
+}
+
+
 func TestSMTPChannelSendFailures(t *testing.T) {
 	ch := NewSMTPChannel(nil)
 
@@ -288,3 +382,42 @@ func TestSMTPChannelSendFailures(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication failed")
 }
+
+func TestSMTPChannelSend_PrefixesRelativeLinksWithBaseUrl(t *testing.T) {
+	srv := &server.Server{
+		Config: &config.ServerConfig{
+			BaseUrl: "https://soc.example.com/",
+		},
+	}
+	ch := NewSMTPChannel(srv)
+	mockClient := &mockSMTPClient{
+		dataBuffer: &bytes.Buffer{},
+	}
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		return mockClient, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title: "Test PCAP",
+		Links: map[string]string{
+			"🌐": "/#/job/1001",
+		},
+		Attachments: []model.Attachment{
+			{Filename: "data.pcap", URL: "/api/stream/1001?ext=pcap"},
+		},
+	}
+
+	err := ch.Send(context.Background(), map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "from@example.com",
+		"to":   "to@example.com",
+	}, payload)
+	require.NoError(t, err)
+
+	data := mockClient.dataBuffer.String()
+	assert.Contains(t, data, "https://soc.example.com")
+	assert.Contains(t, data, "/#/job/1001")
+	assert.Contains(t, data, "/api/stream/1001")
+	assert.NotContains(t, data, "href=3D\"/#/job/1001\"")
+}
+

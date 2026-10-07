@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"html"
 	"mime"
+	"mime/quotedprintable"
 	"net/mail"
 	"sort"
 	"strings"
@@ -167,7 +168,7 @@ func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) s
 	buf.WriteString("  table.fields td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; }\r\n")
 	buf.WriteString("  table.fields td.key { font-weight: 600; color: #4b5563; width: 30%; background-color: #f9fafb; }\r\n")
 	buf.WriteString("  table.fields td.val { color: #111827; word-break: break-all; }\r\n")
-	buf.WriteString("  .btn-link { display: inline-block; padding: 9px 18px; background-color: #2563eb; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 10px; margin-bottom: 8px; }\r\n")
+	buf.WriteString("  .btn-link { display: inline-block; padding: 9px 18px; background-color: #2563eb; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 10px; margin-bottom: 8px; cursor: pointer; }\r\n")
 	buf.WriteString("  .attachments-list { font-size: 14px; color: #4b5563; margin-bottom: 20px; }\r\n")
 	buf.WriteString("  .attachments-list a { color: #2563eb; text-decoration: underline; }\r\n")
 	buf.WriteString("  .footer { padding: 16px 24px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }\r\n")
@@ -212,7 +213,7 @@ func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) s
 		sort.Strings(keys)
 		for _, k := range keys {
 			url := payload.Links[k]
-			buf.WriteString(fmt.Sprintf("      <a class=\"btn-link\" href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">%s &rarr;</a>\r\n",
+			buf.WriteString(fmt.Sprintf("      <a class=\"btn-link\" style=\"display: inline-block; padding: 9px 18px; background-color: #2563eb; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 10px; margin-bottom: 8px; cursor: pointer;\" href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">%s</a>\r\n",
 				html.EscapeString(url), html.EscapeString(k)))
 		}
 		buf.WriteString("    </div>\r\n")
@@ -243,6 +244,14 @@ func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) s
 	buf.WriteString("  </div>\r\n")
 	buf.WriteString("</div>\r\n</body>\r\n</html>\r\n")
 
+	return buf.String()
+}
+
+func encodeQuotedPrintable(s string) string {
+	var buf bytes.Buffer
+	w := quotedprintable.NewWriter(&buf)
+	_, _ = w.Write([]byte(s))
+	_ = w.Close()
 	return buf.String()
 }
 
@@ -281,15 +290,15 @@ func BuildMIMEMessage(from string, to []string, subject string, plainBody string
 		// Plain text part
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(plainBody)
+		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+		buf.WriteString(encodeQuotedPrintable(plainBody))
 		buf.WriteString("\r\n\r\n")
 
 		// HTML part
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(htmlBody)
+		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+		buf.WriteString(encodeQuotedPrintable(htmlBody))
 		buf.WriteString("\r\n\r\n")
 
 		buf.WriteString(fmt.Sprintf("--%s--\r\n\r\n", altBoundary))
@@ -333,15 +342,15 @@ func BuildMIMEMessage(from string, to []string, subject string, plainBody string
 		// Plain text part
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(plainBody)
+		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+		buf.WriteString(encodeQuotedPrintable(plainBody))
 		buf.WriteString("\r\n\r\n")
 
 		// HTML part
 		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
 		buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-		buf.WriteString(htmlBody)
+		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+		buf.WriteString(encodeQuotedPrintable(htmlBody))
 		buf.WriteString("\r\n\r\n")
 
 		buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))

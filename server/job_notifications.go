@@ -122,7 +122,7 @@ func buildPcapCompletionNotification(ctx context.Context, srv *Server, job *mode
 	}
 
 	links := make(map[string]string)
-	links["👁"] = fmt.Sprintf("/#/job/%d", job.Id)
+	links["🌐"] = fmt.Sprintf("/#/job/%d", job.Id)
 	links["⬇"] = fmt.Sprintf("/api/stream/%d?ext=pcap", job.Id)
 
 	title := fmt.Sprintf("PCAP #%d", job.Id)
@@ -170,7 +170,7 @@ func buildReportCompletionNotification(ctx context.Context, srv *Server, job *mo
 	}
 
 	links := make(map[string]string)
-	links["👁"] = "/#/reports"
+	links["🌐"] = "/#/reports"
 	links["⬇"] = fmt.Sprintf("/api/stream/%d?ext=%s", job.Id, ext)
 
 	var attachments []model.Attachment

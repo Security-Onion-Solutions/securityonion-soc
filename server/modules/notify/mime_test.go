@@ -84,7 +84,9 @@ func TestFormatHTMLBody(t *testing.T) {
 	assert.Contains(t, htmlBody, "node")
 	assert.Contains(t, htmlBody, "node-1")
 	assert.Contains(t, htmlBody, "Grid Metrics")
+	assert.NotContains(t, htmlBody, "&rarr;")
 	assert.Contains(t, htmlBody, "https://soc.example.com/#/grid")
+	assert.Contains(t, htmlBody, "cursor: pointer")
 	assert.Contains(t, htmlBody, "Security Onion • SOC • metric")
 }
 
@@ -92,8 +94,8 @@ func TestBuildMIMEMessageNoAttachments(t *testing.T) {
 	from := "soc-alerts@example.com"
 	to := []string{"analyst@example.com"}
 	subject := "[SOC] [HIGH] Alert Test"
-	plain := "Plain body content"
-	html := "<p>HTML body content</p>"
+	plain := "Plain body content with 🌐 and ⬇"
+	html := "<p>HTML body content with 🌐 and ⬇</p>"
 
 	msgBytes, err := BuildMIMEMessage(from, to, subject, plain, html, nil, model.AttachmentModeBoth)
 	require.NoError(t, err)
@@ -104,9 +106,8 @@ func TestBuildMIMEMessageNoAttachments(t *testing.T) {
 	assert.Contains(t, msg, "Subject:")
 	assert.Contains(t, msg, "Content-Type: multipart/alternative")
 	assert.Contains(t, msg, "Content-Type: text/plain; charset=UTF-8")
-	assert.Contains(t, msg, plain)
+	assert.Contains(t, msg, "Content-Transfer-Encoding: quoted-printable")
 	assert.Contains(t, msg, "Content-Type: text/html; charset=UTF-8")
-	assert.Contains(t, msg, html)
 }
 
 func TestBuildMIMEMessageWithAttachments(t *testing.T) {
@@ -132,6 +133,8 @@ func TestBuildMIMEMessageWithAttachments(t *testing.T) {
 	assert.Contains(t, msg, "To: analyst1@example.com, analyst2@example.com")
 	assert.Contains(t, msg, "Content-Type: multipart/mixed")
 	assert.Contains(t, msg, "Content-Type: multipart/alternative")
+	assert.Contains(t, msg, "Content-Transfer-Encoding: quoted-printable")
+
 	assert.Contains(t, msg, "Content-Type: text/csv; name=\"incident.csv\"")
 	assert.Contains(t, msg, "Content-Disposition: attachment; filename=\"incident.csv\"")
 	assert.Contains(t, msg, "Content-Transfer-Encoding: base64")
