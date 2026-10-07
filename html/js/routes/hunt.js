@@ -352,6 +352,15 @@ const huntComponent = {
       this.assistantEnabled = params["enabled"];
       this.investigationMsg = params["investigationPrompt"];
     },
+    // An OAI query needs the agentic assistant running too, since only its automations write the
+    // fields such queries group on.
+    isQueryAvailable(query) {
+      if (!query.license) return true;
+      if (!this.$root.isLicensed(query.license)) return false;
+      if (query.license !== this.$root.FEAT_OAI) return true;
+      const assistant = this.$root.parameters.assistant;
+      return !!(assistant && assistant.enabled && assistant.agentic);
+    },
     async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
@@ -363,7 +372,7 @@ const huntComponent = {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.safeStringMaxLength = params["safeStringMaxLength"];
       this.queryBaseFilter = params["queryBaseFilter"];
-      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => !q.license || this.$root.isLicensed(q.license));
+      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => this.isQueryAvailable(q));
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -1559,8 +1568,8 @@ const huntComponent = {
     },
     // Untriaged and unrecognised values, including the localized missing bucket, rank lowest.
     sortByAssessment(a, b) {
-      const levels = ['likely_benign', 'needs_review', 'likely_malicious'];
-      return levels.indexOf(a) - levels.indexOf(b);
+      const rank = value => ALERT_TRIAGE_ASSESSMENTS[value] ? ALERT_TRIAGE_ASSESSMENTS[value].rank : -1;
+      return rank(a) - rank(b);
     },
     assessmentChip(item) {
       return alertTriageAssessment(item, this.i18n);

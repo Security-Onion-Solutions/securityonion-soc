@@ -390,7 +390,7 @@ test('applyQuerySubstitutions', () => {
   expect(newQueries[1].query).toBe('bar:123');
 });
 
-test('initHunt shows a licensed query only on a grid with that license', async () => {
+test('initHunt shows a licensed query only on a grid where it is available', async () => {
   comp.$root.user = { id: '123' };
   comp.hunt = jest.fn();
   const params = () => ({
@@ -407,9 +407,29 @@ test('initHunt shows a licensed query only on a grid with that license', async (
   expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
 
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
   await comp.initHunt(params());
   expect(comp.queries.map(q => q.name)).toEqual(['Default', 'By Assessment']);
   expect(comp.query).toBe('* | groupby rule.name');
+  delete comp.$root.parameters.assistant;
+});
+
+test('isQueryAvailable', () => {
+  comp.$root.isLicensed = jest.fn(feat => feat !== 'ttr');
+
+  expect(comp.isQueryAvailable({ query: '*' })).toBe(true);
+  expect(comp.isQueryAvailable({ query: '*', license: 'ttr' })).toBe(false);
+  expect(comp.isQueryAvailable({ query: '*', license: 'rpt' })).toBe(true);
+
+  const oai = { query: '*', license: 'oai' };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: false, agentic: true };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: false };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  expect(comp.isQueryAvailable(oai)).toBe(true);
+  delete comp.$root.parameters.assistant;
 });
 
 test('lookupSocIds', () => {
