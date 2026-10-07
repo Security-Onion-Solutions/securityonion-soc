@@ -7307,6 +7307,13 @@ test('compressCurrentSession sends compression message and reloads chat', async 
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith('test-session');
 });
 
+test('stripChoiceMarkers leaves each choice as its label', () => {
+  expect(AssistantUtils.stripChoiceMarkers('1. [[CHOICE]] Acknowledge the alert [[/CHOICE]]\n2. [[CHOICE]]Escalate[[/CHOICE]]'))
+    .toBe('1. Acknowledge the alert\n2. Escalate');
+  expect(AssistantUtils.stripChoiceMarkers('No choices here')).toBe('No choices here');
+  expect(AssistantUtils.stripChoiceMarkers('')).toBe('');
+});
+
 // Choice buttons tests
 test('applyChoiceButtons converts choice markers to buttons', () => {
   const text = 'Choose an option: [[CHOICE]]Option 1[[/CHOICE]] or [[CHOICE]]Option 2[[/CHOICE]]';

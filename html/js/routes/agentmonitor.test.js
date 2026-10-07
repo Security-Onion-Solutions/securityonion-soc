@@ -662,6 +662,7 @@ test('every helper the transcript components call works against this page', asyn
   }).not.toThrow();
 
   expect(comp.formatMarkdown('pick one')).toBe('<p>pick one</p>');
+  expect(comp.formatMarkdown('[[CHOICE]]Acknowledge the alert[[/CHOICE]]')).toBe('<p>Acknowledge the alert</p>');
   expect(comp.formatMarkdown('')).toBe('');
 });
 

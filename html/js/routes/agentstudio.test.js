@@ -867,6 +867,61 @@ test('options save writes only the limits that changed', async () => {
   expect(comp.optionsDirty()).toBe(false);
 });
 
+test('options save writes the automation settings that changed', async () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 60;
+  params.alertTriageEpoch = '2026-09-24T00:00:00Z';
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  comp.showOptions();
+  expect(comp.automationTickSeconds).toBe(60);
+  expect(comp.alertTriageEpoch).toBe('2026-09-24T00:00:00Z');
+  expect(comp.optionsDirty()).toBe(false);
+
+  comp.automationTickSeconds = 30;
+  comp.alertTriageEpoch = '2026-01-01T00:00:00Z';
+  await comp.persistOptions();
+
+  expect(put.mock.calls.map(call => [call[1].id, call[1].value])).toEqual([
+    ['soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds', '30'],
+    ['soc.config.server.modules.assistant.automationSettings.alertTriageEpoch', '2026-01-01T00:00:00Z'],
+  ]);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+const passes = (rules, value) => rules.every(rule => rule(value) === true);
+
+test('the option rules accept only their ranges', () => {
+  const { nonNegative, positive, fraction } = comp.optionRules;
+
+  for (const value of [0, 5, '3']) expect(passes(nonNegative, value)).toBe(true);
+  for (const value of [-1, 1.5, '']) expect(passes(nonNegative, value)).toBe(false);
+
+  for (const value of [1, 60]) expect(passes(positive, value)).toBe(true);
+  for (const value of [0, -5, 1.5, '']) expect(passes(positive, value)).toBe(false);
+
+  for (const value of [0, 0.5, 1]) expect(passes(fraction, value)).toBe(true);
+  for (const value of [-0.1, 1.5, '']) expect(passes(fraction, value)).toBe(false);
+});
+
+test('the alert triage start must be a UTC timestamp or blank', () => {
+  for (const epoch of ['2026-09-24T00:00:00Z', '2026-09-24T00:00:00.5Z', '']) {
+    expect(comp.alertTriageEpochRule(epoch)).toBe(true);
+  }
+  for (const epoch of ['yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
+    expect(comp.alertTriageEpochRule(epoch)).toBe(comp.i18n.agentStudioAlertTriageEpochInvalid);
+  }
+});
+
+test('the interval hint names the scheduler\'s check interval', () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 30;
+  comp.initAssistant(params);
+
+  expect(comp.automationIntervalHelp()).toContain('30-second check interval');
+});
+
 test('a failed options save keeps the dialog open', async () => {
   comp.initAssistant(agenticParams());
   mockPapi('put', null, new Error('nope'));

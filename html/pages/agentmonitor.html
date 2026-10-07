@@ -67,7 +67,7 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_running">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_running" :title="i18n.agentMonitorPeakRunningHelp">
         <div class="so-stat-text">
           <div class="so-stat-label" id="stat-label-pool-peak-running">{{ i18n.agentMonitorPeakRunning }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-peak-running">{{ pool.peakRunning.toLocaleString() }}</div>
@@ -76,7 +76,7 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_queued">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_peak_queued" :title="i18n.agentMonitorPeakQueuedHelp">
         <div class="so-stat-text">
           <div class="so-stat-label" id="stat-label-pool-peak-queued">{{ i18n.agentMonitorPeakQueued }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-peak-queued">{{ pool.peakQueued.toLocaleString() }}</div>
@@ -85,7 +85,7 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentmonitor_pool_rejected">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_rejected" :title="i18n.agentMonitorRejectedHelp">
         <div class="so-stat-text">
           <div class="so-stat-label" id="stat-label-pool-rejected">{{ i18n.agentMonitorRejected }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-rejected">
@@ -96,7 +96,7 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentmonitor_pool_deduped">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_deduped" :title="i18n.agentMonitorDedupedHelp">
         <div class="so-stat-text">
           <div class="so-stat-label" id="stat-label-pool-deduped">{{ i18n.agentMonitorDeduped }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-deduped">{{ pool.deduped.toLocaleString() }}</div>
@@ -105,7 +105,7 @@
       </div>
     </v-col>
     <v-col>
-      <div class="so-stat-pill" data-aid="agentmonitor_pool_busy">
+      <div class="so-stat-pill" data-aid="agentmonitor_pool_busy" :title="i18n.agentMonitorBusyHelp">
         <div class="so-stat-text">
           <div class="so-stat-label" id="stat-label-pool-busy">{{ i18n.agentMonitorBusy }}</div>
           <div class="so-stat-value" aria-labelledby="stat-label-pool-busy">{{ pool.busy.toLocaleString() }}</div>

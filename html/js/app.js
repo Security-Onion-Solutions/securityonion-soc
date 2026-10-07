@@ -327,6 +327,8 @@ $(document).ready(function () {
             badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
             minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
             maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            minValue: limit => value => (value !== '' && value != null && +value >= limit) || _i18n.ruleMinValue.replace('{limit}', limit),
+            maxValue: limit => value => (value !== '' && value != null && +value <= limit) || _i18n.ruleMaxValue.replace('{limit}', limit),
             fileSizeLimit: (maxBytes, formatFn) => value =>
               (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
             matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
@@ -1079,6 +1081,13 @@ $(document).ready(function () {
           // converts non-separator colons to ratio characters in mermaid charts
           text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
           return text
+        },
+        // clean breaks some valid Mermaid; skip it for human-written text.
+        formatMarkdownMermaid(text, render = true, clean = true) {
+          if (!text) return '';
+          const md = this.formatMarkdown(clean ? this.performMermaidRegexes(text) : text, true);
+          if (render) this.$nextTick(() => this.renderMermaid());
+          return md;
         },
         colorSeverity(value) {
           const val = (value || '').toLowerCase();

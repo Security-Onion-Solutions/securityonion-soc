@@ -211,7 +211,7 @@ components.push({
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());
       },
       formatMarkdown(text) {
-        return text ? this.$root.formatMarkdown(text) : '';
+        return this.$root.formatMarkdownMermaid(AssistantUtils.stripChoiceMarkers(text));
       },
     },
   }
