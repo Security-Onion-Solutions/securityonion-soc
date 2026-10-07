@@ -17,7 +17,7 @@ const AUTOMATION_TICK_SETTING_ID = 'soc.config.server.modules.assistant.automati
 const ALERT_TRIAGE_EPOCH_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.alertTriageEpoch';
 
 // Matches the setting's validation in Config.
-const ALERT_TRIAGE_EPOCH_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+const ALERT_TRIAGE_EPOCH_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)?$/;
 
 const MEMORY_SETTING_IDS = {
   useMemory: 'soc.config.server.modules.assistant.useMemory',

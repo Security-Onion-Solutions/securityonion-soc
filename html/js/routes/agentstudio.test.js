@@ -905,11 +905,11 @@ test('the option rules accept only their ranges', () => {
   for (const value of [-0.1, 1.5, '']) expect(passes(fraction, value)).toBe(false);
 });
 
-test('the alert triage start must be a UTC timestamp', () => {
-  for (const epoch of ['2026-09-24T00:00:00Z', '2026-09-24T00:00:00.5Z']) {
+test('the alert triage start must be a UTC timestamp or blank', () => {
+  for (const epoch of ['2026-09-24T00:00:00Z', '2026-09-24T00:00:00.5Z', '']) {
     expect(comp.alertTriageEpochRule(epoch)).toBe(true);
   }
-  for (const epoch of ['', 'yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
+  for (const epoch of ['yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
     expect(comp.alertTriageEpochRule(epoch)).toBe(comp.i18n.agentStudioAlertTriageEpochInvalid);
   }
 });

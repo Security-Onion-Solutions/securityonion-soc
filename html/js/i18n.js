@@ -490,7 +490,7 @@ const i18n = {
       agentStudioAutomationTickInterval: 'Check Interval',
       agentStudioAutomationTickIntervalHelp: 'How often automations are checked to see if they are due.',
       agentStudioAlertTriageEpoch: 'Alert Triage Start',
-      agentStudioAlertTriageEpochHelp: 'Older alerts are never triaged. UTC, e.g. 2026-09-24T00:00:00Z.',
+      agentStudioAlertTriageEpochHelp: 'Older alerts are never triaged. UTC, e.g. 2026-09-24T00:00:00Z. Clear to reset.',
       agentStudioAlertTriageEpochInvalid: 'Use UTC, e.g. 2026-09-24T00:00:00Z.',
       agentStudioAutomationAgent: 'Handling Agent',
       agentStudioAutomationAgentHelp: 'The agent whose sessions do this automation\'s work.',
