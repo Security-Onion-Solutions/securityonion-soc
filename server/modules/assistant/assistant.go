@@ -933,13 +933,16 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 		return
 	}
 
-	if setting.Id == ConfigSettingAutomationTickInterval || setting.Id == ConfigSettingAlertTriageEpoch {
-		if setting.Id == ConfigSettingAutomationTickInterval {
-			ac.reloadAutomationTickInterval(ctx)
-		} else {
-			ac.reloadAlertTriageEpoch(ctx)
-		}
+	if setting.Id == ConfigSettingAutomationTickInterval {
+		ac.reloadAutomationTickInterval(ctx)
+		ac.exposeAutomationSettings()
+		ac.broadcastAgenticUpdate()
 
+		return
+	}
+
+	if setting.Id == ConfigSettingAlertTriageEpoch {
+		ac.reloadAlertTriageEpoch(ctx)
 		ac.exposeAutomationSettings()
 		ac.broadcastAgenticUpdate()
 
