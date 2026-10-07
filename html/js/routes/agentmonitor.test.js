@@ -487,6 +487,20 @@ test('a load the user asked for reports failure; a background refresh only logs 
   expect(console.error).toHaveBeenCalled();
 });
 
+test('a failed automations load keeps the list it had, and only a requested one reports it', async () => {
+  serve();
+  await comp.loadAutomations();
+  serve({ 'assistant/automations': new Error('down') });
+
+  await comp.loadAutomations(true);
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(console.error).toHaveBeenCalled();
+
+  await comp.loadAutomations();
+  expect(comp.$root.showError).toHaveBeenCalledTimes(1);
+  expect(comp.automations.map(a => a.id)).toEqual([TRIAGE_ID]);
+});
+
 test('a refresh keeps what it had when it fails', async () => {
   await load();
   serve({ 'assistant/automations/activity': new Error('down') });
