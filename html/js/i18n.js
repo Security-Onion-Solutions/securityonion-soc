@@ -331,7 +331,7 @@ const i18n = {
       agentMonitorRunHistorySearchHelp: 'Matches automation names, run errors, and work item groups and errors, or a run ID',
       agentMonitorHideEmptyRuns: 'Filter out successful runs that worked no items',
       agentMonitorRunDetails: 'Automation Run',
-      agentMonitorRunItemsEmpty: 'No work item lists this run as its latest.',
+      agentMonitorRunItemsEmpty: 'No work items were processed in this run.',
       agentMonitorFinished: 'Finished',
       agentMonitorPoolRunning: 'Pool Running',
       agentMonitorPoolQueued: 'Pool Queued',
