@@ -19,7 +19,7 @@
 						<div class="col pa-4 contrast-bg rounded rounded-md">
 							<div class="mb-3 header">{{ i18n.add }} {{ i18n.detection }}</div>
 							<span data-aid="detection_new_language_select" class="mb-3 d-block">
-								<v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" :label="i18n.language" :rules="[$root.validators.required]" required @update:model-value="onNewDetectionLanguageChange"></v-select>
+								<v-select id="detection-language-create" v-model="newDetectionLanguage" :items="newDetectionLanguages" :label="i18n.language" :rules="[$root.validators.required]" required @update:model-value="onNewDetectionLanguageChange"></v-select>
 							</span>
 
 							<span data-aid="detection_new_license_select" class="mb-3 d-block">
@@ -110,7 +110,13 @@
 								</div>
 								<div class="header">{{i18n.detectionLogic}}</div>
 								<div class="extracted-content" data-aid="detection_logic_display">
-									<pre><code :class="extractedLogicClass">{{extractedLogic}}</code></pre>
+									<template v-if="correlationRules.length">
+										<div v-for="(rule, index) in correlationRules" :key="index" data-aid="detection_correlation_rule_display">
+											<div>{{ rule.title }} <span v-if="rule.name" class="text-medium-emphasis">({{ rule.name }})</span></div>
+											<pre><code class="language-yaml">{{ rule.logic }}</code></pre>
+										</div>
+									</template>
+									<pre v-else><code :class="extractedLogicClass">{{extractedLogic}}</code></pre>
 								</div>
 							</v-col>
 						</v-row>
@@ -261,6 +267,9 @@
 						</v-col>
 					</v-tabs-window-item>
 					<v-tabs-window-item value="tuning" data-aid="detection_tuning">
+						<v-alert v-if="correlationRules.length" :value="true" color="info" icon="fa-info" class="mb-3" data-aid="detection_correlation_filter_note">
+							{{ i18n.correlationFilterNote }}
+						</v-alert>
 						<v-row v-if="canAddOverride()">
 							<v-col>
 								<v-toolbar class="so-toolbar elevation-0" fixed>
@@ -899,14 +908,14 @@
 					</v-tabs-window-item>
 				</v-tabs-window>
 			</v-row>
-			<v-dialog v-model="showSigmaDialog" persistent width="800px" data-aid="detection_sigma_dialog">
+			<v-dialog v-model="showSigmaDialog" persistent scrollable width="900px" data-aid="detection_sigma_dialog">
 				<v-card>
 					<v-card-title class="lighten-4 py-4 title">{{ i18n.convertToElasticsearch }}</v-card-title>
-					<v-container>
-						<div class="contrast-bg ma-2 pa-2" data-aid="detection_sigma_dialog_rule_display">
-							{{ convertedRule }}
+					<v-card-text>
+						<div class="contrast-bg ma-2 pa-2 extracted-content converted-rule" data-aid="detection_sigma_dialog_rule_display">
+							<pre><code v-if="isEsql" v-html="esqlHighlighter(convertedRule)"></code><code v-else>{{ convertedRule }}</code></pre>
 						</div>
-					</v-container>
+					</v-card-text>
 					<div id="convert-button-container">
 						<v-btn variant="outlined" color="primary" @click="cancelConvert()" data-aid="detection_sigma_dialog_cancel">
 							{{ i18n.cancel }}

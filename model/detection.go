@@ -24,6 +24,7 @@ type Severity string
 type IDType string
 type EngineName string
 type OverrideType string
+type RuleType string
 
 const (
 	ScanTypeFiles           ScanType = "files"
@@ -53,6 +54,9 @@ const (
 	OverrideTypeThreshold    OverrideType = "threshold"
 	OverrideTypeModify       OverrideType = "modify"
 	OverrideTypeCustomFilter OverrideType = "customFilter"
+
+	RuleTypeSingle      RuleType = "single"
+	RuleTypeCorrelation RuleType = "correlation"
 
 	// Valid values for Track parameter (shared between threshold and suppress)
 	TrackBySrc = "by_src"
@@ -163,6 +167,12 @@ type Detection struct {
 	Product string `json:"product,omitempty" example:"windows"`
 	// Used by Sigma rules for filtering a subset of log ouputs to a specific server.
 	Service string `json:"service,omitempty" example:"sshd"`
+	// Sigma rule kind: single or correlation. Empty for other languages.
+	RuleType RuleType `json:"ruleType,omitempty" enums:"single,correlation" example:"correlation"`
+	// Sigma correlation type, e.g. value_count. Empty for single-event rules.
+	CorrelationType string `json:"correlationType,omitempty" example:"value_count"`
+	// Sigma correlation timespan as written, e.g. 10m. Empty for single-event rules.
+	CorrelationTimespan string `json:"correlationTimespan,omitempty" example:"10m"`
 
 	// AI Description fields
 	*AiFields `json:",omitempty"`

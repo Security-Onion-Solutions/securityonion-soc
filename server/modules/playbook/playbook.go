@@ -41,6 +41,9 @@ const (
 	DEFAULT_USER_PLACEHOLDER_MAP_PATH         = "/opt/sensoroni/playbook_placeholder_map_custom.yaml"
 )
 
+// Correlation baselines use this category; older grids never match it.
+const correlationCategory = "correlation"
+
 var ( // treat as constant
 	DEFAULT_PLAYBOOK_REPOS = []*model.Repo{
 		{
@@ -423,7 +426,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	return playbooks, nil
 }
 
-func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, publicId string, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
+func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, detect *model.Detection) ([]*model.Playbook, error) {
 	logger := log.FromContext(ctx)
 
 	err := pdm.srv.CheckAuthorized(ctx, "read", "playbooks")
@@ -431,8 +434,14 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		return nil, err
 	}
 
-	publicId = strings.ToLower(publicId)
-	detectCategory = strings.ToLower(detectCategory)
+	publicId := strings.ToLower(detect.PublicID)
+	detectEngine := detect.Engine
+	isCorrelation := detect.RuleType == model.RuleTypeCorrelation
+
+	detectCategory := strings.ToLower(detect.Category)
+	if isCorrelation {
+		detectCategory = correlationCategory
+	}
 
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
@@ -480,10 +489,15 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, pu
 		}
 	}
 
+	// a correlation's own playbook replaces its baseline; correlations never get the engine baseline
+	if isCorrelation && len(forId) > 0 {
+		forCategory = nil
+	}
+
 	results := append([]string{}, forId...)
 	results = append(results, forCategory...)
 
-	if len(results) == 0 {
+	if len(results) == 0 && !isCorrelation {
 		results = pdm.PlaybooksByEngine[string(detectEngine)]
 	}
 
@@ -626,7 +640,7 @@ func (pdm *PlaybookDiskManager) GetEventSpecificPlaybook(ctx context.Context, id
 	}
 
 	// no playbooks for this detection is a valid state, not an error
-	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
+	playbooks, err := pdm.srv.Playbookstore.GetPlaybooksForDetection(ctx, detection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get playbooks for detection %s: %w", detection.PublicID, err)
 	}

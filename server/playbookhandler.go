@@ -156,7 +156,7 @@ func (h *PlaybookHandler) GetPlaybooksForDetection(w http.ResponseWriter, r *htt
 		}).Error("retrieved detection with unsupported engine")
 	}
 
-	pbs, err := h.server.Playbookstore.GetPlaybooksForDetection(ctx, det.PublicID, det.Category, det.Engine)
+	pbs, err := h.server.Playbookstore.GetPlaybooksForDetection(ctx, det)
 	if err != nil {
 		logger.WithError(err).Error("unable to get playbooks for detection")
 		web.Respond(w, r, http.StatusInternalServerError, err)

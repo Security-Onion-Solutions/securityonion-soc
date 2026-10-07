@@ -2297,6 +2297,7 @@ test('loadPlaybook answers questions progressively', async () => {
         { id: 'q1', question: 'Agg?', query: 'aggregation: true\nquery: test', range: '-1h' },
         { id: 'q2', question: 'NonAgg?', query: 'aggregation: false\nquery: test', range: '-1h' },
         { id: 'q3', question: 'Self?', query: 'aggregation: false\nquery: test', range: null },
+        { id: 'q4', question: 'Summary?', query: 'aggregation: false\nquery: test', range: null },
       ],
     },
   ];
@@ -2308,6 +2309,7 @@ test('loadPlaybook answers questions progressively', async () => {
         { id: 'q1', oqlQuery: 'agg-oql', fields: ['source.ip'], isAggregate: true },
         { id: 'q2', oqlQuery: 'nonagg-oql', fields: ['field2'], isAggregate: false },
         { id: 'q3', oqlQuery: 'self-oql', fields: [], isAggregate: false },
+        { id: 'q4', oqlQuery: 'summary-oql', fields: ['rule.summary'], isAggregate: false },
       ],
     },
   ];
@@ -2326,7 +2328,7 @@ test('loadPlaybook answers questions progressively', async () => {
   expect(papiMock).toHaveBeenCalledWith('playbook/event/789?stage=convert&ts=2023-10-01T12%3A00%3A00Z', expect.anything());
 
   // questions remain in playbook order
-  expect(event.questions).toHaveLength(3);
+  expect(event.questions).toHaveLength(4);
   expect(event.questions[0].id).toBe('q1');
   expect(event.questions[1].id).toBe('q2');
   expect(event.questions[2].id).toBe('q3');
@@ -2344,7 +2346,9 @@ test('loadPlaybook answers questions progressively', async () => {
   expect(event.questions[1].queryResults).toStrictEqual([]);
   expect(event.questions[1].status).toBe('done');
 
-  // rangeless question: answered by the alert itself
+  // rangeless question: answered by the alert itself, no @timestamp prepended
+  expect(event.questions[2].fields).toStrictEqual(['soc_timestamp']);
+  expect(event.questions[3].fields).toStrictEqual(['rule.summary']);
   expect(event.questions[2].queryResults).toHaveLength(1);
   expect(event.questions[2].queryResults[0].payload).toMatchObject({ 'soc_id': '789' });
   expect(event.questions[2].queryResults[0].payload.questions).toBe(undefined); // no self-reference
@@ -2366,7 +2370,7 @@ test('loadPlaybook answers questions progressively', async () => {
   });
 
   // question 1 always expanded; questions with data expand as results arrive
-  expect(comp.expandedPlaybookQuestions[0]).toEqual([0, 2]);
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0, 2, 3]);
 
   expect(comp.$root.batchLookup).toHaveBeenCalledWith(['1.2.3.4'], comp);
 

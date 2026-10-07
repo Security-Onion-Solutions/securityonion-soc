@@ -204,7 +204,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 				}
 
 				mockPlaybookStore.EXPECT().
-					GetPlaybooksForDetection(gomock.Any(), "test-detection-id", "test-category", model.EngineNameElastAlert).
+					GetPlaybooksForDetection(gomock.Any(), testDetection).
 					Return(testPlaybooks, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -241,7 +241,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 					Return(testDetection, nil)
 
 				mockPlaybookStore.EXPECT().
-					GetPlaybooksForDetection(gomock.Any(), "test-detection-id", "test-category", model.EngineNameElastAlert).
+					GetPlaybooksForDetection(gomock.Any(), testDetection).
 					Return([]*model.Playbook{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -281,7 +281,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 				}
 
 				mockPlaybookStore.EXPECT().
-					GetPlaybooksForDetection(gomock.Any(), "test-detection-id", "test-category", model.EngineNameElastAlert).
+					GetPlaybooksForDetection(gomock.Any(), testDetection).
 					Return(testPlaybooks, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -327,7 +327,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 				}
 
 				mockPlaybookStore.EXPECT().
-					GetPlaybooksForDetection(gomock.Any(), "test-detection-id", "test-category", model.EngineNameElastAlert).
+					GetPlaybooksForDetection(gomock.Any(), testDetection).
 					Return(testPlaybooks, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -417,7 +417,7 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 					Return(testDetection, nil)
 
 				mockPlaybookStore.EXPECT().
-					GetPlaybooksForDetection(gomock.Any(), "test-detection-id", "test-category", model.EngineNameElastAlert).
+					GetPlaybooksForDetection(gomock.Any(), testDetection).
 					Return(nil, errors.New("playbook retrieval error"))
 			},
 			expectedStatus: http.StatusInternalServerError,

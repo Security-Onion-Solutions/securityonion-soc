@@ -1448,6 +1448,124 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameSuricata, eng)
 
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Disable Rule That No Longer Validates",
+			ReqBody: []byte(`{"id":"12345","publicId":"publicID","language":"sigma","engine":"elastalert","content":"test"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				// e.g. a correlation saved before ES|QL was turned off
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", model.NewRuleError(errors.New("ERROR_CORRELATION_REQUIRES_ESQL"), errors.New("correlation rules require ES|QL")))
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "publicID").Return(nil, nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{
+					Auditable: model.Auditable{
+						CreateTime: &specificTime,
+					},
+					Ruleset:   "__custom__",
+					Content:   "test",
+					IsEnabled: true,
+				}, nil)
+
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					det.UpdateTime = &specificTime
+
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
+					assert.False(t, dets[0].IsEnabled)
+
+					return nil, nil
+				})
+
+				eng.EXPECT().MergeAuxiliaryData(gomock.Any()).Return(nil)
+			},
+			Code: 200,
+			Response: &model.Detection{
+				Auditable: model.Auditable{
+					Id:         "12345",
+					CreateTime: &specificTime,
+					UpdateTime: &specificTime,
+				},
+				PublicID: "publicID",
+				Content:  "test",
+				Language: "sigma",
+				Ruleset:  "__custom__",
+				Engine:   model.EngineNameElastAlert,
+			},
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LogLevelEq(log.InfoLevel), LogMessageEq("disabling a detection whose stored content no longer validates")),
+				handled,
+			},
+		},
+		{
+			Name:    "Disable With Changed Content That Does Not Validate",
+			ReqBody: []byte(`{"id":"12345","engine":"elastalert","content":"test"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{Content: "before"}, nil)
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Disable Rule That Does Not Parse",
+			ReqBody: []byte(`{"id":"12345","engine":"elastalert","content":"test"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				// the validation code is returned, not the parse error
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", model.NewRuleError(errors.New("ERROR_RULE_INVALID__CORRELATION"), errors.New("invalid correlation")))
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("unparseable"))
+			},
+			Code:     400,
+			Response: []byte(`ERROR_RULE_INVALID__CORRELATION`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			// no store lookup
+			Name:    "Enable Rule That Does Not Validate",
+			ReqBody: []byte(`{"id":"12345","engine":"elastalert","content":"test","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
@@ -3418,6 +3536,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("converted query", nil)
 			},
 			Code: 200,
@@ -3458,6 +3577,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Language: model.SigLangSigma}).Return("converted query", nil)
 			},
 			Code: 200,
@@ -3469,12 +3589,46 @@ func TestHandlerConvertContent(t *testing.T) {
 			},
 		},
 		{
+			Name:    "Invalid Rule",
+			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ValidateRule("sigma goes here").Return("", errors.New("missing required fields: id"))
+			},
+			Code:     400,
+			Response: []byte(`The request could not be processed.`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "Invalid Rule With Code",
+			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
+
+				eng.EXPECT().ValidateRule("sigma goes here").Return("", fmt.Errorf("unable to convert sigma to elastalert: %w",
+					model.NewRuleError(errors.New("ERROR_CORRELATION_REQUIRES_ESQL"), errors.New("correlation rules require ES|QL"))))
+			},
+			Code:     400,
+			Response: []byte(`ERROR_CORRELATION_REQUIRES_ESQL`),
+			Logs: []EntryMatcher{
+				didNotComplete,
+				handled,
+			},
+		},
+		{
 			Name:    "Unknown Error",
 			ReqBody: []byte(`{"engine": "elastalert", "content": "sigma goes here"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
+				eng.EXPECT().ValidateRule("sigma goes here").Return("sigma goes here", nil)
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("", errors.New("something went wrong"))
 			},
 			Code:     500,

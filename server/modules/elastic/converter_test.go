@@ -594,6 +594,52 @@ func TestConvertElasticEventToComment(t *testing.T) {
 	assert.Equal(t, &myCreateTime, obj.CreateTime)
 }
 
+func TestConvertElasticEventToDetectionRuleFields(t *testing.T) {
+	event := &model.EventRecord{
+		Payload: map[string]interface{}{
+			"so_kind":                          "detection",
+			"so_detection.category":            "process_creation",
+			"so_detection.product":             "windows",
+			"so_detection.service":             "sysmon",
+			"so_detection.ruleType":            "correlation",
+			"so_detection.correlationType":     "value_count",
+			"so_detection.correlationTimespan": "10m",
+		},
+	}
+
+	obj, err := convertElasticEventToDetection(event, "so_")
+	assert.NoError(t, err)
+	assert.Equal(t, "process_creation", obj.Category)
+	assert.Equal(t, "windows", obj.Product)
+	assert.Equal(t, "sysmon", obj.Service)
+	assert.Equal(t, model.RuleTypeCorrelation, obj.RuleType)
+	assert.Equal(t, "value_count", obj.CorrelationType)
+	assert.Equal(t, "10m", obj.CorrelationTimespan)
+}
+
+func TestConvertElasticEventToDetectionRuleFieldsNotStrings(t *testing.T) {
+	// written by something other than SOC; skipped rather than panicking
+	event := &model.EventRecord{
+		Payload: map[string]interface{}{
+			"so_kind":                          "detection",
+			"so_detection.category":            nil,
+			"so_detection.product":             []interface{}{"windows"},
+			"so_detection.ruleType":            nil,
+			"so_detection.correlationType":     42.0,
+			"so_detection.correlationTimespan": true,
+		},
+	}
+
+	obj, err := convertElasticEventToDetection(event, "so_")
+	assert.NoError(t, err)
+	assert.Empty(t, obj.Category)
+	assert.Empty(t, obj.Product)
+	assert.Empty(t, obj.Service)
+	assert.Empty(t, obj.RuleType)
+	assert.Empty(t, obj.CorrelationType)
+	assert.Empty(t, obj.CorrelationTimespan)
+}
+
 func TestConvertElasticEventToRelatedEvent(t *testing.T) {
 	myTime := time.Now()
 	myCreateTime := myTime.Add(time.Hour * -1)

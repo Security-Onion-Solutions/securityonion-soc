@@ -33,6 +33,10 @@ const MAX_OVERRIDE_NOTE_LENGTH = 150;
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
+// FAILSAFE loads an empty document as '' rather than null
+globalThis.parseMultiDocYaml = (content) =>
+  jsyaml.loadAll(content, { schema: jsyaml.FAILSAFE_SCHEMA }).filter((doc) => doc !== null && doc !== '');
+
 function moveAriaToPrismTextarea(wrapperEl) {
   const textarea = wrapperEl.querySelector('.prism-editor__textarea');
   if (!textarea) return;

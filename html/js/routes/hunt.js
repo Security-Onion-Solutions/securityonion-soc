@@ -2916,6 +2916,9 @@ const huntComponent = {
 
             if (q.isAggregate) {
               q.fields = [this.i18n.count, ...q.queryFields];
+            } else if (!q.range) {
+              // the alert row's @timestamp is when the alert was written
+              q.fields = q.queryFields.length ? q.queryFields : ['soc_timestamp'];
             } else {
               q.fields = ['@timestamp', ...q.queryFields];
             }

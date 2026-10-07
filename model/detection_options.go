@@ -26,3 +26,9 @@ func WithCommunity(isCommunity bool) GetAllOption {
 		return fmt.Sprintf(`%s AND %sdetection.isCommunity:"%t"`, query, schemaPrefix, isCommunity)
 	}
 }
+
+func WithoutRuleType() GetAllOption {
+	return func(query string, schemaPrefix string) string {
+		return fmt.Sprintf(`%s AND NOT _exists_:%sdetection.ruleType`, query, schemaPrefix)
+	}
+}
