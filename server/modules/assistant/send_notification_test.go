@@ -8,6 +8,8 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
@@ -293,7 +295,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 		{SessionId: "root", Type: alertTriageKindName, EntityId: "abc-123"},
 		{SessionId: "child", ParentSessionId: "root"},
 	}
-	alertLink := map[string]string{alertLinkLabel: "/#/alerts?q=_id%3A%22abc-123%22"}
+	alertLink := map[string]string{alertLinkLabel: triageAlertLink("abc-123")}
 
 	testCases := []struct {
 		name          string
@@ -442,6 +444,36 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			} else {
 				assert.NotContains(t, result.Result, "now shared")
 			}
+		})
+	}
+}
+
+func TestTriageAlertLink(t *testing.T) {
+	testCases := []struct {
+		name    string
+		alertId string
+	}{
+		{name: "plain id", alertId: "WKhCuTw4GPvrQA-9ksmn"},
+		{name: "id needing escapes", alertId: "a&b=c d#e"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			link := triageAlertLink(tc.alertId)
+
+			path, rawQuery, found := strings.Cut(link, "?")
+			assert.True(t, found)
+			assert.Equal(t, "/#/alerts", path)
+
+			query, err := url.ParseQuery(rawQuery)
+			assert.NoError(t, err)
+			assert.Equal(t, url.Values{
+				"q":      {`_id:"` + tc.alertId + `"`},
+				"tab":    {"investigation"},
+				"expand": {tc.alertId},
+				"rt":     {"30"},
+				"rtu":    {"days"},
+			}, query)
 		})
 	}
 }

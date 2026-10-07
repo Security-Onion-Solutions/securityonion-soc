@@ -30,6 +30,11 @@ import (
 const chatLinkLabel = "💬"
 const alertLinkLabel = "🔔"
 
+// The Alerts page measures a relative range from when the link is opened, not when it was
+// sent, so the window is wide enough to keep a notification useful for weeks.
+const alertLinkRelativeTime = 30
+const alertLinkRelativeTimeUnit = "days"
+
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
 
@@ -209,7 +214,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 
 	if rootSession != nil && rootSession.Type == alertTriageKindName && rootSession.EntityId != "" {
 		dropLinksTo(payload, rootSession.EntityId)
-		setLink(payload, alertLinkLabel, "/#/alerts?q="+url.QueryEscape(`_id:"`+rootSession.EntityId+`"`))
+		setLink(payload, alertLinkLabel, triageAlertLink(rootSession.EntityId))
 	} else if rootSessionId != "" && args.ShareChat {
 		setLink(payload, chatLinkLabel, "/#/assistant/"+rootSessionId)
 	}
@@ -224,6 +229,18 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	result.Result = fmt.Sprintf("Notification %q was submitted with severity %q (id %s).%s%s", title, severity, payload.ID, severityNote, sharedNote)
 
 	return result, nil
+}
+
+// triageAlertLink opens the alert on its AI investigation tab.
+func triageAlertLink(alertId string) string {
+	query := url.Values{}
+	query.Set("q", `_id:"`+alertId+`"`)
+	query.Set("tab", "investigation")
+	query.Set("expand", alertId)
+	query.Set("rt", strconv.Itoa(alertLinkRelativeTime))
+	query.Set("rtu", alertLinkRelativeTimeUnit)
+
+	return "/#/alerts?" + query.Encode()
 }
 
 func setLink(payload *model.NotificationPayload, label, link string) {
