@@ -379,7 +379,7 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 	ac.SkillLibrary = map[string]model.Skill{
 		"Hunt": {
 			Name:             "Hunt",
-			Tools:            []string{"query_events", "get_playbooks"},
+			Tools:            []string{"query_events", "get_playbooks", "request_pcap", "get_pcap"},
 			AdditionalPrompt: prompts["prompt_skill_hunt"],
 		},
 		"Playbooks": {

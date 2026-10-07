@@ -93,6 +93,7 @@ type FakeDatastore struct {
 	packets           []*model.Packet
 	HasErrors         bool
 	GetPacketsErr     error
+	GetPacketsResult  []*model.Packet
 	LastJobId         int
 	LastOffset        int
 	LastCount         int
@@ -107,10 +108,12 @@ type FakeDatastore struct {
 	GetJobResult      *model.Job
 	CreateJobResult   *model.Job
 	AddJobErr         error
+	AddPivotJobErr    error
 	UpdateJobErr      error
 	DeleteJobErr      error
 	LastUpdatedJob    *model.Job
 	LastAddedJob      *model.Job
+	LastPivotJob      *model.Job
 	LastDeletedJobId  int
 }
 
@@ -184,7 +187,8 @@ func (impl *FakeDatastore) AddJob(ctx context.Context, job *model.Job) error {
 }
 
 func (impl *FakeDatastore) AddPivotJob(ctx context.Context, job *model.Job) error {
-	return nil
+	impl.LastPivotJob = job
+	return impl.AddPivotJobErr
 }
 
 func (impl *FakeDatastore) UpdateJob(ctx context.Context, job *model.Job) error {
@@ -209,6 +213,9 @@ func (impl *FakeDatastore) GetPackets(ctx context.Context, jobId int, offset int
 	impl.LastCount = count
 	impl.LastUnwrap = unwrap
 	impl.LastExcludeErrors = excludeErrors
+	if impl.GetPacketsResult != nil {
+		return impl.GetPacketsResult, impl.HasErrors, impl.GetPacketsErr
+	}
 	return impl.packets, impl.HasErrors, impl.GetPacketsErr
 }
 

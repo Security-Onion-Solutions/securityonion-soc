@@ -289,6 +289,7 @@ globalThis.AssistantUtils = (function() {
             'query_cases',
             'query_detections',
             'query_reports',
+            'get_pcap',
           ].includes(toolName) ||
           /^delegate_to_.+$/.test(toolName)
         )

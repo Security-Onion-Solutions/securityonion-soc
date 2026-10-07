@@ -53,6 +53,8 @@ type FieldDefinition struct {
 	searchable   bool
 }
 
+var _ server.JobPopulator = (*ElasticEventstore)(nil)
+
 type ElasticEventstore struct {
 	server             *server.Server
 	hostUrls           []string

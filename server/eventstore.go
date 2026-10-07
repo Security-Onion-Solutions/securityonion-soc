@@ -68,6 +68,10 @@ type Eventstore interface {
 	GetEventsHealth(ctx context.Context) (*model.EventsHealth, error)
 }
 
+type JobPopulator interface {
+	PopulateJobFromDocQuery(ctx context.Context, idField string, idValue string, timestampStr string, job *model.Job) error
+}
+
 type EventstoreUpdater interface {
 	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }

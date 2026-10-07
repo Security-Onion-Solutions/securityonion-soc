@@ -5683,6 +5683,13 @@ test('shouldAutoApproveTool returns true for query_reports when setting enabled'
   expect(result).toBe(true);
 });
 
+test('shouldAutoApproveTool returns true for get_pcap but not request_pcap when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+
+  expect(comp.shouldAutoApproveTool('get_pcap')).toBe(true);
+  expect(comp.shouldAutoApproveTool('request_pcap')).toBe(false);
+});
+
 test('shouldAutoApproveTool returns false for other tools when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   
