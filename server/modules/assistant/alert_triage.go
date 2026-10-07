@@ -558,9 +558,17 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 		return r.fail(ctx, item, payload, sessionId, err)
 	}
 
+	assessment, recognized := parseAlertTriageAssessment(result.FinalText)
+	if !recognized {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"workItemId":           item.Id,
+			"alertTriageSessionId": sessionId,
+		}).Warn("alert triage report has no recognisable assessment; recording it as needing review")
+	}
+
 	return r.record(ctx, item, payload, alertTriageResult{
 		SessionId:  sessionId,
-		Assessment: parseAlertTriageAssessment(result.FinalText),
+		Assessment: assessment,
 	})
 }
 
@@ -928,8 +936,8 @@ var alertTriageAssessments = map[string]string{
 
 // parseAlertTriageAssessment reads the ASSESSMENT field of the report's status line, e.g.
 // "STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | DETAIL: FALSE POSITIVE | ...". A report without
-// a recognisable one still records, as needing review.
-func parseAlertTriageAssessment(report string) string {
+// a recognisable one still records, as needing review, and reports that it was not recognised.
+func parseAlertTriageAssessment(report string) (string, bool) {
 	for _, line := range strings.Split(report, "\n") {
 		line = strings.ToUpper(strings.Trim(strings.TrimSpace(line), "*_`#> "))
 		if !strings.HasPrefix(line, "STATUS:") {
@@ -945,12 +953,12 @@ func parseAlertTriageAssessment(report string) string {
 
 			value = strings.Join(strings.Fields(strings.NewReplacer("_", " ", "*", " ", "`", " ").Replace(value)), " ")
 			if assessment, ok := alertTriageAssessments[value]; ok {
-				return assessment
+				return assessment, true
 			}
 		}
 
 		break
 	}
 
-	return model.AlertTriageAssessmentNeedsReview
+	return model.AlertTriageAssessmentNeedsReview, false
 }

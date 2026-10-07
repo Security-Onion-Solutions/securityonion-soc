@@ -157,7 +157,7 @@ func TestAlertTriageUpdateValidate(t *testing.T) {
 		{"failed with an empty run id", func(u *AlertTriageUpdate) { u.Failed = true; u.FailedRunIds = []string{"run-0", ""} }},
 		{"missing assessment", func(u *AlertTriageUpdate) { u.Assessment = "" }},
 		{"unknown assessment", func(u *AlertTriageUpdate) { u.Assessment = "suspicious" }},
-		{"failed with a assessment", func(u *AlertTriageUpdate) { u.Failed = true; u.FailedRunIds = []string{"run-0"} }},
+		{"failed with an assessment", func(u *AlertTriageUpdate) { u.Failed = true; u.FailedRunIds = []string{"run-0"} }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

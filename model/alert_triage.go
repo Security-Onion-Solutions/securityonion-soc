@@ -92,7 +92,7 @@ func (update *AlertTriageUpdate) Validate() error {
 	case !update.Failed && !IsValidAlertTriageAssessment(update.Assessment):
 		return fmt.Errorf("alert triage update has an invalid assessment %q", update.Assessment)
 	case update.Failed && update.Assessment != "":
-		return errors.New("failed alert triage update must not carry a assessment")
+		return errors.New("failed alert triage update must not carry an assessment")
 	case update.Failed && (len(update.FailedRunIds) == 0 || slices.Contains(update.FailedRunIds, "")):
 		return errors.New("failed alert triage update requires its failed run ids")
 	case update.Floor.IsZero():

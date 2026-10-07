@@ -1413,33 +1413,36 @@ func TestParseAlertTriageAssessment(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		report string
-		want   string
+		name       string
+		report     string
+		want       string
+		recognized bool
 	}{
-		{"likely malicious", status("LIKELY MALICIOUS"), model.AlertTriageAssessmentLikelyMalicious},
-		{"needs review", status("NEEDS REVIEW"), model.AlertTriageAssessmentNeedsReview},
-		{"likely benign", status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign},
-		{"lower case", status("likely benign"), model.AlertTriageAssessmentLikelyBenign},
-		{"underscored", status("LIKELY_BENIGN"), model.AlertTriageAssessmentLikelyBenign},
-		{"extra spacing", "STATUS:COMPLETE|ASSESSMENT:  LIKELY   MALICIOUS  |CONFIDENCE: 60", model.AlertTriageAssessmentLikelyMalicious},
-		{"in a code fence", "```\nSTATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | CONFIDENCE: 90\n```", model.AlertTriageAssessmentLikelyMalicious},
-		{"markdown bold", "**STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | CONFIDENCE: 90**", model.AlertTriageAssessmentLikelyBenign},
-		{"preceded by text", "NEEDS ANALYST INPUT: which host is the scanner\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign},
-		{"revised", "STATUS: REVISED | ASSESSMENT: LIKELY MALICIOUS | DETAIL: —", model.AlertTriageAssessmentLikelyMalicious},
-		{"older verdict field, malicious", "STATUS: COMPLETE | VERDICT: MALICIOUS | CONFIDENCE: 80", model.AlertTriageAssessmentLikelyMalicious},
-		{"older verdict field, needs human", "STATUS: COMPLETE | VERDICT: NEEDS HUMAN | CONFIDENCE: 60", model.AlertTriageAssessmentNeedsReview},
-		{"older verdict field, benign", "STATUS: COMPLETE | VERDICT: BENIGN | CONFIDENCE: 90", model.AlertTriageAssessmentLikelyBenign},
-		{"unknown value", status("SUSPICIOUS"), model.AlertTriageAssessmentNeedsReview},
-		{"unfilled template", status("{LIKELY BENIGN|NEEDS REVIEW|LIKELY MALICIOUS}"), model.AlertTriageAssessmentNeedsReview},
-		{"unable to complete", "STATUS: UNABLE TO COMPLETE | REASON: alert not found", model.AlertTriageAssessmentNeedsReview},
-		{"later status lines are ignored", "STATUS: COMPLETE | ASSESSMENT: SUSPICIOUS\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentNeedsReview},
-		{"no status line", "A report with no status line.\nASSESSMENT: LIKELY BENIGN", model.AlertTriageAssessmentNeedsReview},
-		{"empty", "", model.AlertTriageAssessmentNeedsReview},
+		{"likely malicious", status("LIKELY MALICIOUS"), model.AlertTriageAssessmentLikelyMalicious, true},
+		{"needs review", status("NEEDS REVIEW"), model.AlertTriageAssessmentNeedsReview, true},
+		{"likely benign", status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"lower case", status("likely benign"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"underscored", status("LIKELY_BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"extra spacing", "STATUS:COMPLETE|ASSESSMENT:  LIKELY   MALICIOUS  |CONFIDENCE: 60", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"in a code fence", "```\nSTATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | CONFIDENCE: 90\n```", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"markdown bold", "**STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | CONFIDENCE: 90**", model.AlertTriageAssessmentLikelyBenign, true},
+		{"preceded by text", "NEEDS ANALYST INPUT: which host is the scanner\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"revised", "STATUS: REVISED | ASSESSMENT: LIKELY MALICIOUS | DETAIL: —", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"older verdict field, malicious", "STATUS: COMPLETE | VERDICT: MALICIOUS | CONFIDENCE: 80", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"older verdict field, needs human", "STATUS: COMPLETE | VERDICT: NEEDS HUMAN | CONFIDENCE: 60", model.AlertTriageAssessmentNeedsReview, true},
+		{"older verdict field, benign", "STATUS: COMPLETE | VERDICT: BENIGN | CONFIDENCE: 90", model.AlertTriageAssessmentLikelyBenign, true},
+		{"unknown value", status("SUSPICIOUS"), model.AlertTriageAssessmentNeedsReview, false},
+		{"unfilled template", status("{LIKELY BENIGN|NEEDS REVIEW|LIKELY MALICIOUS}"), model.AlertTriageAssessmentNeedsReview, false},
+		{"unable to complete", "STATUS: UNABLE TO COMPLETE | REASON: alert not found", model.AlertTriageAssessmentNeedsReview, false},
+		{"later status lines are ignored", "STATUS: COMPLETE | ASSESSMENT: SUSPICIOUS\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentNeedsReview, false},
+		{"no status line", "A report with no status line.\nASSESSMENT: LIKELY BENIGN", model.AlertTriageAssessmentNeedsReview, false},
+		{"empty", "", model.AlertTriageAssessmentNeedsReview, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, parseAlertTriageAssessment(tt.report))
+			assessment, recognized := parseAlertTriageAssessment(tt.report)
+			assert.Equal(t, tt.want, assessment)
+			assert.Equal(t, tt.recognized, recognized)
 		})
 	}
 }
