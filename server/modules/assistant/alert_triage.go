@@ -68,7 +68,8 @@ type alertTriagePayload struct {
 
 // alertTriageResult is what a work item carries from its session to its update.
 type alertTriageResult struct {
-	SessionId string `json:"sessionId"`
+	SessionId  string `json:"sessionId"`
+	Assessment string `json:"assessment,omitempty"`
 }
 
 func (k *AlertTriageKind) GetName() string        { return alertTriageKindName }
@@ -528,7 +529,7 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 	fields, _ := r.run.Srv.AssistantManager.FilterEvents([]*model.EventRecord{alert})[0]["payload"].(map[string]any)
 
 	result, err := r.run.RunAgentSession(ctx, item.Id, &model.AgentSessionRequest{
-		Objective: alertTriageObjective(fields, payload.Count, payload.GroupFilter),
+		Objective: alertTriageObjective(fields, alert.Id, payload.Count, payload.GroupFilter, r.run.RunId),
 		Agent:     r.run.Task.Agent,
 	})
 
@@ -555,7 +556,10 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 		return r.fail(ctx, item, payload, sessionId, err)
 	}
 
-	return r.record(ctx, item, payload, sessionId)
+	return r.record(ctx, item, payload, alertTriageResult{
+		SessionId:  sessionId,
+		Assessment: parseAlertTriageAssessment(result.FinalText),
+	})
 }
 
 func decodeAlertTriagePayload(item *model.AutomationWorkItem) (*alertTriagePayload, error) {
@@ -638,8 +642,8 @@ func (r *alertTriageRun) repin(ctx context.Context, item *model.AutomationWorkIt
 }
 
 // record checkpoints the session on the item, then updates its alerts from the checkpoint.
-func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
-	result, err := json.Marshal(alertTriageResult{SessionId: sessionId})
+func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, outcome alertTriageResult) error {
+	result, err := json.Marshal(outcome)
 	if err != nil {
 		return err
 	}
@@ -660,7 +664,7 @@ func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkI
 	item.State = model.AutomationWorkItemApplying
 	item.Result = result
 
-	return r.finish(ctx, item, payload, sessionId)
+	return r.finish(ctx, item, payload, &outcome)
 }
 
 // apply replays the checkpoint a previous run left on an item.
@@ -672,7 +676,7 @@ func (r *alertTriageRun) apply(ctx context.Context, item *model.AutomationWorkIt
 		return r.drop(ctx, item, err)
 	}
 
-	return r.finish(ctx, item, payload, result.SessionId)
+	return r.finish(ctx, item, payload, result)
 }
 
 // drop ends an item with nothing to record on its alerts; the next scan re-derives its group.
@@ -694,7 +698,7 @@ func (r *alertTriageRun) drop(ctx context.Context, item *model.AutomationWorkIte
 
 // finish records a checkpointed session on the group's alerts and completes the item. The update
 // is idempotent, so a replay is safe.
-func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
+func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, outcome *alertTriageResult) error {
 	if shuttingDown(ctx) {
 		return context.Cause(ctx)
 	}
@@ -708,12 +712,13 @@ func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkI
 	}
 
 	_, err := r.updater.AlertTriageUpdate(writeCtx, &model.AlertTriageUpdate{
-		Query:     payload.GroupFilter,
-		Floor:     payload.Floor,
-		Ceiling:   payload.Ceiling,
-		Count:     payload.Count,
-		RunId:     runId,
-		SessionId: sessionId,
+		Query:      payload.GroupFilter,
+		Floor:      payload.Floor,
+		Ceiling:    payload.Ceiling,
+		Count:      payload.Count,
+		RunId:      runId,
+		SessionId:  outcome.SessionId,
+		Assessment: outcome.Assessment,
 	})
 	if err != nil {
 		failed := item
@@ -764,6 +769,11 @@ func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePa
 
 	if result.SessionId == "" {
 		return nil, nil, errors.New("alert triage item has no session to record")
+	}
+
+	// Checkpoints written before assessments existed still carry a report worth recording.
+	if !model.IsValidAlertTriageAssessment(result.Assessment) {
+		result.Assessment = model.AlertTriageAssessmentNeedsReview
 	}
 
 	return payload, result, nil
@@ -884,19 +894,61 @@ func (r *alertTriageRun) updateFailedAlerts(ctx context.Context, payload *alertT
 	return err
 }
 
-// alertTriageObjective opens the session: one alert standing for its group, and a request for a
-// report a person will read.
-func alertTriageObjective(alert map[string]any, count int, groupFilter string) string {
+// alertTriageObjective opens the session: one alert standing for its group. The agent's prompt
+// sets the investigation and the report it ends with.
+func alertTriageObjective(alert map[string]any, alertId string, count int, groupFilter string, runId string) string {
 	fields, err := json.MarshalIndent(alert, "", "  ")
 	if err != nil {
 		fields = []byte(fmt.Sprintf("%v", alert))
 	}
 
-	return fmt.Sprintf(`Investigate the alert below. It is the most recent of %d unprocessed alerts matching:
+	return fmt.Sprintf(`Triage the alert below. It is the most recent of %d unprocessed alerts matching:
 %s
 
-Write a report for the analyst who will read it: what you found, what you checked, and what you could not determine.
+SOC ID: %s
+Run ID: %s
 
 Alert:
-%s`, count, groupFilter, fields)
+%s`, count, groupFilter, alertId, runId, fields)
+}
+
+// alertTriageAssessments maps the values a triage report's status line may carry to the
+// assessment recorded on the alerts. The VERDICT forms are what the prompt asked for before it
+// named the field ASSESSMENT.
+var alertTriageAssessments = map[string]string{
+	"LIKELY MALICIOUS": model.AlertTriageAssessmentLikelyMalicious,
+	"NEEDS REVIEW":     model.AlertTriageAssessmentNeedsReview,
+	"LIKELY BENIGN":    model.AlertTriageAssessmentLikelyBenign,
+	"MALICIOUS":        model.AlertTriageAssessmentLikelyMalicious,
+	"NEEDS HUMAN":      model.AlertTriageAssessmentNeedsReview,
+	"BENIGN":           model.AlertTriageAssessmentLikelyBenign,
+}
+
+// parseAlertTriageAssessment reads the ASSESSMENT field of the report's status line, e.g.
+// "STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | DETAIL: FALSE POSITIVE | ...". A report without
+// a recognisable one still records, as needing review.
+func parseAlertTriageAssessment(report string) string {
+	for _, line := range strings.Split(report, "\n") {
+		line = strings.ToUpper(strings.Trim(strings.TrimSpace(line), "*_`#> "))
+		if !strings.HasPrefix(line, "STATUS:") {
+			continue
+		}
+
+		for _, field := range strings.Split(line, "|") {
+			name, value, found := strings.Cut(field, ":")
+			name = strings.TrimSpace(name)
+			if !found || (name != "ASSESSMENT" && name != "VERDICT") {
+				continue
+			}
+
+			value = strings.Join(strings.Fields(strings.NewReplacer("_", " ", "*", " ", "`", " ").Replace(value)), " ")
+			if assessment, ok := alertTriageAssessments[value]; ok {
+				return assessment
+			}
+		}
+
+		break
+	}
+
+	return model.AlertTriageAssessmentNeedsReview
 }

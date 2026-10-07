@@ -65,9 +65,12 @@ func (store *ElasticAssistantstore) addAlertTriageScript(updateCriteria *model.E
 			if (triage_changed) {
 				triage_rec.failed_count = triage_rec.failed_run_ids.size();`
 	} else {
+		updateCriteria.Params["triageAssessment"] = update.Assessment
+
 		script += `
 			if (triage_rec.session_id == null) {
-				triage_rec.session_id = params.triageSessionId;`
+				triage_rec.session_id = params.triageSessionId;
+				triage_rec.assessment = params.triageAssessment;`
 	}
 
 	script += `
@@ -106,6 +109,7 @@ func (store *ElasticAssistantstore) AlertTriageUpdate(ctx context.Context, updat
 	log.FromContext(ctx).WithFields(log.Fields{
 		"automationRunId":       update.RunId,
 		"sessionId":             update.SessionId,
+		"assessment":            update.Assessment,
 		"failedUpdateCount":     update.Failed,
 		"successfulUpdateCount": update.Count,
 		"isAsync":               criteria.Asynchronous,
