@@ -1017,3 +1017,18 @@ test('table settings persist to local storage', () => {
   expect(comp.sortBy[0]).toEqual({ key: 'automationName', order: 'desc' });
   expect(comp.itemsPerPage).toBe(50);
 });
+
+test('hiding empty runs persists, including when turned off', () => {
+  comp.hideEmptyRuns = false;
+  comp.saveLocalSettings();
+
+  comp.hideEmptyRuns = true;
+  comp.loadLocalSettings();
+  expect(comp.hideEmptyRuns).toBe(false);
+
+  comp.hideEmptyRuns = true;
+  comp.saveLocalSettings();
+  comp.hideEmptyRuns = false;
+  comp.loadLocalSettings();
+  expect(comp.hideEmptyRuns).toBe(true);
+});

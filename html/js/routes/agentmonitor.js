@@ -164,6 +164,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     'sortBy': 'saveLocalSettings',
     'itemsPerPage': 'saveLocalSettings',
     'historyItemsPerPage': 'saveLocalSettings',
+    'hideEmptyRuns': 'saveLocalSettings',
     // Changes pushed while disconnected were missed.
     '$root.connected'(connected) {
       if (connected && this.agentic && !this.paused) this.loadActivity(true);
@@ -250,6 +251,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       localStorage['settings.agentmonitor.sortDesc'] = this.sortBy[0].order;
       localStorage['settings.agentmonitor.itemsPerPage'] = this.itemsPerPage;
       localStorage['settings.agentmonitor.historyItemsPerPage'] = this.historyItemsPerPage;
+      localStorage['settings.agentmonitor.hideEmptyRuns'] = this.hideEmptyRuns;
       localStorage['settings.agentmonitor.collapsedSections'] = JSON.stringify(this.collapsedSections);
     },
     loadLocalSettings() {
@@ -257,6 +259,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       if (localStorage['settings.agentmonitor.sortDesc']) this.sortBy[0].order = localStorage['settings.agentmonitor.sortDesc'];
       if (localStorage['settings.agentmonitor.itemsPerPage']) this.itemsPerPage = parseInt(localStorage['settings.agentmonitor.itemsPerPage']);
       if (localStorage['settings.agentmonitor.historyItemsPerPage']) this.historyItemsPerPage = parseInt(localStorage['settings.agentmonitor.historyItemsPerPage']);
+      if (localStorage['settings.agentmonitor.hideEmptyRuns']) this.hideEmptyRuns = localStorage['settings.agentmonitor.hideEmptyRuns'] === 'true';
       if (localStorage['settings.agentmonitor.collapsedSections']) this.collapsedSections = JSON.parse(localStorage['settings.agentmonitor.collapsedSections']);
     },
     toggleShowSection(item) {
