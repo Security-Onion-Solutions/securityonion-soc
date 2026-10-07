@@ -42,7 +42,7 @@ func TestFormatPlainTextBody(t *testing.T) {
 		},
 	}
 
-	body := FormatPlainTextBody(payload, model.AttachmentModeBoth)
+	body := FormatPlainTextBody(payload)
 	assert.Contains(t, body, "[HIGH] [ET SCAN Potential SSH Scan]")
 	assert.Contains(t, body, "2026-08-17 12:00:00 UTC")
 	assert.Contains(t, body, "Inbound SSH scan detected from 192.168.1.100.")
@@ -73,7 +73,7 @@ func TestFormatHTMLBody(t *testing.T) {
 		},
 	}
 
-	htmlBody := FormatHTMLBody(payload, model.AttachmentModeBoth)
+	htmlBody := FormatHTMLBody(payload)
 	assert.Contains(t, htmlBody, "<!DOCTYPE html>")
 	assert.Contains(t, htmlBody, "header-badge")
 	assert.Contains(t, htmlBody, "CRITICAL")

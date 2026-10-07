@@ -421,3 +421,65 @@ func TestSMTPChannelSend_PrefixesRelativeLinksWithBaseUrl(t *testing.T) {
 	assert.NotContains(t, data, "href=3D\"/#/job/1001\"")
 }
 
+func TestSMTPChannelSend_DefaultPort587(t *testing.T) {
+	mockClient := &mockSMTPClient{}
+	var dialedPort int
+	ch := NewSMTPChannel(nil)
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		dialedPort = port
+		return mockClient, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title:    "Port Test",
+		Severity: "info",
+	}
+
+	params := map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "alerts@example.com",
+		"to":   "user@example.com",
+	}
+
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.Equal(t, 587, dialedPort)
+}
+
+func TestSMTPChannelSend_TimeoutConfig(t *testing.T) {
+	mockClient := &mockSMTPClient{}
+	var receivedDeadline time.Time
+	ch := NewSMTPChannel(nil)
+	ch.SetTimeout(5 * time.Second)
+	ch.dialer = func(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
+		if dl, ok := ctx.Deadline(); ok {
+			receivedDeadline = dl
+		}
+		return mockClient, nil
+	}
+
+	payload := &model.NotificationPayload{
+		Title:    "Timeout Test",
+		Severity: "info",
+	}
+
+	params := map[string]interface{}{
+		"host": "smtp.example.com",
+		"from": "alerts@example.com",
+		"to":   "user@example.com",
+	}
+
+	start := time.Now()
+	err := ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.False(t, receivedDeadline.IsZero())
+	assert.WithinDuration(t, start.Add(5*time.Second), receivedDeadline, 500*time.Millisecond)
+
+	// Override via params["timeoutSeconds"]
+	params["timeoutSeconds"] = 10
+	start = time.Now()
+	err = ch.Send(context.Background(), params, payload)
+	require.NoError(t, err)
+	assert.WithinDuration(t, start.Add(10*time.Second), receivedDeadline, 500*time.Millisecond)
+}
+

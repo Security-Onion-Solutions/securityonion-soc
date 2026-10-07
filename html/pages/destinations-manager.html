@@ -97,37 +97,16 @@
               <v-switch v-model="form.params.useTls" color="primary" inset :label="i18n.smtpUseTls" density="compact" data-aid="destination_form_smtp_use_tls"></v-switch>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_smtp_insecure_skip_verify"></v-switch>
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.insecureSkipVerify" density="compact" data-aid="destination_form_smtp_insecure_skip_verify"></v-switch>
             </v-col>
           </template>
 
-          <!-- Generic Webhook Parameters -->
-          <template v-if="form.type === 'generic_webhook'">
+          <template v-if="isWebhookType(form.type)">
             <v-col cols="12">
-              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_webhook_url"></v-text-field>
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" :data-aid="'destination_form_' + form.type + '_url'"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_webhook_insecure_skip_verify"></v-switch>
-            </v-col>
-          </template>
-
-          <!-- Slack Webhook Parameters -->
-          <template v-if="form.type === 'slack_webhook'">
-            <v-col cols="12">
-              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_slack_url"></v-text-field>
-            </v-col>
-            <v-col cols="12">
-              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_slack_insecure_skip_verify"></v-switch>
-            </v-col>
-          </template>
-
-          <!-- Matrix Hookshot Webhook Parameters -->
-          <template v-if="form.type === 'matrix_hookshot_webhook'">
-            <v-col cols="12">
-              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_matrix_url"></v-text-field>
-            </v-col>
-            <v-col cols="12">
-              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.smtpInsecureSkipVerify" density="compact" data-aid="destination_form_matrix_insecure_skip_verify"></v-switch>
+              <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.insecureSkipVerify" density="compact" :data-aid="'destination_form_' + form.type + '_insecure_skip_verify'"></v-switch>
             </v-col>
           </template>
           <v-col cols="12">

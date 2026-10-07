@@ -102,8 +102,8 @@ components.push({
       scheduleOptions() {
         return (this.schedules || []).map((s) => {
           const statusSuffix = s.enabled !== false
-            ? ` (${this.i18n?.enabled})`
-            : ` (${this.i18n?.disabled})`;
+            ? ` (${this.i18n.enabled})`
+            : ` (${this.i18n.disabled})`;
           return {
             title: `${s.name}${statusSuffix}`,
             value: s.id,
@@ -227,6 +227,14 @@ components.push({
             return sev;
         }
       },
+      supportsRecipients(type) {
+        const t = type || this.form?.type;
+        return t === 'soc' || t === 'smtp';
+      },
+      isWebhookType(type) {
+        const t = type || this.form?.type;
+        return t === 'generic_webhook' || t === 'slack_webhook' || t === 'matrix_hookshot_webhook';
+      },
       showAddDestination() {
         this.getSchedules();
         this.loadUsers();
@@ -248,20 +256,16 @@ components.push({
         this.destinationDialog = true;
       },
       onChannelTypeChange(newType) {
-        if (newType === 'soc' || newType === 'smtp') {
-          this.form.recipientsSupported = true;
-          this.form.enableRecipients = true;
-        } else {
-          this.form.recipientsSupported = false;
-          this.form.enableRecipients = false;
-        }
+        const supportsRecipients = this.supportsRecipients(newType);
+        this.form.recipientsSupported = supportsRecipients;
+        this.form.enableRecipients = supportsRecipients;
       },
       showEditDestination(dest) {
         this.getSchedules();
         this.loadUsers();
         this.showPassword = false;
         const destType = dest?.type || 'soc';
-        const recipientsSupported = Boolean(dest?.recipientsSupported) && (destType === 'soc' || destType === 'smtp');
+        const recipientsSupported = Boolean(dest?.recipientsSupported) && this.supportsRecipients(destType);
         const enableRecipients = dest?.enableRecipients !== undefined
           ? Boolean(dest.enableRecipients)
           : recipientsSupported;
@@ -314,17 +318,7 @@ components.push({
             insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
             attachmentMode: this.form.params?.attachmentMode || 'both',
           };
-        } else if (this.form.type === 'slack_webhook') {
-          params = {
-            webhookUrl: this.form.params?.webhookUrl?.trim() || '',
-            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
-          };
-        } else if (this.form.type === 'matrix_hookshot_webhook') {
-          params = {
-            webhookUrl: this.form.params?.webhookUrl?.trim() || '',
-            insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
-          };
-        } else if (this.form.type === 'generic_webhook') {
+        } else if (this.isWebhookType(this.form.type)) {
           params = {
             webhookUrl: this.form.params?.webhookUrl?.trim() || '',
             insecureSkipVerify: Boolean(this.form.params?.insecureSkipVerify),
@@ -335,7 +329,7 @@ components.push({
           params = this.form.params || {};
         }
 
-        const isRecipientSupported = (this.form.type === 'soc' || this.form.type === 'smtp');
+        const isRecipientSupported = this.supportsRecipients(this.form.type);
         const payload = {
           id: this.form.id || undefined,
           name: this.form.name.trim(),

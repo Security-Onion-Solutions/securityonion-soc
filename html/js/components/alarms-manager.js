@@ -66,20 +66,12 @@ components.push({
       };
     },
     computed: {
-      isSuperuser() {
-        return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
-      },
-      notificationsLicensed() {
-        return this.$root?.isLicensed ? this.$root.isLicensed(this.$root.FEAT_NTF) : false;
-      },
       tableHeaders() {
         let headers = this.alarmHeaders;
-        const ntfLicensed = typeof this.notificationsLicensed === 'function' ? this.notificationsLicensed() : this.notificationsLicensed;
-        if (!ntfLicensed) {
+        if (!this.$root.isLicensed(this.$root.FEAT_NTF)) {
           headers = headers.filter(h => h.value !== 'destinations' && h.value !== 'clearedSeverity');
         }
-        const superuser = typeof this.isSuperuser === 'function' ? this.isSuperuser() : this.isSuperuser;
-        if (!superuser) {
+        if (!this.$root.isUserAdmin()) {
           headers = headers.filter(h => h.value !== 'actions');
         }
         return headers;
@@ -216,8 +208,7 @@ components.push({
             this.getStates(),
             this.getNodes(),
           ];
-          const ntfLicensed = typeof this.notificationsLicensed === 'function' ? this.notificationsLicensed() : this.notificationsLicensed;
-          if (ntfLicensed) {
+          if (this.$root.isLicensed(this.$root.FEAT_NTF)) {
             promises.push(this.getDestinations(), this.getUsers());
           }
           await Promise.all(promises);
@@ -335,24 +326,24 @@ components.push({
         const metricType = metricObj?.type || 'numeric';
         if (metricType === 'string') {
           return [
-            { title: this.i18n?.operatorEQ, value: 'eq' },
-            { title: this.i18n?.operatorNEQ, value: 'ne' },
-            { title: this.i18n?.operatorContains, value: 'contains' },
+            { title: this.i18n.operatorEQ, value: 'eq' },
+            { title: this.i18n.operatorNEQ, value: 'ne' },
+            { title: this.i18n.operatorContains, value: 'contains' },
           ];
         }
         if (metricType === 'bool') {
           return [
-            { title: this.i18n?.operatorEQ, value: 'eq' },
-            { title: this.i18n?.operatorNEQ, value: 'ne' },
+            { title: this.i18n.operatorEQ, value: 'eq' },
+            { title: this.i18n.operatorNEQ, value: 'ne' },
           ];
         }
         return [
-          { title: this.i18n?.operatorGT, value: 'gt' },
-          { title: this.i18n?.operatorGTE, value: 'gte' },
-          { title: this.i18n?.operatorLT, value: 'lt' },
-          { title: this.i18n?.operatorLTE, value: 'lte' },
-          { title: this.i18n?.operatorEQ, value: 'eq' },
-          { title: this.i18n?.operatorNEQ, value: 'ne' },
+          { title: this.i18n.operatorGT, value: 'gt' },
+          { title: this.i18n.operatorGTE, value: 'gte' },
+          { title: this.i18n.operatorLT, value: 'lt' },
+          { title: this.i18n.operatorLTE, value: 'lte' },
+          { title: this.i18n.operatorEQ, value: 'eq' },
+          { title: this.i18n.operatorNEQ, value: 'ne' },
         ];
       },
       onMetricChange(metricName) {
@@ -495,7 +486,7 @@ components.push({
         let res = `${opSymbol} ${alarm.threshold}`;
         if (alarm.durationSeconds && alarm.durationSeconds > 0) {
           const durStr = this.$root.formatDuration(alarm.durationSeconds);
-          res += ` ${this.i18n.alarmConditionFor.replace('{duration}', durStr)}`;
+          res += ` ${this.$root.replaceActionVar(this.i18n.alarmConditionFor, 'duration', durStr)}`;
         }
         return res;
       },

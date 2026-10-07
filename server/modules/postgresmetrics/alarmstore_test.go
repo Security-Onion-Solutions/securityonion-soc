@@ -344,6 +344,8 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 	assert.Len(t, fakeNotifier.InputPayloads, 1)
 	assert.Contains(t, fakeNotifier.InputPayloads[0].Title, "High CPU")
 	assert.Equal(t, "high", fakeNotifier.InputPayloads[0].Severity)
+	assert.Equal(t, "true", fakeNotifier.InputPayloads[0].Fields["Triggered"])
+	assert.NotContains(t, fakeNotifier.InputPayloads[0].Fields, "Status")
 }
 
 func TestAlarmstore_EvaluateAlarms_Breach_Unlicensed(t *testing.T) {
@@ -483,3 +485,4 @@ type fakeDatastore struct {
 func (f *fakeDatastore) GetNodes(ctx context.Context) []*model.Node {
 	return f.nodes
 }
+

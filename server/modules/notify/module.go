@@ -9,6 +9,7 @@ package notify
 import (
 	"context"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,10 +22,11 @@ import (
 )
 
 const (
-	ConfigSettingNotificationDestinations       = "soc.config.server.modules.notification.destinations"
-	ConfigSettingNotificationEnabled            = "soc.config.server.modules.notification.enabled"
-	ConfigSettingNotificationDismissedPruneDays = "soc.config.server.modules.notification.dismissedPruneDays"
-	ConfigSettingNotificationMaxListLimit       = "soc.config.server.modules.notification.maxListLimit"
+	ConfigSettingNotificationDestinations              = "soc.config.server.modules.notification.destinations"
+	ConfigSettingNotificationEnabled                   = "soc.config.server.modules.notification.enabled"
+	ConfigSettingNotificationDismissedPruneDays        = "soc.config.server.modules.notification.dismissedPruneDays"
+	ConfigSettingNotificationMaxListLimit              = "soc.config.server.modules.notification.maxListLimit"
+	ConfigSettingNotificationConnectionTimeoutSeconds  = "soc.config.server.modules.notification.connectionTimeoutSeconds"
 )
 
 type NotificationModule struct {
@@ -114,6 +116,15 @@ func (mod *NotificationModule) Init(cfg module.ModuleConfig) error {
 		return err
 	}
 
+	timeout := time.Duration(parsedConfig.ConnectionTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second
+	}
+	smtpChannel.SetTimeout(timeout)
+	webhookChannel.SetTimeout(timeout)
+	slackChannel.SetTimeout(timeout)
+	matrixChannel.SetTimeout(timeout)
+
 	mod.notifier = NewNotifier(mod.server, mod.registry, parsedConfig)
 	if mod.server != nil {
 		mod.server.Notifier = mod.notifier
@@ -141,6 +152,7 @@ func (mod *NotificationModule) registerConfigCallbacks() {
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationEnabled, mod)
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationDismissedPruneDays, mod)
 	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationMaxListLimit, mod)
+	registrar.RegisterConfigSettingCallback(ConfigSettingNotificationConnectionTimeoutSeconds, mod)
 }
 
 func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setting *model.Setting, removed bool) {
@@ -187,6 +199,28 @@ func (mod *NotificationModule) OnConfigSettingUpdated(ctx context.Context, setti
 		} else if limit, err := strconv.Atoi(setting.Value); err == nil && limit > 0 {
 			if ns, ok := mod.server.Notificationstore.(*NotificationstoreImpl); ok {
 				ns.SetDefaultLimit(limit)
+			}
+		}
+	case ConfigSettingNotificationConnectionTimeoutSeconds:
+		timeout := time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second
+		if removed || setting.Value == "" {
+			sec := module.GetIntDefault(mod.config, "connectionTimeoutSeconds", DEFAULT_CONNECTION_TIMEOUT_SECONDS)
+			timeout = time.Duration(sec) * time.Second
+		} else if sec, err := strconv.Atoi(strings.TrimSpace(setting.Value)); err == nil && sec > 0 {
+			timeout = time.Duration(sec) * time.Second
+		}
+		mod.setConnectionTimeout(timeout)
+	}
+}
+
+func (mod *NotificationModule) setConnectionTimeout(d time.Duration) {
+	if mod.registry == nil || d <= 0 {
+		return
+	}
+	for _, t := range mod.registry.RegisteredTypes() {
+		if ch, found := mod.registry.Get(t); found {
+			if ts, ok := ch.(interface{ SetTimeout(time.Duration) }); ok {
+				ts.SetTimeout(d)
 			}
 		}
 	}

@@ -14,7 +14,6 @@ import (
 	"mime"
 	"mime/quotedprintable"
 	"net/mail"
-	"sort"
 	"strings"
 	"time"
 
@@ -41,33 +40,22 @@ func GetSeverityColor(severity string) string {
 
 // FormatEmailSubject creates a standardized email subject line.
 func FormatEmailSubject(payload *model.NotificationPayload) string {
-	defaultSubject := NOTIFICATION_DEFAULT_TITLE
 	if payload == nil {
-		return defaultSubject
+		return NOTIFICATION_DEFAULT_TITLE
 	}
-	sev := strings.ToUpper(strings.TrimSpace(payload.Severity))
-	if sev == "" {
-		sev = "INFO"
-	}
-	title := strings.TrimSpace(payload.Title)
-	if title == "" {
-		title = defaultSubject
-	}
+	sev, title := defaultSeverityAndTitle(payload)
 	return fmt.Sprintf("[%s] %s", sev, title)
 }
 
 // FormatPlainTextBody generates a plain text email body from a NotificationPayload.
-func FormatPlainTextBody(payload *model.NotificationPayload, attachmentMode string) string {
+func FormatPlainTextBody(payload *model.NotificationPayload) string {
 	if payload == nil {
 		return ""
 	}
 
 	var buf bytes.Buffer
-	sev := strings.ToUpper(strings.TrimSpace(payload.Severity))
-	if sev == "" {
-		sev = "INFO"
-	}
-	buf.WriteString(fmt.Sprintf("[%s] [%s]\r\n", sev, payload.Title))
+	sev, title := defaultSeverityAndTitle(payload)
+	buf.WriteString(fmt.Sprintf("[%s] [%s]\r\n", sev, title))
 	ts := payload.Timestamp
 	if ts.IsZero() {
 		ts = time.Now().UTC()
@@ -81,12 +69,7 @@ func FormatPlainTextBody(payload *model.NotificationPayload, attachmentMode stri
 
 	if len(payload.Fields) > 0 {
 		buf.WriteString("🛈\r\n")
-		keys := make([]string, 0, len(payload.Fields))
-		for k := range payload.Fields {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Fields) {
 			buf.WriteString(fmt.Sprintf("  * %s: %s\r\n", k, payload.Fields[k]))
 		}
 		buf.WriteString("\r\n")
@@ -94,12 +77,7 @@ func FormatPlainTextBody(payload *model.NotificationPayload, attachmentMode stri
 
 	if len(payload.Links) > 0 {
 		buf.WriteString("🔗\r\n")
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Links) {
 			buf.WriteString(fmt.Sprintf("  * %s: %s\r\n", k, payload.Links[k]))
 		}
 		buf.WriteString("\r\n")
@@ -128,21 +106,13 @@ func FormatPlainTextBody(payload *model.NotificationPayload, attachmentMode stri
 }
 
 // FormatHTMLBody generates a styled, responsive HTML email body from a NotificationPayload.
-func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) string {
+func FormatHTMLBody(payload *model.NotificationPayload) string {
 	if payload == nil {
 		return ""
 	}
 
-	sev := strings.ToUpper(strings.TrimSpace(payload.Severity))
-	if sev == "" {
-		sev = "INFO"
-	}
+	sev, title := defaultSeverityAndTitle(payload)
 	color := GetSeverityColor(payload.Severity)
-
-	title := strings.TrimSpace(payload.Title)
-	if title == "" {
-		title = NOTIFICATION_DEFAULT_TITLE
-	}
 
 	ts := payload.Timestamp
 	if ts.IsZero() {
@@ -191,12 +161,7 @@ func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) s
 	if len(payload.Fields) > 0 {
 		buf.WriteString("    <div class=\"section-heading\">🛈</div>\r\n")
 		buf.WriteString("    <table class=\"fields\">\r\n")
-		keys := make([]string, 0, len(payload.Fields))
-		for k := range payload.Fields {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Fields) {
 			buf.WriteString(fmt.Sprintf("      <tr><td class=\"key\">%s</td><td class=\"val\">%s</td></tr>\r\n",
 				html.EscapeString(k), html.EscapeString(payload.Fields[k])))
 		}
@@ -206,13 +171,10 @@ func FormatHTMLBody(payload *model.NotificationPayload, attachmentMode string) s
 	if len(payload.Links) > 0 {
 		buf.WriteString("    <div class=\"section-heading\">🔗</div>\r\n")
 		buf.WriteString("    <div style=\"margin: 20px 0;\">\r\n")
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Links) {
 			url := payload.Links[k]
+			// Duplicate button styling inline as well as in .btn-link CSS class because
+			// many email clients strip head style blocks and require inline styles.
 			buf.WriteString(fmt.Sprintf("      <a class=\"btn-link\" style=\"display: inline-block; padding: 9px 18px; background-color: #2563eb; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; margin-right: 10px; margin-bottom: 8px; cursor: pointer;\" href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">%s</a>\r\n",
 				html.EscapeString(url), html.EscapeString(k)))
 		}
@@ -255,6 +217,24 @@ func encodeQuotedPrintable(s string) string {
 	return buf.String()
 }
 
+func writeAlternativePart(buf *bytes.Buffer, altBoundary string, plainBody, htmlBody string) {
+	// Plain text part
+	buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
+	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	buf.WriteString(encodeQuotedPrintable(plainBody))
+	buf.WriteString("\r\n\r\n")
+
+	// HTML part
+	buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
+	buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	buf.WriteString(encodeQuotedPrintable(htmlBody))
+	buf.WriteString("\r\n\r\n")
+
+	buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
+}
+
 // BuildMIMEMessage formats a full RFC 2045/2046/5322 MIME multipart message.
 func BuildMIMEMessage(from string, to []string, subject string, plainBody string, htmlBody string, attachments []model.Attachment, attachmentMode string) ([]byte, error) {
 	if from == "" {
@@ -286,22 +266,8 @@ func BuildMIMEMessage(from string, to []string, subject string, plainBody string
 		// Alternative body part
 		buf.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
 		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary))
-
-		// Plain text part
-		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
-		buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
-		buf.WriteString(encodeQuotedPrintable(plainBody))
-		buf.WriteString("\r\n\r\n")
-
-		// HTML part
-		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
-		buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
-		buf.WriteString(encodeQuotedPrintable(htmlBody))
-		buf.WriteString("\r\n\r\n")
-
-		buf.WriteString(fmt.Sprintf("--%s--\r\n\r\n", altBoundary))
+		writeAlternativePart(&buf, altBoundary, plainBody, htmlBody)
+		buf.WriteString("\r\n")
 
 		// Attachments
 		for _, att := range attachments {
@@ -338,22 +304,7 @@ func BuildMIMEMessage(from string, to []string, subject string, plainBody string
 	} else {
 		altBoundary := fmt.Sprintf("alt_%s", strings.ReplaceAll(uuid.New().String(), "-", ""))
 		buf.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", altBoundary))
-
-		// Plain text part
-		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
-		buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
-		buf.WriteString(encodeQuotedPrintable(plainBody))
-		buf.WriteString("\r\n\r\n")
-
-		// HTML part
-		buf.WriteString(fmt.Sprintf("--%s\r\n", altBoundary))
-		buf.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-		buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
-		buf.WriteString(encodeQuotedPrintable(htmlBody))
-		buf.WriteString("\r\n\r\n")
-
-		buf.WriteString(fmt.Sprintf("--%s--\r\n", altBoundary))
+		writeAlternativePart(&buf, altBoundary, plainBody, htmlBody)
 	}
 
 	return buf.Bytes(), nil

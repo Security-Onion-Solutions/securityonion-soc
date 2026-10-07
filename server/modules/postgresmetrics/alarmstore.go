@@ -544,7 +544,7 @@ func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *mo
 			"Threshold": alarm.Threshold,
 			"Value":     currentValue,
 			"Duration":  durStr,
-			"Status":    "true",
+			"Triggered": "true",
 		},
 		Links: map[string]string{
 			"SOC": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),
@@ -587,7 +587,7 @@ func (s *AlarmstoreImpl) triggerClearedNotification(ctx context.Context, alarm *
 			"Threshold": alarm.Threshold,
 			"Value":     currentValue,
 			"Duration":  durStr,
-			"Status":    "false",
+			"Triggered": "false",
 		},
 		Links: map[string]string{
 			"SOC": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),

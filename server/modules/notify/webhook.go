@@ -17,7 +17,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
@@ -43,6 +42,7 @@ type WebhookChannel struct {
 	channelType   string
 	defaultFormat string
 	client        HTTPDoer
+	timeout       time.Duration
 }
 
 // NewWebhookChannel constructs a generic webhook notification channel.
@@ -51,6 +51,7 @@ func NewWebhookChannel(srv *server.Server) *WebhookChannel {
 		server:        srv,
 		channelType:   "generic_webhook",
 		defaultFormat: FormatGeneric,
+		timeout:       time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second,
 	}
 }
 
@@ -60,6 +61,7 @@ func NewSlackChannel(srv *server.Server) *WebhookChannel {
 		server:        srv,
 		channelType:   "slack_webhook",
 		defaultFormat: FormatSlack,
+		timeout:       time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second,
 	}
 }
 
@@ -69,6 +71,14 @@ func NewMatrixChannel(srv *server.Server) *WebhookChannel {
 		server:        srv,
 		channelType:   "matrix_hookshot_webhook",
 		defaultFormat: FormatMatrixHookshot,
+		timeout:       time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second,
+	}
+}
+
+// SetTimeout sets the default request timeout for the webhook client.
+func (c *WebhookChannel) SetTimeout(d time.Duration) {
+	if d > 0 {
+		c.timeout = d
 	}
 }
 
@@ -199,8 +209,6 @@ func (c *WebhookChannel) buildHTTPClient(params map[string]interface{}) *http.Cl
 	if params != nil {
 		if skipVal, ok := params["insecureSkipVerify"]; ok {
 			insecureSkipVerify, _ = skipVal.(bool)
-		} else if skipVal, ok := params["skipVerify"]; ok {
-			insecureSkipVerify, _ = skipVal.(bool)
 		}
 	}
 
@@ -226,7 +234,10 @@ func (c *WebhookChannel) buildHTTPClient(params map[string]interface{}) *http.Cl
 		}
 	}
 
-	timeout := 15 * time.Second
+	timeout := c.timeout
+	if timeout <= 0 {
+		timeout = time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second
+	}
 	if params != nil {
 		if timeoutVal, ok := params["timeoutSeconds"]; ok {
 			if t, err := parsePort(timeoutVal); err == nil && t > 0 {
@@ -275,9 +286,6 @@ func extractWebhookURL(params map[string]interface{}) string {
 	if urlVal, ok := params["webhookUrl"].(string); ok && strings.TrimSpace(urlVal) != "" {
 		return strings.TrimSpace(urlVal)
 	}
-	if urlVal, ok := params["url"].(string); ok && strings.TrimSpace(urlVal) != "" {
-		return strings.TrimSpace(urlVal)
-	}
 	return ""
 }
 
@@ -298,18 +306,11 @@ type slackAttachmentField struct {
 	Short bool   `json:"short"`
 }
 
-type slackAction struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-	URL  string `json:"url"`
-}
-
 type slackAttachment struct {
 	Color    string                 `json:"color,omitempty"`
 	Title    string                 `json:"title,omitempty"`
 	Text     string                 `json:"text,omitempty"`
 	Fields   []slackAttachmentField `json:"fields,omitempty"`
-	Actions  []slackAction          `json:"actions,omitempty"`
 	Ts       int64                  `json:"ts,omitempty"`
 	Footer   string                 `json:"footer,omitempty"`
 	MrkdwnIn []string               `json:"mrkdwn_in,omitempty"`
@@ -321,16 +322,8 @@ type slackMessage struct {
 }
 
 func formatSlackPayload(params map[string]interface{}, payload *model.NotificationPayload) ([]byte, error) {
-	sev := strings.ToUpper(strings.TrimSpace(payload.Severity))
-	if sev == "" {
-		sev = "INFO"
-	}
+	sev, title := defaultSeverityAndTitle(payload)
 	color := GetSeverityColor(payload.Severity)
-
-	title := strings.TrimSpace(payload.Title)
-	if title == "" {
-		title = NOTIFICATION_DEFAULT_TITLE
-	}
 
 	attText := fmt.Sprintf("*[%s] %s*", sev, title)
 	if payload.Summary != "" {
@@ -355,12 +348,7 @@ func formatSlackPayload(params map[string]interface{}, payload *model.Notificati
 	}
 
 	if len(payload.Fields) > 0 {
-		keys := make([]string, 0, len(payload.Fields))
-		for k := range payload.Fields {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Fields) {
 			att.Fields = append(att.Fields, slackAttachmentField{
 				Title: k,
 				Value: payload.Fields[k],
@@ -370,13 +358,8 @@ func formatSlackPayload(params map[string]interface{}, payload *model.Notificati
 	}
 
 	if len(payload.Links) > 0 {
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
 		var linkParts []string
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Links) {
 			u := payload.Links[k]
 			if u != "" {
 				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
@@ -394,22 +377,6 @@ func formatSlackPayload(params map[string]interface{}, payload *model.Notificati
 		}
 	}
 
-	// Add actions for links
-	if len(payload.Links) > 0 {
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			att.Actions = append(att.Actions, slackAction{
-				Type: "button",
-				Text: k,
-				URL:  payload.Links[k],
-			})
-		}
-	}
-
 	msg := slackMessage{
 		Attachments: []slackAttachment{att},
 	}
@@ -423,16 +390,8 @@ type matrixHookshotMessage struct {
 }
 
 func formatMatrixHookshotPayload(params map[string]interface{}, payload *model.NotificationPayload) ([]byte, error) {
-	sev := strings.ToUpper(strings.TrimSpace(payload.Severity))
-	if sev == "" {
-		sev = "INFO"
-	}
+	sev, title := defaultSeverityAndTitle(payload)
 	color := GetSeverityColor(payload.Severity)
-
-	title := strings.TrimSpace(payload.Title)
-	if title == "" {
-		title = NOTIFICATION_DEFAULT_TITLE
-	}
 
 	footer := NOTIFICATION_ATTRIBUTION
 	if payload.Source != "" {
@@ -446,23 +405,13 @@ func formatMatrixHookshotPayload(params map[string]interface{}, payload *model.N
 		mdBuf.WriteString(fmt.Sprintf("%s\n\n", payload.Summary))
 	}
 	if len(payload.Fields) > 0 {
-		keys := make([]string, 0, len(payload.Fields))
-		for k := range payload.Fields {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Fields) {
 			mdBuf.WriteString(fmt.Sprintf("* **%s**: %s\n", k, payload.Fields[k]))
 		}
 	}
 	if len(payload.Links) > 0 {
 		mdBuf.WriteString("\n")
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Links) {
 			mdBuf.WriteString(fmt.Sprintf("[%s](%s) ", k, payload.Links[k]))
 		}
 		mdBuf.WriteString("\n")
@@ -478,12 +427,7 @@ func formatMatrixHookshotPayload(params map[string]interface{}, payload *model.N
 	}
 	if len(payload.Fields) > 0 {
 		htmlBuf.WriteString("<ul>")
-		keys := make([]string, 0, len(payload.Fields))
-		for k := range payload.Fields {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Fields) {
 			htmlBuf.WriteString(fmt.Sprintf("<li><b>%s:</b> %s</li>",
 				html.EscapeString(k), html.EscapeString(payload.Fields[k])))
 		}
@@ -492,12 +436,7 @@ func formatMatrixHookshotPayload(params map[string]interface{}, payload *model.N
 
 	if len(payload.Links) > 0 {
 		htmlBuf.WriteString("<p>")
-		keys := make([]string, 0, len(payload.Links))
-		for k := range payload.Links {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range sortedKeys(payload.Links) {
 			htmlBuf.WriteString(fmt.Sprintf("<a href=\"%s\">%s</a> ",
 				html.EscapeString(payload.Links[k]), html.EscapeString(k)))
 		}

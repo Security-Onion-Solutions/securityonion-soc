@@ -62,26 +62,31 @@ func TestWebhookChannelValidation(t *testing.T) {
 	// Nil params
 	assert.Error(t, ch.ValidateConfig(nil))
 
-	// Missing url
+	// Missing webhookUrl
 	assert.Error(t, ch.ValidateConfig(map[string]interface{}{}))
+
+	// Alternative "url" param is not supported
+	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
+		"url": "https://example.com/webhook",
+	}))
 
 	// Invalid URL scheme
 	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
-		"url": "ftp://example.com/webhook",
+		"webhookUrl": "ftp://example.com/webhook",
 	}))
 
 	// Invalid format
 	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
-		"url":    "https://example.com/webhook",
-		"format": "invalid_format",
+		"webhookUrl": "https://example.com/webhook",
+		"format":     "invalid_format",
 	}))
 
 	// Valid generic format
 	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{
-		"url": "https://example.com/webhook",
+		"webhookUrl": "https://example.com/webhook",
 	}))
 
-	// Valid webhookUrl alias
+	// Valid webhookUrl with slack format and headers
 	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{
 		"webhookUrl": "https://example.com/webhook",
 		"format":     "slack",
@@ -112,7 +117,7 @@ func TestWebhookChannelSendGeneric(t *testing.T) {
 	}
 
 	params := map[string]interface{}{
-		"url": "https://my-siem.example.com/api/v1/alerts",
+		"webhookUrl": "https://my-siem.example.com/api/v1/alerts",
 		"headers": map[string]string{
 			"X-API-Key": "secret-key",
 		},
@@ -198,12 +203,6 @@ func TestWebhookChannelSendSlack(t *testing.T) {
 	require.Len(t, att.Fields, 2)
 	assert.Equal(t, "host", att.Fields[0].Title)
 	assert.Contains(t, att.Fields[1].Value, "<https://soc.example.com/#/grid|View Grid>")
-
-	// Actions verify
-	require.Len(t, att.Actions, 1)
-	assert.Equal(t, "button", att.Actions[0].Type)
-	assert.Equal(t, "View Grid", att.Actions[0].Text)
-	assert.Equal(t, "https://soc.example.com/#/grid", att.Actions[0].URL)
 }
 
 func TestWebhookChannelSendMatrixHookshot(t *testing.T) {
@@ -332,7 +331,7 @@ func TestWebhookChannelSendErrors(t *testing.T) {
 
 	payload := &model.NotificationPayload{Title: "Test"}
 	params := map[string]interface{}{
-		"url": "https://example.com/hook",
+		"webhookUrl": "https://example.com/hook",
 	}
 
 	// 500 error response
@@ -439,7 +438,7 @@ func TestWebhookChannelSendGeneric_WithBaseUrl_PrefixesRelativeLink(t *testing.T
 	}
 
 	params := map[string]interface{}{
-		"url": "https://example.com/generic-hook",
+		"webhookUrl": "https://example.com/generic-hook",
 	}
 
 	err := ch.Send(context.Background(), params, payload)

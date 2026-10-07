@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNotifierImpl_ListDestinations(t *testing.T) {
@@ -140,6 +141,7 @@ func TestNotifierImpl_CreateDestination(t *testing.T) {
 		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
 	}
 	registry := NewChannelRegistry()
+	_ = registry.Register(&mockChannel{channelType: "soc"})
 	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
 
 	ctx := context.Background()
@@ -205,6 +207,7 @@ func TestNotifierImpl_UpdateDestination(t *testing.T) {
 		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
 	}
 	registry := NewChannelRegistry()
+	_ = registry.Register(&mockChannel{channelType: "soc"})
 	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
 
 	ctx := context.Background()
@@ -291,6 +294,7 @@ func TestNotifierImpl_Unauthorized(t *testing.T) {
 		Authorizer:  &rbac.FakeAuthorizer{Authorized: false},
 	}
 	registry := NewChannelRegistry()
+	_ = registry.Register(&mockChannel{channelType: "soc"})
 	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
 
 	ctx := context.Background()
@@ -373,7 +377,7 @@ func TestNotifierImpl_CreateDestination_SMTPAndWebhookValidation(t *testing.T) {
 		Name: "Generic Hook",
 		Type: "generic_webhook",
 		Params: map[string]interface{}{
-			"url": "https://example.com/webhook",
+			"webhookUrl": "https://example.com/webhook",
 		},
 	})
 	assert.NoError(t, err)
@@ -466,4 +470,109 @@ func TestNotifierImpl_CreateAndUpdateDestination_InvalidChannelType(t *testing.T
 	})
 	assert.ErrorIs(t, err, server.ErrInvalidChannelType)
 }
+func TestNotifierImpl_SecretMaskingAndUnmasking(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	cfgStore := server.NewMemConfigStore([]*model.Setting{})
+	srv := &server.Server{
+		Configstore: cfgStore,
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	registry := NewChannelRegistry()
+	_ = registry.Register(NewSMTPChannel(srv))
+	_ = registry.Register(NewSlackChannel(srv))
+	_ = registry.Register(NewMatrixChannel(srv))
+
+	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
+	ctx := context.Background()
+
+	// 1. Create SMTP destination with password
+	smtpDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "smtp-1",
+		Name: "SMTP Destination",
+		Type: "smtp",
+		Params: map[string]interface{}{
+			"host":     "smtp.example.com",
+			"from":     "alerts@example.com",
+			"password": "supersecretpassword",
+		},
+	})
+	require.NoError(t, err)
+	// Masked on return from Create
+	assert.Equal(t, MaskedSecret, smtpDest.Params["password"])
+
+	// 2. Read back via GetDestination - must be masked
+	getDest, err := notifier.GetDestination(ctx, "smtp-1")
+	require.NoError(t, err)
+	assert.Equal(t, MaskedSecret, getDest.Params["password"])
+
+	// 3. Read back via ListDestinations - must be masked
+	listDests, err := notifier.ListDestinations(ctx)
+	require.NoError(t, err)
+	var foundSMTP *model.DestinationConfig
+	for _, d := range listDests {
+		if d.ID == "smtp-1" {
+			foundSMTP = &d
+			break
+		}
+	}
+	require.NotNil(t, foundSMTP)
+	assert.Equal(t, MaskedSecret, foundSMTP.Params["password"])
+
+	// 4. Update SMTP destination submitting the mask back (e.g. unmodified form submission)
+	updatedDest, err := notifier.UpdateDestination(ctx, "smtp-1", &model.DestinationConfig{
+		Name: "SMTP Destination Renamed",
+		Type: "smtp",
+		Params: map[string]interface{}{
+			"host":     "smtp.example.com",
+			"from":     "alerts@example.com",
+			"password": MaskedSecret,
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "SMTP Destination Renamed", updatedDest.Name)
+	assert.Equal(t, MaskedSecret, updatedDest.Params["password"])
+
+	// Verify the stored password in configstore is still the original secret
+	rawSetting, err := cfgStore.GetSetting(ctx, ConfigSettingNotificationDestinations)
+	require.NoError(t, err)
+	storedDests, err := unmarshalDestinations(rawSetting.Value)
+	require.NoError(t, err)
+	assert.Equal(t, "supersecretpassword", storedDests["smtp-1"].Params["password"])
+
+	// 5. Update with a new password
+	_, err = notifier.UpdateDestination(ctx, "smtp-1", &model.DestinationConfig{
+		Name: "SMTP Destination",
+		Type: "smtp",
+		Params: map[string]interface{}{
+			"host":     "smtp.example.com",
+			"from":     "alerts@example.com",
+			"password": "newsupersecretpassword",
+		},
+	})
+	require.NoError(t, err)
+	rawSetting, err = cfgStore.GetSetting(ctx, ConfigSettingNotificationDestinations)
+	require.NoError(t, err)
+	storedDests, err = unmarshalDestinations(rawSetting.Value)
+	require.NoError(t, err)
+	assert.Equal(t, "newsupersecretpassword", storedDests["smtp-1"].Params["password"])
+
+	// 6. Test Slack webhook URL is NOT masked
+	slackDest, err := notifier.CreateDestination(ctx, &model.DestinationConfig{
+		ID:   "slack-1",
+		Name: "Slack Destination",
+		Type: "slack_webhook",
+		Params: map[string]interface{}{
+			"webhookUrl": "https://hooks.slack.com/services/T00/B00/SECRET123",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "https://hooks.slack.com/services/T00/B00/SECRET123", slackDest.Params["webhookUrl"])
+
+	getSlack, err := notifier.GetDestination(ctx, "slack-1")
+	require.NoError(t, err)
+	assert.Equal(t, "https://hooks.slack.com/services/T00/B00/SECRET123", getSlack.Params["webhookUrl"])
+}
+
 

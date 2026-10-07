@@ -10,6 +10,13 @@ let comp;
 
 beforeEach(() => {
   comp = getComponent('alarms-manager');
+  for (const [key, fn] of Object.entries(comp.computed || {})) {
+    Object.defineProperty(comp, key, {
+      get: () => fn.call(comp),
+      set: () => {},
+      configurable: true,
+    });
+  }
   resetPapi();
 });
 
@@ -349,61 +356,55 @@ test('thresholdHint and booleanThresholdOptions computed properties', () => {
   ];
 
   comp.form.metric = 'cpu';
-  expect(comp.thresholdHint()).toBe('Unit: percent');
-  expect(comp.selectedMetricType()).toBe('numeric');
+  expect(comp.thresholdHint).toBe('Unit: percent');
+  expect(comp.selectedMetricType).toBe('numeric');
 
   comp.form.metric = 'system_uptime';
-  expect(comp.thresholdHint()).toBe('Unit: seconds');
+  expect(comp.thresholdHint).toBe('Unit: seconds');
 
   comp.form.metric = 'os_needs_restart';
-  expect(comp.thresholdHint()).toBe('');
-  expect(comp.selectedMetricType()).toBe('bool');
-  expect(comp.booleanThresholdOptions()).toEqual([
+  expect(comp.thresholdHint).toBe('');
+  expect(comp.selectedMetricType).toBe('bool');
+  expect(comp.booleanThresholdOptions).toEqual([
     { title: 'True', value: 'true' },
     { title: 'False', value: 'false' },
   ]);
 
   comp.form.metric = 'node_status';
-  expect(comp.thresholdHint()).toBe('Varies per metric. Ex: fault');
-  expect(comp.selectedMetricType()).toBe('string');
+  expect(comp.thresholdHint).toBe('Varies per metric. Ex: fault');
+  expect(comp.selectedMetricType).toBe('string');
 });
 
-test('notificationsLicensed and tableHeaders filtering based on license', () => {
-  comp.$root = {
-    isUserAdmin: () => true,
-    isLicensed: (feat) => feat === 'ntf',
-    FEAT_NTF: 'ntf',
-  };
+test('tableHeaders filtering based on license and admin status', () => {
+  comp.$root.isUserAdmin = () => true;
+  comp.$root.isLicensed = (feat) => feat === 'ntf';
+  comp.$root.FEAT_NTF = 'ntf';
 
-  expect(comp.notificationsLicensed()).toBe(true);
-  let headers = comp.tableHeaders();
+  let headers = comp.tableHeaders;
   expect(headers.some(h => h.value === 'destinations')).toBe(true);
   expect(headers.some(h => h.value === 'clearedSeverity')).toBe(true);
   expect(headers.some(h => h.value === 'actions')).toBe(true);
 
   // When unlicensed for notifications
   comp.$root.isLicensed = () => false;
-  expect(comp.notificationsLicensed()).toBe(false);
-  headers = comp.tableHeaders();
+  headers = comp.tableHeaders;
   expect(headers.some(h => h.value === 'destinations')).toBe(false);
   expect(headers.some(h => h.value === 'clearedSeverity')).toBe(false);
   expect(headers.some(h => h.value === 'actions')).toBe(true);
 
   // When non-admin and unlicensed
   comp.$root.isUserAdmin = () => false;
-  headers = comp.tableHeaders();
+  headers = comp.tableHeaders;
   expect(headers.some(h => h.value === 'destinations')).toBe(false);
   expect(headers.some(h => h.value === 'clearedSeverity')).toBe(false);
   expect(headers.some(h => h.value === 'actions')).toBe(false);
 });
 
 test('loadData skips destinations and users when unlicensed for notifications', async () => {
-  comp.$root = {
-    isLicensed: () => false,
-    FEAT_NTF: 'ntf',
-    startLoading: jest.fn(),
-    stopLoading: jest.fn(),
-  };
+  comp.$root.isLicensed = () => false;
+  comp.$root.FEAT_NTF = 'ntf';
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
 
   const getAlarmsSpy = jest.spyOn(comp, 'getAlarms').mockResolvedValue();
   const getMetricsSpy = jest.spyOn(comp, 'getMetrics').mockResolvedValue();
@@ -420,5 +421,18 @@ test('loadData skips destinations and users when unlicensed for notifications', 
   expect(getNodesSpy).toHaveBeenCalled();
   expect(getDestinationsSpy).not.toHaveBeenCalled();
   expect(getUsersSpy).not.toHaveBeenCalled();
+});
+
+
+test('alarms-manager template references root functions directly without removed helpers', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/alarms-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('$root.isUserAdmin()');
+  expect(tmpl).toContain('$root.isLicensed($root.FEAT_NTF)');
+  expect(tmpl).not.toContain('isSuperuser');
+  expect(tmpl).not.toContain('notificationsLicensed');
 });
 

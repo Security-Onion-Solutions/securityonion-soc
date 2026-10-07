@@ -66,15 +66,24 @@ func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 
 // SMTPChannel implements NotificationChannel for email notifications.
 type SMTPChannel struct {
-	server *server.Server
-	dialer smtpDialerFunc
+	server  *server.Server
+	dialer  smtpDialerFunc
+	timeout time.Duration
 }
 
 // NewSMTPChannel constructs a new SMTP notification channel driver.
 func NewSMTPChannel(srv *server.Server) *SMTPChannel {
 	return &SMTPChannel{
-		server: srv,
-		dialer: defaultSMTPDialer,
+		server:  srv,
+		dialer:  defaultSMTPDialer,
+		timeout: time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second,
+	}
+}
+
+// SetTimeout sets the default connection timeout for SMTP connections.
+func (c *SMTPChannel) SetTimeout(d time.Duration) {
+	if d > 0 {
+		c.timeout = d
 	}
 }
 
@@ -161,7 +170,7 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 	host, _ := params["host"].(string)
 	host = strings.TrimSpace(host)
 
-	port := 25
+	port := 587
 	if portVal, ok := params["port"]; ok {
 		if p, err := parsePort(portVal); err == nil && p > 0 {
 			port = p
@@ -178,15 +187,10 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 
 	username, _ := params["username"].(string)
 	password, _ := params["password"].(string)
-	authType, _ := params["auth"].(string)
-	if authType == "" {
-		authType, _ = params["authType"].(string)
-	}
+	authType, _ := params["authType"].(string)
 
 	useTLS := false
 	if tlsVal, ok := params["useTls"]; ok {
-		useTLS, _ = tlsVal.(bool)
-	} else if tlsVal, ok := params["tls"]; ok {
 		useTLS, _ = tlsVal.(bool)
 	} else if port == 465 {
 		useTLS = true
@@ -194,8 +198,6 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 
 	insecureSkipVerify := false
 	if skipVal, ok := params["insecureSkipVerify"]; ok {
-		insecureSkipVerify, _ = skipVal.(bool)
-	} else if skipVal, ok := params["skipVerify"]; ok {
 		insecureSkipVerify, _ = skipVal.(bool)
 	}
 
@@ -211,12 +213,24 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 	if len(payload.Recipients) > 0 {
 		for _, rec := range payload.Recipients {
 			rec = strings.TrimSpace(rec)
+			if rec == "" {
+				continue
+			}
 			if strings.Contains(rec, "@") {
 				recipients = append(recipients, rec)
-			} else if c.server != nil && c.server.Userstore != nil && rec != "" {
-				if u, err := c.server.Userstore.GetUserById(ctx, rec); err == nil && u != nil && strings.TrimSpace(u.Email) != "" {
+			} else if c.server != nil && c.server.Userstore != nil {
+				u, err := c.server.Userstore.GetUserById(ctx, rec)
+				if err != nil {
+					log.WithError(err).WithField("recipient", rec).Warn("failed to lookup recipient user in userstore; dropping recipient")
+				} else if u == nil {
+					log.WithField("recipient", rec).Warn("recipient user not found in userstore; dropping recipient")
+				} else if strings.TrimSpace(u.Email) == "" {
+					log.WithField("recipient", rec).Warn("recipient user has no configured email address; dropping recipient")
+				} else {
 					recipients = append(recipients, strings.TrimSpace(u.Email))
 				}
+			} else {
+				log.WithField("recipient", rec).Warn("userstore unavailable to resolve non-email recipient; dropping recipient")
 			}
 		}
 	} else if toVal, ok := params["to"]; ok && toVal != nil {
@@ -229,8 +243,8 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 	}
 
 	subject := FormatEmailSubject(payload)
-	plainBody := FormatPlainTextBody(payload, attachmentMode)
-	htmlBody := FormatHTMLBody(payload, attachmentMode)
+	plainBody := FormatPlainTextBody(payload)
+	htmlBody := FormatHTMLBody(payload)
 
 	msgBytes, err := BuildMIMEMessage(from, recipients, subject, plainBody, htmlBody, payload.Attachments, attachmentMode)
 	if err != nil {
@@ -244,7 +258,20 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 
 	directTLS := (port == 465) || (useTLS && port != 587 && port != 25)
 
-	client, err := c.dialer(ctx, host, port, tlsConfig, directTLS)
+	timeout := c.timeout
+	if timeout <= 0 {
+		timeout = time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second
+	}
+	if timeoutVal, ok := params["timeoutSeconds"]; ok {
+		if t, err := parsePort(timeoutVal); err == nil && t > 0 {
+			timeout = time.Duration(t) * time.Second
+		}
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(ctx, timeout)
+	defer dialCancel()
+
+	client, err := c.dialer(dialCtx, host, port, tlsConfig, directTLS)
 	if err != nil {
 		return fmt.Errorf("failed to connect to smtp server %s:%d: %w", host, port, err)
 	}
@@ -258,7 +285,7 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 				if useTLS || port == 587 {
 					return fmt.Errorf("failed to negotiate STARTTLS: %w", err)
 				}
-				log.WithError(err).Debug("STARTTLS failed on opportunistic connection; continuing unencrypted")
+				log.WithError(err).Warn("STARTTLS failed on opportunistic connection; continuing unencrypted")
 			}
 		}
 	}
@@ -291,7 +318,7 @@ func (c *SMTPChannel) Send(ctx context.Context, params map[string]interface{}, p
 		}
 		seenRcpt[lowerAddr] = true
 		if err := client.Rcpt(toAddr); err != nil {
-			log.WithError(err).WithField("recipient", toAddr).Warn("SMTP server rejected recipient")
+			log.WithError(err).WithField("smtpRecipient", toAddr).Warn("SMTP server rejected recipient")
 			rcptErrors = append(rcptErrors, fmt.Errorf("RCPT TO <%s>: %w", toAddr, err))
 		} else {
 			acceptedRecipients = append(acceptedRecipients, toAddr)
@@ -354,8 +381,14 @@ func selectSMTPAuth(authType, username, password, host string, client SMTPClient
 
 func defaultSMTPDialer(ctx context.Context, host string, port int, tlsConfig *tls.Config, directTLS bool) (SMTPClientInterface, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
+	timeout := time.Duration(DEFAULT_CONNECTION_TIMEOUT_SECONDS) * time.Second
+	if dl, ok := ctx.Deadline(); ok {
+		if rem := time.Until(dl); rem > 0 {
+			timeout = rem
+		}
+	}
 	dialer := &net.Dialer{
-		Timeout: 15 * time.Second,
+		Timeout: timeout,
 	}
 
 	var conn net.Conn

@@ -59,18 +59,3 @@ func TestValidateDestinationName(t *testing.T) {
 	// Exceeds max length
 	assert.Error(t, ValidateDestinationName(string(make([]byte, MAX_DESTINATION_NAME_LEN+1))))
 }
-
-
-func TestIsValidChannelType(t *testing.T) {
-	assert.True(t, IsValidChannelType(ChannelTypeSOC))
-	assert.True(t, IsValidChannelType(ChannelTypeSMTP))
-	assert.True(t, IsValidChannelType(ChannelTypeSlackWebhook))
-	assert.True(t, IsValidChannelType(ChannelTypeMatrixHookshotWebhook))
-	assert.True(t, IsValidChannelType(ChannelTypeGenericWebhook))
-
-	assert.False(t, IsValidChannelType(""))
-	assert.False(t, IsValidChannelType("unknown"))
-	assert.False(t, IsValidChannelType("slack"))
-	assert.False(t, IsValidChannelType("matrix"))
-	assert.False(t, IsValidChannelType("webhook"))
-}

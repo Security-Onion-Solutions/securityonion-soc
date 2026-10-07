@@ -60,10 +60,10 @@
       </v-chip>
     </template>
     <template #item.actions="{ item }">
-      <v-btn v-if="isSuperuser" icon size="small" variant="text" @click.stop="showEditAlarm(item)" :title="i18n.editAlarm" :aria-label="i18n.ariaAlarmEdit" data-aid="alarm_action_edit">
+      <v-btn v-if="$root.isUserAdmin()" icon size="small" variant="text" @click.stop="showEditAlarm(item)" :title="i18n.editAlarm" :aria-label="i18n.ariaAlarmEdit" data-aid="alarm_action_edit">
         <v-icon size="16">fa-pencil</v-icon>
       </v-btn>
-      <v-btn v-if="isSuperuser" icon size="small" variant="text" color="error" @click.stop="showDeleteAlarm(item)" :title="i18n.delete" :aria-label="i18n.ariaAlarmDelete" data-aid="alarm_action_delete">
+      <v-btn v-if="$root.isUserAdmin()" icon size="small" variant="text" color="error" @click.stop="showDeleteAlarm(item)" :title="i18n.delete" :aria-label="i18n.ariaAlarmDelete" data-aid="alarm_action_delete">
         <v-icon size="16">fa-trash</v-icon>
       </v-btn>
     </template>
@@ -130,15 +130,15 @@
               <v-text-field v-model.number="form.durationSeconds" type="number" min="0" :label="i18n.alarmDuration" :hint="i18n.alarmDurationHelp" persistent-hint density="comfortable" data-aid="alarm_form_duration"></v-text-field>
             </v-col>
 
-            <v-col cols="12" :sm="notificationsLicensed ? 6 : 12">
+            <v-col cols="12" :sm="$root.isLicensed($root.FEAT_NTF) ? 6 : 12">
               <v-select v-model="form.severity" :items="severityOptions" :label="i18n.alarmSeverity" :rules="[$root.validators.required]" density="comfortable" data-aid="alarm_form_severity"></v-select>
             </v-col>
 
-            <v-col v-if="notificationsLicensed" cols="12" sm="6">
+            <v-col v-if="$root.isLicensed($root.FEAT_NTF)" cols="12" sm="6">
               <v-select v-model="form.clearedSeverity" :items="clearedSeverityOptions" :label="i18n.alarmClearedSeverity" :hint="i18n.alarmClearedSeverityHint" persistent-hint density="comfortable" data-aid="alarm_form_cleared_severity"></v-select>
             </v-col>
 
-            <v-col v-if="notificationsLicensed" cols="12">
+            <v-col v-if="$root.isLicensed($root.FEAT_NTF)" cols="12">
               <v-autocomplete
                 v-model="form.destinations"
                 :items="destinationOptions"
@@ -155,7 +155,7 @@
               </v-autocomplete>
             </v-col>
 
-            <v-col v-if="notificationsLicensed" cols="12">
+            <v-col v-if="$root.isLicensed($root.FEAT_NTF)" cols="12">
               <v-autocomplete
                 v-model="form.recipients"
                 :items="userOptions"

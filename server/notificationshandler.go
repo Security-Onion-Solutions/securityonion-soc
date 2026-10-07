@@ -278,11 +278,12 @@ type SendNotificationResponse struct {
 // @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
 // @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
-// @Failure      400         "Title is missing, input exceeds maximum length, or notification delivery failed"
+// @Failure      400         "Title is missing, input exceeds maximum length, or other input issues"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Notification module has not been enabled on the server"
+// @Failure      500         "Possible delivery failure, or other internal SOC error; review SOC logs"
 // @Router       /connect/notifications/send [post]
 func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {

@@ -51,23 +51,7 @@ const (
 	AttachmentModeBoth   = "both"
 
 	DefaultDestinationSOCBell = "soc-bell"
-
-	ChannelTypeSOC                   = "soc"
-	ChannelTypeSMTP                  = "smtp"
-	ChannelTypeSlackWebhook          = "slack_webhook"
-	ChannelTypeMatrixHookshotWebhook = "matrix_hookshot_webhook"
-	ChannelTypeGenericWebhook        = "generic_webhook"
 )
-
-// IsValidChannelType checks if the provided channel driver type is supported.
-func IsValidChannelType(t string) bool {
-	switch t {
-	case ChannelTypeSOC, ChannelTypeSMTP, ChannelTypeSlackWebhook, ChannelTypeMatrixHookshotWebhook, ChannelTypeGenericWebhook:
-		return true
-	default:
-		return false
-	}
-}
 
 // DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
 // The Name field is left empty so the client side can determine the localized display name.
@@ -213,6 +197,8 @@ type NotificationConfig struct {
 	DismissedPruneDays int `json:"dismissedPruneDays" example:"30"`
 	// Maximum number of notifications returned to clients in list queries.
 	MaxListLimit int `json:"maxListLimit,omitempty" example:"500"`
+	// Connection timeout in seconds for outbound notification dispatches.
+	ConnectionTimeoutSeconds int `json:"connectionTimeoutSeconds,omitempty" example:"15"`
 	// Map of configured notification destinations keyed by destination identifier.
 	Destinations map[string]DestinationConfig `json:"destinations,omitempty"`
 }

@@ -599,3 +599,31 @@ test('destinations-manager template includes show/hide password toggle for smtp 
   expect(tmpl).toMatch(/:append-inner-icon="showPassword\s*\?\s*'fa-eye-slash'\s*:\s*'fa-eye'"/);
   expect(tmpl).toMatch(/@click:append-inner="showPassword\s*=\s*!showPassword"/);
 });
+
+test('supportsRecipients helper identifies soc and smtp', () => {
+  expect(comp.supportsRecipients('soc')).toBe(true);
+  expect(comp.supportsRecipients('smtp')).toBe(true);
+  expect(comp.supportsRecipients('slack_webhook')).toBe(false);
+  expect(comp.supportsRecipients('matrix_hookshot_webhook')).toBe(false);
+  expect(comp.supportsRecipients('generic_webhook')).toBe(false);
+});
+
+test('isWebhookType helper identifies webhook types', () => {
+  expect(comp.isWebhookType('generic_webhook')).toBe(true);
+  expect(comp.isWebhookType('slack_webhook')).toBe(true);
+  expect(comp.isWebhookType('matrix_hookshot_webhook')).toBe(true);
+  expect(comp.isWebhookType('soc')).toBe(false);
+  expect(comp.isWebhookType('smtp')).toBe(false);
+});
+
+test('destinations-manager template collapses webhook templates and uses insecureSkipVerify label', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('v-if="isWebhookType(form.type)"');
+  expect(tmpl).toContain(':label="i18n.insecureSkipVerify"');
+  expect(tmpl).not.toContain('i18n.smtpInsecureSkipVerify');
+});
+
