@@ -25,11 +25,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// An emoji rather than text, like the PCAP job links, so the label needs no translation.
+// Emoji rather than text, like the PCAP job links, so the labels need no translation and read
+// the same in SOC and in every other destination.
 const chatLinkLabel = "💬"
-
-// The SOC notification menu renders an "fa-" label as that icon, the one Alerts uses.
-const alertLinkLabel = "fa-bell"
+const alertLinkLabel = "🔔"
 
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
