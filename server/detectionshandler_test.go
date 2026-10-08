@@ -1469,7 +1469,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
 				// e.g. a correlation saved before ES|QL was turned off
-				eng.EXPECT().ValidateRule(gomock.Any()).Return("", model.NewRuleError(errors.New("ERROR_CORRELATION_REQUIRES_ESQL"), errors.New("correlation rules require ES|QL")))
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("ERROR_CORRELATION_REQUIRES_ESQL"))
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
 
@@ -1547,7 +1547,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				// the validation code is returned, not the parse error
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
-				eng.EXPECT().ValidateRule(gomock.Any()).Return("", model.NewRuleError(errors.New("ERROR_RULE_INVALID__CORRELATION"), errors.New("invalid correlation")))
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("ERROR_RULE_INVALID__CORRELATION"))
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("unparseable"))
 			},
 			Code:     400,
@@ -3611,8 +3611,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
-				eng.EXPECT().ValidateRule("sigma goes here").Return("", fmt.Errorf("unable to convert sigma to elastalert: %w",
-					model.NewRuleError(errors.New("ERROR_CORRELATION_REQUIRES_ESQL"), errors.New("correlation rules require ES|QL"))))
+				eng.EXPECT().ValidateRule("sigma goes here").Return("", errors.New("ERROR_CORRELATION_REQUIRES_ESQL"))
 			},
 			Code:     400,
 			Response: []byte(`ERROR_CORRELATION_REQUIRES_ESQL`),

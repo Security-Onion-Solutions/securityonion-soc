@@ -1945,7 +1945,7 @@ func TestExtractDetailsStoredExtraDocument(t *testing.T) {
 	detect := &model.Detection{Content: SimpleRule + "\n---\ntitle: Not A Filter\n"}
 
 	_, err := eng.ValidateRule(detect.Content)
-	assert.ErrorIs(t, err, errCodeRuleInvalidExtraDocument)
+	assert.ErrorIs(t, err, errRuleInvalidExtraDocument)
 
 	require.NoError(t, eng.ExtractDetails(detect))
 	assert.Equal(t, SimpleRuleSID, detect.PublicID)

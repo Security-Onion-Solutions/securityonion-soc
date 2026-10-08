@@ -77,22 +77,22 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Rule With Incomplete Correlation - Missing Rules",
 			Input:         correlationRule(`type: event_count, group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.rules"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.rules"),
 		},
 		{
 			Name:          "Rule With Incomplete Correlation - Missing Timespan",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], condition: { gte: 2 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.timespan"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.timespan"),
 		},
 		{
 			Name:          "Rule With Incomplete Correlation - Missing Condition",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
-			ExpectedError: util.Ptr("missing required fields: correlation.condition (a count comparison such as gte)"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.condition (a count comparison such as gte)"),
 		},
 		{
 			Name:          "Rule With Incomplete Correlation - Missing GroupBy",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], timespan: "30s", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.group-by"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.group-by"),
 		},
 		{
 			Name:  "Value Count Correlation Carries A Field In Its Condition",
@@ -101,12 +101,12 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Value Count Correlation Without A Condition Field",
 			Input:         correlationRule(`type: value_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.condition.field"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.condition.field"),
 		},
 		{
 			Name:          "Correlation Without A Type",
 			Input:         correlationRule(`rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.type"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.type"),
 		},
 		{
 			Name:  "Metric Correlation With A Fractional Threshold",
@@ -115,33 +115,33 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Metric Correlation Without A Comparison Or Field",
 			Input:         correlationRule(`type: value_sum, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
-			ExpectedError: util.Ptr("missing required fields: correlation.condition (a comparison such as gt), correlation.condition.field"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.condition (a comparison such as gt), correlation.condition.field"),
 		},
 		{
 			Name:          "Percentile Correlation Without A Percentile",
 			Input:         correlationRule(`type: value_percentile, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", gt: 5 }`),
-			ExpectedError: util.Ptr("missing required fields: correlation.condition.percentile"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: missing required fields: correlation.condition.percentile"),
 		},
 		{
 			Name:          "Correlation With A Range Condition",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2, lte: 5 }`),
-			ExpectedError: util.Ptr("correlation.condition must have exactly one comparison (gt, gte, lt, lte, eq or neq), found 2; ranges are not supported"),
-			ExpectedCode:  errCodeRuleInvalidCorrelation,
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation.condition must have exactly one comparison (gt, gte, lt, lte, eq or neq), found 2; ranges are not supported"),
+			ExpectedCode:  errRuleInvalidCorrelation,
 		},
 		{
 			Name:          "Correlation With Unknown Condition Keys",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2, within: 5, above: 1 }`),
-			ExpectedError: util.Ptr("unsupported correlation.condition keys: above, within; use field, percentile and one of gt, gte, lt, lte, eq or neq"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: unsupported correlation.condition keys: above, within; use field, percentile and one of gt, gte, lt, lte, eq or neq"),
 		},
 		{
 			Name:          "Percentile Correlation With A Percentile Above 100",
 			Input:         correlationRule(`type: value_percentile, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", percentile: 150, gt: 5 }`),
-			ExpectedError: util.Ptr("correlation.condition.percentile must be between 0 and 100, found 150"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation.condition.percentile must be between 0 and 100, found 150"),
 		},
 		{
 			Name:          "Percentile Correlation With A Negative Percentile",
 			Input:         correlationRule(`type: value_percentile, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { field: "bytes", percentile: -1, gt: 5 }`),
-			ExpectedError: util.Ptr("correlation.condition.percentile must be between 0 and 100, found -1"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation.condition.percentile must be between 0 and 100, found -1"),
 		},
 		{
 			Name:  "Percentile Correlation At 0",
@@ -158,7 +158,7 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Temporal Correlation Condition Naming A Field",
 			Input:         correlationRule(`type: temporal, rules: ["rule1", "rule2"], group-by: ["field1"], timespan: "30s", condition: { field: "user.name", gte: 2 }`, "rule1", "rule2"),
-			ExpectedError: util.Ptr("a temporal correlation counts matching rules, so its condition cannot name a field"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: a temporal correlation counts matching rules, so its condition cannot name a field"),
 		},
 		{
 			Name:  "Temporal Correlation Needs No Condition",
@@ -167,23 +167,23 @@ func TestParseRule(t *testing.T) {
 		{
 			Name:          "Temporal Correlation With Only One Rule",
 			Input:         correlationRule(`type: temporal, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
-			ExpectedError: util.Ptr("a temporal correlation must reference at least 2 rules, found 1"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: a temporal correlation must reference at least 2 rules, found 1"),
 		},
 		{
 			Name:          "Correlation Type Unsupported By The ESQL Backend",
 			Input:         correlationRule(`type: temporal_ordered, rules: ["rule1"], group-by: ["field1"], timespan: "30s"`),
-			ExpectedError: util.Ptr(`unsupported correlation type "temporal_ordered"; supported types are: event_count, value_count, temporal, value_sum, value_avg, value_percentile, value_median`),
-			ExpectedCode:  errCodeRuleInvalidCorrelation,
+			ExpectedError: util.Ptr(`ERROR_RULE_INVALID__CORRELATION: unsupported correlation type "temporal_ordered"; supported types are: event_count, value_count, temporal, value_sum, value_avg, value_percentile, value_median`),
+			ExpectedCode:  errRuleInvalidCorrelation,
 		},
 		{
 			Name:          "Correlation With An Unparseable Timespan",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30 minutes", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr(`invalid timespan "30 minutes": expected a positive count followed by s, m, h, d or w (e.g. 15m)`),
+			ExpectedError: util.Ptr(`ERROR_RULE_INVALID__CORRELATION: invalid timespan "30 minutes": expected a positive count followed by s, m, h, d or w (e.g. 15m)`),
 		},
 		{
 			Name:          "Correlation With A Timespan Too Long For A Duration",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "99999999999w", condition: { gte: 2 }`),
-			ExpectedError: util.Ptr(`invalid timespan "99999999999w": too long`),
+			ExpectedError: util.Ptr(`ERROR_RULE_INVALID__CORRELATION: invalid timespan "99999999999w": too long`),
 		},
 		{
 			Name: "Correlation Referencing A Rule By Its ID",
@@ -198,15 +198,15 @@ func TestParseRule(t *testing.T) {
 { name: "inner", title: "t1", correlation: { type: event_count, rules: ["base"], group-by: ["field1"], timespan: "10m", condition: { gte: 5 } }}
 ---
 { name: "base", title: "t2", logsource: { category: "test" }, detection: { condition: "sel" }}`,
-			ExpectedError: util.Ptr(`referenced rule "inner" is itself a correlation, which is not supported; refer to the rules it correlates directly`),
-			ExpectedCode:  errCodeRuleInvalidCorrelation,
+			ExpectedError: util.Ptr(`ERROR_RULE_INVALID__CORRELATION: referenced rule "inner" is itself a correlation, which is not supported; refer to the rules it correlates directly`),
+			ExpectedCode:  errRuleInvalidCorrelation,
 		},
 		{
 			Name: "Correlation Referencing A Rule That Is Not Present",
 			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["missing_rule"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
 ---
 { name: "other_rule", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}`,
-			ExpectedError: util.Ptr("correlation references 1 rule(s) not defined in this detection: missing_rule; " +
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation references 1 rule(s) not defined in this detection: missing_rule; " +
 				"add each referenced rule as an additional YAML document (separated by ---) with a matching id or name"),
 		},
 		{
@@ -216,24 +216,24 @@ func TestParseRule(t *testing.T) {
 { name: "rule1", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}
 ---
 { name: "leftover", title: "t2", logsource: { category: "test" }, detection: { condition: "sel" }}`,
-			ExpectedError: util.Ptr("document 3 is not used by the correlation; list its id or name in correlation.rules or remove it"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: document 3 is not used by the correlation; list its id or name in correlation.rules or remove it"),
 		},
 		{
 			Name: "Referenced Rule Missing Its Detection",
 			Input: `{ id: "x", title: "title", correlation: { type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "30s", condition: { gte: 2 } }}
 ---
 { name: "rule1", title: "t1", logsource: { category: "test" }}`,
-			ExpectedError: util.Ptr(`referenced rule "rule1" is invalid: missing required fields: detection.condition`),
+			ExpectedError: util.Ptr(`ERROR_RULE_INVALID__CORRELATION: referenced rule "rule1" is invalid: missing required fields: detection.condition`),
 		},
 		{
 			Name:          "Correlation That Also Generates Its Referenced Rules",
 			Input:         correlationRule(`type: event_count, rules: ["rule1"], group-by: ["field1"], timespan: "10m", condition: { gte: 2 }, generate: true`),
-			ExpectedError: util.Ptr("correlation.generate is not supported; to alert on a referenced rule by itself as well, add it as its own detection"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation.generate is not supported; to alert on a referenced rule by itself as well, add it as its own detection"),
 		},
 		{
 			Name:          "Correlation With Aliases",
 			Input:         correlationRule(`type: temporal, rules: ["rule1", "rule2"], group-by: ["host"], timespan: "10m", aliases: { host: { rule1: source.ip, rule2: client.ip } }`, "rule1", "rule2"),
-			ExpectedError: util.Ptr("correlation.aliases is not supported; give the referenced rules the same field name instead"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: correlation.aliases is not supported; give the referenced rules the same field name instead"),
 		},
 		{
 			Name: "Referenced Rule With Neither ID Nor Name",
@@ -242,14 +242,14 @@ func TestParseRule(t *testing.T) {
 { name: "rule1", title: "t1", logsource: { category: "test" }, detection: { condition: "sel" }}
 ---
 { title: "orphan", logsource: { category: "test" }, detection: { condition: "sel" }}`,
-			ExpectedError: util.Ptr("document 3 is invalid: missing required fields: id or name"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__CORRELATION: document 3 is invalid: missing required fields: id or name"),
 		},
 		{
 			Name: "Plain Rule May Not Carry Extra Documents",
 			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: "sel" }}
 ---
 { id: "y", title: "title2", logsource: { category: "test" }, detection: { condition: "sel" }}`,
-			ExpectedError: util.Ptr("document 2 is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it"),
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__EXTRA_DOCUMENT: document 2 is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it"),
 		},
 		{
 			Name: "Plain Rule Followed By A Filter Naming It",
@@ -280,8 +280,8 @@ func TestParseRule(t *testing.T) {
 			Input: `{ id: "x", title: "title", logsource: { category: "test" }, detection: { condition: "sel" }}
 ---
 { title: "f", logsource: { category: "test" }, filter: { rules: ["y"], admin: { host: "a" }, condition: "not admin" }}`,
-			ExpectedError: util.Ptr("document 2 is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it"),
-			ExpectedCode:  errCodeRuleInvalidExtraDocument,
+			ExpectedError: util.Ptr("ERROR_RULE_INVALID__EXTRA_DOCUMENT: document 2 is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it"),
+			ExpectedCode:  errRuleInvalidExtraDocument,
 		},
 		{
 			Name: "Plain Rule With Leading And Trailing Separators",

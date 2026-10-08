@@ -134,7 +134,6 @@ func TestCorrelationRequiresEsql(t *testing.T) {
 
 	_, err := engine.ValidateRule(testCorrelationContent)
 	assert.ErrorIs(t, err, errCorrelationNeedsEsql)
-	assert.ErrorIs(t, err, errCodeCorrelationRequiresEsql)
 
 	_, err = engine.sigmaToElastAlert(context.Background(), &model.Detection{Content: testCorrelationContent})
 	assert.ErrorIs(t, err, errCorrelationNeedsEsql)

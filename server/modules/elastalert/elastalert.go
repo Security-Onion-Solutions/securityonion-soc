@@ -430,6 +430,13 @@ func (e *ElastAlertEngine) IsRunning() bool {
 func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 	collection, err := ParseElastAlertRuleCollection([]byte(data))
 	if err != nil {
+		for _, code := range []error{errRuleInvalidCorrelation, errRuleInvalidExtraDocument} {
+			if errors.Is(err, code) {
+				log.WithError(err).Warn("invalid Sigma rule")
+				return "", code
+			}
+		}
+
 		return "", err
 	}
 

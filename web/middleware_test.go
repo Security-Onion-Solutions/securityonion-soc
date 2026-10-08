@@ -9,8 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -142,13 +140,6 @@ func TestRespond(t *testing.T) {
 			Obj:          &model.Unauthorized{},
 			ExpectedBody: []byte(`ERROR_PERMISSION_DENIED`),
 			ExpectedCode: http.StatusForbidden,
-		},
-		{
-			Name:         "Rule Error - 400",
-			StatusCode:   http.StatusBadRequest,
-			Obj:          fmt.Errorf("invalid rule: %w", model.NewRuleError(errors.New("ERROR_RULE_INVALID__CORRELATION"), errors.New("unsupported correlation type"))),
-			ExpectedBody: []byte(`ERROR_RULE_INVALID__CORRELATION`),
-			ExpectedCode: http.StatusBadRequest,
 		},
 		{
 			Name:         "200 but Error",

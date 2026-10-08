@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/model"
-
 	"github.com/apex/log"
 	"github.com/samber/lo"
 )
@@ -25,11 +23,8 @@ import (
 // Warn-only: each run re-reads timespan + run interval + allowance. Shipped rules use 10m-1h.
 const largeCorrelationWindow = 4 * time.Hour
 
-var errCodeCorrelationRequiresEsql = errors.New("ERROR_CORRELATION_REQUIRES_ESQL")
-
 // Only the ES|QL backend counts correlations in event-time windows.
-var errCorrelationNeedsEsql = model.NewRuleError(errCodeCorrelationRequiresEsql,
-	errors.New("correlation rules require ES|QL; enable useEsql in the Sigma configuration"))
+var errCorrelationNeedsEsql = errors.New("ERROR_CORRELATION_REQUIRES_ESQL")
 
 // The correlation types the ES|QL backend can express.
 const (

@@ -20,10 +20,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Codes for invalid rules that the UI localizes; see model.RuleError.
 var (
-	errCodeRuleInvalidCorrelation   = errors.New("ERROR_RULE_INVALID__CORRELATION")
-	errCodeRuleInvalidExtraDocument = errors.New("ERROR_RULE_INVALID__EXTRA_DOCUMENT")
+	errRuleInvalidCorrelation   = errors.New("ERROR_RULE_INVALID__CORRELATION")
+	errRuleInvalidExtraDocument = errors.New("ERROR_RULE_INVALID__EXTRA_DOCUMENT")
 )
 
 type SigmaStatus string
@@ -244,8 +243,8 @@ func (c *SigmaRuleCollection) Validate() error {
 		// sigma-cli applies Sigma filter documents to the rule they name
 		for i, doc := range c.Referenced {
 			if !doc.filters(c.Primary) {
-				return model.NewRuleError(errCodeRuleInvalidExtraDocument,
-					fmt.Errorf("document %d is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it", i+2))
+				return fmt.Errorf("%w: document %d is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it",
+					errRuleInvalidExtraDocument, i+2)
 			}
 		}
 
@@ -253,11 +252,15 @@ func (c *SigmaRuleCollection) Validate() error {
 	}
 
 	err = c.Primary.Correlation.Validate()
-	if err != nil {
-		return model.NewRuleError(errCodeRuleInvalidCorrelation, err)
+	if err == nil {
+		err = c.validateReferences()
 	}
 
-	return model.NewRuleError(errCodeRuleInvalidCorrelation, c.validateReferences())
+	if err != nil {
+		return fmt.Errorf("%w: %w", errRuleInvalidCorrelation, err)
+	}
+
+	return nil
 }
 
 func (c *SigmaRuleCollection) validateReferences() error {

@@ -266,7 +266,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -1267,7 +1267,7 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 	// A rule that previews must also save.
 	_, err = eng.ValidateRule(det.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule for conversion: %w", err))
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -1378,7 +1378,7 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 
 	_, err := e.ValidateRule(detect.Content)
 	if err != nil {
-		invalidErr = fmt.Errorf("invalid rule for update: %w", err)
+		invalidErr = err
 
 		// a disable is checked once the stored rule is loaded
 		if detect.IsEnabled || detect.Id == "" {

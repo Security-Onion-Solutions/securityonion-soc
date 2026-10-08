@@ -158,12 +158,6 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 			statusCode = http.StatusNotFound
 		}
 
-		// the detail is logged above; only the code reaches the client
-		var ruleError *model.RuleError
-		if errors.As(err, &ruleError) {
-			err = ruleError.Code
-		}
-
 		bytes := []byte(ConvertErrorToSafeString(err))
 		contentLength = len(bytes)
 
