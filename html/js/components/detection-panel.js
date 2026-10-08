@@ -140,7 +140,7 @@ components.push({
 
 						break;
 					case 'elastalert':
-						const yaml = parseMultiDocYaml(this.detection.content)[0] ?? {};
+						const yaml = this.$root.parseMultiDocYaml(this.detection.content)[0] ?? {};
 						if (yaml.description) {
 							this.extractedSummary = yaml.description;
 							break;
@@ -441,7 +441,7 @@ components.push({
 				return results[1];
 			},
 			extractElastAlertPublicID() {
-				return parseMultiDocYaml(this.detection.content)[0]?.id;
+				return this.$root.parseMultiDocYaml(this.detection.content)[0]?.id;
 			},
 			pickValue(item, field) {
 				let value = '';

@@ -272,7 +272,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 					break;
 				case 'elastalert':
-					const docs = parseMultiDocYaml(this.detect.content);
+					const docs = this.$root.parseMultiDocYaml(this.detect.content);
 					if (docs.length > 0 && docs[0].description) {
 						this.extractedSummary = docs[0].description;
 						break;
@@ -330,7 +330,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		extractElastAlertReferences() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0 || !docs[0]['references']) {
 				return;
 			}
@@ -457,7 +457,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedLogic = lines.map(l => l.length >= min ? l.substring(min) : l).join('\n');
 		},
 		extractElastAlertLogic() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0) {
 				this.extractedLogic = '';
 				return;
@@ -503,8 +503,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
 
 				if (oldDict['engine'] === 'elastalert') {
-					const docsOld = parseMultiDocYaml(oldDict['content']);
-					const docsNew = parseMultiDocYaml(newDict['content']);
+					const docsOld = this.$root.parseMultiDocYaml(oldDict['content']);
+					const docsNew = this.$root.parseMultiDocYaml(newDict['content']);
 
 					const keysToDelete = ['title', 'description', 'level'];
 
@@ -974,14 +974,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return sev;
 		},
 		extractElastAlertPublicID() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length > 0) {
 				return docs[0]['id'];
 			}
 			return undefined;
 		},
 		extractElastAlertDetection() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0) {
 				return undefined;
 			}
@@ -992,7 +992,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return doc['detection'];
 		},
 		extractElastAlertSeverity() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length > 0) {
 				const level = docs[0]['level'];
 				if (!level) return;

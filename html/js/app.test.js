@@ -1754,7 +1754,7 @@ test('a live agentic push is not republished again by the next settings reload',
 });
 
 test('parseMultiDocYaml', () => {
-  expect(parseMultiDocYaml('---\nid: a\nlevel: 3\n---\n---\nname: b\n')).toEqual([{ id: 'a', level: '3' }, { name: 'b' }]);
-  expect(parseMultiDocYaml('')).toEqual([]);
-  expect(parseMultiDocYaml('id: a\n---\n')).toEqual([{ id: 'a' }]);
+  expect(app.parseMultiDocYaml('---\nid: a\nlevel: 3\n---\n---\nname: b\n')).toEqual([{ id: 'a', level: '3' }, { name: 'b' }]);
+  expect(app.parseMultiDocYaml('')).toEqual([]);
+  expect(app.parseMultiDocYaml('id: a\n---\n')).toEqual([{ id: 'a' }]);
 });
