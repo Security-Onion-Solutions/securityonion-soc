@@ -210,6 +210,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
         this.$refs.alarmsManager.showAddAlarm();
       }
     },
+    onAlarmDeleted(alarm) {
+      if (alarm?.id && this.$root?.onAlarmDelete) {
+        this.$root.onAlarmDelete({ alarmId: alarm.id });
+      }
+    },
     refresh() {
       this.loadData();
       if (this.activeTab === 'metrics') {

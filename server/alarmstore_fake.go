@@ -82,6 +82,13 @@ func (f *FakeAlarmstore) DeleteAlarm(ctx context.Context, id string) error {
 	for i, a := range f.Alarms {
 		if a.ID == id {
 			f.Alarms = append(f.Alarms[:i], f.Alarms[i+1:]...)
+			var remainingStates []model.AlarmState
+			for _, s := range f.States {
+				if s.AlarmID != id {
+					remainingStates = append(remainingStates, s)
+				}
+			}
+			f.States = remainingStates
 			return nil
 		}
 	}

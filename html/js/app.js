@@ -687,6 +687,7 @@ $(document).ready(function () {
                   this.subscribe("status", this.updateStatus);
                   this.subscribe('notification', this.handleIncomingNotification);
                   this.subscribe('alarm:state', this.onAlarmStateUpdate);
+                  this.subscribe('alarm:delete', this.onAlarmDelete);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);
@@ -1715,6 +1716,19 @@ $(document).ready(function () {
           this.updateStatus();
           this.setFavicon();
           this.updateTitle();
+        },
+        onAlarmDelete(payload) {
+          const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
+          if (!alarmId) return;
+          if (this.alarmStates && this.alarmStates.length > 0) {
+            const initialLen = this.alarmStates.length;
+            this.alarmStates = this.alarmStates.filter(s => s.alarmId !== alarmId);
+            if (this.alarmStates.length !== initialLen) {
+              this.updateStatus();
+              this.setFavicon();
+              this.updateTitle();
+            }
+          }
         },
         loadAlarmStates() {
           if (!this.username) return Promise.resolve();
