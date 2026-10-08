@@ -142,7 +142,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			curCommentEditTarget: null,
 			origComment: null,
 			showSigmaDialog: false,
-			newDetectionLanguage: null,
+			newDetectionSigmaKind: 'single',
+			sigmaKindItems: [
+				{ title: this.$root.i18n.sigmaSingleEvent, value: 'single' },
+				{ title: this.$root.i18n.sigmaCorrelation, value: 'correlation' },
+			],
 			convertedRule: '',
 			isEsql: false,
 			showDirtySourceDialog: false,
@@ -178,20 +182,6 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			Prism.highlightAll();
 		});
 	},
-	computed: {
-		newDetectionLanguages() {
-			return this.getPresets('language').flatMap(lang => {
-				if (lang.toLowerCase() !== 'sigma' || !this.ruleTemplates['elastalert_correlation']) {
-					return [{ title: lang, value: lang }];
-				}
-
-				return [
-					{ title: this.i18n.sigmaSingleEvent, value: lang },
-					{ title: this.i18n.sigmaCorrelation, value: lang + ':correlation' },
-				];
-			});
-		},
-	},
 	methods: {
 		async initDetection(params) {
 			this.params = params;
@@ -203,7 +193,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
-				this.newDetectionLanguage = null;
+				this.newDetectionSigmaKind = 'single';
 			} else {
 				await this.loadData();
 			}
@@ -1014,14 +1004,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				}
 			}
 		},
+		hasSigmaKindChoice() {
+			return (this.detect.language || '').toLowerCase() === 'sigma' && !!this.ruleTemplates['elastalert_correlation'];
+		},
 		async onNewDetectionLanguageChange() {
-			const [lang, variant] = (this.newDetectionLanguage || '').split(':');
-			this.detect.language = lang;
+			const lang = (this.detect.language || '').toLowerCase();
+			const engine = this.languageToEngine[lang];
 
-			const engine = this.languageToEngine[lang.toLowerCase()];
-			const template = this.ruleTemplates[variant ? `${engine}_${variant}` : engine];
-
-			if (template) {
+			if (engine) {
 				let publicId = '';
 
 				if (engine !== 'strelka') {
@@ -1033,7 +1023,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = template
+				const correlation = this.hasSigmaKindChoice() && this.newDetectionSigmaKind === 'correlation';
+				this.detect.content = this.ruleTemplates[correlation ? 'elastalert_correlation' : engine]
 					.replaceAll('[publicId]', publicId)
 					.replaceAll('[today]', moment().format('YYYY-MM-DD'))
 					.trim();

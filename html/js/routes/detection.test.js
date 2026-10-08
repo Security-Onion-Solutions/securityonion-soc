@@ -433,83 +433,76 @@ test('onNewDetectionLanguageChange', async () => {
 		"elastalert": 'c [publicId]',
 	};
 	// no language means no engine means no request means no change
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = '';
+	comp.detect = { language: '', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('x');
 
 	// yara, no publicId, results in template without publicId, note that the template is trimmed and there is no [publicId]
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = 'yara';
+	comp.detect = { language:'yara', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
-	expect(comp.detect.language).toBe('yara');
 	expect(comp.detect.content).toBe('b');
 
 	// suricata, sid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = 'suricata';
+	comp.detect = { language:'suricata', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('a X');
 
 	// sigma, uuid, results in template with publicId
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = 'sigma';
+	comp.detect = { language:'sigma', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X');
 
 	// [today] is replaced with the current date in YYYY-MM-DD format
 	comp.ruleTemplates["elastalert"] = 'c [publicId] [today]';
 	resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = 'sigma';
+	comp.detect = { language:'sigma', content: 'x' };
 	await comp.onNewDetectionLanguageChange();
 	expect(comp.detect.content).toBe('c X ' + moment().format('YYYY-MM-DD'));
 });
 
-test('onNewDetectionLanguageChange - correlation', async () => {
+test('onNewDetectionLanguageChange - sigma kind', async () => {
 	comp.ruleTemplates = {
+		"strelka": 'b [publicId]',
 		"elastalert": 'c [publicId]',
 		"elastalert_correlation": 'corr [publicId]',
 	};
-	comp.detect = { content: 'x' };
-	comp.newDetectionLanguage = 'Sigma:correlation';
+	comp.detect = { language: 'Sigma', content: 'x' };
+	comp.newDetectionSigmaKind = 'correlation';
 
 	const mock = resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
 	await comp.onNewDetectionLanguageChange();
 
 	expect(mock).toHaveBeenCalledWith('detection/elastalert/genpublicid');
-	expect(comp.detect.language).toBe('Sigma');
 	expect(comp.detect.content).toBe('corr X');
 
-	// switching to the single-event entry loads the single-event template
 	resetPapi().mockPapi("get", { data: { publicId: 'Y' } }, null);
-	comp.newDetectionLanguage = 'Sigma';
+	comp.newDetectionSigmaKind = 'single';
 	await comp.onNewDetectionLanguageChange();
-	expect(comp.detect.language).toBe('Sigma');
 	expect(comp.detect.content).toBe('c Y');
+
+	// only Sigma has a rule type
+	comp.newDetectionSigmaKind = 'correlation';
+	comp.detect = { language: 'YARA', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('b');
 });
 
-test('newDetectionLanguages', () => {
-	comp.presets = { language: { labels: ['suricata', 'sigma', 'yara'] } };
-
-	// with a correlation template, Sigma is offered once per template
+test('hasSigmaKindChoice', () => {
 	comp.ruleTemplates = { "elastalert": 'c', "elastalert_correlation": 'corr' };
-	expect(comp.newDetectionLanguages()).toEqual([
-		{ title: 'Suricata', value: 'Suricata' },
-		{ title: comp.i18n.sigmaSingleEvent, value: 'Sigma' },
-		{ title: comp.i18n.sigmaCorrelation, value: 'Sigma:correlation' },
-		{ title: 'YARA', value: 'YARA' },
-	]);
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(true);
 
-	// without one, Sigma is a single entry
+	comp.detect = { language: 'YARA' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
+	comp.detect = {};
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
 	comp.ruleTemplates = { "elastalert": 'c' };
-	expect(comp.newDetectionLanguages()).toEqual([
-		{ title: 'Suricata', value: 'Suricata' },
-		{ title: 'Sigma', value: 'Sigma' },
-		{ title: 'YARA', value: 'YARA' },
-	]);
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
 });
 
 test('getDefaultPreset', () => {

@@ -19,7 +19,11 @@
 						<div class="col pa-4 contrast-bg rounded rounded-md">
 							<div class="mb-3 header">{{ i18n.add }} {{ i18n.detection }}</div>
 							<span data-aid="detection_new_language_select" class="mb-3 d-block">
-								<v-select id="detection-language-create" v-model="newDetectionLanguage" :items="newDetectionLanguages" :label="i18n.language" :rules="[$root.validators.required]" required @update:model-value="onNewDetectionLanguageChange"></v-select>
+								<v-select id="detection-language-create" v-model="detect.language" :items="getPresets('language')" :label="i18n.language" :rules="[$root.validators.required]" required @update:model-value="onNewDetectionLanguageChange"></v-select>
+							</span>
+
+							<span v-if="hasSigmaKindChoice()" data-aid="detection_new_sigma_kind_select" class="mb-3 d-block">
+								<v-select id="detection-sigma-kind-create" v-model="newDetectionSigmaKind" :items="sigmaKindItems" :label="i18n.sigmaRuleType" @update:model-value="onNewDetectionLanguageChange"></v-select>
 							</span>
 
 							<span data-aid="detection_new_license_select" class="mb-3 d-block">
