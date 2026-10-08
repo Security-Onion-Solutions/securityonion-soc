@@ -6,6 +6,18 @@
 loadPageTemplate('component-alert-investigation', 'pages/alert-investigation.html');
 
 const ALERT_INVESTIGATIONS_FIELD = 'event.so_investigations';
+
+const ALERT_TRIAGE_ASSESSMENTS = {
+  likely_malicious: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
+  needs_review: { label: 'aiAssessmentNeedsReview', color: 'warning' },
+  likely_benign: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+};
+
+globalThis.alertTriageAssessment = function(alert, i18n) {
+  const assessment = alert ? ALERT_TRIAGE_ASSESSMENTS[alert['event.so_alerttriage.assessment']] : null;
+  return assessment ? { label: i18n[assessment.label], color: assessment.color } : null;
+};
+
 const MAX_SESSION_ACCESS_IDS = 50;
 
 rootMethods.push({
@@ -113,6 +125,9 @@ components.push({
         if (!subject || !subject.soc_id) return null;
         if (!this.newLinks[subject.soc_id]) this.newLinks[subject.soc_id] = this.newInvestigationLink(subject);
         return this.newLinks[subject.soc_id];
+      },
+      assessment() {
+        return alertTriageAssessment(this.subject(), this.i18n);
       },
       failedCount() {
         return this.triageField('failed_count') || 0;
