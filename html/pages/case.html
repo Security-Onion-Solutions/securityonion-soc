@@ -37,7 +37,7 @@
 				<div tabindex="0" class="clicktoedit d-flex align-start pa-2" v-if="!isEdit('case-description')" @click="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)"
 					@keypress.enter.space.prevent="startEdit('case-desc-input',  caseObj.description, 'case-description', 'description', modifyCase, [], true)" role="button" aria-labelledby="case-description-label">
 					<div class="d-block" style="width: 100%;">
-						<div id="case-description" class="rounded case detail-field markdown-body" v-html="formatMarkdown(caseObj.description)"></div>
+						<div id="case-description" class="rounded case detail-field markdown-body" v-html="formatMarkdown(caseObj.description, false, true)"></div>
 					</div>
 				</div>
 				<div class="d-flex flex-column" v-if="isEdit('case-description')">
@@ -109,7 +109,7 @@
 												<div class="d-flex flex-column align-start">
 													<div v-if="!isEdit(`comment-${index}`)" class="case d-block comment-body mt-2" data-aid="case_comment_display">
 														<div class="mb-2">
-															<div :id="`comment-${index}`" class="markdown-body" v-html="$root.formatMarkdownMermaid(comment.description, true, false)"></div>
+															<div :id="`comment-${index}`" class="markdown-body" v-html="$root.formatMarkdownMermaid(comment.description, true, true)"></div>
 														</div>
 													</div>
 													<div v-else class="d-flex flex-column full-width" data-aid="case_comment_edit">
@@ -410,7 +410,7 @@
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)"
 													@keypress.enter.space.prevent="startEdit(`attachments-${index}-description-input`, item.description, `attachments-${index}-description`, 'description', modifyAssociation, ['attachments', item], true)" role="button">
 													<div :id="`attachments-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description)" :aria-labelledby="`attachments-${index}-description-label`"></div>
+													<div :id="`attachments-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`attachments-${index}-description`)" v-html="formatMarkdown(item.description, false, true)" :aria-labelledby="`attachments-${index}-description-label`"></div>
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`attachments-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>
@@ -725,7 +725,7 @@
 												<div tabindex="0" class="clicktoedit" @click="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)"
 													@keypress.enter.space.prevent="startEdit(`evidence-${index}-description-input`, item.description, `evidence-${index}-description`, 'description', modifyAssociation, ['evidence', item], true)" role="button">
 													<div :id="`evidence-${index}-description-label`" class="font-weight-bold">{{i18n.artifactDescription}}: </div>
-													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" :aria-labelledby="`evidence-${index}-description-label`" v-html="formatMarkdown(item.description)"></div>
+													<div :id="`evidence-${index}-description`" class="case detail-field markdown-body" v-if="!isEdit(`evidence-${index}-description`)" :aria-labelledby="`evidence-${index}-description-label`" v-html="formatMarkdown(item.description, false, true)"></div>
 												</div>
 												<div class="d-flex flex-column" v-if="isEdit(`evidence-${index}-description`)">
 													<v-form v-model="editForm.valid" @submit.prevent>

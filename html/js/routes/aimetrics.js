@@ -528,7 +528,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return Math.round(rawCPM);
     },
     sanitizeHtml(html) {
-      return html ? DOMPurify.sanitize(html) : '';
+      return this.$root.sanitizeMarkdownHtml(html);
     },
     messageAid(item) {
       return item?.tags?.includes('tool_result')
