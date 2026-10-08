@@ -16,6 +16,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
@@ -518,7 +519,7 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 }
 
 func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *model.Alarm, nodeID string, currentValue string, durationSeconds int) {
-	if s.server == nil || s.server.Notifier == nil {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) || s.server == nil || s.server.Notifier == nil {
 		return
 	}
 
@@ -532,22 +533,21 @@ func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *mo
 	payload := &model.NotificationPayload{
 		ID:        uuid.NewString(),
 		Source:    model.SourceMetric,
-		Title:     "🚨 " + alarm.Name,
+		Title:     "🔴 " + alarm.Name,
 		Summary:   summary,
 		Severity:  alarm.Severity,
 		Timestamp: time.Now().UTC(),
 		Fields: map[string]string{
-			"Alarm":         alarm.Name,
-			"Node":          nodeID,
-			"Metric":        alarm.Metric,
-			"Operator":      alarm.Operator,
-			"Threshold":     alarm.Threshold,
-			"Current Value": currentValue,
-			"Duration":      durStr,
-			"Status":        "🚨 Active",
+			"Node":      nodeID,
+			"Metric":    alarm.Metric,
+			"Operator":  alarm.Operator,
+			"Threshold": alarm.Threshold,
+			"Value":     currentValue,
+			"Duration":  durStr,
+			"Triggered": "true",
 		},
 		Links: map[string]string{
-			"Grid Metrics": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),
+			"SOC": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),
 		},
 		Recipients: alarm.Recipients,
 		SilenceKey: fmt.Sprintf("alarm:%s:%s", alarm.ID, nodeID),
@@ -557,7 +557,7 @@ func (s *AlarmstoreImpl) triggerAlarmNotification(ctx context.Context, alarm *mo
 }
 
 func (s *AlarmstoreImpl) triggerClearedNotification(ctx context.Context, alarm *model.Alarm, nodeID string, currentValue string, durationActiveSeconds int) {
-	if s.server == nil || s.server.Notifier == nil {
+	if !licensing.IsEnabled(licensing.FEAT_NTF) || s.server == nil || s.server.Notifier == nil {
 		return
 	}
 
@@ -576,22 +576,21 @@ func (s *AlarmstoreImpl) triggerClearedNotification(ctx context.Context, alarm *
 	payload := &model.NotificationPayload{
 		ID:        uuid.NewString(),
 		Source:    model.SourceMetric,
-		Title:     "✅ " + alarm.Name,
+		Title:     "🟢 " + alarm.Name,
 		Summary:   summary,
 		Severity:  clearedSev,
 		Timestamp: time.Now().UTC(),
 		Fields: map[string]string{
-			"Alarm":         alarm.Name,
-			"Node":          nodeID,
-			"Metric":        alarm.Metric,
-			"Operator":      alarm.Operator,
-			"Threshold":     alarm.Threshold,
-			"Current Value": currentValue,
-			"Duration":      durStr,
-			"Status":        "✅ Cleared",
+			"Node":      nodeID,
+			"Metric":    alarm.Metric,
+			"Operator":  alarm.Operator,
+			"Threshold": alarm.Threshold,
+			"Value":     currentValue,
+			"Duration":  durStr,
+			"Triggered": "false",
 		},
 		Links: map[string]string{
-			"Grid Metrics": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),
+			"SOC": fmt.Sprintf("/#/grid?tab=metrics&nodeId=%s", url.QueryEscape(nodeID)),
 		},
 		Recipients: alarm.Recipients,
 		SilenceKey: fmt.Sprintf("alarm:%s:%s:cleared", alarm.ID, nodeID),

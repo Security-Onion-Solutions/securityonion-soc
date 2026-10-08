@@ -62,7 +62,7 @@ func TestChannelRegistry_Licensed(t *testing.T) {
 	assert.Error(t, err)
 
 	// Test register valid channel
-	ch1 := &dummyChannel{channelType: "slack"}
+	ch1 := &dummyChannel{channelType: "slack_webhook"}
 	err = reg.Register(ch1)
 	assert.NoError(t, err)
 
@@ -71,7 +71,7 @@ func TestChannelRegistry_Licensed(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test get existing
-	retrieved, found := reg.Get("slack")
+	retrieved, found := reg.Get("slack_webhook")
 	assert.True(t, found)
 	assert.Equal(t, ch1, retrieved)
 
@@ -82,7 +82,7 @@ func TestChannelRegistry_Licensed(t *testing.T) {
 	// Test registered types
 	types := reg.RegisteredTypes()
 	assert.Len(t, types, 2)
-	assert.Contains(t, types, "slack")
+	assert.Contains(t, types, "slack_webhook")
 	assert.Contains(t, types, "smtp")
 }
 
@@ -91,12 +91,12 @@ func TestChannelRegistry_Unlicensed(t *testing.T) {
 	licensing.Test(licensing.FEAT_API, 0, 0, "", "")
 
 	reg := NewChannelRegistry()
-	ch := &dummyChannel{channelType: "slack"}
+	ch := &dummyChannel{channelType: "slack_webhook"}
 	err := reg.Register(ch)
 	assert.NoError(t, err)
 
 	// Get should return nil, false when unlicensed
-	retrieved, found := reg.Get("slack")
+	retrieved, found := reg.Get("slack_webhook")
 	assert.False(t, found)
 	assert.Nil(t, retrieved)
 

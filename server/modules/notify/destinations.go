@@ -119,6 +119,39 @@ func (n *NotifierImpl) saveDestinationsMap(ctx context.Context, dests map[string
 	return nil
 }
 
+// MaskedSecret represents the redacted mask returned for secret destination configuration fields.
+const MaskedSecret = "******"
+
+func maskDestinationSecrets(dest *model.DestinationConfig) {
+	if dest == nil || dest.Params == nil {
+		return
+	}
+	paramsCopy := make(map[string]interface{}, len(dest.Params))
+	for k, v := range dest.Params {
+		paramsCopy[k] = v
+	}
+
+	switch dest.Type {
+	case "smtp":
+		if pwd, ok := paramsCopy["password"].(string); ok && pwd != "" {
+			paramsCopy["password"] = MaskedSecret
+		}
+	}
+	dest.Params = paramsCopy
+}
+
+func unmaskDestinationSecrets(dest *model.DestinationConfig, existing *model.DestinationConfig) {
+	if dest == nil || dest.Params == nil || existing == nil || existing.Params == nil {
+		return
+	}
+	switch dest.Type {
+	case "smtp":
+		if pwd, ok := dest.Params["password"].(string); ok && pwd == MaskedSecret {
+			dest.Params["password"] = existing.Params["password"]
+		}
+	}
+}
+
 func (n *NotifierImpl) decorateDestinationCapabilities(dest *model.DestinationConfig) {
 	if dest == nil || n.registry == nil {
 		return
@@ -146,6 +179,7 @@ func (n *NotifierImpl) ListDestinations(ctx context.Context) ([]model.Destinatio
 			dest.ID = id
 		}
 		n.decorateDestinationCapabilities(&dest)
+		maskDestinationSecrets(&dest)
 		result = append(result, dest)
 	}
 
@@ -179,6 +213,7 @@ func (n *NotifierImpl) GetDestination(ctx context.Context, id string) (*model.De
 		dest.ID = id
 	}
 	n.decorateDestinationCapabilities(&dest)
+	maskDestinationSecrets(&dest)
 	return &dest, nil
 }
 
@@ -195,21 +230,23 @@ func (n *NotifierImpl) CreateDestination(ctx context.Context, dest *model.Destin
 		return nil, err
 	}
 
-	if strings.TrimSpace(dest.Type) == "" {
-		dest.Type = "soc"
-	}
-
 	if dest.ID == "" {
 		dest.ID = uuid.NewString()
 	} else if !model.IsValidDestinationID(dest.ID) {
 		return nil, server.ErrInvalidDestinationID
 	}
 
+	if strings.TrimSpace(dest.Type) == "" {
+		dest.Type = "soc"
+	}
+
 	if n.registry != nil {
-		if ch, found := n.registry.Get(dest.Type); found {
-			if err := ch.ValidateConfig(dest.Params); err != nil {
-				return nil, fmt.Errorf("invalid channel parameters: %w", err)
-			}
+		ch, found := n.registry.Get(dest.Type)
+		if !found {
+			return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+		}
+		if err := ch.ValidateConfig(dest.Params); err != nil {
+			return nil, fmt.Errorf("invalid channel parameters: %w", err)
 		}
 	}
 
@@ -231,6 +268,7 @@ func (n *NotifierImpl) CreateDestination(ctx context.Context, dest *model.Destin
 	}
 
 	n.decorateDestinationCapabilities(dest)
+	maskDestinationSecrets(dest)
 	return dest, nil
 }
 
@@ -257,14 +295,6 @@ func (n *NotifierImpl) UpdateDestination(ctx context.Context, id string, dest *m
 
 	dest.ID = id
 
-	if n.registry != nil {
-		if ch, found := n.registry.Get(dest.Type); found {
-			if err := ch.ValidateConfig(dest.Params); err != nil {
-				return nil, fmt.Errorf("invalid channel parameters: %w", err)
-			}
-		}
-	}
-
 	n.destMu.Lock()
 	defer n.destMu.Unlock()
 
@@ -273,8 +303,21 @@ func (n *NotifierImpl) UpdateDestination(ctx context.Context, id string, dest *m
 		return nil, err
 	}
 
-	if _, exists := destsMap[id]; !exists {
+	existing, exists := destsMap[id]
+	if !exists {
 		return nil, server.ErrDestinationNotFound
+	}
+
+	unmaskDestinationSecrets(dest, &existing)
+
+	if n.registry != nil {
+		ch, found := n.registry.Get(dest.Type)
+		if !found {
+			return nil, fmt.Errorf("%w: %s", server.ErrInvalidChannelType, dest.Type)
+		}
+		if err := ch.ValidateConfig(dest.Params); err != nil {
+			return nil, fmt.Errorf("invalid channel parameters: %w", err)
+		}
 	}
 
 	destsMap[id] = *dest
@@ -283,6 +326,7 @@ func (n *NotifierImpl) UpdateDestination(ctx context.Context, id string, dest *m
 	}
 
 	n.decorateDestinationCapabilities(dest)
+	maskDestinationSecrets(dest)
 	return dest, nil
 }
 

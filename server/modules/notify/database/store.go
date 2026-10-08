@@ -54,14 +54,15 @@ func SanitizeLinks(links map[string]string) map[string]string {
 	}
 	clean := make(map[string]string)
 	for name, rawURL := range links {
-		if isSafeURL(rawURL) {
+		if IsSafeURL(rawURL) {
 			clean[name] = rawURL
 		}
 	}
 	return clean
 }
 
-func isSafeURL(rawURL string) bool {
+// IsSafeURL validates that a URL uses an approved protocol scheme or relative path.
+func IsSafeURL(rawURL string) bool {
 	trimmed := strings.TrimSpace(rawURL)
 	if trimmed == "" {
 		return false

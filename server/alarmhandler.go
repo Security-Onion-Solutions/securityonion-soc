@@ -13,7 +13,6 @@ import (
 
 	"github.com/apex/log"
 	"github.com/go-chi/chi/v5"
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
@@ -89,18 +88,12 @@ func (h *AlarmHandler) respondError(w http.ResponseWriter, r *http.Request, err 
 // @Security     bearer[grid/read]
 // @Produce      json
 // @Success      200  {array}  model.Alarm  "The list of alarms"
-// @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Alarm module has not been enabled on the server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms [get]
 func (h *AlarmHandler) GetAlarms(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -120,18 +113,12 @@ func (h *AlarmHandler) GetAlarms(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[grid/read]
 // @Produce      json
 // @Success      200  {array}  model.AlarmMetricInfo  "The list of available metric datapoints"
-// @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Alarm module has not been enabled on the server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/metrics [get]
 func (h *AlarmHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -151,17 +138,11 @@ func (h *AlarmHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[grid/read]
 // @Produce      json
 // @Success      200  {array}  model.AlarmState  "The list of alarm states"
-// @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/states [get]
 func (h *AlarmHandler) GetStates(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -195,11 +176,6 @@ func (h *AlarmHandler) GetStates(w http.ResponseWriter, r *http.Request) {
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/{id} [get]
 func (h *AlarmHandler) GetAlarm(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
@@ -229,11 +205,6 @@ func (h *AlarmHandler) GetAlarm(w http.ResponseWriter, r *http.Request) {
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms [post]
 func (h *AlarmHandler) PostAlarm(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -271,11 +242,6 @@ func (h *AlarmHandler) PostAlarm(w http.ResponseWriter, r *http.Request) {
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/{id} [put]
 func (h *AlarmHandler) PutAlarm(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
@@ -312,11 +278,6 @@ func (h *AlarmHandler) PutAlarm(w http.ResponseWriter, r *http.Request) {
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/{id} [delete]
 func (h *AlarmHandler) DeleteAlarm(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 	id := chi.URLParam(r, "id")
@@ -336,18 +297,12 @@ func (h *AlarmHandler) DeleteAlarm(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[config/read]
 // @Produce      json
 // @Success      200         "Evaluation completed successfully"
-// @Failure      400         "License is invalid"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Alarm module has not been enabled on the server"
 // @Failure      500         "Internal SOC error; review SOC logs"
 // @Router       /connect/alarms/evaluate [post]
 func (h *AlarmHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
-	if !licensing.IsEnabled(licensing.FEAT_NTF) {
-		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
-		return
-	}
-
 	ctx := r.Context()
 	logger := log.FromContext(ctx)
 
@@ -363,5 +318,5 @@ func (h *AlarmHandler) PostEvaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	web.Respond(w, r, http.StatusOK, map[string]bool{"success": true})
+	web.Respond(w, r, http.StatusOK, nil)
 }

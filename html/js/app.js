@@ -276,6 +276,7 @@ $(document).ready(function () {
           notificationsStarted: false,
           showNotificationOptions: false,
           alarmStates: [],
+          alarmStatesLoaded: false,
           subtitle: '',
           connected: false,
           reconnecting: false,
@@ -641,8 +642,10 @@ $(document).ready(function () {
                     this.username = this.user.email;
                   }
                   this.notificationsStarted = !!response.data.notificationsStarted;
+                  if (!this.alarmStatesLoaded) {
+                    this.loadAlarmStates();
+                  }
                   this.handleServerInfoNotifications(response.data);
-                  this.loadAlarmStates();
 
                   if (this.parameterCallback != null) {
                     this.parameterCallback(this.parameters[this.parameterSection]);
@@ -1371,6 +1374,7 @@ $(document).ready(function () {
               vm.connected = true;
               vm.reconnecting = false;
               vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
+              vm.loadAlarmStates();
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
@@ -1722,10 +1726,11 @@ $(document).ready(function () {
           this.updateTitle();
         },
         loadAlarmStates() {
-          if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+          if (!this.username) return Promise.resolve();
           return this.papi.get('alarms/states')
             .then(response => {
               this.alarmStates = response?.data || [];
+              this.alarmStatesLoaded = true;
               this.updateStatus();
               this.setFavicon();
               this.updateTitle();

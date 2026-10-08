@@ -66,17 +66,18 @@ components.push({
       };
     },
     computed: {
-      isSuperuser() {
-        return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
-      },
       tableHeaders() {
-        if (!this.isSuperuser) {
-          return this.alarmHeaders.filter(h => h.value !== 'actions');
+        let headers = this.alarmHeaders;
+        if (!this.$root.isLicensed(this.$root.FEAT_NTF)) {
+          headers = headers.filter(h => h.value !== 'destinations' && h.value !== 'clearedSeverity');
         }
-        return this.alarmHeaders;
+        if (!this.$root.isUserAdmin()) {
+          headers = headers.filter(h => h.value !== 'actions');
+        }
+        return headers;
       },
       nodeOptions() {
-        const opts = [{ title: this.i18n?.allNodes, value: '' }];
+        const opts = [{ title: this.i18n.allNodes, value: '' }];
         (this.nodes || []).forEach(n => {
           if (n && n.id) {
             opts.push({ title: n.id, value: n.id });
@@ -101,8 +102,8 @@ components.push({
       },
       booleanThresholdOptions() {
         return [
-          { title: this.i18n?.trueLabel, value: 'true' },
-          { title: this.i18n?.falseLabel, value: 'false' },
+          { title: this.i18n.trueLabel, value: 'true' },
+          { title: this.i18n.falseLabel, value: 'false' },
         ];
       },
       thresholdHint() {
@@ -111,24 +112,24 @@ components.push({
           return '';
         }
         if (metricObj.type === 'string') {
-          return this.i18n?.alarmThresholdStringHint;
+          return this.i18n.alarmThresholdStringHint;
         }
         if (metricObj.type === 'bool') {
           return '';
         }
         switch (metricObj.units) {
           case 'percent':
-            return this.i18n?.unitPercent;
+            return this.i18n.unitPercent;
           case 'seconds':
-            return this.i18n?.unitSeconds;
+            return this.i18n.unitSeconds;
           case 'days':
-            return this.i18n?.unitDays;
+            return this.i18n.unitDays;
           case 'gb':
-            return this.i18n?.unitGigabytes;
+            return this.i18n.unitGigabytes;
           case 'mbs':
-            return this.i18n?.unitMbps;
+            return this.i18n.unitMbps;
           case 'bits':
-            return this.i18n?.unitBits;
+            return this.i18n.unitBits;
           default:
             return '';
         }
@@ -148,22 +149,22 @@ components.push({
       },
       severityOptions() {
         return [
-          { title: this.i18n?.severityCritical, value: 'critical' },
-          { title: this.i18n?.severityHigh, value: 'high' },
-          { title: this.i18n?.severityMedium, value: 'medium' },
-          { title: this.i18n?.severityLow, value: 'low' },
-          { title: this.i18n?.severityInfo, value: 'info' },
+          { title: this.i18n.severityCritical, value: 'critical' },
+          { title: this.i18n.severityHigh, value: 'high' },
+          { title: this.i18n.severityMedium, value: 'medium' },
+          { title: this.i18n.severityLow, value: 'low' },
+          { title: this.i18n.severityInfo, value: 'info' },
         ];
       },
       clearedSeverityOptions() {
         return [
-          { title: this.i18n?.none, value: 'none' },
+          { title: this.i18n.none, value: 'none' },
           ...this.severityOptions,
         ];
       },
       destinationOptions() {
         return (this.destinations || []).map(d => ({
-          title: d.name || (d.id === 'soc-bell' ? this.i18n?.builtinSOCNotifications : d.id),
+          title: d.name || (d.id === 'soc-bell' ? this.i18n.builtinSOCNotifications : d.id),
           value: d.id,
         }));
       },
@@ -201,14 +202,16 @@ components.push({
       async loadData() {
         this.$root?.startLoading?.();
         try {
-          await Promise.all([
+          const promises = [
             this.getAlarms(),
             this.getMetrics(),
             this.getStates(),
             this.getNodes(),
-            this.getDestinations(),
-            this.getUsers(),
-          ]);
+          ];
+          if (this.$root.isLicensed(this.$root.FEAT_NTF)) {
+            promises.push(this.getDestinations(), this.getUsers());
+          }
+          await Promise.all(promises);
         } finally {
           this.$root?.stopLoading?.();
         }
@@ -323,24 +326,24 @@ components.push({
         const metricType = metricObj?.type || 'numeric';
         if (metricType === 'string') {
           return [
-            { title: this.i18n?.operatorEQ, value: 'eq' },
-            { title: this.i18n?.operatorNEQ, value: 'ne' },
-            { title: this.i18n?.operatorContains, value: 'contains' },
+            { title: this.i18n.operatorEQ, value: 'eq' },
+            { title: this.i18n.operatorNEQ, value: 'ne' },
+            { title: this.i18n.operatorContains, value: 'contains' },
           ];
         }
         if (metricType === 'bool') {
           return [
-            { title: this.i18n?.operatorEQ, value: 'eq' },
-            { title: this.i18n?.operatorNEQ, value: 'ne' },
+            { title: this.i18n.operatorEQ, value: 'eq' },
+            { title: this.i18n.operatorNEQ, value: 'ne' },
           ];
         }
         return [
-          { title: this.i18n?.operatorGT, value: 'gt' },
-          { title: this.i18n?.operatorGTE, value: 'gte' },
-          { title: this.i18n?.operatorLT, value: 'lt' },
-          { title: this.i18n?.operatorLTE, value: 'lte' },
-          { title: this.i18n?.operatorEQ, value: 'eq' },
-          { title: this.i18n?.operatorNEQ, value: 'ne' },
+          { title: this.i18n.operatorGT, value: 'gt' },
+          { title: this.i18n.operatorGTE, value: 'gte' },
+          { title: this.i18n.operatorLT, value: 'lt' },
+          { title: this.i18n.operatorLTE, value: 'lte' },
+          { title: this.i18n.operatorEQ, value: 'eq' },
+          { title: this.i18n.operatorNEQ, value: 'ne' },
         ];
       },
       onMetricChange(metricName) {
@@ -436,12 +439,12 @@ components.push({
       },
       getAlarmStateLabel(alarm) {
         if (alarm.enabled === false) {
-          return this.i18n?.disabled;
+          return this.i18n.disabled;
         }
         if (this.isAlarmActive(alarm)) {
-          return this.i18n?.alarmActive;
+          return this.i18n.alarmActive;
         }
-        return this.i18n?.alarmCleared;
+        return this.i18n.alarmCleared;
       },
       getAlarmStateColor(alarm) {
         if (alarm.enabled === false) return 'grey';
@@ -482,8 +485,8 @@ components.push({
         }
         let res = `${opSymbol} ${alarm.threshold}`;
         if (alarm.durationSeconds && alarm.durationSeconds > 0) {
-          const durStr = this.$root?.formatDuration ? this.$root.formatDuration(alarm.durationSeconds) : `${alarm.durationSeconds}s`;
-          res += ` for >= ${durStr}`;
+          const durStr = this.$root.formatDuration(alarm.durationSeconds);
+          res += ` ${this.$root.replaceActionVar(this.i18n.alarmConditionFor, 'duration', durStr)}`;
         }
         return res;
       },
@@ -496,16 +499,16 @@ components.push({
         return states[0].currentValue || '—';
       },
       colorSeverity(sev) {
-        return this.$root?.colorSeverity ? this.$root.colorSeverity(sev) : 'icon';
+        return this.$root.colorSeverity(sev);
       },
       getSeverityLabel(sev) {
         switch (sev) {
-          case 'critical': return this.i18n?.severityCritical;
-          case 'high': return this.i18n?.severityHigh;
-          case 'medium': return this.i18n?.severityMedium;
-          case 'low': return this.i18n?.severityLow;
-          case 'info': return this.i18n?.severityInfo;
-          case 'none': return this.i18n?.none;
+          case 'critical': return this.i18n.severityCritical;
+          case 'high': return this.i18n.severityHigh;
+          case 'medium': return this.i18n.severityMedium;
+          case 'low': return this.i18n.severityLow;
+          case 'info': return this.i18n.severityInfo;
+          case 'none': return this.i18n.none;
           default: return sev;
         }
       },
@@ -515,7 +518,7 @@ components.push({
           return dest.name;
         }
         if (id === 'soc-bell' || (dest && dest.id === 'soc-bell')) {
-          return this.i18n?.builtinSOCNotifications;
+          return this.i18n.builtinSOCNotifications;
         }
         return dest?.name || id;
       },

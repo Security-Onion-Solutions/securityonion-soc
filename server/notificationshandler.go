@@ -8,7 +8,6 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -82,7 +81,7 @@ func (h *NotificationHandler) respondError(w http.ResponseWriter, r *http.Reques
 	} else if errors.Is(err, ErrDestinationNotFound) || strings.Contains(errStr, "not found") {
 		web.Respond(w, r, http.StatusNotFound, err)
 	} else if errors.Is(err, ErrInvalidDestinationID) || errors.Is(err, ErrDuplicateDestinationID) ||
-		errors.Is(err, ErrCannotDeleteDefaultDestination) ||
+		errors.Is(err, ErrCannotDeleteDefaultDestination) || errors.Is(err, ErrInvalidChannelType) ||
 		strings.Contains(errStr, "invalid") || strings.Contains(errStr, "already exists") ||
 		strings.Contains(errStr, "cannot delete") || strings.Contains(errStr, "exceeds") ||
 		strings.Contains(errStr, "required") {
@@ -279,12 +278,12 @@ type SendNotificationResponse struct {
 // @Param        bypassSchedules query  bool    false  "Whether to bypass destination activation schedules"
 // @Produce      json
 // @Success      200  {object}   SendNotificationResponse "The notification dispatch result"
-// @Failure      400         "Title is missing, input exceeds maximum length, or invalid configuration"
+// @Failure      400         "Title is missing, input exceeds maximum length, or other input issues"
 // @Failure      404         "Destination not found"
 // @Failure      401         "Request was not properly authenticated"
 // @Failure      403         "Insufficient permissions for this request"
 // @Failure      405         "Notification module has not been enabled on the server"
-// @Failure      500         "Failed to send notification via channel driver"
+// @Failure      500         "Possible delivery failure, or other internal SOC error; review SOC logs"
 // @Router       /connect/notifications/send [post]
 func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_NTF) {
@@ -399,7 +398,11 @@ func (h *NotificationHandler) PostSendNotification(w http.ResponseWriter, r *htt
 
 	if sendErr != nil {
 		logger.WithError(sendErr).WithField("destinationId", id).Error("failed to dispatch notification")
-		web.Respond(w, r, http.StatusInternalServerError, fmt.Errorf("notification delivery failed: %w", sendErr))
+		if errors.Is(sendErr, ErrDestinationNotFound) || (strings.Contains(sendErr.Error(), "destination '") && strings.Contains(sendErr.Error(), "not found")) {
+			web.Respond(w, r, http.StatusNotFound, errors.New("ERROR_DESTINATION_NOT_FOUND"))
+		} else {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_NOTIFICATION_SEND_FAILED"))
+		}
 		return
 	}
 

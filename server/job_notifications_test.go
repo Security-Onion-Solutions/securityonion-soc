@@ -87,7 +87,7 @@ func TestBuildJobCompletionNotification_PcapJob(t *testing.T) {
 	assert.Equal(t, "user1@somewhere.invalid", payload1.Fields["user"])
 	assert.Equal(t, "4096", payload1.Fields["size"])
 	assert.Equal(t, "2026-09-18 10:00:00 - 2026-09-18 11:00:00", payload1.Fields["timeframe"])
-	assert.Equal(t, "/#/job/1005", payload1.Links["👁"])
+	assert.Equal(t, "/#/job/1005", payload1.Links["🌐"])
 	assert.Equal(t, "/api/stream/1005?ext=pcap", payload1.Links["⬇"])
 	assert.Empty(t, payload1.Attachments)
 	assert.Equal(t, []string{"user-id-1"}, payload1.Recipients)
@@ -155,7 +155,7 @@ func TestBuildJobCompletionNotification_ReportJob_WithPdfStream(t *testing.T) {
 	assert.Equal(t, "user2@somewhere.invalid", payload.Fields["user"])
 	assert.Equal(t, "Executive Summary", payload.Fields["report"])
 	assert.Equal(t, "Last 24 Hours", payload.Fields["timeframe"])
-	assert.Equal(t, "/#/reports", payload.Links["👁"])
+	assert.Equal(t, "/#/reports", payload.Links["🌐"])
 	assert.Equal(t, "/api/stream/1007?ext=pdf", payload.Links["⬇"])
 	assert.Equal(t, []string{"user-id-2"}, payload.Recipients)
 
@@ -200,7 +200,7 @@ func TestBuildJobCompletionNotification_ReportJob_CustomReportMarkdownParsing(t 
 	assert.Equal(t, "user1@somewhere.invalid", payload.Fields["user"])
 	assert.Empty(t, payload.Summary)
 	assert.Empty(t, payload.Attachments)
-	assert.Equal(t, "/#/reports", payload.Links["👁"])
+	assert.Equal(t, "/#/reports", payload.Links["🌐"])
 	assert.Equal(t, "/api/stream/1008?ext=pdf", payload.Links["⬇"])
 	assert.Equal(t, []string{"user-id-1"}, payload.Recipients)
 

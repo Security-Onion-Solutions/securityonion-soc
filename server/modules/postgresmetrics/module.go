@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgres"
@@ -177,7 +176,7 @@ func (mod *PostgresMetricsModule) evaluationLoop() {
 			log.Debug("Postgresmetrics alarm evaluation loop exiting")
 			return
 		case <-ticker.C:
-			if licensing.IsEnabled(licensing.FEAT_NTF) && mod.alarmStore != nil {
+			if mod.alarmStore != nil {
 				if err := mod.alarmStore.EvaluateAlarms(ctx); err != nil {
 					log.WithError(err).Warn("Failed to evaluate alarms in background loop")
 				}

@@ -116,10 +116,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
     },
     alarmsEnabled() {
-      const featNtf = this.$root?.FEAT_NTF;
-      const licensed = this.$root?.isLicensed ? this.$root.isLicensed(featNtf) : false;
-      const started = !!this.$root?.notificationsStarted;
-      return this.historicalMetricsEnabled && started && licensed;
+      return !!this.historicalMetricsEnabled;
     },
     isAnyAlarmActive() {
       return this.$root?.isAlarmActive ? this.$root.isAlarmActive() : false;
