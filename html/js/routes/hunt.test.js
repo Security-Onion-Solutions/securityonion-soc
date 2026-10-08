@@ -390,6 +390,48 @@ test('applyQuerySubstitutions', () => {
   expect(newQueries[1].query).toBe('bar:123');
 });
 
+test('initHunt shows a licensed query only on a grid where it is available', async () => {
+  comp.$root.user = { id: '123' };
+  comp.hunt = jest.fn();
+  const params = () => ({
+    queries: [
+      { name: 'Default', query: '* | groupby rule.name' },
+      { name: 'By Assessment', query: '* | groupby event.so_alerttriage.assessment*', license: 'oai' },
+    ],
+  });
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  await comp.initHunt(params());
+  expect(comp.queries.map(q => q.name)).toEqual(['Default']);
+  expect(comp.query).toBe('* | groupby rule.name');
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  await comp.initHunt(params());
+  expect(comp.queries.map(q => q.name)).toEqual(['Default', 'By Assessment']);
+  expect(comp.query).toBe('* | groupby rule.name');
+  delete comp.$root.parameters.assistant;
+});
+
+test('isQueryAvailable', () => {
+  comp.$root.isLicensed = jest.fn(feat => feat !== 'ttr');
+
+  expect(comp.isQueryAvailable({ query: '*' })).toBe(true);
+  expect(comp.isQueryAvailable({ query: '*', license: 'ttr' })).toBe(false);
+  expect(comp.isQueryAvailable({ query: '*', license: 'rpt' })).toBe(true);
+
+  const oai = { query: '*', license: 'oai' };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: false, agentic: true };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: false };
+  expect(comp.isQueryAvailable(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  expect(comp.isQueryAvailable(oai)).toBe(true);
+  delete comp.$root.parameters.assistant;
+});
+
 test('lookupSocIds', () => {
   comp.$root.users = [{id:'12345678-1234-5678-0123-123456789012', email:'test@test.invalid'}];
   var record = { 'so_case.assigneeId': '123'}; // invalid UUID
@@ -488,6 +530,34 @@ test('populateGroupByTables', () => {
   result = comp.populateGroupByTables(metrics);
   expect(comp.groupBys[0].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
   expect(comp.groupBys[1].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
+});
+
+test('populateGroupByTables sorts an assessment group by assessment', () => {
+  const metrics = {
+    "groupby_0|event.so_alerttriage.assessment|rule.name": [
+      { value: 40, keys: ['likely_benign', 'A'] },
+      { value: 2, keys: ['likely_malicious', 'B'] },
+      { value: 9, keys: ['__missing__', 'C'] },
+    ],
+  };
+  comp.queryGroupByOptions = [[]];
+
+  comp.groupBySortBy = '';
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'event.so_alerttriage.assessment', order: 'desc' }]);
+  expect(comp.groupBys[0].headers[1]).toMatchObject({ title: 'AI Assessment', value: 'event.so_alerttriage.assessment', sort: comp.sortByAssessment });
+  expect(comp.groupBys[0].data[2]['event.so_alerttriage.assessment']).toBe(comp.i18n.__missing__);
+
+  // A sort saved from a view without this column does not apply.
+  comp.groupBySortBy = 'source.ip';
+  comp.groupBySortDesc = false;
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'event.so_alerttriage.assessment', order: 'desc' }]);
+
+  comp.groupBySortBy = 'count';
+  comp.groupBySortDesc = true;
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'count', order: 'desc' }]);
 });
 
 test('displayTable', () => {
@@ -1747,6 +1817,21 @@ test('debounceChartResize - no flapping', () => {
   expect(chart.options.responsive).toBe(true);
 });
 
+test('sortByAssessment ranks likely malicious highest and untriaged lowest', () => {
+  const ranked = ['likely_benign', comp.i18n.__missing__, 'likely_malicious', 'bogus', 'needs_review'].sort(comp.sortByAssessment);
+  expect(ranked.slice(2)).toEqual(['likely_benign', 'needs_review', 'likely_malicious']);
+  expect(comp.sortByAssessment('needs_review', 'needs_review')).toBe(0);
+  expect(comp.sortByAssessment(comp.i18n.__missing__, 'likely_benign')).toBeLessThan(0);
+});
+
+test('assessmentChip', () => {
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 'likely_malicious' })).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 'needs_review' })).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 'likely_benign' })).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': comp.i18n.__missing__ })).toBeNull();
+  expect(comp.assessmentChip({})).toBeNull();
+});
+
 test('sortBySeverity', () => {
   const tests = [
     { A: 'CRITICAL', B: 'CRITICAL', expected: 0 },
@@ -2059,6 +2144,16 @@ test('fetchNewestEvent', async () => {
   });
 
   resetPapi();
+});
+
+test('fetchNewestEvent searches the missing bucket by its marker, not its label', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.filterToggles = [];
+  comp.queryBaseFilter = 'tags:alert';
+
+  await comp.fetchNewestEvent({ 'event.so_alerttriage.assessment': comp.i18n.__missing__, 'rule.name': 'A', count: 3 });
+
+  expect(eventSearch.mock.calls[0][1].params.query).toContain('event.so_alerttriage.assessment:"__missing__" AND rule.name:"A"');
 });
 
 test('isComplexQuery', () => {

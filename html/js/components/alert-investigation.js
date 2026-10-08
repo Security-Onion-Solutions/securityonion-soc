@@ -22,10 +22,10 @@ globalThis.alertManualInvestigations = function(alert) {
   return older.concat(entries).filter(inv => inv.sessionId && !seen.has(inv.sessionId) && seen.add(inv.sessionId));
 };
 
-const ALERT_TRIAGE_ASSESSMENTS = {
-  likely_malicious: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
-  needs_review: { label: 'aiAssessmentNeedsReview', color: 'warning' },
-  likely_benign: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+globalThis.ALERT_TRIAGE_ASSESSMENTS = {
+  likely_malicious: { label: 'aiAssessmentLikelyMalicious', color: 'error', rank: 2 },
+  needs_review: { label: 'aiAssessmentNeedsReview', color: 'warning', rank: 1 },
+  likely_benign: { label: 'aiAssessmentLikelyBenign', color: 'success', rank: 0 },
 };
 
 globalThis.alertTriageAssessment = function(alert, i18n) {

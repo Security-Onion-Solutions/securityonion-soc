@@ -352,6 +352,15 @@ const huntComponent = {
       this.assistantEnabled = params["enabled"];
       this.investigationMsg = params["investigationPrompt"];
     },
+    // An OAI query needs the agentic assistant running too, since only its automations write the
+    // fields such queries group on.
+    isQueryAvailable(query) {
+      if (!query.license) return true;
+      if (!this.$root.isLicensed(query.license)) return false;
+      if (query.license !== this.$root.FEAT_OAI) return true;
+      const assistant = this.$root.parameters.assistant;
+      return !!(assistant && assistant.enabled && assistant.agentic);
+    },
     async initHunt(params) {
       this.params = params;
       this.groupByItemsPerPage = params["groupItemsPerPage"];
@@ -363,7 +372,7 @@ const huntComponent = {
       this.mruQueryLimit = params["mostRecentlyUsedLimit"];
       this.safeStringMaxLength = params["safeStringMaxLength"];
       this.queryBaseFilter = params["queryBaseFilter"];
-      this.queries = this.applyQuerySubstitutions(params["queries"]);
+      this.queries = this.applyQuerySubstitutions(params["queries"]).filter(q => this.isQueryAvailable(q));
       this.filterToggles = params["queryToggleFilters"];
       this.eventFields = params["eventFields"];
       this.advanced = params["advanced"];
@@ -1522,6 +1531,7 @@ const huntComponent = {
 
       const customSorts = {
         'event.severity_label': this.sortBySeverity,
+        [ALERT_TRIAGE_PREFIX + 'assessment']: this.sortByAssessment,
       };
 
       if (fields && fields.length > 0) {
@@ -1555,6 +1565,14 @@ const huntComponent = {
 
       // compare
       return sevA - sevB;
+    },
+    // Untriaged and unrecognised values, including the localized missing bucket, rank lowest.
+    sortByAssessment(a, b) {
+      const rank = value => ALERT_TRIAGE_ASSESSMENTS[value] ? ALERT_TRIAGE_ASSESSMENTS[value].rank : -1;
+      return rank(a) - rank(b);
+    },
+    assessmentChip(item) {
+      return alertTriageAssessment(item, this.i18n);
     },
     lookupSocId(data) {
       if (data && data.length == 36 && data.indexOf("-") == 8) {
@@ -1658,7 +1676,10 @@ const huntComponent = {
 
           // Preserve group-by sort settings only for first group. Useful for non-advanced views.
           group.sortBy = [{ key: 'count', order: 'desc' }];
-          if (this.groupBys.length == 0 && this.groupBySortBy) {
+          if (group.fields[0] === ALERT_TRIAGE_PREFIX + 'assessment') {
+            group.sortBy = [{ key: group.fields[0], order: 'desc' }];
+          }
+          if (this.groupBys.length == 0 && this.groupBySortBy && group.headers.some(header => header.value === this.groupBySortBy)) {
             group.sortBy = [{ key: this.groupBySortBy, order: this.groupBySortDesc ? 'desc' : 'asc' }];
           }
 
@@ -3095,7 +3116,7 @@ const huntComponent = {
         if (label.toLowerCase() === 'count') continue;
 
         if (item[field] && !Array.isArray(item[field])) {
-          parts.push(`${label}:"${item[field]}"`);
+          parts.push(`${label}:"${this.subMissing(item[field])}"`);
         }
       }
 
