@@ -23,28 +23,29 @@ const DEFAULT_CHART_LABEL_OTHER_LIMIT = 10
 const DEFAULT_CHART_LABEL_FIELD_SEPARATOR = ", "
 
 type ClientParameters struct {
-	HuntingParams      HuntingParameters    `json:"hunt"`
-	AlertingParams     AlertingParameters   `json:"alerts"`
-	CasesParams        HuntingParameters    `json:"cases"`
-	CaseParams         CaseParameters       `json:"case"`
-	DashboardsParams   HuntingParameters    `json:"dashboards"`
-	JobParams          HuntingParameters    `json:"job"`
-	DetectionsParams   DetectionsParameters `json:"detections"`
-	DetectionParams    DetectionParameters  `json:"detection"`
-	DocsUrl            string               `json:"docsUrl"`
-	CheatsheetUrl      string               `json:"cheatsheetUrl"`
-	ReleaseNotesUrl    string               `json:"releaseNotesUrl"`
-	GridParams         GridParameters       `json:"grid"`
-	WebSocketTimeoutMs int                  `json:"webSocketTimeoutMs"`
-	TipTimeoutMs       int                  `json:"tipTimeoutMs"`
-	ApiTimeoutMs       int                  `json:"apiTimeoutMs"`
-	CacheExpirationMs  int                  `json:"cacheExpirationMs"`
-	InactiveTools      []string             `json:"inactiveTools"`
-	Tools              []ClientTool         `json:"tools"`
-	CasesEnabled       bool                 `json:"casesEnabled"`
-	DetectionsEnabled  bool                 `json:"detectionsEnabled"`
-	ExportNodeId       string               `json:"exportNodeId"`
-	AssistantParams    AssistantParameters  `json:"assistant"`
+	HuntingParams               HuntingParameters    `json:"hunt"`
+	AlertingParams              AlertingParameters   `json:"alerts"`
+	CasesParams                 HuntingParameters    `json:"cases"`
+	CaseParams                  CaseParameters       `json:"case"`
+	DashboardsParams            HuntingParameters    `json:"dashboards"`
+	JobParams                   HuntingParameters    `json:"job"`
+	DetectionsParams            DetectionsParameters `json:"detections"`
+	DetectionParams             DetectionParameters  `json:"detection"`
+	DocsUrl                     string               `json:"docsUrl"`
+	CheatsheetUrl               string               `json:"cheatsheetUrl"`
+	ReleaseNotesUrl             string               `json:"releaseNotesUrl"`
+	GridParams                  GridParameters       `json:"grid"`
+	WebSocketTimeoutMs          int                  `json:"webSocketTimeoutMs"`
+	TipTimeoutMs                int                  `json:"tipTimeoutMs"`
+	ApiTimeoutMs                int                  `json:"apiTimeoutMs"`
+	CacheExpirationMs           int                  `json:"cacheExpirationMs"`
+	InactiveTools               []string             `json:"inactiveTools"`
+	Tools                       []ClientTool         `json:"tools"`
+	CasesEnabled                bool                 `json:"casesEnabled"`
+	DetectionsEnabled           bool                 `json:"detectionsEnabled"`
+	ExportNodeId                string               `json:"exportNodeId"`
+	AssistantParams             AssistantParameters  `json:"assistant"`
+	AllowExternalMarkdownImages bool                 `json:"allowExternalMarkdownImages"`
 }
 
 func (config *ClientParameters) Verify() error {
@@ -203,6 +204,10 @@ type AssistantParameters struct {
 	// without fetching every setting. 0 disables the limit.
 	MaxDelegationDepth  int `json:"maxDelegationDepth" example:"3"`
 	MaxSubSessionTokens int `json:"maxSubSessionTokens" example:"100000"`
+	// How often the automation scheduler checks what is due.
+	AutomationTickIntervalSeconds int `json:"automationTickIntervalSeconds" example:"60"`
+	// The earliest alert time Alert Triage considers, in RFC3339.
+	AlertTriageEpoch string `json:"alertTriageEpoch" example:"2026-09-24T00:00:00Z"`
 }
 
 type MemoryParameters struct {

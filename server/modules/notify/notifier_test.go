@@ -157,7 +157,7 @@ func TestNotifierSendExplicitDestinations(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	reg := NewChannelRegistry()
-	slackCh := &mockChannel{channelType: "slack"}
+	slackCh := &mockChannel{channelType: "slack_webhook"}
 	emailCh := &mockChannel{channelType: "smtp"}
 	_ = reg.Register(slackCh)
 	_ = reg.Register(emailCh)
@@ -172,12 +172,12 @@ func TestNotifierSendExplicitDestinations(t *testing.T) {
 			},
 			"slack-sec": {
 				Name:    "Slack",
-				Type:    "slack",
+				Type:    "slack_webhook",
 				Enabled: true,
 			},
 			"disabled-dest": {
 				Name:    "Disabled",
-				Type:    "slack",
+				Type:    "slack_webhook",
 				Enabled: false,
 			},
 		},
@@ -215,7 +215,7 @@ func TestNotifierSendErrors(t *testing.T) {
 			},
 			"missing-driver": {
 				Name:    "Matrix",
-				Type:    "matrix",
+				Type:    "matrix_hookshot_webhook",
 				Enabled: true,
 			},
 		},
@@ -227,7 +227,7 @@ func TestNotifierSendErrors(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 0, count)
 	assert.Contains(t, err.Error(), "destination 'missing-dest' not found")
-	assert.Contains(t, err.Error(), "channel driver 'matrix' not found for destination 'missing-driver'")
+	assert.Contains(t, err.Error(), "channel driver 'matrix_hookshot_webhook' not found for destination 'missing-driver'")
 	assert.Contains(t, err.Error(), "destination 'email-dest' send failed")
 }
 
@@ -548,7 +548,7 @@ func TestNotifierSend_RecipientTargeting(t *testing.T) {
 
 	reg := NewChannelRegistry()
 	socCh := &mockChannel{channelType: "soc", supportsRecipients: true}
-	webhookCh := &mockChannel{channelType: "webhook", supportsRecipients: false}
+	webhookCh := &mockChannel{channelType: "generic_webhook", supportsRecipients: false}
 	_ = reg.Register(socCh)
 	_ = reg.Register(webhookCh)
 
@@ -580,12 +580,12 @@ func TestNotifierSend_RecipientTargeting(t *testing.T) {
 				SkipIfRecipients: true,
 			},
 			"webhook-noskip": {
-				Type:             "webhook",
+				Type:             "generic_webhook",
 				Enabled:          true,
 				SkipIfRecipients: false,
 			},
 			"webhook-skip": {
-				Type:             "webhook",
+				Type:             "generic_webhook",
 				Enabled:          true,
 				SkipIfRecipients: true,
 			},

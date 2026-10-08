@@ -151,15 +151,7 @@ globalThis.AssistantUtils = (function() {
       return this.$root.formatTimestamp(timestamp);
     },
     formatMarkdown(text) {
-      text = this.applyChoiceButtons(text);
-      text = this.$root.performMermaidRegexes(text);
-      const md = this.$root.formatMarkdown(text, true);
-      if (!this.isStreaming) {
-        this.$nextTick(() => {
-          this.$root.renderMermaid();
-        });
-      }
-      return md;
+      return this.$root.formatMarkdownMermaid(this.applyChoiceButtons(text), !this.isStreaming);
     },
     renderInlineMarkdown(text) {
       if (!text) return '';
@@ -580,6 +572,10 @@ globalThis.AssistantUtils = (function() {
         this.focusChatInput();
         this.sendMessage();
       });
+    },
+    stripChoiceMarkers(text) {
+      if (!text || typeof text !== 'string') return text;
+      return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
     },
     stripNewlines(text) {
       if (typeof text !== 'string') return text;

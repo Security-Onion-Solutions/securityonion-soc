@@ -98,8 +98,9 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     '$root.connected'(connected) {
       if (connected) this.loadAutomatedAgents();
     },
+    // A new chat's first send puts its id in the URL before the server has the session.
     '$route'(to, from) {
-      if (to.params.sessionId !== from.params.sessionId) {
+      if (to.params.sessionId !== from.params.sessionId && to.params.sessionId !== this.currentChatId) {
         this.handleRouteSessionId();
       }
     },

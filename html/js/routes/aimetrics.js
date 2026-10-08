@@ -431,7 +431,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
             if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
               expandMessage += `\n\n<hr>\n\n<br>`;
             }
-            expandMessage += this.formatMarkdownMermaid(this.nbspRegexOp(block.text));
+            expandMessage += this.$root.formatMarkdownMermaid(this.nbspRegexOp(block.text));
           } else {
             expandMessage += this.$root.escapeHtml(block.text);
           }
@@ -474,14 +474,6 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         }
       }
       return expandMessage;
-    },
-    formatMarkdownMermaid(text) {
-      text = this.$root.performMermaidRegexes(text);
-      md = this.$root.formatMarkdown(text, true);
-      this.$nextTick(() => {
-        this.$root.renderMermaid();
-      });
-      return md;
     },
     updateBreadcrumbs(currUserId, currSessionId) {
       if (currUserId && currSessionId) {
@@ -536,7 +528,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       return Math.round(rawCPM);
     },
     sanitizeHtml(html) {
-      return html ? DOMPurify.sanitize(html) : '';
+      return this.$root.sanitizeMarkdownHtml(html);
     },
     messageAid(item) {
       return item?.tags?.includes('tool_result')

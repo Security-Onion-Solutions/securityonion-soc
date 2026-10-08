@@ -23,6 +23,7 @@ func TestParseConfigDefaults(t *testing.T) {
 	assert.True(t, parsed.Enabled)
 	assert.Equal(t, 0, parsed.GlobalSilenceWindowSeconds)
 	assert.Equal(t, DEFAULT_DISMISSED_PRUNE_DAYS, parsed.DismissedPruneDays)
+	assert.Equal(t, DEFAULT_CONNECTION_TIMEOUT_SECONDS, parsed.ConnectionTimeoutSeconds)
 
 	// Check default soc-bell destination
 	dest, exists := parsed.Destinations[model.DefaultDestinationSOCBell]
@@ -37,6 +38,7 @@ func TestParseConfigCustom(t *testing.T) {
 		"enabled":                    false,
 		"globalSilenceWindowSeconds": float64(600),
 		"dismissedPruneDays":         float64(45),
+		"connectionTimeoutSeconds":   float64(30),
 		"destinations": map[string]interface{}{
 			"email-alerts": map[string]interface{}{
 				"name":       "SOC Email",
@@ -51,7 +53,7 @@ func TestParseConfigCustom(t *testing.T) {
 			},
 			"slack-alerts": map[string]interface{}{
 				"name":    "Slack Alerts",
-				"type":    "slack",
+				"type":    "slack_webhook",
 				"enabled": false,
 				"params": map[string]interface{}{
 					"webhookUrl": "https://hooks.slack.com/services/xxx",
@@ -65,6 +67,7 @@ func TestParseConfigCustom(t *testing.T) {
 	assert.False(t, parsed.Enabled)
 	assert.Equal(t, 600, parsed.GlobalSilenceWindowSeconds)
 	assert.Equal(t, 45, parsed.DismissedPruneDays)
+	assert.Equal(t, 30, parsed.ConnectionTimeoutSeconds)
 	assert.Len(t, parsed.Destinations, 2)
 
 	emailDest, ok := parsed.Destinations["email-alerts"]
@@ -80,7 +83,7 @@ func TestParseConfigCustom(t *testing.T) {
 	slackDest, ok := parsed.Destinations["slack-alerts"]
 	assert.True(t, ok)
 	assert.Equal(t, "Slack Alerts", slackDest.Name)
-	assert.Equal(t, "slack", slackDest.Type)
+	assert.Equal(t, "slack_webhook", slackDest.Type)
 	assert.False(t, slackDest.Enabled)
 }
 

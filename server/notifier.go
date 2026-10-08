@@ -18,6 +18,7 @@ var (
 	ErrInvalidDestinationID           = errors.New("invalid destination ID")
 	ErrDuplicateDestinationID         = errors.New("destination with this ID already exists")
 	ErrCannotDeleteDefaultDestination = errors.New("cannot delete default notification destination")
+	ErrInvalidChannelType             = errors.New("invalid or unsupported notification channel type")
 )
 
 // Notifier defines the interface for sending notifications across channels and managing destinations.

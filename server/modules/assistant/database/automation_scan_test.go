@@ -339,6 +339,48 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			fragments: []string{"WHERE automation_id = $1", "LIMIT $2", "OFFSET $3"},
 			args:      []any{testAutomationId, 10, 5},
 		},
+		{
+			name:  "finished without empty runs",
+			query: AutomationRunQuery{Finished: true, HideEmpty: true},
+			fragments: []string{
+				"WHERE state NOT IN ('queued', 'running') AND (state = 'failed' OR EXISTS (SELECT 1 FROM automation_work_items w",
+				"w.run_id = automation_runs.id OR w.failed_run_ids @> ARRAY[automation_runs.id::text]",
+				"LIMIT $1",
+			},
+			args: []any{defaultAutomationRunLimit},
+		},
+		{
+			name:  "search",
+			query: AutomationRunQuery{AutomationId: testAutomationId, Search: "10.0.0.1"},
+			fragments: []string{
+				"WHERE automation_id = $1 AND (error ILIKE $2 ESCAPE '\\'",
+				"w.group_key ILIKE $2 ESCAPE '\\' OR w.error ILIKE $2 ESCAPE '\\'",
+				"LIMIT $3",
+			},
+			args: []any{testAutomationId, "%10.0.0.1%", defaultAutomationRunLimit},
+		},
+		{
+			name:      "search naming automations",
+			query:     AutomationRunQuery{Search: "triage", SearchAutomationIds: []string{testAutomationId}, Offset: 5},
+			fragments: []string{"OR automation_id = ANY($2::uuid[]))", "LIMIT $3", "OFFSET $4"},
+			args:      []any{"%triage%", []string{testAutomationId}, defaultAutomationRunLimit, 5},
+		},
+		{
+			name:      "search by run id",
+			query:     AutomationRunQuery{Search: testRunId, SearchRunId: testRunId},
+			fragments: []string{"OR id = $2::uuid)", "LIMIT $3"},
+			args:      []any{"%" + testRunId + "%", testRunId, defaultAutomationRunLimit},
+		},
+		{
+			name:  "a run asked for by id survives hiding empty runs",
+			query: AutomationRunQuery{HideEmpty: true, Search: testRunId, SearchRunId: testRunId},
+			fragments: []string{
+				"WHERE (state = 'failed' OR id = $1::uuid OR EXISTS (SELECT 1",
+				"OR id = $3::uuid)",
+				"LIMIT $4",
+			},
+			args: []any{testRunId, "%" + testRunId + "%", testRunId, defaultAutomationRunLimit},
+		},
 	}
 
 	for _, tc := range cases {
@@ -356,6 +398,31 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			mDB.AssertExpectations(t)
 		})
 	}
+}
+
+func TestEscapeLikeMatchesWildcardsLiterally(t *testing.T) {
+	assert.Equal(t, `100\%`, escapeLike(`100%`))
+	assert.Equal(t, `rule\_name`, escapeLike(`rule_name`))
+	assert.Equal(t, `a\\b`, escapeLike(`a\b`))
+}
+
+func TestCountAutomationRunsSharesTheListFilters(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mRow := &mockdb.MockRow{}
+	mRow.On("Scan", anyArgs(1)...).Run(func(args mock.Arguments) {
+		*(args.Get(0).(*int)) = 7
+	}).Return(nil)
+
+	count := sqlContainsAll("SELECT count(*) FROM automation_runs WHERE automation_id = $1 AND state NOT IN", "error ILIKE $2")
+	mDB.On("QueryRow", mock.Anything, count, testAutomationId, "%x\\_y%").Return(mRow)
+
+	total, err := s.CountAutomationRuns(context.Background(), AutomationRunQuery{AutomationId: testAutomationId, Finished: true, Search: "x_y", Limit: 10, Offset: 20})
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, total)
+	mDB.AssertExpectations(t)
 }
 
 func TestListAutomationRunsReturnsEveryRow(t *testing.T) {

@@ -19,6 +19,7 @@ const (
 	DEFAULT_DISMISSED_PRUNE_DAYS          = 30
 	DEFAULT_MAX_LIST_LIMIT                = 500
 	MAX_ALLOWED_LIST_LIMIT                = 5000
+	DEFAULT_CONNECTION_TIMEOUT_SECONDS    = 15
 )
 
 // LoadConfigFromStore reads notification destinations configuration from onionconfig.
@@ -45,6 +46,7 @@ func ParseConfig(cfg module.ModuleConfig) (model.NotificationConfig, error) {
 		GlobalSilenceWindowSeconds: module.GetIntDefault(cfg, "globalSilenceWindowSeconds", DEFAULT_GLOBAL_SILENCE_WINDOW_SECONDS),
 		DismissedPruneDays:         module.GetIntDefault(cfg, "dismissedPruneDays", DEFAULT_DISMISSED_PRUNE_DAYS),
 		MaxListLimit:               module.GetIntDefault(cfg, "maxListLimit", DEFAULT_MAX_LIST_LIMIT),
+		ConnectionTimeoutSeconds:   module.GetIntDefault(cfg, "connectionTimeoutSeconds", DEFAULT_CONNECTION_TIMEOUT_SECONDS),
 		Destinations:               make(map[string]model.DestinationConfig),
 	}
 

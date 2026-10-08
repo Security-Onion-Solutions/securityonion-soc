@@ -520,7 +520,7 @@
 		</v-window-item>
 		<v-window-item value="alarms" v-if="alarmsEnabled" class="rounded-t-0">
 			<v-card variant="flat" class="pa-4 rounded-0">
-				<alarms-manager ref="alarmsManager" data-aid="grid_alarms_manager"></alarms-manager>
+				<alarms-manager ref="alarmsManager" @alarm-deleted="onAlarmDeleted" data-aid="grid_alarms_manager"></alarms-manager>
 			</v-card>
 		</v-window-item>
 	</v-window>

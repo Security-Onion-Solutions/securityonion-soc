@@ -867,6 +867,61 @@ test('options save writes only the limits that changed', async () => {
   expect(comp.optionsDirty()).toBe(false);
 });
 
+test('options save writes the automation settings that changed', async () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 60;
+  params.alertTriageEpoch = '2026-09-24T00:00:00Z';
+  comp.initAssistant(params);
+  const put = mockPapi('put', {});
+
+  comp.showOptions();
+  expect(comp.automationTickSeconds).toBe(60);
+  expect(comp.alertTriageEpoch).toBe('2026-09-24T00:00:00Z');
+  expect(comp.optionsDirty()).toBe(false);
+
+  comp.automationTickSeconds = 30;
+  comp.alertTriageEpoch = '2026-01-01T00:00:00Z';
+  await comp.persistOptions();
+
+  expect(put.mock.calls.map(call => [call[1].id, call[1].value])).toEqual([
+    ['soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds', '30'],
+    ['soc.config.server.modules.assistant.automationSettings.alertTriageEpoch', '2026-01-01T00:00:00Z'],
+  ]);
+  expect(comp.optionsDirty()).toBe(false);
+});
+
+const passes = (rules, value) => rules.every(rule => rule(value) === true);
+
+test('the option rules accept only their ranges', () => {
+  const { nonNegative, positive, fraction } = comp.optionRules;
+
+  for (const value of [0, 5, '3']) expect(passes(nonNegative, value)).toBe(true);
+  for (const value of [-1, 1.5, '']) expect(passes(nonNegative, value)).toBe(false);
+
+  for (const value of [1, 60]) expect(passes(positive, value)).toBe(true);
+  for (const value of [0, -5, 1.5, '']) expect(passes(positive, value)).toBe(false);
+
+  for (const value of [0, 0.5, 1]) expect(passes(fraction, value)).toBe(true);
+  for (const value of [-0.1, 1.5, '']) expect(passes(fraction, value)).toBe(false);
+});
+
+test('the alert triage start must be a UTC timestamp or blank', () => {
+  for (const epoch of ['2026-09-24T00:00:00Z', '2026-09-24T00:00:00.5Z', '']) {
+    expect(comp.alertTriageEpochRule(epoch)).toBe(true);
+  }
+  for (const epoch of ['yesterday', '2026-09-24', '2026-09-24T00:00:00-06:00']) {
+    expect(comp.alertTriageEpochRule(epoch)).toBe(comp.i18n.agentStudioAlertTriageEpochInvalid);
+  }
+});
+
+test('the interval hint names the scheduler\'s check interval', () => {
+  const params = agenticParams();
+  params.automationTickIntervalSeconds = 30;
+  comp.initAssistant(params);
+
+  expect(comp.automationIntervalHelp()).toContain('30-second check interval');
+});
+
 test('a failed options save keeps the dialog open', async () => {
   comp.initAssistant(agenticParams());
   mockPapi('put', null, new Error('nope'));
@@ -1459,6 +1514,8 @@ test('a memory role whose model is missing is flagged instead of failing silentl
   expect(comp.memoryRoleResolves('embedModel')).toBe(false);
   expect(comp.memoryRoleHint('embedModel', 'help')).toBe(comp.i18n.agentStudioMemoryRoleDisabled);
   expect(comp.memoryRoleHint('memoryModel', 'help')).toBe('help');
+  expect(comp.memoryRoleColor('embedModel')).toBe('error');
+  expect(comp.memoryRoleColor('memoryModel')).toBeUndefined();
 });
 
 test('an unset memory model reads as disabled', () => {
@@ -1801,6 +1858,13 @@ test('run rows count their done and failed items', () => {
   expect(comp.runItemCount(run, 'done')).toBe(4);
   expect(comp.runItemCount(run, 'failed')).toBe(1);
   expect(comp.runItemCount({}, 'failed')).toBe(0);
+});
+
+test('a finished run opens in Agent Monitor\'s run history; one still going opens In Flight', () => {
+  expect(comp.runMonitorLink({ id: 'run-1', state: 'failed' })).toEqual({ name: 'agentmonitor', query: { run: 'run-1' } });
+  expect(comp.runMonitorLink({ id: 'run-2', state: 'succeeded' })).toEqual({ name: 'agentmonitor', query: { run: 'run-2' } });
+  expect(comp.runMonitorLink({ id: 'run-3', state: 'running' })).toEqual({ name: 'agentmonitor' });
+  expect(comp.runMonitorLink({ id: 'run-4', state: 'queued' })).toEqual({ name: 'agentmonitor' });
 });
 
 test('an agent can be opened in Onion AI on a new session', () => {

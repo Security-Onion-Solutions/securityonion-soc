@@ -950,8 +950,8 @@ test('formatExpandMessage handles text content blocks', () => {
   
   const result = comp.formatExpandMessage(data);
   
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith('**Bold text**', true);
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith('Regular text', true);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith('**Bold text**', true, false);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith('Regular text', true, false);
   expect(result).toContain('<strong>Bold text</strong>');
   expect(result).toContain('<hr>');
   expect(result).toContain('Regular text');

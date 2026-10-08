@@ -99,6 +99,7 @@ global.Vue.createApp = function(obj) {
   };
   app.debug = true;
   Object.assign(app, obj.data(), obj.methods);
+  app.$nextTick = (fun) => { fun(); };
   this.ensureConnected = jest.fn();
 
   app.use = () => { };

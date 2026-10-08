@@ -844,6 +844,7 @@ func (ac *AssistantCoordinator) Start() error {
 	ac.reloadMemoryConfiguration(ac.srv.Context)
 
 	ac.reloadAutomationTickInterval(ac.srv.Context)
+	ac.exposeAutomationSettings()
 	ac.startAutomationScheduler()
 
 	return nil
@@ -934,12 +935,16 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 
 	if setting.Id == ConfigSettingAutomationTickInterval {
 		ac.reloadAutomationTickInterval(ctx)
+		ac.exposeAutomationSettings()
+		ac.broadcastAgenticUpdate()
 
 		return
 	}
 
 	if setting.Id == ConfigSettingAlertTriageEpoch {
 		ac.reloadAlertTriageEpoch(ctx)
+		ac.exposeAutomationSettings()
+		ac.broadcastAgenticUpdate()
 
 		return
 	}

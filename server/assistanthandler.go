@@ -60,6 +60,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/automations", h.GetAutomations)
 		r.Post("/automations", h.CreateAutomation)
 		r.Get("/automations/activity", h.GetAutomationActivity)
+		r.Get("/automations/runs", h.GetAllAutomationRuns)
 		r.Get("/automations/{id}", h.GetAutomation)
 		r.Put("/automations/{id}", h.UpdateAutomation)
 		r.Delete("/automations/{id}", h.DeleteAutomation)
@@ -2024,6 +2025,53 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 	err := h.server.AssistantManager.DeleteAutomation(ctx, urlParamId(r))
 
 	h.respondAutomation(w, r, nil, err)
+}
+
+// @Summary      List Finished Automation Runs
+// @Description  Retrieve a page of finished runs across every automation, newest first, with each run's work items counted by state and its automation's name. A deleted automation's runs are reported with an empty display name.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Param        automationId  query  string  false  "Only this automation's runs" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        hideEmpty     query  bool    false  "Drop succeeded runs that worked no item" example(true)
+// @Param        q             query  string  false  "Case-insensitive text matched against the automation's name, the run's error, and its items' group keys and errors, or a run ID; at most 256 characters" example(10.0.0.1)
+// @Param        limit         query  int     false  "Page size, at most 500" example(50)
+// @Param        offset        query  int     false  "Page offset" example(0)
+// @Param        count         query  bool    false  "Also count every matching run" example(true)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunPage "The page of runs"
+// @Failure      400           "The search is too long"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "automationId is not a valid automation ID"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/runs [get]
+func (h *AssistantHandler) GetAllAutomationRuns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if !h.checkAssistantAvailable(ctx, w, r) {
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+	hideEmpty, _ := strconv.ParseBool(query.Get("hideEmpty"))
+	count, _ := strconv.ParseBool(query.Get("count"))
+
+	page, err := h.server.AssistantManager.ListAutomationRuns(ctx, &model.AutomationRunFilter{
+		AutomationId: query.Get("automationId"),
+		HideEmpty:    hideEmpty,
+		Search:       query.Get("q"),
+		Limit:        limit,
+		Offset:       offset,
+		Count:        count,
+	})
+	h.respondAutomation(w, r, page, err)
 }
 
 // @Summary      List an Automation's Runs

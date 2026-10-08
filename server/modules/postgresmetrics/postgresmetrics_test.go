@@ -421,3 +421,25 @@ func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {
 	assert.Len(t, dash.Panels, 26)
 }
 
+
+func TestPostgresMetricsModule_Start_Stop_EvaluationLoop(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	mod := NewPostgresMetricsModule(srv)
+	mod.evaluationInterval = 10 * time.Millisecond
+
+	cfg := make(map[string]interface{})
+	err := mod.Init(cfg)
+	assert.NoError(t, err)
+
+	assert.False(t, mod.IsRunning())
+	err = mod.Start()
+	assert.NoError(t, err)
+	assert.True(t, mod.IsRunning())
+
+	time.Sleep(50 * time.Millisecond)
+
+	err = mod.Stop()
+	assert.NoError(t, err)
+	assert.False(t, mod.IsRunning())
+}
+

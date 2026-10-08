@@ -1513,12 +1513,5 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		showAiSummary() {
 			return !!(this?.detect?.aiSummary && (this.detect.aiSummaryReviewed || this.showUnreviewedAiSummaries));
 		},
-		formatMarkdownMermaid(text) {
-			md = this.$root.formatMarkdown(text, true);
-			this.$nextTick(() => {
-				this.$root.renderMermaid();
-			});
-			return md;
-		},
 	}
 }});

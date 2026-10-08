@@ -74,6 +74,7 @@ type AssistantManager interface {
 	SaveAutomation(ctx context.Context, automation *model.Automation) error
 	DeleteAutomation(ctx context.Context, id string) error
 	GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error)
+	ListAutomationRuns(ctx context.Context, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error)
 	GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error)
 	GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error)
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)

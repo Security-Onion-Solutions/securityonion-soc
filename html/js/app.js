@@ -30,6 +30,13 @@ const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
+// Markdown can carry untrusted text, so nothing in it may fetch a URL on render.
+const MARKDOWN_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: ['audio', 'video', 'source', 'track', 'picture', 'input'],
+  FORBID_ATTR: ['style', 'srcset', 'background', 'poster', 'ping'],
+};
+
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -276,6 +283,7 @@ $(document).ready(function () {
           notificationsStarted: false,
           showNotificationOptions: false,
           alarmStates: [],
+          alarmStatesLoaded: false,
           subtitle: '',
           connected: false,
           reconnecting: false,
@@ -327,6 +335,8 @@ $(document).ready(function () {
             badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
             minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
             maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            minValue: limit => value => (value !== '' && value != null && +value >= limit) || _i18n.ruleMinValue.replace('{limit}', limit),
+            maxValue: limit => value => (value !== '' && value != null && +value <= limit) || _i18n.ruleMaxValue.replace('{limit}', limit),
             fileSizeLimit: (maxBytes, formatFn) => value =>
               (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
             matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
@@ -639,8 +649,10 @@ $(document).ready(function () {
                     this.username = this.user.email;
                   }
                   this.notificationsStarted = !!response.data.notificationsStarted;
+                  if (!this.alarmStatesLoaded) {
+                    this.loadAlarmStates();
+                  }
                   this.handleServerInfoNotifications(response.data);
-                  this.loadAlarmStates();
 
                   if (this.parameterCallback != null) {
                     this.parameterCallback(this.parameters[this.parameterSection]);
@@ -684,6 +696,7 @@ $(document).ready(function () {
                   this.subscribe("status", this.updateStatus);
                   this.subscribe('notification', this.handleIncomingNotification);
                   this.subscribe('alarm:state', this.onAlarmStateUpdate);
+                  this.subscribe('alarm:delete', this.onAlarmDelete);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);
@@ -994,7 +1007,8 @@ $(document).ready(function () {
           if (!str) return '';
           return String(str).replace(/<[^>]*>/g, '');
         },
-        formatMarkdown(str, handleMermaid=false) {
+        // authored: written by a person, not AI.
+        formatMarkdown(str, handleMermaid=false, authored=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
             smartLists: true,
@@ -1011,7 +1025,7 @@ $(document).ready(function () {
             var md = str;
             if (str) {
               md = marked.parse(str);
-              md = DOMPurify.sanitize(md);
+              md = this.sanitizeMarkdownHtml(md, authored);
               md = this.wrapScrollableTables(md);
             }
             return md;
@@ -1035,7 +1049,7 @@ $(document).ready(function () {
             if (str) {
               this.initializeMermaid();
               md = marked.parse(str);
-              md = DOMPurify.sanitize(md);
+              md = this.sanitizeMarkdownHtml(md, authored);
               md = this.wrapScrollableTables(md);
             }
             return md;
@@ -1054,6 +1068,38 @@ $(document).ready(function () {
             wrapper.setAttribute('aria-label', this.i18n.ariaScrollableTable);
             table.replaceWith(wrapper);
             wrapper.appendChild(table);
+          });
+          return template.innerHTML;
+        },
+        sanitizeMarkdownHtml(html, authored = false) {
+          if (!html) return '';
+          const allowImages = authored && !!this.parameters.allowExternalMarkdownImages;
+          return this.blockExternalResources(DOMPurify.sanitize(html, MARKDOWN_PURIFY_CONFIG), allowImages);
+        },
+        blockExternalResources(html, allowImages = false) {
+          if (!html || (html.indexOf('<img') == -1 && html.indexOf('<a') == -1)) return html;
+          const template = document.createElement('template');
+          template.innerHTML = html;
+          const isExternal = (value) => {
+            try {
+              const url = new URL(value, location.href);
+              return url.origin !== location.origin && !['data:', 'blob:'].includes(url.protocol);
+            } catch (e) {
+              return true;
+            }
+          };
+          template.content.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (allowImages || !src || !isExternal(src)) return;
+            const link = document.createElement('a');
+            link.setAttribute('href', src);
+            link.textContent = this.i18n.externalImageBlocked.replace('{url}', src);
+            img.replaceWith(link);
+          });
+          template.content.querySelectorAll('a[href]').forEach(a => {
+            if (!isExternal(a.getAttribute('href'))) return;
+            a.setAttribute('rel', 'noopener noreferrer');
+            a.setAttribute('target', '_blank');
           });
           return template.innerHTML;
         },
@@ -1079,6 +1125,13 @@ $(document).ready(function () {
           // converts non-separator colons to ratio characters in mermaid charts
           text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
           return text
+        },
+        // The Mermaid cleanup breaks some valid Mermaid, so authored text skips it.
+        formatMarkdownMermaid(text, render = true, authored = false) {
+          if (!text) return '';
+          const md = this.formatMarkdown(authored ? text : this.performMermaidRegexes(text), true, authored);
+          if (render) this.$nextTick(() => this.renderMermaid());
+          return md;
         },
         colorSeverity(value) {
           const val = (value || '').toLowerCase();
@@ -1362,6 +1415,7 @@ $(document).ready(function () {
               vm.connected = true;
               vm.reconnecting = false;
               vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
+              vm.loadAlarmStates();
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
@@ -1712,11 +1766,25 @@ $(document).ready(function () {
           this.setFavicon();
           this.updateTitle();
         },
+        onAlarmDelete(payload) {
+          const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
+          if (!alarmId) return;
+          if (this.alarmStates && this.alarmStates.length > 0) {
+            const initialLen = this.alarmStates.length;
+            this.alarmStates = this.alarmStates.filter(s => s.alarmId !== alarmId);
+            if (this.alarmStates.length !== initialLen) {
+              this.updateStatus();
+              this.setFavicon();
+              this.updateTitle();
+            }
+          }
+        },
         loadAlarmStates() {
-          if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+          if (!this.username) return Promise.resolve();
           return this.papi.get('alarms/states')
             .then(response => {
               this.alarmStates = response?.data || [];
+              this.alarmStatesLoaded = true;
               this.updateStatus();
               this.setFavicon();
               this.updateTitle();
