@@ -1935,3 +1935,54 @@ test('openWebsocket onopen reloads alarm states to reconcile state on reconnect'
   expect(app.loadAlarmStates).toHaveBeenCalled();
   expect(app.connected).toBe(true);
 });
+
+test('onAlarmDelete removes matching alarm states and updates UI indicators', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ];
+
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-1 via object payload
+  app.onAlarmDelete({ alarmId: 'alarm-1' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(1);
+  expect(app.setFavicon).toHaveBeenCalledTimes(1);
+  expect(app.updateTitle).toHaveBeenCalledTimes(1);
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-2 via string payload
+  app.onAlarmDelete('alarm-2');
+
+  expect(app.alarmStates).toEqual([]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(2);
+  expect(app.setFavicon).toHaveBeenCalledTimes(2);
+  expect(app.updateTitle).toHaveBeenCalledTimes(2);
+  expect(app.isAlarmActive()).toBe(false);
+});
+
+test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+  ];
+
+  app.onAlarmDelete(null);
+  app.onAlarmDelete({});
+  app.onAlarmDelete('');
+  app.onAlarmDelete({ alarmId: 'alarm-nonexistent' });
+
+  expect(app.alarmStates).toHaveLength(1);
+  expect(app.updateStatus).not.toHaveBeenCalled();
+});

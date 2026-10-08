@@ -245,12 +245,14 @@ test('deleteAlarm deletes alarm via DELETE', async () => {
   mockPapi('get', []);
 
   comp.$emit = jest.fn();
+  comp.$root.onAlarmDelete = jest.fn();
 
   await comp.deleteAlarm();
 
   expect(deleteMock).toHaveBeenCalledWith('alarms/alarm-1');
   expect(comp.deleteAlarmDialog).toBe(false);
   expect(comp.alarmToDelete).toBeNull();
+  expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1' });
   expect(comp.$emit).toHaveBeenCalledWith('alarm-deleted', { id: 'alarm-1', name: 'To Delete' });
 });
 
@@ -337,6 +339,65 @@ test('onAlarmStateUpdate inserts or updates alarm states in real time', () => {
 
   expect(comp.states).toHaveLength(2);
   expect(comp.states[1].alarmId).toBe('alarm-2');
+});
+
+test('onAlarmDelete removes alarm from alarms list and corresponding states', () => {
+  comp.alarms = [
+    { id: 'alarm-1', name: 'Alarm 1' },
+    { id: 'alarm-2', name: 'Alarm 2' },
+  ];
+  comp.states = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+    { alarmId: 'alarm-1', nodeId: 'node-2', status: 'alarm' },
+    { alarmId: 'alarm-2', nodeId: 'node-1', status: 'ok' },
+  ];
+
+  comp.onAlarmDelete({ alarmId: 'alarm-1' });
+
+  expect(comp.alarms).toEqual([{ id: 'alarm-2', name: 'Alarm 2' }]);
+  expect(comp.states).toEqual([{ alarmId: 'alarm-2', nodeId: 'node-1', status: 'ok' }]);
+
+  // Gracefully handles missing/invalid payload
+  comp.onAlarmDelete(null);
+  comp.onAlarmDelete({});
+  expect(comp.alarms).toHaveLength(1);
+});
+
+test('saveAlarm notifies root onAlarmDelete when existing alarm is disabled', async () => {
+  comp.form = {
+    isEdit: true,
+    id: 'alarm-1',
+    name: 'Disabled Alarm',
+    enabled: false,
+    metric: 'cpu',
+    operator: 'gt',
+    threshold: '85',
+    durationSeconds: 120,
+    severity: 'critical',
+  };
+  comp.$root.onAlarmDelete = jest.fn();
+  mockPapi('put', { id: 'alarm-1' });
+  mockPapi('get', []);
+  mockPapi('get', []);
+  mockPapi('get', []);
+  mockPapi('get', []);
+  mockPapi('get', []);
+  mockPapi('get', []);
+
+  await comp.saveAlarm();
+  expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1' });
+});
+
+test('created and unmounted subscribe and unsubscribe to alarm:delete', () => {
+  comp.$root.subscribe = jest.fn();
+  comp.$root.unsubscribe = jest.fn();
+
+  comp.autoLoad = false;
+  comp.created();
+  expect(comp.$root.subscribe).toHaveBeenCalledWith('alarm:delete', comp.onAlarmDelete);
+
+  comp.unmounted();
+  expect(comp.$root.unsubscribe).toHaveBeenCalledWith('alarm:delete', comp.onAlarmDelete);
 });
 
 test('thresholdHint and booleanThresholdOptions computed properties', () => {

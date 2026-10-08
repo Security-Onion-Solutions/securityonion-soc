@@ -503,6 +503,16 @@ test('addAlarm delegates to alarmsManager.showAddAlarm', () => {
 	expect(showAddAlarm).toHaveBeenCalled();
 });
 
+test('onAlarmDeleted calls $root.onAlarmDelete', () => {
+	comp.$root.onAlarmDelete = jest.fn();
+	comp.onAlarmDeleted({ id: 'alarm-1' });
+	expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1' });
+
+	comp.onAlarmDeleted(null);
+	comp.onAlarmDeleted({});
+	expect(comp.$root.onAlarmDelete).toHaveBeenCalledTimes(1);
+});
+
 test('refresh reloads alarmsManager when activeTab is alarms', () => {
 	const loadData = jest.fn();
 	comp.$refs = {

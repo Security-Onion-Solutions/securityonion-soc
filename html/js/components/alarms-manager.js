@@ -181,11 +181,13 @@ components.push({
       }
       if (this.$root?.subscribe) {
         this.$root.subscribe('alarm:state', this.onAlarmStateUpdate);
+        this.$root.subscribe('alarm:delete', this.onAlarmDelete);
       }
     },
     unmounted() {
       if (this.$root?.unsubscribe) {
         this.$root.unsubscribe('alarm:state', this.onAlarmStateUpdate);
+        this.$root.unsubscribe('alarm:delete', this.onAlarmDelete);
       }
     },
     methods: {
@@ -197,6 +199,16 @@ components.push({
           this.states.splice(idx, 1, state);
         } else {
           this.states.push(state);
+        }
+      },
+      onAlarmDelete(payload) {
+        const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
+        if (!alarmId) return;
+        if (Array.isArray(this.alarms)) {
+          this.alarms = this.alarms.filter(a => a.id !== alarmId);
+        }
+        if (Array.isArray(this.states)) {
+          this.states = this.states.filter(s => s.alarmId !== alarmId);
         }
       },
       async loadData() {
@@ -392,6 +404,9 @@ components.push({
 
           if (this.form.isEdit) {
             await this.$root.papi.put(`alarms/${this.form.id}`, payload);
+            if (!this.form.enabled && this.$root?.onAlarmDelete) {
+              this.$root.onAlarmDelete({ alarmId: this.form.id });
+            }
           } else {
             await this.$root.papi.post('alarms', payload);
           }
@@ -414,11 +429,15 @@ components.push({
       async deleteAlarm() {
         if (!this.alarmToDelete) return;
         try {
-          await this.$root.papi.delete(`alarms/${this.alarmToDelete.id}`);
+          const alarmId = this.alarmToDelete.id;
+          await this.$root.papi.delete(`alarms/${alarmId}`);
           this.deleteAlarmDialog = false;
           const deleted = this.alarmToDelete;
           this.alarmToDelete = null;
           await this.loadData();
+          if (this.$root?.onAlarmDelete) {
+            this.$root.onAlarmDelete({ alarmId });
+          }
           if (typeof this.$emit === 'function') {
             this.$emit('alarm-deleted', deleted);
           }

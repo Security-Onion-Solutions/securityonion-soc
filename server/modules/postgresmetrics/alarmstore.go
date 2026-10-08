@@ -257,6 +257,7 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 		if dbStore := s.getDBStore(ctx); dbStore != nil {
 			_ = dbStore.DeleteAlarmStatesForAlarm(ctx, id)
 		}
+		s.broadcastAlarmDelete(id)
 	}
 
 	return alarm, nil
@@ -299,6 +300,8 @@ func (s *AlarmstoreImpl) DeleteAlarm(ctx context.Context, id string) error {
 	if dbStore := s.getDBStore(ctx); dbStore != nil {
 		_ = dbStore.DeleteAlarmStatesForAlarm(ctx, id)
 	}
+
+	s.broadcastAlarmDelete(id)
 
 	return nil
 }
@@ -604,4 +607,11 @@ func (s *AlarmstoreImpl) broadcastAlarmState(state *model.AlarmState) {
 		return
 	}
 	s.server.Host.Broadcast("alarm:state", "nodes", state)
+}
+
+func (s *AlarmstoreImpl) broadcastAlarmDelete(alarmID string) {
+	if alarmID == "" || s.server == nil || s.server.Host == nil {
+		return
+	}
+	s.server.Host.Broadcast("alarm:delete", "nodes", map[string]string{"alarmId": alarmID})
 }
