@@ -148,8 +148,6 @@ type ElastAlertEngine struct {
 	elastAlertRunEvery                 time.Duration
 	esqlQueryDelay                     time.Duration
 	esqlCorrelationAllowance           time.Duration
-	migrations                         map[string]func(string) error
-	checkMigrationsOnce                func()
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -250,17 +248,7 @@ func NewElastAlertEngine(srv *server.Server) *ElastAlertEngine {
 	resMan := &detections.ResourceManager{Config: srv.Config}
 	engine.IOManager = resMan
 
-	engine.checkMigrationsOnce = sync.OnceFunc(engine.checkForMigrations)
-
-	engine.migrations = map[string]func(string) error{
-		"3.4.0": engine.Migration340,
-	}
-
 	return engine
-}
-
-func (e *ElastAlertEngine) checkForMigrations() {
-	detections.RunMigrations(e.IOManager, model.EngineNameElastAlert, e.migrations, &e.EngineState)
 }
 
 func (e *ElastAlertEngine) PrerequisiteModules() []string {
@@ -493,8 +481,6 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 	detect.Product = lo.FromPtr(rule.LogSource.Product)
 	detect.Service = lo.FromPtr(rule.LogSource.Service)
 
-	rule.setRuleType(detect)
-
 	if rule.Level != nil {
 		switch strings.ToLower(string(*rule.Level)) {
 		case "informational":
@@ -667,9 +653,6 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	}
 
 	e.writeNoRead = nil
-
-	// before the early returns, so migrations always run
-	e.checkMigrationsOnce()
 
 	if !e.autoUpdateEnabled && !forceSync {
 		logger.WithFields(log.Fields{
@@ -1105,6 +1088,10 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*
 				continue
 			}
 
+			if e.skipCorrelation(rule, file.Name) {
+				continue
+			}
+
 			det := rule.ToDetection(pkg, model.LicenseDRL, true)
 
 			detects = append(detects, det)
@@ -1173,6 +1160,10 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 				return nil
 			}
 
+			if e.skipCorrelation(rule, path) {
+				return nil
+			}
+
 			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 
 			detects = append(detects, det)
@@ -1188,20 +1179,18 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 	return detects, errMap
 }
 
-func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool) (errMap map[string]error, err error) {
-	if !e.useEsql {
-		// correlations need ES|QL; earlier imports are deleted below
-		runnable := lo.Reject(detects, func(d *model.Detection, _ int) bool {
-			return d.RuleType == model.RuleTypeCorrelation
-		})
-
-		if skipped := len(detects) - len(runnable); skipped > 0 {
-			logger.WithField("correlationCount", skipped).Info("skipping Sigma correlations, which require ES|QL")
-		}
-
-		detects = runnable
+// skipCorrelation skips correlations when ES|QL is off, which also deletes any already imported.
+func (e *ElastAlertEngine) skipCorrelation(rule *SigmaRule, ruleFile string) bool {
+	if rule.Correlation == nil || e.useEsql {
+		return false
 	}
 
+	log.WithField("elastAlertRuleFile", ruleFile).Info("skipping Sigma correlation, which requires ES|QL")
+
+	return true
+}
+
+func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool) (errMap map[string]error, err error) {
 	existing, err := e.IndexExistingRules()
 	if err != nil {
 		return nil, err

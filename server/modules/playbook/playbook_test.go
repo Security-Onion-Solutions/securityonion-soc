@@ -566,9 +566,9 @@ func TestScheduler(t *testing.T) {
 	assert.Equal(t, 1, len(pdm.PlaybooksByCategory["process_creation"]))
 	assert.Equal(t, "4f1db62f-cb41-41fb-8af3-11a67585b5db", pdm.PlaybooksByCategory["process_creation"][0])
 
-	assert.Equal(t, 1, len(pdm.PlaybooksByEngine))
-	assert.Equal(t, 1, len(pdm.PlaybooksByEngine["suricata"]))
-	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", pdm.PlaybooksByEngine["suricata"][0])
+	assert.Equal(t, 1, len(pdm.PlaybooksByType))
+	assert.Equal(t, 1, len(pdm.PlaybooksByType["nids"]))
+	assert.Equal(t, "1dfe7517-f105-454f-ae96-f2280c09e4b2", pdm.PlaybooksByType["nids"][0])
 
 	assert.Equal(t, 3, len(pdm.playbooksOnDisk))
 	assert.Equal(t, "/tmp/playbooks/repo/playbook1.yaml", pdm.playbooksOnDisk["1dfe7517-f105-454f-ae96-f2280c09e4b2"])
@@ -590,8 +590,8 @@ func TestGetPlaybooksForDetection(t *testing.T) {
 		PlaybooksByCategory: map[string][]string{
 			"process_creation": {"4f1db62f-cb41-41fb-8af3-11a67585b5db"},
 		},
-		PlaybooksByEngine: map[string][]string{
-			"suricata": {"1dfe7517-f105-454f-ae96-f2280c09e4b2"},
+		PlaybooksByType: map[string][]string{
+			"nids": {"1dfe7517-f105-454f-ae96-f2280c09e4b2"},
 		},
 		playbooksOnDisk: map[string]string{
 			"6f64990a-acda-40b6-ab71-134c073013b5": "/path/6f6",
@@ -636,60 +636,137 @@ func TestGetPlaybooksForDetection_Correlation(t *testing.T) {
 
 	iom := mock.NewMockIOManager(ctrl)
 
-	byCategory := map[string][]string{
-		correlationCategory: {"correlation-baseline"},
-	}
-
 	pdm := PlaybookDiskManager{
 		srv: server.NewFakeAuthorizedServer(nil),
 		PlaybooksByDetectionId: map[string][]string{
 			"own-rule": {"own-playbook"},
 		},
-		PlaybooksByCategory: byCategory,
-		PlaybooksByEngine: map[string][]string{
-			string(model.EngineNameElastAlert): {"engine-baseline"},
+		PlaybooksByCategory: map[string][]string{
+			"process_creation": {"process-playbook"},
+		},
+		PlaybooksByType: map[string][]string{
+			"sigma":             {"sigma-baseline"},
+			"sigma_correlation": {"correlation-baseline"},
+			"yara":              {"yara-baseline"},
 		},
 		playbooksOnDisk: map[string]string{
 			"own-playbook":         "/path/own",
+			"process-playbook":     "/path/process",
+			"sigma-baseline":       "/path/sigma",
 			"correlation-baseline": "/path/correlation",
-			"engine-baseline":      "/path/engine",
+			"yara-baseline":        "/path/yara",
 		},
 		playbookTypes: map[string]string{
-			"own-playbook":         "sigma",
-			"correlation-baseline": "sigma",
-			"engine-baseline":      "sigma",
+			"process-playbook": "sigma",
 		},
 		IOManager: iom,
 	}
 
 	ctx := context.Background()
 
+	correlation := "title: Many\ncorrelation:\n  type: event_count\n  rules:\n    - single\n  timespan: 5m\n"
+	single := "title: Single\nlogsource:\n  category: process_creation\n"
+
 	// the rule's own playbook replaces the correlation baseline
 	iom.EXPECT().ReadFile("/path/own").Return([]byte("id: own-playbook"), nil)
-	playbooks, err := pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "own-rule", Engine: model.EngineNameElastAlert, RuleType: model.RuleTypeCorrelation})
+	playbooks, err := pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "own-rule", Engine: model.EngineNameElastAlert, Content: correlation})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "own-playbook", playbooks[0].Id)
 
 	// without its own playbook, a correlation gets the correlation baseline
 	iom.EXPECT().ReadFile("/path/correlation").Return([]byte("id: correlation-baseline"), nil)
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, RuleType: model.RuleTypeCorrelation})
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, Content: correlation})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
 	assert.Equal(t, "correlation-baseline", playbooks[0].Id)
 
-	// with neither, a correlation gets nothing rather than the engine baseline
-	delete(byCategory, correlationCategory)
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, RuleType: model.RuleTypeCorrelation})
+	// single-rule category playbooks skip correlations
+	iom.EXPECT().ReadFile("/path/correlation").Return([]byte("id: correlation-baseline"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, Category: "process_creation", Content: correlation})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "correlation-baseline", playbooks[0].Id)
+
+	// single rule: category playbook, else Sigma baseline
+	iom.EXPECT().ReadFile("/path/process").Return([]byte("id: process-playbook"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, Category: "process_creation", Content: single})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "process-playbook", playbooks[0].Id)
+
+	iom.EXPECT().ReadFile("/path/sigma").Return([]byte("id: sigma-baseline"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, Content: single})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(playbooks))
+	assert.Equal(t, "sigma-baseline", playbooks[0].Id)
+
+	// no correlation baseline: nothing, not the Sigma baseline
+	delete(pdm.PlaybooksByType, "sigma_correlation")
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert, Content: correlation})
 	assert.NoError(t, err)
 	assert.Empty(t, playbooks)
 
-	// a single-event rule still falls back to the engine baseline
-	iom.EXPECT().ReadFile("/path/engine").Return([]byte("id: engine-baseline"), nil)
-	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameElastAlert})
+	iom.EXPECT().ReadFile("/path/yara").Return([]byte("id: yara-baseline"), nil)
+	playbooks, err = pdm.GetPlaybooksForDetection(ctx, &model.Detection{PublicID: "other-rule", Engine: model.EngineNameStrelka})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(playbooks))
-	assert.Equal(t, "engine-baseline", playbooks[0].Id)
+	assert.Equal(t, "yara-baseline", playbooks[0].Id)
+}
+
+func TestIsSigmaCorrelation(t *testing.T) {
+	tests := []struct {
+		Name    string
+		Content string
+		Expect  bool
+	}{
+		{
+			Name:    "Single Rule",
+			Content: "title: Single\nlogsource:\n  category: process_creation\ndetection:\n  sel:\n    Image: x\n  condition: sel\n",
+			Expect:  false,
+		},
+		{
+			Name:    "Correlation",
+			Content: "title: Many\ncorrelation:\n  type: event_count\n  rules:\n    - single\n  timespan: 5m\n---\ntitle: Single\nname: single\nlogsource:\n  category: process_creation\n",
+			Expect:  true,
+		},
+		{
+			Name:    "Empty First Document",
+			Content: "---\n---\ntitle: Many\ncorrelation:\n  type: temporal\n",
+			Expect:  true,
+		},
+		{
+			Name:    "Correlation Only In A Referenced Document",
+			Content: "title: Single\nlogsource:\n  category: process_creation\n---\ntitle: Many\ncorrelation:\n  type: event_count\n",
+			Expect:  false,
+		},
+		{
+			Name:    "Mentioned In A Comment",
+			Content: "title: Single\n# correlation: not this one\ndescription: no correlation: here\n",
+			Expect:  false,
+		},
+		{
+			Name:    "Empty Correlation",
+			Content: "title: Many\ncorrelation:\n",
+			Expect:  false,
+		},
+		{
+			Name:    "Invalid YAML",
+			Content: "title: [unclosed\ncorrelation:\n  type: event_count\n",
+			Expect:  false,
+		},
+		{
+			Name:    "Empty",
+			Content: "",
+			Expect:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			assert.Equal(t, test.Expect, isSigmaCorrelation(test.Content))
+		})
+	}
 }
 
 func TestGetPlaybookById(t *testing.T) {
@@ -875,6 +952,57 @@ func TestReadPlaybooks(t *testing.T) {
 	assert.Equal(t, "repo2-playbook2.yaml", pdm.playbooksOnDisk["repo2-pb2"])
 }
 
+func TestReadPlaybooksBaselinesByType(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	iom := mock.NewMockIOManager(ctrl)
+	pdm := PlaybookDiskManager{
+		isRunning: true,
+		IOManager: iom,
+	}
+
+	repos := []*detections.RepoOnDisk{
+		{
+			Repo: &model.Repo{RepoUrl: "file:///playbooks/repo"},
+			Path: "/tmp/playbooks/repo",
+		},
+	}
+
+	files := []struct{ name, content string }{
+		{"sigma.yaml", "id: sigma-baseline\ndetection_type: sigma"},
+		{"correlation.yaml", "id: correlation-baseline\ndetection_type: sigma_correlation"},
+		{"nids.yaml", "id: nids-baseline\ndetection_type: nids"},
+		{"yara.yaml", "id: yara-baseline\ndetection_type: yara"},
+		{"unknown.yaml", "id: unknown-baseline\ndetection_type: unknown"},
+		{"category.yaml", "id: correlation-category\ndetection_type: sigma_correlation\ndetection_category: network"},
+	}
+
+	iom.EXPECT().WalkDir("/tmp/playbooks/repo", gomock.Any()).DoAndReturn(func(path string, fn func(p string, dir fs.DirEntry, err error) error) error {
+		for _, f := range files {
+			iom.EXPECT().ReadFile(f.name).Return([]byte(f.content), nil)
+			err := fn(f.name, &handmock.MockDirEntry{Filename: f.name}, nil)
+			assert.NoError(t, err)
+		}
+
+		return nil
+	})
+
+	h := memory.New()
+	lg := &log.Logger{Handler: h, Level: log.DebugLevel}
+
+	_, err := pdm.readPlaybooks(lg.WithField("test", true), repos)
+	assert.NoError(t, err)
+
+	assert.Equal(t, map[string][]string{
+		"sigma":             {"sigma-baseline"},
+		"sigma_correlation": {"correlation-baseline"},
+		"nids":              {"nids-baseline"},
+		"yara":              {"yara-baseline"},
+	}, pdm.PlaybooksByType)
+	assert.Equal(t, []string{"correlation-category"}, pdm.PlaybooksByCategory["network"])
+}
+
 // loadPlaceholderMap must be non-fatal: a missing/malformed/empty map file yields an empty map
 // (never an error) so a bad map file can't abort Init
 func TestLoadPlaceholderMap(t *testing.T) {
@@ -920,7 +1048,7 @@ func TestGetPlaybooksForDetection_BaseCategoryMatching(t *testing.T) {
 			"sql":     {"sql-playbook"},
 			"generic": {"generic-playbook"},
 		},
-		PlaybooksByEngine: map[string][]string{},
+		PlaybooksByType: map[string][]string{},
 		playbooksOnDisk: map[string]string{
 			"scan-playbook":       "/path/scan",
 			"sigma-scan-playbook": "/path/sigma-scan",

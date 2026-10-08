@@ -924,15 +924,6 @@ func convertElasticEventToDetection(event *model.EventRecord, schemaPrefix strin
 			if value, ok := event.Payload[schemaPrefix+"detection.service"].(string); ok {
 				obj.Service = value
 			}
-			if value, ok := event.Payload[schemaPrefix+"detection.ruleType"].(string); ok {
-				obj.RuleType = model.RuleType(value)
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.correlationType"].(string); ok {
-				obj.CorrelationType = value
-			}
-			if value, ok := event.Payload[schemaPrefix+"detection.correlationTimespan"].(string); ok {
-				obj.CorrelationTimespan = value
-			}
 			if value, ok := event.Payload[schemaPrefix+"detection.tags"]; ok && value != nil {
 				arr := value.([]interface{})
 				obj.Tags = make([]string, 0, len(arr))

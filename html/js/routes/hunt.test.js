@@ -2332,6 +2332,7 @@ test('loadPlaybook answers questions progressively', async () => {
   expect(event.questions[0].id).toBe('q1');
   expect(event.questions[1].id).toBe('q2');
   expect(event.questions[2].id).toBe('q3');
+  expect(event.questions[3].id).toBe('q4');
 
   // aggregate question: Count column prepended, server-executed results attached
   expect(event.questions[0].isAggregate).toBe(true);
@@ -2348,11 +2349,11 @@ test('loadPlaybook answers questions progressively', async () => {
 
   // rangeless question: answered by the alert itself, no @timestamp prepended
   expect(event.questions[2].fields).toStrictEqual(['soc_timestamp']);
-  expect(event.questions[3].fields).toStrictEqual(['rule.summary']);
   expect(event.questions[2].queryResults).toHaveLength(1);
   expect(event.questions[2].queryResults[0].payload).toMatchObject({ 'soc_id': '789' });
   expect(event.questions[2].queryResults[0].payload.questions).toBe(undefined); // no self-reference
   expect(event.questions[2].status).toBe('done');
+  expect(event.questions[3].fields).toStrictEqual(['rule.summary']);
 
   // ranged questions are executed server-side, anchored to the alert timestamp
   expect(papiPostMock).toHaveBeenCalledTimes(2);

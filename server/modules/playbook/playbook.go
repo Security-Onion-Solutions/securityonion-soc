@@ -41,9 +41,6 @@ const (
 	DEFAULT_USER_PLACEHOLDER_MAP_PATH         = "/opt/sensoroni/playbook_placeholder_map_custom.yaml"
 )
 
-// Correlation baselines use this category; older grids never match it.
-const correlationCategory = "correlation"
-
 var ( // treat as constant
 	DEFAULT_PLAYBOOK_REPOS = []*model.Repo{
 		{
@@ -77,7 +74,7 @@ type PlaybookDiskManager struct {
 
 	PlaybooksByDetectionId map[string][]string
 	PlaybooksByCategory    map[string][]string
-	PlaybooksByEngine      map[string][]string
+	PlaybooksByType        map[string][]string // Baselines (no detection ID or category) by detection type
 	playbooksOnDisk        map[string]string
 	playbookTypes          map[string]string // Maps playbook ID to detection type
 
@@ -286,7 +283,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 	byDetId := make(map[string][]string)
 	onDisk := make(map[string]string)
 	byCategory := make(map[string][]string)
-	byEngine := make(map[string][]string)
+	byType := make(map[string][]string)
 	types := make(map[string]string)
 
 	total := 0
@@ -375,13 +372,9 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 			}
 
 			if pb.DetectionId == "" && pb.DetectionCategory == "" {
-				switch strings.ToLower(pb.DetectionType) {
-				case "sigma":
-					byEngine[string(model.EngineNameElastAlert)] = append(byEngine[string(model.EngineNameElastAlert)], id)
-				case "strelka":
-					byEngine[string(model.EngineNameStrelka)] = append(byEngine[string(model.EngineNameStrelka)], id)
-				case "nids":
-					byEngine[string(model.EngineNameSuricata)] = append(byEngine[string(model.EngineNameSuricata)], id)
+				switch pbType := strings.ToLower(pb.DetectionType); pbType {
+				case "nids", "sigma", "sigma_correlation", "yara":
+					byType[pbType] = append(byType[pbType], id)
 				default:
 					logger.Warn("unexpected playbook detection_type: " + pb.DetectionType)
 				}
@@ -415,7 +408,7 @@ func (pdm *PlaybookDiskManager) readPlaybooks(logger log.Interface, repos []*det
 
 	pdm.pbUpdateMutex.Lock()
 
-	pdm.PlaybooksByEngine = byEngine
+	pdm.PlaybooksByType = byType
 	pdm.PlaybooksByCategory = byCategory
 	pdm.PlaybooksByDetectionId = byDetId
 	pdm.playbooksOnDisk = onDisk
@@ -436,12 +429,8 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, de
 
 	publicId := strings.ToLower(detect.PublicID)
 	detectEngine := detect.Engine
-	isCorrelation := detect.RuleType == model.RuleTypeCorrelation
-
 	detectCategory := strings.ToLower(detect.Category)
-	if isCorrelation {
-		detectCategory = correlationCategory
-	}
+	detectType := playbookTypeFor(detect)
 
 	pdm.pbUpdateMutex.RLock()
 	defer pdm.pbUpdateMutex.RUnlock()
@@ -451,19 +440,9 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, de
 
 	// First try exact match, filtered by detection type for engine consistency
 	if matches := pdm.PlaybooksByCategory[detectCategory]; len(matches) > 0 {
-		expectedType := ""
-		switch detectEngine {
-		case model.EngineNameSuricata:
-			expectedType = "nids"
-		case model.EngineNameElastAlert:
-			expectedType = "sigma"
-		case model.EngineNameStrelka:
-			expectedType = "yara"
-		}
-
 		for _, playbookId := range matches {
 			playbookType, ok := pdm.playbookTypes[playbookId]
-			if !ok || playbookType == expectedType {
+			if !ok || playbookType == detectType {
 				// Include playbooks with matching type or no type specified
 				forCategory = append(forCategory, playbookId)
 			}
@@ -489,16 +468,11 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, de
 		}
 	}
 
-	// a correlation's own playbook replaces its baseline; correlations never get the engine baseline
-	if isCorrelation && len(forId) > 0 {
-		forCategory = nil
-	}
-
 	results := append([]string{}, forId...)
 	results = append(results, forCategory...)
 
-	if len(results) == 0 && !isCorrelation {
-		results = pdm.PlaybooksByEngine[string(detectEngine)]
+	if len(results) == 0 {
+		results = pdm.PlaybooksByType[detectType]
 	}
 
 	pbs := make([]*model.Playbook, 0, len(results))
@@ -541,10 +515,47 @@ func (pdm *PlaybookDiskManager) GetPlaybooksForDetection(ctx context.Context, de
 		"detectionPublicId": publicId,
 		"detectCategory":    detectCategory,
 		"detectEngine":      detectEngine,
+		"detectType":        detectType,
 		"playbookIds":       results,
 	}).Info("retrieving playbooks for detection")
 
 	return pbs, nil
+}
+
+// playbookTypeFor returns the playbook detection_type that matches the detection.
+func playbookTypeFor(detect *model.Detection) string {
+	switch detect.Engine {
+	case model.EngineNameSuricata:
+		return "nids"
+	case model.EngineNameElastAlert:
+		if isSigmaCorrelation(detect.Content) {
+			return "sigma_correlation"
+		}
+
+		return "sigma"
+	case model.EngineNameStrelka:
+		return "yara"
+	}
+
+	return ""
+}
+
+// isSigmaCorrelation reports whether the first non-empty YAML document is a correlation.
+func isSigmaCorrelation(content string) bool {
+	decoder := yaml.NewDecoder(strings.NewReader(content))
+
+	for {
+		doc := map[string]interface{}{}
+
+		err := decoder.Decode(&doc)
+		if err != nil {
+			return false
+		}
+
+		if len(doc) != 0 {
+			return doc["correlation"] != nil
+		}
+	}
 }
 
 func (pdm *PlaybookDiskManager) GetPlaybookById(ctx context.Context, id string) (pb *model.Playbook, err error) {

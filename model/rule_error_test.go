@@ -23,7 +23,6 @@ func TestRuleError(t *testing.T) {
 	assert.ErrorIs(t, err, code)
 	assert.ErrorIs(t, err, reason)
 
-	// the detail, never the code, so an unmapped RuleError is still masked
 	assert.Equal(t, "wrapped: document 2 is not a Sigma filter", err.Error())
 
 	var ruleErr *RuleError

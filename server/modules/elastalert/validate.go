@@ -471,29 +471,5 @@ func (r *SigmaRule) ToDetection(ruleset string, license string, isCommunity bool
 		det.Service = *r.LogSource.Service
 	}
 
-	r.setRuleType(det)
-
 	return det
-}
-
-func (r *SigmaRule) setRuleType(det *model.Detection) {
-	det.RuleType = model.RuleTypeSingle
-	det.CorrelationType = ""
-	det.CorrelationTimespan = ""
-
-	if r.Correlation == nil {
-		return
-	}
-
-	det.RuleType = model.RuleTypeCorrelation
-	det.CorrelationType = r.Correlation.Type
-
-	// correlations have no logsource; drop any left from a single-event rule
-	det.Category = ""
-	det.Product = ""
-	det.Service = ""
-
-	if r.Correlation.Timespan != nil {
-		det.CorrelationTimespan = *r.Correlation.Timespan
-	}
 }

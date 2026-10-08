@@ -14,13 +14,10 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
-	"github.com/security-onion-solutions/securityonion-soc/server"
-	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/handmock"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections/mock"
 
-	"github.com/apex/log"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -130,6 +127,8 @@ func TestCorrelationRequiresEsql(t *testing.T) {
 
 	// no expectations: neither validation nor conversion may run sigma-cli
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	iom := mock.NewMockIOManager(ctrl)
 	engine := &ElastAlertEngine{IOManager: iom}
 
@@ -177,6 +176,8 @@ func TestConvertRulePreviewsOnlyTheQuery(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			iom := mock.NewMockIOManager(ctrl)
 			iom.EXPECT().ExecCommand(gomock.Any()).Return([]byte("Parsing Sigma rules\n"+test.Output), 0, time.Duration(0), nil)
 
@@ -196,35 +197,21 @@ func TestSigmaCliError(t *testing.T) {
 	assert.Equal(t, "The pipeline 'x' was not found.", sigmaCliError([]byte("Usage: sigma convert\n\nError: The pipeline 'x' was not found.\nList all installed processing pipelines with: ...")))
 	// a traceback ends with the exception
 	assert.Equal(t, "AttributeError: 'int' object has no attribute 'replace'", sigmaCliError([]byte("Traceback (most recent call last):\n  File \"x.py\"\nAttributeError: 'int' object has no attribute 'replace'")))
+	assert.Equal(t, "second", sigmaCliError([]byte("Error: first\nError: second\n")))
+	assert.Equal(t, "last line", sigmaCliError([]byte("Error: \nlast line")))
 	assert.Empty(t, sigmaCliError(nil))
 }
 
-func TestSyncCommunityCorrelationWithoutEsql(t *testing.T) {
+func TestParseRepoRulesSkipsCorrelationsWithoutEsql(t *testing.T) {
 	t.Parallel()
 
-	const publicId = "11111111-1111-1111-1111-111111111111"
-	const path = "rules/" + publicId + ".yml"
-
 	table := []struct {
-		Name            string
-		Imported        bool
-		InitMock        func(*mock.MockIOManager)
-		ExpectedActions []string
+		Name     string
+		UseEsql  bool
+		Expected int
 	}{
-		{
-			Name: "Not Imported",
-			// sigma-cli never runs
-			InitMock: func(iom *mock.MockIOManager) {},
-		},
-		{
-			// ES|QL turned off again
-			Name:     "One Imported Earlier Is Removed",
-			Imported: true,
-			InitMock: func(iom *mock.MockIOManager) {
-				iom.EXPECT().DeleteFile(path).Return(nil)
-			},
-			ExpectedActions: []string{"delete"},
-		},
+		{Name: "Without ES|QL", UseEsql: false, Expected: 0},
+		{Name: "With ES|QL", UseEsql: true, Expected: 1},
 	}
 
 	for _, test := range table {
@@ -234,64 +221,17 @@ func TestSyncCommunityCorrelationWithoutEsql(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			ctx := context.Background()
-			detStore := servermock.NewMockDetectionstore(ctrl)
 			iom := mock.NewMockIOManager(ctrl)
-			bim := servermock.NewMockBulkIndexer(ctrl)
+			iom.EXPECT().WalkDir("repo", gomock.Any()).DoAndReturn(func(path string, fn fs.WalkDirFunc) error {
+				return fn("repo/correlation.yml", &handmock.MockDirEntry{Filename: "correlation.yml"}, nil)
+			})
+			iom.EXPECT().ReadFile("repo/correlation.yml").Return([]byte(testCorrelationContent), nil)
 
-			engine := &ElastAlertEngine{
-				srv: &server.Server{
-					Context:        ctx,
-					Detectionstore: detStore,
-				},
-				isRunning:             true,
-				elastAlertRulesFolder: "rules",
-				IOManager:             iom,
-			}
+			engine := &ElastAlertEngine{isRunning: true, useEsql: test.UseEsql, IOManager: iom}
 
-			community := map[string]*model.Detection{}
-			deployed := []fs.DirEntry{}
-			if test.Imported {
-				community[publicId] = &model.Detection{
-					Auditable:   model.Auditable{Id: "detection-id"},
-					PublicID:    publicId,
-					Content:     testCorrelationContent,
-					RuleType:    model.RuleTypeCorrelation,
-					IsEnabled:   true,
-					IsCommunity: true,
-				}
-				// the ES|QL rule deployed earlier
-				deployed = append(deployed, &handmock.MockDirEntry{Filename: publicId + ".yml"})
-			}
-
-			var actions []string
-
-			iom.EXPECT().ReadDir("rules").Return(deployed, nil)
-			detStore.EXPECT().GetAllDetections(gomock.Any(), gomock.Any()).Return(community, nil)
-			detStore.EXPECT().BuildBulkIndexer(gomock.Any(), gomock.Any()).Return(bim, nil).AnyTimes()
-			detStore.EXPECT().ConvertObjectToDocument(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return([]byte("document"), "index", nil).AnyTimes()
-			bim.EXPECT().Add(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, item esutil.BulkIndexerItem) error {
-				actions = append(actions, item.Action)
-				return nil
-			}).AnyTimes()
-			bim.EXPECT().Close(gomock.Any()).Return(nil).AnyTimes()
-			bim.EXPECT().Stats().Return(esutil.BulkIndexerStats{}).AnyTimes()
-			test.InitMock(iom)
-
-			errMap, err := engine.syncCommunityDetections(ctx, log.WithField("test", t.Name()), []*model.Detection{
-				{
-					PublicID:    publicId,
-					Content:     testCorrelationContent,
-					RuleType:    model.RuleTypeCorrelation,
-					IsCommunity: true,
-					Engine:      model.EngineNameElastAlert,
-				},
-			}, false)
-
-			assert.NoError(t, err)
+			dets, errMap := engine.parseRepoRules([]*detections.RepoOnDisk{{Repo: &model.Repo{}, Path: "repo"}})
 			assert.Empty(t, errMap)
-
-			assert.Equal(t, test.ExpectedActions, actions)
+			assert.Len(t, dets, test.Expected)
 		})
 	}
 }

@@ -451,7 +451,6 @@ func TestConversionSettings(t *testing.T) {
 		}
 	}
 	base := engine().conversionSettings()
-	assert.Equal(t, base, engine().conversionSettings())
 
 	changes := map[string]func(e *ElastAlertEngine){
 		"useEsql":                  func(e *ElastAlertEngine) { e.useEsql = false },
@@ -1405,7 +1404,6 @@ level: high
 		IsCommunity:   true,
 		Engine:        model.EngineNameElastAlert,
 		Language:      model.SigLangSigma,
-		RuleType:      model.RuleTypeSingle,
 		Ruleset:       "all_rules",
 		License:       model.LicenseDRL,
 		SourceCreated: util.Ptr(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
@@ -1477,7 +1475,6 @@ license: Elastic-2.0
 		Service:       "audit",
 		Engine:        model.EngineNameElastAlert,
 		Language:      model.SigLangSigma,
-		RuleType:      model.RuleTypeSingle,
 		Ruleset:       "repo-path",
 		License:       model.LicenseDRL,
 		SourceCreated: util.Ptr(time.Date(2024, 3, 6, 0, 0, 0, 0, time.UTC)),
@@ -1954,10 +1951,10 @@ func TestExtractDetailsStoredExtraDocument(t *testing.T) {
 	assert.Equal(t, SimpleRuleSID, detect.PublicID)
 }
 
-func TestExtractDetailsRuleType(t *testing.T) {
+func TestExtractDetailsCorrelationLogSource(t *testing.T) {
 	eng := &ElastAlertEngine{}
 
-	// a single-event rule edited into a correlation loses its old logsource fields
+	// single rule edited into a correlation drops its logsource
 	detect := &model.Detection{
 		Content:  testCorrelationContent,
 		Category: "process_creation",
@@ -1965,19 +1962,13 @@ func TestExtractDetailsRuleType(t *testing.T) {
 		Service:  "sysmon",
 	}
 	require.NoError(t, eng.ExtractDetails(detect))
-	assert.Equal(t, model.RuleTypeCorrelation, detect.RuleType)
-	assert.Equal(t, "value_count", detect.CorrelationType)
-	assert.Equal(t, "10m", detect.CorrelationTimespan)
 	assert.Empty(t, detect.Category)
 	assert.Empty(t, detect.Product)
 	assert.Empty(t, detect.Service)
 
-	// a correlation edited into a single-event rule loses its correlation fields
+	// and back again restores it
 	detect.Content = SimpleRule
 	require.NoError(t, eng.ExtractDetails(detect))
-	assert.Equal(t, model.RuleTypeSingle, detect.RuleType)
-	assert.Empty(t, detect.CorrelationType)
-	assert.Empty(t, detect.CorrelationTimespan)
 	assert.Equal(t, "process_creation", detect.Category)
 
 	// a logsource key removed from the content clears the stored value
@@ -2096,7 +2087,6 @@ func TestSyncIncrementalNoChanges(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Detectionstore: detStore,
 		},
@@ -2176,10 +2166,7 @@ func TestSyncDisabled(t *testing.T) {
 	detStore := servermock.NewMockDetectionstore(ctrl)
 	iom := mock.NewMockIOManager(ctrl)
 
-	migrationsChecked := false
-
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() { migrationsChecked = true },
 		srv: &server.Server{
 			Detectionstore: detStore,
 			Config:         &config.ServerConfig{},
@@ -2194,9 +2181,6 @@ func TestSyncDisabled(t *testing.T) {
 
 	err := eng.Sync(logger, false)
 	assert.NoError(t, err)
-
-	// migrations run even when there is nothing to sync
-	assert.True(t, migrationsChecked)
 
 	assert.False(t, eng.EngineState.Syncing)
 	assert.False(t, eng.EngineState.IntegrityFailure)
@@ -2227,7 +2211,6 @@ func TestSyncChanges(t *testing.T) {
 	auditm := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
@@ -2435,7 +2418,6 @@ func TestSyncUnchangedOverrides(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
@@ -2583,7 +2565,6 @@ func TestSyncStateFileNoCommunity(t *testing.T) {
 	// bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
@@ -2768,7 +2749,6 @@ func TestSyncLocalNew(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
@@ -2947,7 +2927,6 @@ func TestSyncLocalExisting(t *testing.T) {
 	bim := servermock.NewMockBulkIndexer(ctrl)
 
 	eng := &ElastAlertEngine{
-		checkMigrationsOnce: func() {},
 		srv: &server.Server{
 			Context:        context.Background(),
 			Detectionstore: detStore,
@@ -3258,11 +3237,10 @@ func TestSyncStopsWithoutSigmaPipelines(t *testing.T) {
 	iom := mock.NewMockIOManager(ctrl)
 
 	eng := &ElastAlertEngine{
-		isRunning:           true,
-		sigmaPipelinesDir:   "sigmaPipelinesDir",
-		IOManager:           iom,
-		autoUpdateEnabled:   true,
-		checkMigrationsOnce: func() {},
+		isRunning:         true,
+		sigmaPipelinesDir: "sigmaPipelinesDir",
+		IOManager:         iom,
+		autoUpdateEnabled: true,
 	}
 
 	// a folder with only a .yaml file: sigma-cli would load no pipelines
