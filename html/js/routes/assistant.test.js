@@ -962,6 +962,22 @@ test('the pill counts pushed activity as it arrives, and fetches after a reconne
   }
 });
 
+test('a route change to the open chat does not reload it', () => {
+  const onRoute = routes.find(r => r.name === 'assistant').component.watch['$route'];
+  comp.handleRouteSessionId = jest.fn();
+  comp.currentChatId = 'new-chat';
+
+  onRoute.call(comp, { params: { sessionId: 'new-chat' } }, { params: {} });
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+
+  onRoute.call(comp, { params: { sessionId: 'other-chat' } }, { params: { sessionId: 'new-chat' } });
+  expect(comp.handleRouteSessionId).toHaveBeenCalledTimes(1);
+
+  comp.currentChatId = null;
+  onRoute.call(comp, { params: {} }, { params: { sessionId: 'other-chat' } });
+  expect(comp.handleRouteSessionId).toHaveBeenCalledTimes(2);
+});
+
 test('the pill ignores counts older than what it shows', () => {
   comp.agentic = true;
   comp.$root.user = { id: 'u', roles: ['analyst'] };
@@ -3320,7 +3336,7 @@ test('formatMarkdown delegates to root', () => {
   
   const result = comp.formatMarkdown(text);
   
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true, false);
   expect(result).toBe('<strong>bold text</strong>');
 });
 

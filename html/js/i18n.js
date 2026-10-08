@@ -1037,6 +1037,7 @@ const i18n = {
       exportJobEnqueued: 'A new exported report job #{jobId} has been enqueued. When completed, it will be available for download on the Reports page.',
       exportMetricsHelp: 'Export these metrics as a CSV file',
       exportSessionHelp: 'Export this session as a PDF report',
+      externalImageBlocked: 'External image not loaded: {url}',
       extract: 'Extract',
       incomplete: 'Incomplete',
       invalidHours: 'Hours are not valid. Ex: 1.5',

@@ -205,7 +205,7 @@ test('the report renders mermaid and shows choices as plain text', () => {
 
   const html = comp.formatMarkdown('Next?\n1. [[CHOICE]]Acknowledge the alert[[/CHOICE]]');
 
-  expect(formatMarkdown).toHaveBeenCalledWith('Next?\n1. Acknowledge the alert', true);
+  expect(formatMarkdown).toHaveBeenCalledWith('Next?\n1. Acknowledge the alert', true, false);
   expect(html).not.toContain('[[CHOICE]]');
   expect(renderMermaid).toHaveBeenCalled();
   expect(comp.formatMarkdown('')).toBe('');
