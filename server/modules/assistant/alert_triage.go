@@ -895,7 +895,7 @@ func alertTriageObjective(alert map[string]any, alertId string, count int, group
 	return fmt.Sprintf(`Triage the alert below. It is the most recent of %d unprocessed alerts matching:
 %s
 
-SOC ID: %s
+SOC Alert ID: %s
 Run ID: %s
 
 Alert:

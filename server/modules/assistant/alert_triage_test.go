@@ -1400,7 +1400,7 @@ func TestAlertTriageObjective(t *testing.T) {
 	assert.Contains(t, objective, "Triage the alert below")
 	assert.Contains(t, objective, "7 unprocessed alerts")
 	assert.Contains(t, objective, `rule.name:"ET SCAN"`)
-	assert.Contains(t, objective, "SOC ID: alert-9\nRun ID: run-3")
+	assert.Contains(t, objective, "SOC Alert ID: alert-9\nRun ID: run-3")
 	assert.Contains(t, objective, `"source.ip": "1.2.3.4"`)
 }
 
