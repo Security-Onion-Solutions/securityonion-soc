@@ -346,6 +346,23 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 				"Also acknowledges alerts, escalates to cases, and looks up cases. " +
 				"Objectives must include all identifiers verbatim.",
 		},
+		"AlertTriage": {
+			Name:          "AlertTriage",
+			AllowedSkills: []string{"Hunt", "Playbooks"},
+			CanDelegateTo: []string{"Notifier", "DetectionEngineer"},
+			Prompt:        prompts["prompt_agent_alert_triage"],
+			Description: "Triages an alert autonomously, without a person in the loop, and ends with a report whose status line carries its assessment. " +
+				"Notifies through the Notifier; never acknowledges or escalates. " +
+				"Objectives must include all identifiers verbatim.",
+		},
+		"Notifier": {
+			Name:          "Notifier",
+			AllowedSkills: []string{"Notify"},
+			CanDelegateTo: []string{},
+			Prompt:        prompts["prompt_agent_notifier"],
+			Description: "Sends exactly one notification from a self-contained objective and takes no other action. " +
+				"Objectives must give the priority and the full message.",
+		},
 		"DetectionEngineer": {
 			Name:          "DetectionEngineer",
 			AllowedSkills: []string{"Detections", "Tuning", "Hunt"},
@@ -390,7 +407,6 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 			Tools:            []string{"query_reports", "update_custom_report"},
 			AdditionalPrompt: prompts["prompt_skill_reports"],
 		},
-		// Granted to no built-in agent yet; an admin can add it to a custom agent.
 		"Notify": {
 			Name:             "Notify",
 			Tools:            []string{"send_notification"},

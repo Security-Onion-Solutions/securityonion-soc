@@ -264,6 +264,8 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 			"Orchestrator":      "classic-model@SOAI",
 			"Investigator":      "classic-model",
 			"DetectionEngineer": "classic-model@SOAI",
+			"AlertTriage":       "classic-model@SOAI",
+			"Notifier":          "classic-model@SOAI",
 		},
 	})
 	assert.NoError(t, err)
@@ -274,18 +276,20 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.Equal(t, agenticTestModels(), srv.Config.ClientParams.AssistantParams.AvailableModels)
 
 	// The hardcoded agents are defined and their mapping loaded.
-	assert.Len(t, ac.agents, 3)
+	assert.Len(t, ac.agents, 5)
 	assert.Equal(t, "classic-model@SOAI", ac.agentMapping["Orchestrator"])
 	assert.Equal(t, "classic-model", ac.agentMapping["Investigator"])
 	assert.Equal(t, "classic-model@SOAI", ac.agentMapping["DetectionEngineer"])
 
 	// The agentic flag, agent list, and mapping are exposed to clients.
 	assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
-	assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
+	assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 5)
 	assert.Equal(t, map[string]string{
 		"Orchestrator":      "classic-model@SOAI",
 		"Investigator":      "classic-model",
 		"DetectionEngineer": "classic-model@SOAI",
+		"AlertTriage":       "classic-model@SOAI",
+		"Notifier":          "classic-model@SOAI",
 	}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
 	// Delegation topology: hub-and-spoke plus the Investigator -> Engineer
@@ -293,20 +297,28 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.ElementsMatch(t, []string{"Investigator", "DetectionEngineer"}, ac.agents["Orchestrator"].CanDelegateTo)
 	assert.Equal(t, []string{"DetectionEngineer"}, ac.agents["Investigator"].CanDelegateTo)
 	assert.Empty(t, ac.agents["DetectionEngineer"].CanDelegateTo)
+	assert.Equal(t, []string{"Notifier", "DetectionEngineer"}, ac.agents["AlertTriage"].CanDelegateTo)
+	assert.Empty(t, ac.agents["Notifier"].CanDelegateTo)
 
 	// Skill wiring is a permission boundary: Tuning (the write skill) is
 	// Engineer-only, and the Orchestrator holds no skills.
 	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
+	// Triage runs unattended, so it can neither respond to alerts nor notify directly; only the
+	// Notifier sends.
+	assert.ElementsMatch(t, []string{"Hunt", "Playbooks"}, ac.agents["AlertTriage"].AllowedSkills)
+	assert.Equal(t, []string{"Notify"}, ac.agents["Notifier"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
-	// Notify ships defined but granted to nobody: an admin decides which agent gets it.
+	// Notify is granted to the Notifier alone; every other agent sends through it.
 	assert.Equal(t, []string{"send_notification"}, ac.SkillLibrary["Notify"].Tools)
 	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
 	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
 	assert.Contains(t, ac.builtinSkills, "Notify")
 	for name, agent := range ac.agents {
-		assert.NotContains(t, agent.AllowedSkills, "Notify", name)
+		if name != "Notifier" {
+			assert.NotContains(t, agent.AllowedSkills, "Notify", name)
+		}
 	}
 
 	// Delegate tools are registered under both the agent name and the
@@ -314,6 +326,8 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	for _, key := range []string{
 		"Investigator", "delegate_to_Investigator",
 		"DetectionEngineer", "delegate_to_DetectionEngineer",
+		"AlertTriage", "delegate_to_AlertTriage",
+		"Notifier", "delegate_to_Notifier",
 	} {
 		_, ok := ac.DelegationLibrary[key]
 		assert.True(t, ok, "missing delegate registration for %s", key)
