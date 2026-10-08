@@ -477,7 +477,7 @@ func newTriageFixture(t *testing.T, params string, open ...*model.AutomationWork
 
 	f := &triageFixture{es: server.NewFakeEventstore(), store: &triageWorkStore{}, kind: &AlertTriageKind{}, pinned: map[string]*model.EventRecord{}}
 	f.alerts = &triageAssistantstore{prefix: "so_", work: f.store}
-	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{FinalText: "report"}}
+	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{FinalText: "STATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | DETAIL: — | CONFIDENCE: 80\n\nreport"}}
 	f.es.MSearchResults = []*model.EventMSearchResults{model.NewEventMSearchResults()}
 
 	// An item ends only after its alerts carry the outcome.
@@ -950,12 +950,13 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	assert.NotEmpty(t, sessionId)
 	assert.Equal(t, model.AutomationWorkItemDone, item.State)
 	assert.Equal(t, []string{sessionId}, item.SessionIds)
-	assert.JSONEq(t, `{"sessionId":"`+sessionId+`"}`, string(item.Result))
+	assert.JSONEq(t, `{"sessionId":"`+sessionId+`","assessment":"likely_malicious"}`, string(item.Result))
 
 	updates := f.alerts.recorded()
 	require.Len(t, updates, 1)
 	assert.False(t, updates[0].Failed)
 	assert.Equal(t, sessionId, updates[0].SessionId)
+	assert.Equal(t, model.AlertTriageAssessmentLikelyMalicious, updates[0].Assessment)
 	assert.Equal(t, "run-1", updates[0].RunId)
 	assert.Equal(t, `tags:alert AND rule.name:"A"`, updates[0].Query)
 	assert.True(t, updates[0].Floor.Equal(triageTestEpoch))
@@ -1275,7 +1276,7 @@ func TestAlertTriageUpdateErrorSpendsARetry(t *testing.T) {
 	// The checkpoint survives with this run charged against it, so the next run replays only
 	// the update.
 	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
-	assert.JSONEq(t, `{"sessionId":"`+f.sessionId(t)+`"}`, string(item.Result))
+	assert.JSONEq(t, `{"sessionId":"`+f.sessionId(t)+`","assessment":"likely_malicious"}`, string(item.Result))
 	assert.Equal(t, []string{"run-1"}, item.FailedRunIds)
 }
 
@@ -1404,6 +1405,46 @@ func TestAlertTriageObjective(t *testing.T) {
 	assert.Contains(t, objective, `"source.ip": "1.2.3.4"`)
 }
 
+func TestParseAlertTriageAssessment(t *testing.T) {
+	status := func(assessment string) string {
+		return "STATUS: COMPLETE | ASSESSMENT: " + assessment + " | DETAIL: — | CONFIDENCE: 80 | ACTION: NONE\n\n🔍 TRIAGE REPORT — ET SCAN\n\n✅ Assessment: LIKELY MALICIOUS — not this line"
+	}
+
+	tests := []struct {
+		name       string
+		report     string
+		want       string
+		recognized bool
+	}{
+		{"likely malicious", status("LIKELY MALICIOUS"), model.AlertTriageAssessmentLikelyMalicious, true},
+		{"needs review", status("NEEDS REVIEW"), model.AlertTriageAssessmentNeedsReview, true},
+		{"likely benign", status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"lower case", status("likely benign"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"underscored", status("LIKELY_BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"extra spacing", "STATUS:COMPLETE|ASSESSMENT:  LIKELY   MALICIOUS  |CONFIDENCE: 60", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"in a code fence", "```\nSTATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | CONFIDENCE: 90\n```", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"markdown bold", "**STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | CONFIDENCE: 90**", model.AlertTriageAssessmentLikelyBenign, true},
+		{"preceded by text", "NEEDS ANALYST INPUT: which host is the scanner\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
+		{"revised", "STATUS: REVISED | ASSESSMENT: LIKELY MALICIOUS | DETAIL: —", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"older verdict field, malicious", "STATUS: COMPLETE | VERDICT: MALICIOUS | CONFIDENCE: 80", model.AlertTriageAssessmentLikelyMalicious, true},
+		{"older verdict field, needs human", "STATUS: COMPLETE | VERDICT: NEEDS HUMAN | CONFIDENCE: 60", model.AlertTriageAssessmentNeedsReview, true},
+		{"older verdict field, benign", "STATUS: COMPLETE | VERDICT: BENIGN | CONFIDENCE: 90", model.AlertTriageAssessmentLikelyBenign, true},
+		{"unknown value", status("SUSPICIOUS"), model.AlertTriageAssessmentNeedsReview, false},
+		{"unfilled template", status("{LIKELY BENIGN|NEEDS REVIEW|LIKELY MALICIOUS}"), model.AlertTriageAssessmentNeedsReview, false},
+		{"unable to complete", "STATUS: UNABLE TO COMPLETE | REASON: alert not found", model.AlertTriageAssessmentNeedsReview, false},
+		{"later status lines are ignored", "STATUS: COMPLETE | ASSESSMENT: SUSPICIOUS\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentNeedsReview, false},
+		{"no status line", "A report with no status line.\nASSESSMENT: LIKELY BENIGN", model.AlertTriageAssessmentNeedsReview, false},
+		{"empty", "", model.AlertTriageAssessmentNeedsReview, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assessment, recognized := parseAlertTriageAssessment(tt.report)
+			assert.Equal(t, tt.want, assessment)
+			assert.Equal(t, tt.recognized, recognized)
+		})
+	}
+}
+
 func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
 		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`)}
@@ -1423,6 +1464,8 @@ func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
 	assert.False(t, updates[0].Failed)
 	assert.Equal(t, "run-0", updates[0].RunId)
 	assert.Equal(t, "sess-old", updates[0].SessionId)
+	// Checkpointed before assessments existed.
+	assert.Equal(t, model.AlertTriageAssessmentNeedsReview, updates[0].Assessment)
 	assert.Equal(t, `tags:alert AND rule.name:"A"`, updates[0].Query)
 }
 
