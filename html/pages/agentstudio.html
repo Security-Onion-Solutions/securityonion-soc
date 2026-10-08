@@ -56,7 +56,7 @@
             <v-col cols="12" md="4">
               <v-select v-model="memoryOptions.memoryModel" :items="groupModelItems(modelItems())" :label="i18n.agentStudioMemoryModel"
                 :hint="memoryRoleHint('memoryModel', i18n.agentStudioMemoryModelHelp)" persistent-hint
-                :error="!memoryRoleResolves('memoryModel')" data-aid="agentstudio_options_memory_model">
+                :base-color="memoryRoleColor('memoryModel')" :color="memoryRoleColor('memoryModel')" data-aid="agentstudio_options_memory_model">
                 <template v-slot:item="{ props, item }">
                   <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
                   <v-list-item v-else v-bind="props"></v-list-item>
@@ -66,7 +66,7 @@
             <v-col cols="12" md="4">
               <v-select v-model="memoryOptions.embedModel" :items="groupModelItems(embedModelItems())" :label="i18n.agentStudioEmbedModel"
                 :hint="memoryRoleHint('embedModel', i18n.agentStudioEmbedModelHelp)" persistent-hint
-                :error="!memoryRoleResolves('embedModel')" data-aid="agentstudio_options_embed_model">
+                :base-color="memoryRoleColor('embedModel')" :color="memoryRoleColor('embedModel')" data-aid="agentstudio_options_embed_model">
                 <template v-slot:item="{ props, item }">
                   <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
                   <v-list-item v-else v-bind="props"></v-list-item>
@@ -76,7 +76,7 @@
             <v-col cols="12" md="4">
               <v-select v-model="memoryOptions.reconcileModel" :items="groupModelItems(modelItems())" :label="i18n.agentStudioReconcileModel"
                 :hint="memoryRoleHint('reconcileModel', i18n.agentStudioReconcileModelHelp)" persistent-hint
-                :error="!memoryRoleResolves('reconcileModel')" data-aid="agentstudio_options_reconcile_model">
+                :base-color="memoryRoleColor('reconcileModel')" :color="memoryRoleColor('reconcileModel')" data-aid="agentstudio_options_reconcile_model">
                 <template v-slot:item="{ props, item }">
                   <v-list-subheader v-if="item?.header" class="text-body-small">{{ item.header }}</v-list-subheader>
                   <v-list-item v-else v-bind="props"></v-list-item>

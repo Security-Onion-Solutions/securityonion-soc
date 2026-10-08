@@ -430,6 +430,10 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     memoryRoleHint(field, help) {
       return this.memoryRoleResolves(field) ? help : this.i18n.agentStudioMemoryRoleDisabled;
     },
+    // Not :error, which would invalidate the form and block saving the other settings.
+    memoryRoleColor(field) {
+      return this.memoryRoleResolves(field) ? undefined : 'error';
+    },
     providerFor(selector) {
       const m = AssistantUtils.resolveMappedModel(this.models, selector);
       return m ? m.adapter : '';

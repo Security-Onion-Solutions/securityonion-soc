@@ -1514,6 +1514,8 @@ test('a memory role whose model is missing is flagged instead of failing silentl
   expect(comp.memoryRoleResolves('embedModel')).toBe(false);
   expect(comp.memoryRoleHint('embedModel', 'help')).toBe(comp.i18n.agentStudioMemoryRoleDisabled);
   expect(comp.memoryRoleHint('memoryModel', 'help')).toBe('help');
+  expect(comp.memoryRoleColor('embedModel')).toBe('error');
+  expect(comp.memoryRoleColor('memoryModel')).toBeUndefined();
 });
 
 test('an unset memory model reads as disabled', () => {
