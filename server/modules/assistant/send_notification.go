@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,8 +25,15 @@ import (
 	"github.com/google/uuid"
 )
 
-// An emoji rather than text, like the PCAP job links, so the label needs no translation.
+// Emoji rather than text, like the PCAP job links, so the labels need no translation and read
+// the same in SOC and in every other destination.
 const chatLinkLabel = "💬"
+const alertLinkLabel = "🔔"
+
+// The Alerts page measures a relative range from when the link is opened, not when it was
+// sent, so the window is wide enough to keep a notification useful for weeks.
+const alertLinkRelativeTime = 30
+const alertLinkRelativeTimeUnit = "days"
 
 // Delegation depth is capped well below this; the bound only guards a corrupt parent chain.
 const maxSessionAncestors = 16
@@ -57,7 +65,8 @@ func (t *SendNotificationTool) GetDescription() string {
 	Set share_chat to true when recipients need this conversation to understand or act on the
 	notification. That shares this chat, including any sub-agent sessions, with every user who can read
 	shared chats, and adds a link back to it; do not add that link yourself. Leave it false for a
-	notification that stands on its own.
+	notification that stands on its own. A notification from an alert triage automation always links to
+	the triaged alert instead of the chat; do not add that link yourself.
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.`
 }
 
@@ -85,7 +94,7 @@ func (t *SendNotificationTool) GetSchema() model.JSONSchema {
 				},
 				"share_chat": {
 					Type:        "boolean",
-					Description: "Share this chat with everyone who can view shared chats and link the notification to it. Defaults to false.",
+					Description: "Share this chat with everyone who can view shared chats and, outside alert triage, link the notification to it. Defaults to false.",
 					Default:     false,
 				},
 				approvalMessageParam: {
@@ -192,11 +201,8 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	}
 
 	sharedNote := ""
-	rootSessionId := ""
-	if args.ShareChat {
-		rootSessionId = resolveRootSessionId(ctx, srv, req.SessionId)
-	}
-	if rootSessionId != "" {
+	rootSessionId, rootSession := resolveRootSession(ctx, srv, req.SessionId)
+	if rootSessionId != "" && args.ShareChat {
 		// Shared before sending so the chat is readable by the time anyone follows the link.
 		shared, shareErr := shareSessionTree(ctx, srv, rootSessionId)
 		if shareErr != nil {
@@ -204,11 +210,13 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		} else if shared {
 			sharedNote = " This chat is now shared so recipients can open it."
 		}
+	}
 
-		if payload.Links == nil {
-			payload.Links = map[string]string{}
-		}
-		payload.Links[chatLinkLabel] = "/#/assistant/" + rootSessionId
+	if rootSession != nil && rootSession.Type == alertTriageKindName && rootSession.EntityId != "" {
+		dropLinksTo(payload, rootSession.EntityId)
+		setLink(payload, alertLinkLabel, triageAlertLink(rootSession.EntityId))
+	} else if rootSessionId != "" && args.ShareChat {
+		setLink(payload, chatLinkLabel, "/#/assistant/"+rootSessionId)
 	}
 
 	_, err = srv.Notifier.Send(ctx, payload)
@@ -223,11 +231,45 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	return result, nil
 }
 
-// resolveRootSessionId walks a delegated sub-agent's session up to the top-level chat,
-// which is what a person opens. A failed lookup stops at the last session resolved.
-func resolveRootSessionId(ctx context.Context, srv *server.Server, sessionId string) string {
+// triageAlertLink opens the alert on its AI investigation tab.
+func triageAlertLink(alertId string) string {
+	query := url.Values{}
+	query.Set("q", `_id:"`+alertId+`"`)
+	query.Set("tab", "investigation")
+	query.Set("expand", alertId)
+	query.Set("rt", strconv.Itoa(alertLinkRelativeTime))
+	query.Set("rtu", alertLinkRelativeTimeUnit)
+
+	return "/#/alerts?" + query.Encode()
+}
+
+func setLink(payload *model.NotificationPayload, label, link string) {
+	if payload.Links == nil {
+		payload.Links = map[string]string{}
+	}
+	payload.Links[label] = link
+}
+
+// dropLinksTo removes links the model added that mention the alert, encoded or not, so the
+// alert link appears once.
+func dropLinksTo(payload *model.NotificationPayload, alertId string) {
+	for label, link := range payload.Links {
+		decoded, err := url.QueryUnescape(link)
+		if err != nil {
+			decoded = link
+		}
+		if strings.Contains(decoded, alertId) {
+			delete(payload.Links, label)
+		}
+	}
+}
+
+// resolveRootSession walks a delegated sub-agent's session up to the top-level chat,
+// which is what a person opens. A failed lookup stops at the last session resolved,
+// returning its id with a nil session.
+func resolveRootSession(ctx context.Context, srv *server.Server, sessionId string) (string, *model.AssistantSession) {
 	if sessionId == "" || srv.Assistantstore == nil {
-		return sessionId
+		return sessionId, nil
 	}
 
 	current := sessionId
@@ -237,13 +279,16 @@ func resolveRootSessionId(ctx context.Context, srv *server.Server, sessionId str
 			model.GetSessionsWithIncludeDeleted(true),
 			model.GetSessionsWithMessageMeta(false),
 			model.GetSessionsWithAutomationSessions(true))
-		if err != nil || len(sessions) == 0 || sessions[0].ParentSessionId == "" {
-			return current
+		if err != nil || len(sessions) == 0 {
+			return current, nil
+		}
+		if sessions[0].ParentSessionId == "" {
+			return current, sessions[0]
 		}
 		current = sessions[0].ParentSessionId
 	}
 
-	return current
+	return current, nil
 }
 
 // shareSessionTree tags the chat and every sub-session as shared, as the manual share
