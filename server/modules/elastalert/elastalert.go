@@ -1188,10 +1188,15 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 
 // shouldDropCorrelation reports whether rule is a correlation and ES|QL is off.
 func (e *ElastAlertEngine) shouldDropCorrelation(rule *SigmaRule, ruleFile string) bool {
+	// If rule.Correlation is nil it means this is a normal "single" Sigma rule. Therefore we don't want to drop
+	// this "single" rule. Further, if Correlation is *not* nil and esql is enabled then we don't want to drop this 
+	// "correlation" rule. 
 	if rule.Correlation == nil || e.useEsql {
 		return false
 	}
 
+	// We got this far, so this means it *is* a correlation rule but esql is not enabled, so we're dropping this one.
+	
 	log.WithField("elastAlertRuleFile", ruleFile).Info("skipping Sigma correlation, which requires ES|QL")
 
 	return true
