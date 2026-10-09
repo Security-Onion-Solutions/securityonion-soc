@@ -1095,7 +1095,7 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*
 				continue
 			}
 
-			if e.skipCorrelation(rule, file.Name) {
+			if e.shouldDropCorrelation(rule, file.Name) {
 				continue
 			}
 
@@ -1167,7 +1167,7 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 				return nil
 			}
 
-			if e.skipCorrelation(rule, path) {
+			if e.shouldDropCorrelation(rule, path) {
 				return nil
 			}
 
@@ -1186,8 +1186,8 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 	return detects, errMap
 }
 
-// skipCorrelation skips correlations when ES|QL is off, which also deletes any already imported.
-func (e *ElastAlertEngine) skipCorrelation(rule *SigmaRule, ruleFile string) bool {
+// shouldDropCorrelation reports whether rule is a correlation and ES|QL is off.
+func (e *ElastAlertEngine) shouldDropCorrelation(rule *SigmaRule, ruleFile string) bool {
 	if rule.Correlation == nil || e.useEsql {
 		return false
 	}
