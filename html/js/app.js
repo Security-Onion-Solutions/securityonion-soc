@@ -1733,6 +1733,13 @@ $(document).ready(function () {
         canReadInvestigations(user = null) {
           return this.canStartInvestigations(user) || this.userHasRole("auditor", user);
         },
+        // Mirrors the built-in rbac/roles grants for memories; the server still enforces them.
+        canWriteOwnMemories(user = null) {
+          return this.userHasRole("analyst", user) || this.userHasRole("superuser", user);
+        },
+        canWriteAllMemories(user = null) {
+          return this.isUserAdmin(user);
+        },
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },

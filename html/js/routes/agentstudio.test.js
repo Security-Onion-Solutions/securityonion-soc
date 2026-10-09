@@ -480,6 +480,32 @@ test('an orchestrator can be disabled while another stays enabled', async () => 
   expect(savedRow(put).row.enabled).toBe(false);
 });
 
+test('only superusers can edit configuration and other users\' memories', () => {
+  const user = comp.$root.user;
+  const own = { scope: 'user', targetUserId: 'me' };
+  const others = { scope: 'user', targetUserId: 'someone-else' };
+  const global = { scope: 'global', targetUserId: '' };
+  try {
+    comp.$root.user = { id: 'me', roles: ['superuser'] };
+    expect(comp.canEditConfig()).toBe(true);
+    expect([own, others, global].every(mem => comp.canEditMemory(mem))).toBe(true);
+    expect(comp.memoryScopeItems(own).map(i => i.value)).toEqual(['user', 'global']);
+
+    comp.$root.user = { id: 'me', roles: ['analyst'] };
+    expect(comp.canEditConfig()).toBe(false);
+    expect(comp.canEditMemory(own)).toBe(true);
+    expect(comp.canEditMemory(others)).toBe(false);
+    expect(comp.canEditMemory(global)).toBe(false);
+    expect(comp.memoryScopeItems(own).map(i => i.value)).toEqual(['user']);
+    expect(comp.memoryScopeItems(global).map(i => i.value)).toEqual(['user', 'global']);
+
+    comp.$root.user = { id: 'me', roles: ['auditor'] };
+    expect(comp.canEditMemory(own)).toBe(false);
+  } finally {
+    comp.$root.user = user;
+  }
+});
+
 test('duplicating a custom agent appends an editable copy with a free name', async () => {
   comp.initAssistant(agenticParams());
   const put = mockPapi('put', {});
