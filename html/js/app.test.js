@@ -363,6 +363,15 @@ test('isUserAdmin', async () => {
   expect(app.isUserAdmin()).toBe(true);
 });
 
+test('memory write permissions mirror the built-in roles', () => {
+  const role = (r) => ({ id: '123', roles: [r] });
+  expect(app.canWriteOwnMemories(role('analyst'))).toBe(true);
+  expect(app.canWriteOwnMemories(role('superuser'))).toBe(true);
+  expect(app.canWriteOwnMemories(role('auditor'))).toBe(false);
+  expect(app.canWriteAllMemories(role('superuser'))).toBe(true);
+  expect(app.canWriteAllMemories(role('analyst'))).toBe(false);
+});
+
 test('isMyUser', () => {
   app.user = null;
   expect(app.isMyUser()).toBe(false);

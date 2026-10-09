@@ -576,6 +576,18 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       return ok;
     },
 
+    canEditConfig() {
+      return this.$root.isUserAdmin();
+    },
+    canEditMemory(mem) {
+      if (this.$root.canWriteAllMemories()) return true;
+      return mem.scope !== 'global' && mem.targetUserId === this.$root.user?.id && this.$root.canWriteOwnMemories();
+    },
+    // A global memory keeps its option so a read-only view still shows its scope.
+    memoryScopeItems(mem) {
+      if (this.$root.canWriteAllMemories() || mem.scope === 'global') return this.scopeItems;
+      return this.scopeItems.filter(item => item.value !== 'global');
+    },
     // Disabling the last enabled orchestrator would leave the grid with no entry
     // point for agentic chat; the backend refuses it too.
     canDisableAgent(agent) {

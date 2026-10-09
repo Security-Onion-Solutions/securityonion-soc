@@ -247,7 +247,7 @@
             <v-textarea v-model="newMemory.memoryText" :label="i18n.agentStudioMemoryText" variant="outlined" density="comfortable" rows="4" auto-grow autofocus :hint="i18n.agentStudioMemoryTextHelp" persistent-hint data-aid="agentstudio_new_memory_text"></v-textarea>
           </v-col>
           <v-col cols="12" md="6">
-            <v-select v-model="newMemory.scope" :items="scopeItems" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint data-aid="agentstudio_new_memory_scope"></v-select>
+            <v-select v-model="newMemory.scope" :items="memoryScopeItems(newMemory)" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint data-aid="agentstudio_new_memory_scope"></v-select>
           </v-col>
         </v-row>
       </v-card-text>
@@ -363,19 +363,19 @@
         </v-toolbar>
 
         <v-toolbar class="so-toolbar elevation-0 flex-grow-0 agentstudio-toolbar" variant="flat" density="comfortable">
-          <v-btn v-if="tab === 'agents'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAgent()" data-aid="agentstudio_create_new_agent" :aria-label="i18n.agentStudioNewAgent" :title="i18n.agentStudioNewAgent">
+          <v-btn v-if="tab === 'agents' && canEditConfig()" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAgent()" data-aid="agentstudio_create_new_agent" :aria-label="i18n.agentStudioNewAgent" :title="i18n.agentStudioNewAgent">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn v-else-if="tab === 'skills'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
+          <v-btn v-else-if="tab === 'skills' && canEditConfig()" icon variant="flat" class="circle-button mx-2" @click.stop="showAddSkill()" data-aid="agentstudio_create_new_skill" :aria-label="i18n.agentStudioNewSkill" :title="i18n.agentStudioNewSkill">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn v-else-if="tab === 'automations' && !automationsReadOnly" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAutomation()" data-aid="agentstudio_create_new_automation" :aria-label="i18n.agentStudioNewAutomation" :title="i18n.agentStudioNewAutomation">
+          <v-btn v-else-if="tab === 'automations' && !automationsReadOnly && canEditConfig()" icon variant="flat" class="circle-button mx-2" @click.stop="showAddAutomation()" data-aid="agentstudio_create_new_automation" :aria-label="i18n.agentStudioNewAutomation" :title="i18n.agentStudioNewAutomation">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn v-else-if="tab === 'memories'" icon variant="flat" class="circle-button mx-2" @click.stop="showAddMemory()" data-aid="agentstudio_create_new_memory" :aria-label="i18n.agentStudioNewMemory" :title="i18n.agentStudioNewMemory">
+          <v-btn v-else-if="tab === 'memories' && $root.canWriteOwnMemories()" icon variant="flat" class="circle-button mx-2" @click.stop="showAddMemory()" data-aid="agentstudio_create_new_memory" :aria-label="i18n.agentStudioNewMemory" :title="i18n.agentStudioNewMemory">
             <v-icon>fa-plus</v-icon>
           </v-btn>
-          <v-btn icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.configSettings" :title="i18n.configSettings">
+          <v-btn v-if="canEditConfig()" icon variant="flat" class="circle-button mx-2" @click.stop="showOptions()" data-aid="agentstudio_options_button" :aria-label="i18n.configSettings" :title="i18n.configSettings">
             <v-icon>fa-screwdriver-wrench</v-icon>
           </v-btn>
           <v-btn icon variant="flat" class="circle-button mx-2" :target="$root.target('so-help')" :href="$root.parameters.docsUrl + 'onion-ai'" :title="i18n.contextualDocsBtn" data-aid="agentstudio_docs" :aria-label="i18n.contextualDocsBtn">
@@ -431,7 +431,7 @@
                     <td>
                       <div class="d-flex align-center">
                         <v-switch :model-value="item.enabled" @update:model-value="toggleAgentEnabled(item)" color="primary" density="compact" hide-details inset
-                          :disabled="item.enabled && !canDisableAgent(item)"
+                          :disabled="!canEditConfig() || (item.enabled && !canDisableAgent(item))"
                           :aria-label="i18n.agentStudioEnabled" :title="item.enabled && !canDisableAgent(item) ? i18n.agentStudioLastOrchestrator : i18n.agentStudioEnabled"
                           :data-aid="'agentstudio_agent_enabled_' + item.id"></v-switch>
                       </div>
@@ -456,15 +456,15 @@
                               <v-tabs-window-item value="identity">
                                 <v-row>
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-if="item.isSystem" :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-if="item.isSystem || !canEditConfig()" :model-value="item.name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
                                     <v-text-field v-else v-model="draftForAgent(item).name" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details :data-aid="'agentstudio_agent_name_' + item.id"></v-text-field>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-if="item.isSystem" :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-if="item.isSystem || !canEditConfig()" :model-value="roleLabel(item)" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
                                     <v-select v-else v-model="draftForAgent(item).isOrchestrator" :items="roleItems" :label="i18n.agentStudioRole" variant="outlined" density="comfortable" hide-details></v-select>
                                   </v-col>
                                   <v-col cols="12">
-                                    <v-textarea v-if="item.isSystem" :model-value="item.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow readonly :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
+                                    <v-textarea v-if="item.isSystem || !canEditConfig()" :model-value="item.description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow readonly :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
                                     <v-textarea v-else v-model="draftForAgent(item).description" :label="i18n.agentStudioDescription" variant="outlined" density="comfortable" rows="2" auto-grow :hint="i18n.agentStudioDescriptionHelp" persistent-hint></v-textarea>
                                   </v-col>
                                 </v-row>
@@ -473,25 +473,25 @@
                               <v-tabs-window-item value="model">
                                 <v-row>
                                   <v-col cols="12" md="6">
-                                    <v-select v-model="draftForAgent(item).modelSelector" :items="modelItems()" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" :hint="i18n.agentStudioModelHelp" persistent-hint :data-aid="'agentstudio_agent_model_' + item.id"></v-select>
+                                    <v-select v-model="draftForAgent(item).modelSelector" :items="modelItems()" :label="i18n.agentStudioExecutingModel" variant="outlined" density="comfortable" :readonly="!canEditConfig()" :hint="i18n.agentStudioModelHelp" persistent-hint :data-aid="'agentstudio_agent_model_' + item.id"></v-select>
                                   </v-col>
                                   <v-col cols="12" md="6">
                                     <v-text-field :model-value="providerFor(draftForAgent(item).modelSelector)" :label="i18n.agentStudioProvider" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioProviderHelp" persistent-hint></v-text-field>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-model.number="draftForAgent(item).maxConcurrentInstances" type="number" min="0" :label="i18n.agentStudioMaxInstances" variant="outlined" density="comfortable" prepend-inner-icon="fa-layer-group" :hint="i18n.agentStudioMaxInstancesHelp" persistent-hint :data-aid="'agentstudio_agent_max_instances_' + item.id"></v-text-field>
+                                    <v-text-field v-model.number="draftForAgent(item).maxConcurrentInstances" type="number" min="0" :label="i18n.agentStudioMaxInstances" variant="outlined" density="comfortable" prepend-inner-icon="fa-layer-group" :readonly="!canEditConfig()" :hint="i18n.agentStudioMaxInstancesHelp" persistent-hint :data-aid="'agentstudio_agent_max_instances_' + item.id"></v-text-field>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
 
                               <v-tabs-window-item value="skills">
-                                <template v-if="item.isSystem">
+                                <template v-if="item.isSystem || !canEditConfig()">
                                   <div class="text-overline text-medium-emphasis">{{ i18n.agentStudioSkills }}</div>
                                   <div>
                                     <v-chip v-for="s in item.allowedSkills" :key="s" size="small" variant="tonal" class="mr-1 my-1">{{ s }}</v-chip>
                                     <span v-if="!item.allowedSkills.length" class="text-disabled">&mdash;</span>
                                   </div>
-                                  <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemSkillsNote }}</div>
+                                  <div v-if="item.isSystem" class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemSkillsNote }}</div>
                                 </template>
                                 <v-row v-else>
                                   <v-col cols="12" md="8">
@@ -503,7 +503,7 @@
                               <v-tabs-window-item value="delegation">
                                 <v-row>
                                   <v-col cols="12" md="8">
-                                    <v-select v-model="draftForAgent(item).canDelegateTo" :items="delegateChoices(item)" :label="i18n.agentStudioDelegatesTo" variant="outlined" density="comfortable" multiple chips closable-chips :hint="i18n.agentStudioDelegationHelp" persistent-hint :data-aid="'agentstudio_agent_delegation_' + item.id"></v-select>
+                                    <v-select v-model="draftForAgent(item).canDelegateTo" :items="delegateChoices(item)" :label="i18n.agentStudioDelegatesTo" variant="outlined" density="comfortable" multiple chips :closable-chips="canEditConfig()" :readonly="!canEditConfig()" :hint="i18n.agentStudioDelegationHelp" persistent-hint :data-aid="'agentstudio_agent_delegation_' + item.id"></v-select>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
@@ -514,7 +514,7 @@
                                 </v-alert>
                                 <v-row>
                                   <v-col cols="12">
-                                    <v-textarea v-model="draftForAgent(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="10" auto-grow :hint="i18n.agentStudioPersonaHelp" persistent-hint :data-aid="'agentstudio_agent_persona_' + item.id"></v-textarea>
+                                    <v-textarea v-model="draftForAgent(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPersona" variant="outlined" density="comfortable" rows="10" auto-grow :readonly="!canEditConfig()" :hint="i18n.agentStudioPersonaHelp" persistent-hint :data-aid="'agentstudio_agent_persona_' + item.id"></v-textarea>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
@@ -522,13 +522,13 @@
                           </v-card-text>
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
-                            <v-btn v-if="item.enabled" variant="text" color="primary" :to="chatWithAgentLink(item)" :data-aid="'agentstudio_agent_chat_' + item.id">
+                            <v-btn v-if="item.enabled && $root.canStartInvestigations()" variant="text" color="primary" :to="chatWithAgentLink(item)" :data-aid="'agentstudio_agent_chat_' + item.id">
                               <v-icon class="mr-2" size="small">fa-microchip</v-icon>{{ i18n.openInOnionAi }}
                             </v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateAgent(item)" :data-aid="'agentstudio_agent_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('agent', item)" :data-aid="'agentstudio_agent_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="!item.isSystem && canEditConfig()" variant="text" color="primary" @click.stop="duplicateAgent(item)" :data-aid="'agentstudio_agent_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem && canEditConfig()" variant="text" color="error" @click.stop="confirmDelete('agent', item)" :data-aid="'agentstudio_agent_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
-                            <v-btn variant="text" :color="agentDirty(item) ? 'primary' : ''" :disabled="!agentDirty(item)" @click.stop="saveAgent(item)" :data-aid="'agentstudio_agent_save_' + item.id">{{ i18n.save }}</v-btn>
+                            <v-btn v-if="canEditConfig()" variant="text" :color="agentDirty(item) ? 'primary' : ''" :disabled="!agentDirty(item)" @click.stop="saveAgent(item)" :data-aid="'agentstudio_agent_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
                         </v-card>
                       </div>
@@ -580,7 +580,7 @@
                     </td>
                     <td>
                       <div class="d-flex align-center">
-                        <v-switch :model-value="item.enabled" @update:model-value="toggleSkillEnabled(item)" color="primary" density="compact" hide-details inset
+                        <v-switch :model-value="item.enabled" @update:model-value="toggleSkillEnabled(item)" :disabled="!canEditConfig()" color="primary" density="compact" hide-details inset
                           :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled"
                           :data-aid="'agentstudio_skill_enabled_' + item.id"></v-switch>
                       </div>
@@ -601,13 +601,13 @@
                           <v-card-text>
                             <v-tabs-window v-model="skillTabs[item.id]">
                               <v-tabs-window-item value="tools">
-                                <template v-if="item.isSystem">
+                                <template v-if="item.isSystem || !canEditConfig()">
                                   <div class="text-overline text-medium-emphasis">{{ i18n.tools }}</div>
                                   <div>
                                     <v-chip v-for="t in item.tools" :key="t" size="small" variant="tonal" class="mr-1 my-1">{{ t }}</v-chip>
                                     <span v-if="!item.tools.length" class="text-disabled">&mdash;</span>
                                   </div>
-                                  <div class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemToolsNote }}</div>
+                                  <div v-if="item.isSystem" class="text-body-small text-medium-emphasis mt-2">{{ i18n.agentStudioSystemToolsNote }}</div>
                                 </template>
                                 <v-row v-else>
                                   <v-col cols="12" md="8">
@@ -631,7 +631,7 @@
                                 </v-alert>
                                 <v-row>
                                   <v-col cols="12">
-                                    <v-textarea v-model="draftForSkill(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPromptGuidance" variant="outlined" density="comfortable" rows="10" auto-grow :hint="i18n.agentStudioSkillPersonaHelp" persistent-hint :data-aid="'agentstudio_skill_persona_' + item.id"></v-textarea>
+                                    <v-textarea v-model="draftForSkill(item).persona" :label="item.isSystem ? i18n.agentStudioPersonaAddendum : i18n.agentStudioPromptGuidance" variant="outlined" density="comfortable" rows="10" auto-grow :readonly="!canEditConfig()" :hint="i18n.agentStudioSkillPersonaHelp" persistent-hint :data-aid="'agentstudio_skill_persona_' + item.id"></v-textarea>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
@@ -639,10 +639,10 @@
                           </v-card-text>
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
-                            <v-btn v-if="!item.isSystem" variant="text" color="primary" @click.stop="duplicateSkill(item)" :data-aid="'agentstudio_skill_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('skill', item)" :data-aid="'agentstudio_skill_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="!item.isSystem && canEditConfig()" variant="text" color="primary" @click.stop="duplicateSkill(item)" :data-aid="'agentstudio_skill_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem && canEditConfig()" variant="text" color="error" @click.stop="confirmDelete('skill', item)" :data-aid="'agentstudio_skill_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
-                            <v-btn variant="text" :color="skillDirty(item) ? 'primary' : ''" :disabled="!skillDirty(item)" @click.stop="saveSkill(item)" :data-aid="'agentstudio_skill_save_' + item.id">{{ i18n.save }}</v-btn>
+                            <v-btn v-if="canEditConfig()" variant="text" :color="skillDirty(item) ? 'primary' : ''" :disabled="!skillDirty(item)" @click.stop="saveSkill(item)" :data-aid="'agentstudio_skill_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
                         </v-card>
                       </div>
@@ -698,10 +698,10 @@
                             </v-alert>
                             <v-row>
                               <v-col cols="12">
-                                <v-textarea v-model="draftForMemory(item).memoryText" :label="i18n.agentStudioMemoryText" variant="outlined" density="comfortable" rows="4" auto-grow :hint="i18n.agentStudioMemoryTextHelp" persistent-hint :data-aid="'agentstudio_memory_text_' + item.id"></v-textarea>
+                                <v-textarea v-model="draftForMemory(item).memoryText" :label="i18n.agentStudioMemoryText" variant="outlined" density="comfortable" rows="4" auto-grow :readonly="!canEditMemory(item)" :hint="i18n.agentStudioMemoryTextHelp" persistent-hint :data-aid="'agentstudio_memory_text_' + item.id"></v-textarea>
                               </v-col>
                               <v-col cols="12" md="6">
-                                <v-select v-model="draftForMemory(item).scope" :items="scopeItems" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint :data-aid="'agentstudio_memory_scope_' + item.id"></v-select>
+                                <v-select v-model="draftForMemory(item).scope" :items="memoryScopeItems(item)" :label="i18n.agentStudioMemoryScope" variant="outlined" density="comfortable" :readonly="!canEditMemory(item)" :hint="i18n.agentStudioMemoryScopeHelp" persistent-hint :data-aid="'agentstudio_memory_scope_' + item.id"></v-select>
                               </v-col>
                               <v-col cols="12" md="3">
                                 <v-text-field :model-value="item.sessionId" :label="i18n.agentStudioMemoryOrigin" variant="outlined" density="comfortable" readonly :hint="i18n.agentStudioMemoryOriginHelp" persistent-hint></v-text-field>
@@ -713,9 +713,9 @@
                           </v-card-text>
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
-                            <v-btn variant="text" color="error" @click.stop="removeMemory(item)" :data-aid="'agentstudio_memory_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="canEditMemory(item)" variant="text" color="error" @click.stop="removeMemory(item)" :data-aid="'agentstudio_memory_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
-                            <v-btn variant="text" :color="memoryDirty(item) ? 'primary' : ''" :disabled="!memoryDirty(item)" @click.stop="saveMemory(item)" :data-aid="'agentstudio_memory_save_' + item.id">{{ i18n.save }}</v-btn>
+                            <v-btn v-if="canEditMemory(item)" variant="text" :color="memoryDirty(item) ? 'primary' : ''" :disabled="!memoryDirty(item)" @click.stop="saveMemory(item)" :data-aid="'agentstudio_memory_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
                         </v-card>
                       </div>
@@ -773,7 +773,7 @@
                     </td>
                     <td>
                       <div class="d-flex align-center">
-                        <v-switch :model-value="item.enabled" @update:model-value="toggleAutomationEnabled(item)" :disabled="!automationKind(item.automationKind)" color="primary" density="compact" hide-details inset
+                        <v-switch :model-value="item.enabled" @update:model-value="toggleAutomationEnabled(item)" :disabled="!canEditConfig() || !automationKind(item.automationKind)" color="primary" density="compact" hide-details inset
                           :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled" :data-aid="'agentstudio_automation_enabled_' + item.id"></v-switch>
                       </div>
                     </td>
@@ -795,7 +795,7 @@
                               <v-tabs-window-item value="general">
                                 <v-row>
                                   <v-col cols="12" md="8">
-                                    <v-text-field v-if="item.isSystem" :model-value="item.displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
+                                    <v-text-field v-if="item.isSystem || !canEditConfig()" :model-value="item.displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
                                     <v-text-field v-else v-model="draftForAutomation(item).displayName" :label="i18n.agentStudioName" variant="outlined" density="comfortable" hide-details :data-aid="'agentstudio_automation_name_' + item.id"></v-text-field>
                                   </v-col>
                                   <!-- Read-only: the server refuses kind changes. -->
@@ -803,10 +803,10 @@
                                     <v-text-field :model-value="automationKindLabel(item.automationKind)" :label="i18n.kind" variant="outlined" density="comfortable" readonly hide-details></v-text-field>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-select v-model="draftForAutomation(item).agent" :items="automationAgentChoices(item)" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint :data-aid="'agentstudio_automation_agent_' + item.id"></v-select>
+                                    <v-select v-model="draftForAutomation(item).agent" :items="automationAgentChoices(item)" :label="i18n.agentStudioAutomationAgent" variant="outlined" density="comfortable" prepend-inner-icon="fa-user-tie" :readonly="!canEditConfig()" :hint="i18n.agentStudioAutomationAgentHelp" persistent-hint :data-aid="'agentstudio_automation_agent_' + item.id"></v-select>
                                   </v-col>
                                   <v-col cols="12" md="6">
-                                    <v-text-field v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :hint="automationIntervalHelp()" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
+                                    <v-text-field v-model.number="draftForAutomation(item).intervalSeconds" type="number" min="1" :label="i18n.agentStudioAutomationInterval" :suffix="i18n.secondsLabel" variant="outlined" density="comfortable" prepend-inner-icon="fa-clock" :readonly="!canEditConfig()" :hint="automationIntervalHelp()" persistent-hint :data-aid="'agentstudio_automation_interval_' + item.id"></v-text-field>
                                   </v-col>
                                   <!-- A built-in's userId is its first saver, not a creator. -->
                                   <v-col v-if="!item.isSystem && item.userId" cols="12" md="6">
@@ -820,7 +820,7 @@
                                 <v-alert v-if="!automationKind(item.automationKind)" type="warning" variant="tonal" density="compact" icon="fa-info" :data-aid="'agentstudio_automation_kind_unknown_' + item.id">{{ i18n.agentStudioAutomationKindUnknown }}</v-alert>
                                 <v-row v-else>
                                   <v-col v-for="field in automationKindFields(item.automationKind)" :key="field.key" cols="12" :md="field.type === 'integer' || field.type === 'number' ? 6 : 12">
-                                    <automation-param-field :field="field" :params="draftForAutomation(item).params" :readonly="item.isSystem"></automation-param-field>
+                                    <automation-param-field :field="field" :params="draftForAutomation(item).params" :readonly="item.isSystem || !canEditConfig()"></automation-param-field>
                                   </v-col>
                                 </v-row>
                               </v-tabs-window-item>
@@ -860,10 +860,10 @@
                           </v-card-text>
                           <v-divider></v-divider>
                           <v-card-actions class="px-4">
-                            <v-btn v-if="!automationsReadOnly && automationKind(item.automationKind)" variant="text" color="primary" @click.stop="duplicateAutomation(item)" :data-aid="'agentstudio_automation_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
-                            <v-btn v-if="!item.isSystem" variant="text" color="error" @click.stop="confirmDelete('automation', item)" :data-aid="'agentstudio_automation_delete_' + item.id">{{ i18n.delete }}</v-btn>
+                            <v-btn v-if="!automationsReadOnly && automationKind(item.automationKind) && canEditConfig()" variant="text" color="primary" @click.stop="duplicateAutomation(item)" :data-aid="'agentstudio_automation_duplicate_' + item.id">{{ i18n.duplicate }}</v-btn>
+                            <v-btn v-if="!item.isSystem && canEditConfig()" variant="text" color="error" @click.stop="confirmDelete('automation', item)" :data-aid="'agentstudio_automation_delete_' + item.id">{{ i18n.delete }}</v-btn>
                             <v-spacer></v-spacer>
-                            <v-btn variant="text" :color="automationDirty(item) && automationValid(draftForAutomation(item)) ? 'primary' : ''" :disabled="!automationDirty(item) || !automationValid(draftForAutomation(item))" @click.stop="saveAutomation(item)" :data-aid="'agentstudio_automation_save_' + item.id">{{ i18n.save }}</v-btn>
+                            <v-btn v-if="canEditConfig()" variant="text" :color="automationDirty(item) && automationValid(draftForAutomation(item)) ? 'primary' : ''" :disabled="!automationDirty(item) || !automationValid(draftForAutomation(item))" @click.stop="saveAutomation(item)" :data-aid="'agentstudio_automation_save_' + item.id">{{ i18n.save }}</v-btn>
                           </v-card-actions>
                         </v-card>
                       </div>
