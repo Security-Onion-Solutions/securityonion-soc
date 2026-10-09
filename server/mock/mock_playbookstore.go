@@ -116,18 +116,18 @@ func (mr *MockPlaybookstoreMockRecorder) GetPlaybookById(ctx, id any) *gomock.Ca
 }
 
 // GetPlaybooksForDetection mocks base method.
-func (m *MockPlaybookstore) GetPlaybooksForDetection(ctx context.Context, detectId, detectCategory string, detectEngine model.EngineName) ([]*model.Playbook, error) {
+func (m *MockPlaybookstore) GetPlaybooksForDetection(ctx context.Context, detect *model.Detection) ([]*model.Playbook, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPlaybooksForDetection", ctx, detectId, detectCategory, detectEngine)
+	ret := m.ctrl.Call(m, "GetPlaybooksForDetection", ctx, detect)
 	ret0, _ := ret[0].([]*model.Playbook)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetPlaybooksForDetection indicates an expected call of GetPlaybooksForDetection.
-func (mr *MockPlaybookstoreMockRecorder) GetPlaybooksForDetection(ctx, detectId, detectCategory, detectEngine any) *gomock.Call {
+func (mr *MockPlaybookstoreMockRecorder) GetPlaybooksForDetection(ctx, detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybooksForDetection", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybooksForDetection), ctx, detectId, detectCategory, detectEngine)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlaybooksForDetection", reflect.TypeOf((*MockPlaybookstore)(nil).GetPlaybooksForDetection), ctx, detect)
 }
 
 // Interrupt mocks base method.

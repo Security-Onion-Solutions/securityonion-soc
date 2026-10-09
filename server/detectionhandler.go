@@ -266,7 +266,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 
 	_, err = engine.ValidateRule(detect.Content)
 	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
+		web.Respond(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -460,12 +460,6 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	eng := engInt.(DetectionEngine)
-
-	_, err = eng.ValidateRule(detect.Content)
-	if err != nil {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Errorf("invalid rule: %w", err))
-		return
-	}
 
 	specifiedStatus := detect.IsEnabled
 
@@ -1270,6 +1264,13 @@ func (h *DetectionHandler) ConvertContent(w http.ResponseWriter, r *http.Request
 	engInt, _ := h.server.DetectionEngines.Load(model.EngineNameElastAlert)
 	eng := engInt.(DetectionEngine)
 
+	// A rule that previews must also save.
+	_, err = eng.ValidateRule(det.Content)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
 	eaQuery, err := eng.ConvertRule(ctx, det)
 	if err != nil {
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -1373,8 +1374,24 @@ func (h *DetectionHandler) GenPublicId(w http.ResponseWriter, r *http.Request) {
 func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Detection, e DetectionEngine) error {
 	logger := log.FromContext(ctx)
 
-	err := e.ExtractDetails(detect)
+	var invalidErr error
+
+	_, err := e.ValidateRule(detect.Content)
 	if err != nil {
+		invalidErr = err
+
+		// a disable is checked once the stored rule is loaded
+		if detect.IsEnabled || detect.Id == "" {
+			return invalidErr
+		}
+	}
+
+	err = e.ExtractDetails(detect)
+	if err != nil {
+		if invalidErr != nil {
+			return invalidErr
+		}
+
 		return err
 	}
 
@@ -1400,6 +1417,15 @@ func (h *DetectionHandler) PrepareForSave(ctx context.Context, detect *model.Det
 		if err != nil {
 			return err
 		}
+	}
+
+	// an unchanged rule that no longer validates (e.g. a correlation with ES|QL off) can still be disabled
+	if invalidErr != nil {
+		if old.Content != detect.Content {
+			return invalidErr
+		}
+
+		logger.WithError(invalidErr).WithField("detectionPublicId", detect.PublicID).Info("disabling a detection whose stored content no longer validates")
 	}
 
 	detect.CreateTime = old.CreateTime

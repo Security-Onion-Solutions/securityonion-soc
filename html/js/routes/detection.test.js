@@ -462,6 +462,49 @@ test('onNewDetectionLanguageChange', async () => {
 	expect(comp.detect.content).toBe('c X ' + moment().format('YYYY-MM-DD'));
 });
 
+test('onNewDetectionLanguageChange - sigma kind', async () => {
+	comp.ruleTemplates = {
+		"strelka": 'b [publicId]',
+		"elastalert": 'c [publicId]',
+		"elastalert_correlation": 'corr [publicId]',
+	};
+	comp.detect = { language: 'Sigma', content: 'x' };
+	comp.newDetectionSigmaKind = 'correlation';
+
+	const mock = resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	await comp.onNewDetectionLanguageChange();
+
+	expect(mock).toHaveBeenCalledWith('detection/elastalert/genpublicid');
+	expect(comp.detect.content).toBe('corr X');
+
+	resetPapi().mockPapi("get", { data: { publicId: 'Y' } }, null);
+	comp.newDetectionSigmaKind = 'single';
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('c Y');
+
+	// only Sigma has a rule type
+	comp.newDetectionSigmaKind = 'correlation';
+	comp.detect = { language: 'YARA', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('b');
+});
+
+test('hasSigmaKindChoice', () => {
+	comp.ruleTemplates = { "elastalert": 'c', "elastalert_correlation": 'corr' };
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(true);
+
+	comp.detect = { language: 'YARA' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
+	comp.detect = {};
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
+	comp.ruleTemplates = { "elastalert": 'c' };
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+});
+
 test('getDefaultPreset', () => {
 	comp.presets = {
 		"language": {
@@ -1241,6 +1284,23 @@ test('loadPlaybooks', async () => {
 		resetPapi();
 	});
 
+	test('formatEsql puts each command on its own line', () => {
+		expect(comp.formatEsql(' from * | where a == 1\n| stats c=count() by d ')).toBe(
+			'from *\n' +
+			'| where a == 1\n' +
+			'| stats c=count() by d');
+
+		// pipes inside strings are not command breaks
+		expect(comp.formatEsql('from * | where m == "a | (b" and n == "q\\"|(" | where o == """x|"(""" | limit 1')).toBe(
+			'from *\n' +
+			'| where m == "a | (b" and n == "q\\"|("\n' +
+			'| where o == """x|"("""\n' +
+			'| limit 1');
+
+		// an unterminated string runs to the end
+		expect(comp.formatEsql('from * | where a == "x | y')).toBe('from *\n| where a == "x | y');
+	});
+
 	test('buildEsqlDiscoverUrl escapes rison special characters', () => {
 		const url = comp.buildEsqlDiscoverUrl(`from * | where process.command_line like "* /priv*" and message == "it's a !bang"`);
 
@@ -1530,50 +1590,60 @@ name: failed_login
 		expect(comp.extractedLogic).toContain('service: kratos');
 	});
 
-	test('extractElastAlertLogic with correlation in first doc', () => {
+	test('extractLogic lists the rules a correlation refers to', () => {
 		comp.detect = {
 			engine: 'elastalert',
-			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
-id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
-status: experimental
-description: |
-  Detects two or more failed SOC logins from
-  the same client IP within 30 seconds.
+			content: `title: Corr
+id: abc123
 correlation:
-    type: event_count
-    rules:
-        - failed_login
-    group-by:
-        - http.request.headers.x-real-ip
-    timespan: 30s
-    condition:
-        gte: 2
-falsepositives:
-    - TBD
-level: medium
+    type: temporal
 ---
-title: Failed SOC Console Login
-id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
-name: failed_login
+title: A
+name: rule_a
 logsource:
-    product: securityonion
-    service: kratos
+    category: test
 detection:
     selection:
-        service_name: 'Ory Kratos'
-        event.action: 'Encountered self-service login error.'
+        a: b
+    condition: selection
+---
+title: B
+id: 22222222-2222-2222-2222-222222222222
+logsource:
+    category: test
+detection:
+    selection:
+        c: d
     condition: selection
 `,
 		};
 
-		comp.extractedLogic = '';
-		comp.extractElastAlertLogic();
+		comp.extractLogic();
 
-		expect(comp.extractedLogic).not.toContain('correlation:');
-		expect(comp.extractedLogic).toContain('type: event_count');
-		expect(comp.extractedLogic).toContain('rules:');
-		expect(comp.extractedLogic).toContain('failed_login');
-		expect(comp.extractedLogic).not.toContain('logsource:');
+		expect(comp.extractedLogic).toBe('');
+		// a rule referenced by id is labelled with its id
+		expect(comp.correlationRules).toEqual([
+			{ title: 'A', name: 'rule_a', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    a: b\n  condition: selection" },
+			{ title: 'B', name: '22222222-2222-2222-2222-222222222222', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    c: d\n  condition: selection" },
+		]);
+
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Plain
+id: abc123
+logsource:
+    category: test
+detection:
+    selection:
+        a: b
+    condition: selection
+`,
+		};
+
+		comp.extractLogic();
+
+		expect(comp.correlationRules).toEqual([]);
+		expect(comp.extractedLogic).toContain('a: b');
 	});
 
 	test('extractElastAlertDetection with correlation in first doc', () => {
@@ -1636,3 +1706,15 @@ detection:
 		expect(det).toBeUndefined();
 	});
 
+	test('extractElastAlertSeverity', () => {
+		comp.presets = {
+			severity: { labels: ['unknown', 'informational', 'low', 'medium', 'high', 'critical'] },
+		};
+
+		// correlations often omit level
+		comp.detect = { engine: 'elastalert', content: 'title: x\nid: a' };
+		expect(comp.extractElastAlertSeverity()).toBeUndefined();
+
+		comp.detect = { engine: 'elastalert', content: 'title: x\nlevel: High' };
+		expect(comp.extractElastAlertSeverity()).toBe('high');
+	});

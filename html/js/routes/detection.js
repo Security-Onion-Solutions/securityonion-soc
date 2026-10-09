@@ -17,16 +17,6 @@ function debounce(fn, wait) {
 	}
 }
 
-function parseMultiDocYaml(content) {
-	const docs = [];
-	jsyaml.loadAll(content, (doc) => {
-		if (doc !== null) {
-			docs.push(doc);
-		}
-	}, { schema: jsyaml.FAILSAFE_SCHEMA });
-	return docs;
-}
-
 loadPageTemplate('page-detection', 'pages/detection.html');
 
 routes.push({ path: '/detection/:id', name: 'detection', component: {
@@ -129,6 +119,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			extractedReferences: [],
 			extractedLogic: '',
 			extractedLogicClass: '',
+			correlationRules: [],
 			history: [],
 			comments: [],
 			commentsTable: {
@@ -151,6 +142,11 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			curCommentEditTarget: null,
 			origComment: null,
 			showSigmaDialog: false,
+			newDetectionSigmaKind: 'single',
+			sigmaKindItems: [
+				{ title: this.$root.i18n.sigmaSingleEvent, value: 'single' },
+				{ title: this.$root.i18n.sigmaCorrelation, value: 'correlation' },
+			],
 			convertedRule: '',
 			isEsql: false,
 			showDirtySourceDialog: false,
@@ -197,6 +193,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 			if (this.$route.params.id === 'create') {
 				this.detect = this.newDetection();
+				this.newDetectionSigmaKind = 'single';
 			} else {
 				await this.loadData();
 			}
@@ -275,7 +272,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 
 					break;
 				case 'elastalert':
-					const docs = parseMultiDocYaml(this.detect.content);
+					const docs = this.$root.parseMultiDocYaml(this.detect.content);
 					if (docs.length > 0 && docs[0].description) {
 						this.extractedSummary = docs[0].description;
 						break;
@@ -333,7 +330,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			}
 		},
 		extractElastAlertReferences() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0 || !docs[0]['references']) {
 				return;
 			}
@@ -365,6 +362,7 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		extractLogic() {
 			this.extractedLogic = '';
 			this.extractedLogicClass = '';
+			this.correlationRules = [];
 
 			switch (this.detect.engine) {
 				case 'suricata':
@@ -459,20 +457,24 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.extractedLogic = lines.map(l => l.length >= min ? l.substring(min) : l).join('\n');
 		},
 		extractElastAlertLogic() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0) {
 				this.extractedLogic = '';
 				return;
 			}
-			const doc = docs[0];
-			if (doc['correlation']) {
-				this.extractedLogic = jsyaml.dump(doc['correlation']).trim();
+			const logic = doc => jsyaml.dump({ logsource: doc['logsource'], detection: doc['detection'] }).trim();
+
+			if (docs[0]['correlation']) {
+				// the rest are the rules it refers to
+				this.correlationRules = docs.slice(1).map(doc => ({
+					title: doc['title'],
+					name: doc['name'] || doc['id'],
+					logic: logic(doc),
+				}));
 				return;
 			}
-			const logSource = doc['logsource'];
-			const detection = doc['detection'];
 
-			this.extractedLogic = jsyaml.dump({ logsource: logSource, detection: detection }).trim();
+			this.extractedLogic = logic(docs[0]);
 		},
 		async loadHistory(showLoadingIndicator = false) {
 			if (showLoadingIndicator) this.$root.startLoading();
@@ -501,8 +503,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 				let releventKeys = ['title', 'description', 'isEnabled', 'severity', 'content'];
 
 				if (oldDict['engine'] === 'elastalert') {
-					const docsOld = parseMultiDocYaml(oldDict['content']);
-					const docsNew = parseMultiDocYaml(newDict['content']);
+					const docsOld = this.$root.parseMultiDocYaml(oldDict['content']);
+					const docsNew = this.$root.parseMultiDocYaml(newDict['content']);
 
 					const keysToDelete = ['title', 'description', 'level'];
 
@@ -972,14 +974,14 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return sev;
 		},
 		extractElastAlertPublicID() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length > 0) {
 				return docs[0]['id'];
 			}
 			return undefined;
 		},
 		extractElastAlertDetection() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length === 0) {
 				return undefined;
 			}
@@ -990,15 +992,20 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			return doc['detection'];
 		},
 		extractElastAlertSeverity() {
-			const docs = parseMultiDocYaml(this.detect.content);
+			const docs = this.$root.parseMultiDocYaml(this.detect.content);
 			if (docs.length > 0) {
 				const level = docs[0]['level'];
+				if (!level) return;
+
 				for (let lvl in this.presets['severity'].labels) {
 					if (this.presets['severity'].labels[lvl].toUpperCase() === level.toUpperCase()) {
 						return this.presets['severity'].labels[lvl];
 					}
 				}
 			}
+		},
+		hasSigmaKindChoice() {
+			return (this.detect.language || '').toLowerCase() === 'sigma' && !!this.ruleTemplates['elastalert_correlation'];
 		},
 		async onNewDetectionLanguageChange() {
 			const lang = (this.detect.language || '').toLowerCase();
@@ -1016,7 +1023,8 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 					}
 				}
 
-				this.detect.content = this.ruleTemplates[engine]
+				const correlation = this.hasSigmaKindChoice() && this.newDetectionSigmaKind === 'correlation';
+				this.detect.content = this.ruleTemplates[correlation ? 'elastalert_correlation' : engine]
 					.replaceAll('[publicId]', publicId)
 					.replaceAll('[today]', moment().format('YYYY-MM-DD'))
 					.trim();
@@ -1400,6 +1408,28 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 			this.isEsql = false;
 			this.showSigmaDialog = false;
 		},
+		formatEsql(query) {
+			// one command per line; pipes inside strings do not split
+			const commands = [];
+			let start = 0;
+
+			for (let i = 0; i < query.length; i++) {
+				if (query[i] === '"') {
+					const close = query.startsWith('"""', i) ? '"""' : '"';
+					let end = i + close.length;
+					while (end < query.length && !query.startsWith(close, end)) {
+						end += query[end] === '\\' && close === '"' ? 2 : 1;
+					}
+					i = end + close.length - 1;
+				} else if (query[i] === '|') {
+					commands.push(query.slice(start, i).trim());
+					start = i + 1;
+				}
+			}
+			commands.push(query.slice(start).trim());
+
+			return commands.join('\n| ');
+		},
 		copyConvertToClipboard() {
 			this.$root.copyToClipboard(this.convertedRule);
 		},
@@ -1469,6 +1499,10 @@ routes.push({ path: '/detection/:id', name: 'detection', component: {
 		},
 		playbookHighlighter(code) {
 			return Prism.highlight(code, Prism.languages.yaml, 'yaml');
+		},
+		esqlHighlighter(query) {
+			// highlighted before render, so the dialog never repaints
+			return Prism.highlight(this.formatEsql(query), Prism.languages.esql, 'esql');
 		},
 		checkChangedKey(id, key) {
 			return this.changedKeys[id]?.includes(key);

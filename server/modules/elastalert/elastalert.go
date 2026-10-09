@@ -25,6 +25,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -67,6 +68,17 @@ const (
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                        = true
 	DEFAULT_AUTO_UPDATE_ENABLED                      = false
+	// Mirrors the grid-wide elastalert.config run_every managed by Salt.
+	DEFAULT_ELASTALERT_RUN_EVERY_SECONDS = 180
+	// Covers the index refresh interval, so ingested documents are searchable.
+	DEFAULT_ESQL_QUERY_DELAY_SECONDS = 30
+	// How spread out the arrivals of one burst can be and still be counted together.
+	DEFAULT_ESQL_CORRELATION_ALLOWANCE_SECONDS = 600
+
+	// Selecting by arrival still evaluates events that arrive after their window.
+	esqlTimestampField = "event.ingested"
+	// Bump when a code change alters rule files, so deployed rules regenerate.
+	ruleFormatVersion = 6
 )
 
 type RuleCriteria struct {
@@ -133,6 +145,9 @@ type ElastAlertEngine struct {
 	autoUpdateEnabled                  bool
 	useEsql                            bool
 	esqlCaseInsensitive                bool
+	elastAlertRunEvery                 time.Duration
+	esqlQueryDelay                     time.Duration
+	esqlCorrelationAllowance           time.Duration
 	detections.SyncSchedulerParams
 	detections.IntegrityCheckerData
 	detections.IOManager
@@ -282,6 +297,9 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 	e.useEsql = module.GetBoolDefault(config, "useEsql", false)
 	e.esqlCaseInsensitive = module.GetBoolDefault(config, "esqlCaseInsensitive", true)
+	e.elastAlertRunEvery = time.Duration(module.GetIntDefault(config, "elastAlertRunEverySeconds", DEFAULT_ELASTALERT_RUN_EVERY_SECONDS)) * time.Second
+	e.esqlQueryDelay = time.Duration(module.GetIntDefault(config, "esqlQueryDelaySeconds", DEFAULT_ESQL_QUERY_DELAY_SECONDS)) * time.Second
+	e.esqlCorrelationAllowance = time.Duration(module.GetIntDefault(config, "esqlCorrelationAllowanceSeconds", DEFAULT_ESQL_CORRELATION_ALLOWANCE_SECONDS)) * time.Second
 
 	if custom, ok := config["additionalUserDefinedNotifications"]; ok {
 		switch ct := custom.(type) {
@@ -408,13 +426,25 @@ func (e *ElastAlertEngine) IsRunning() bool {
 	return e.isRunning
 }
 
+// ValidateRule checks the rule's structure; conversion is left to deploy and Convert.
 func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
-	_, err := ParseElastAlertRule([]byte(data))
+	collection, err := ParseElastAlertRuleCollection([]byte(data))
 	if err != nil {
+		for _, code := range []error{errRuleInvalidCorrelation, errRuleInvalidExtraDocument} {
+			if errors.Is(err, code) {
+				log.WithError(err).Warn("invalid Sigma rule")
+				return "", code
+			}
+		}
+
 		return "", err
 	}
 
-	return string(data), nil
+	if collection.IsCorrelation() && !e.useEsql {
+		return "", errCorrelationNeedsEsql
+	}
+
+	return data, nil
 }
 
 func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
@@ -422,7 +452,17 @@ func (e *ElastAlertEngine) ApplyFilters(detect *model.Detection) (bool, error) {
 }
 
 func (e *ElastAlertEngine) ConvertRule(ctx context.Context, detect *model.Detection) (string, error) {
-	return e.sigmaToElastAlert(ctx, detect)
+	output, err := e.sigmaToElastAlert(ctx, detect)
+	if err != nil {
+		return "", err
+	}
+
+	// the preview shows only the query, not the group-by columns
+	if converted, err := parseCorrelationOutput(output); err == nil {
+		return converted.Query, nil
+	}
+
+	return output, nil
 }
 
 func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
@@ -443,17 +483,10 @@ func (e *ElastAlertEngine) ExtractDetails(detect *model.Detection) error {
 		detect.Description = *rule.Description
 	}
 
-	if rule.LogSource.Category != nil {
-		detect.Category = *rule.LogSource.Category
-	}
-
-	if rule.LogSource.Product != nil {
-		detect.Product = *rule.LogSource.Product
-	}
-
-	if rule.LogSource.Service != nil {
-		detect.Service = *rule.LogSource.Service
-	}
+	// always from the content, so removing a logsource key clears the stored value
+	detect.Category = lo.FromPtr(rule.LogSource.Category)
+	detect.Product = lo.FromPtr(rule.LogSource.Product)
+	detect.Service = lo.FromPtr(rule.LogSource.Service)
 
 	if rule.Level != nil {
 		switch strings.ToLower(string(*rule.Level)) {
@@ -581,6 +614,7 @@ func (e *ElastAlertEngine) SyncLocalDetections(ctx context.Context, detections [
 
 			wrapped, err := e.wrapRule(det, eaRule)
 			if err != nil {
+				errMap[det.PublicID] = fmt.Sprintf("unable to wrap local elastalert rule: %s", err)
 				continue
 			}
 
@@ -652,12 +686,11 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 	// announce the beginning of the sync
 	e.EngineState.Syncing = true
 
-	// Check to see if the sigma processing pipelines have changed.
-	// If they have, set forceSync to true to regenerate the elastalert rule files.
-	regenNeeded, sigmaPipelineNewHash, err := e.checkSigmaPipelines()
+	// changed conversion inputs force a regeneration of every rule file
+	regenNeeded, conversionHash, err := e.checkConversionInputs()
 	if err != nil {
 		// without pipelines every rule converts wrong, so keep the current rule files
-		logger.WithField("sigmaPipelineError", err).Error("failed to check the sigma processing pipelines")
+		logger.WithField("conversionInputsError", err).Error("failed to check the conversion inputs")
 
 		if e.notify {
 			e.srv.Host.Broadcast("detection-sync", "detections", server.SyncStatus{
@@ -669,7 +702,7 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 		return detections.ErrSyncFailed
 	}
 
-	logger.Info("successfully checked the sigma processing pipelines")
+	logger.Info("successfully checked the conversion inputs")
 
 	if regenNeeded {
 		forceSync = true
@@ -903,9 +936,9 @@ func (e *ElastAlertEngine) Sync(logger *log.Entry, forceSync bool) error {
 			}
 		}
 
-		// Now that a successful sync completed - if the sigma pipelines changed, write out the new sigma pipelines hash .
+		// the sync succeeded, so record the new conversion hash
 		if regenNeeded {
-			err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(sigmaPipelineNewHash), 0644)
+			err = e.WriteFile(e.sigmaPipelinesFingerprintFile, []byte(conversionHash), 0644)
 			if err != nil {
 				logger.WithError(err).WithField("fingerprintPath", e.sigmaPipelinesFingerprintFile).Error("unable to write sigma pipelines fingerprint file")
 			} else {
@@ -962,7 +995,8 @@ func (e *ElastAlertEngine) sigmaPipelineFiles() ([]string, error) {
 	return files, nil
 }
 
-func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
+// checkConversionInputs hashes the pipelines, settings and code version used to build rule files.
+func (e *ElastAlertEngine) checkConversionInputs() (bool, string, error) {
 	files, err := e.sigmaPipelineFiles()
 	if err != nil {
 		return false, "", err
@@ -980,6 +1014,8 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 		h.Write(data)
 	}
 
+	io.WriteString(h, e.conversionSettings())
+
 	newHash := hex.EncodeToString(h.Sum(nil))
 
 	// Read the existing hash from the fingerprint file
@@ -990,14 +1026,21 @@ func (e *ElastAlertEngine) checkSigmaPipelines() (bool, string, error) {
 
 	// Compare hashes
 	if string(oldHash) == newHash {
-		log.Info("no changes to sigma processing pipeline")
+		log.Info("no changes to conversion inputs")
 		return false, "", nil
 	}
 
 	// If hashes do not match, the elastalert rules need to be regenerated
-	log.Info("changes detected in sigma processing pipelines")
+	log.Info("changes detected in conversion inputs")
 
 	return true, newHash, nil
+}
+
+// conversionSettings lists the settings and code version used to build rule files.
+func (e *ElastAlertEngine) conversionSettings() string {
+	return fmt.Sprintf("v%d|esql=%t|ci=%t|allowance=%s|delay=%s|every=%s",
+		ruleFormatVersion, e.useEsql, e.esqlCaseInsensitive, e.esqlCorrelationAllowance,
+		e.esqlQueryDelay, e.elastAlertRunEvery)
 }
 
 func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*model.Detection, errMap map[string]error) {
@@ -1049,6 +1092,10 @@ func (e *ElastAlertEngine) parseZipRules(pkgZips map[string][]byte) (detects []*
 			rule, err := ParseElastAlertRule(data)
 			if err != nil {
 				errMap[file.Name] = err
+				continue
+			}
+
+			if e.shouldDropCorrelation(rule, file.Name) {
 				continue
 			}
 
@@ -1120,6 +1167,10 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 				return nil
 			}
 
+			if e.shouldDropCorrelation(rule, path) {
+				return nil
+			}
+
 			det := rule.ToDetection(ruleset, repo.Repo.License, repo.Repo.Community)
 
 			detects = append(detects, det)
@@ -1133,6 +1184,22 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 	}
 
 	return detects, errMap
+}
+
+// shouldDropCorrelation reports whether rule is a correlation and ES|QL is off.
+func (e *ElastAlertEngine) shouldDropCorrelation(rule *SigmaRule, ruleFile string) bool {
+	// If rule.Correlation is nil it means this is a normal "single" Sigma rule. Therefore we don't want to drop
+	// this "single" rule. Further, if Correlation is *not* nil and esql is enabled then we don't want to drop this 
+	// "correlation" rule. 
+	if rule.Correlation == nil || e.useEsql {
+		return false
+	}
+
+	// We got this far, so this means it *is* a correlation rule but esql is not enabled, so we're dropping this one.
+	
+	log.WithField("elastAlertRuleFile", ruleFile).Info("skipping Sigma correlation, which requires ES|QL")
+
+	return true
 }
 
 func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *log.Entry, detects []*model.Detection, fingerprintFilePresent bool) (errMap map[string]error, err error) {
@@ -1395,6 +1462,7 @@ func (e *ElastAlertEngine) syncCommunityDetections(ctx context.Context, logger *
 
 			rule, err = e.wrapRule(detect, rule)
 			if err != nil {
+				errMap[detect.PublicID] = fmt.Errorf("unable to wrap elastalert rule: %w", err)
 				continue
 			}
 
@@ -1664,6 +1732,24 @@ func (e *ElastAlertEngine) IndexExistingRules() (index map[string]string, err er
 	return index, nil
 }
 
+var sigmaCliInputSuffix = regexp.MustCompile(` in /dev/\S+$`)
+
+// sigmaCliError returns sigma-cli's last "Error:" line, else its last line.
+func sigmaCliError(output []byte) string {
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		reason, ok := strings.CutPrefix(lines[i], "Error: ")
+		if ok && strings.TrimSpace(reason) != "" {
+			reason = strings.TrimPrefix(reason, "Error while converting: ")
+
+			return sigmaCliInputSuffix.ReplaceAllString(reason, "")
+		}
+	}
+
+	return strings.TrimSpace(lines[len(lines)-1])
+}
+
 func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Detection) (string, error) {
 	rule := det.Content
 
@@ -1673,42 +1759,20 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 
 	// apply overrides
 	if len(filters) > 0 {
-		doc := map[string]interface{}{}
-
-		err := yaml.Unmarshal([]byte(rule), &doc)
+		filtered, err := applyCustomFilters(rule, filters)
 		if err != nil {
-			return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
+			return "", err
 		}
 
-		detection, ok := doc["detection"].(map[string]interface{})
-		if !ok || detection == nil {
-			return "", fmt.Errorf("sigma rule does not contain a detection section")
-		}
+		rule = filtered
+	}
 
-		condition, ok := detection["condition"].(string)
-		if !ok || condition == "" {
-			return "", fmt.Errorf("sigma rule does not contain a condition")
-		}
-
-		for _, f := range filters {
-			o, err := f.PrepareForSigma()
-			if err != nil {
-				return "", fmt.Errorf("unable to marshal filter: %w", err)
-			}
-
-			for k, v := range o {
-				detection[k] = v
-			}
-		}
-
-		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
-
-		raw, err := yaml.Marshal(doc)
-		if err != nil {
-			return "", fmt.Errorf("unable to marshal sigma rule with overrides: %w", err)
-		}
-
-		rule = string(raw)
+	// An unparseable rule fails in sigma-cli with a clearer error.
+	collection, parseErr := parseRuleCollection([]byte(rule))
+	isCorrelation := parseErr == nil && collection.IsCorrelation()
+	// ValidateRule blocks saves; this blocks preview and deploy
+	if isCorrelation && !e.useEsql {
+		return "", errCorrelationNeedsEsql
 	}
 
 	target := "eql"
@@ -1718,6 +1782,18 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	args := []string{"convert", "-t", target, "-p", e.sigmaPipelinesDir, "-p", "windows-logsources", "-p", "ecs_windows", "--disable-pipeline-check", "/dev/stdin"}
 	if e.useEsql && e.esqlCaseInsensitive {
 		args = append(args, "-O", "case_insensitive=true")
+	}
+
+	if e.useEsql {
+		// `:` on multivalued fields is pushed down to the index
+		args = append(args, "-O", "multivalue_match_operator=true")
+
+		if isCorrelation {
+			// trailing windows lag enough to include late arrivals
+			args = append(args, "--correlation-method", "window",
+				"-O", fmt.Sprintf("query_delay=%d", int(e.esqlQueryDelay.Seconds())),
+				"-O", fmt.Sprintf("correlation_allowance=%d", int(e.esqlCorrelationAllowance.Seconds())))
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, "sigma", args...)
@@ -1734,6 +1810,10 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	}).Info("executing sigma cli")
 
 	if err != nil {
+		if reason := sigmaCliError(raw); reason != "" {
+			return "", fmt.Errorf("problem with sigma cli: %s", reason)
+		}
+
 		return "", fmt.Errorf("problem with sigma cli: %w", err)
 	}
 
@@ -1747,6 +1827,60 @@ func (e *ElastAlertEngine) sigmaToElastAlert(ctx context.Context, det *model.Det
 	query = strings.TrimSpace(query)
 
 	return query, nil
+}
+
+// applyCustomFilters adds the custom filters to every rule document except the correlation.
+func applyCustomFilters(content string, filters []*model.Override) (string, error) {
+	docs, err := decodeDocuments[map[string]interface{}](strings.NewReader(content))
+	if err != nil {
+		return "", fmt.Errorf("unable to unmarshal sigma rule: %w", err)
+	}
+
+	prepared := []map[string]interface{}{}
+
+	for _, f := range filters {
+		o, err := f.PrepareForSigma()
+		if err != nil {
+			return "", fmt.Errorf("unable to marshal filter: %w", err)
+		}
+
+		prepared = append(prepared, o)
+	}
+
+	filtered := false
+
+	for _, doc := range docs {
+		detection, ok := (*doc)["detection"].(map[string]interface{})
+		if !ok || detection == nil {
+			// a correlation or filter document
+			continue
+		}
+
+		condition, ok := detection["condition"].(string)
+		if !ok || condition == "" {
+			return "", errors.New("sigma rule does not contain a condition")
+		}
+
+		for _, o := range prepared {
+			for k, v := range o {
+				detection[k] = v
+			}
+		}
+
+		detection["condition"] = fmt.Sprintf("(%s) and not 1 of sofilter*", condition)
+		filtered = true
+	}
+
+	if !filtered {
+		return "", errors.New("sigma rule does not contain a detection section")
+	}
+
+	out, err := encodeDocuments(docs)
+	if err != nil {
+		return "", fmt.Errorf("unable to marshal sigma rule with overrides: %w", err)
+	}
+
+	return out, nil
 }
 
 func (e *ElastAlertEngine) GenerateUnusedPublicId(ctx context.Context) (string, error) {
@@ -1785,8 +1919,15 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 		return nil, err
 	}
 
-	rule.OriginalSource = ""
-	rule.Title += " (copy)"
+	title := rule.Title + " (copy)"
+
+	content, err := duplicateContent(detection.Content, id, title)
+	if err != nil {
+		return nil, err
+	}
+
+	rule.OriginalSource = content
+	rule.Title = title
 	rule.ID = &id
 
 	det := rule.ToDetection(detections.RULESET_CUSTOM, detection.License, false)
@@ -1804,6 +1945,43 @@ func (e *ElastAlertEngine) DuplicateDetection(ctx context.Context, detection *mo
 	det.Author = detections.AddUser(det.Author, user, ", ")
 
 	return det, nil
+}
+
+// duplicateContent sets a new id and title on the first document, keeping the rest.
+func duplicateContent(content string, id string, title string) (string, error) {
+	docs, err := decodeDocuments[yaml.Node](strings.NewReader(content))
+	if err != nil {
+		return "", err
+	}
+
+	if len(docs) == 0 {
+		return "", errors.New("no Sigma rule documents found to duplicate")
+	}
+
+	setMappingValue(docs[0], "id", id)
+	setMappingValue(docs[0], "title", title)
+
+	return encodeDocuments(docs)
+}
+
+// setMappingValue sets a top-level scalar key, appending it when absent.
+func setMappingValue(doc *yaml.Node, key string, value string) {
+	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return
+	}
+
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content[i+1].SetString(value)
+			return
+		}
+	}
+
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value},
+	)
 }
 
 func (e *ElastAlertEngine) IsAirgapped() bool {
@@ -1928,6 +2106,7 @@ type CustomWrapper struct {
 	SigmaCategory     string   `yaml:"sigma_category,omitempty"`
 	SigmaProduct      string   `yaml:"sigma_product,omitempty"`
 	SigmaService      string   `yaml:"sigma_service,omitempty"`
+	SigmaCorrelation  string   `yaml:"sigma_correlation,omitempty"`
 	EventModule       string   `yaml:"event.module"`
 	EventDataset      string   `yaml:"event.dataset"`
 	EventSeverity     int      `yaml:"event.severity"`
@@ -1940,6 +2119,14 @@ type CustomWrapper struct {
 	Type           string                   `yaml:"type"`
 	Filter         []map[string]interface{} `yaml:"filter"`
 	TimestampField string                   `yaml:"timestamp_field,omitempty"`
+	QueryDelay     *TimeFrame               `yaml:"query_delay,omitempty"`
+
+	// Correlation rules only; see applyCorrelation.
+	BufferTime          *TimeFrame `yaml:"buffer_time,omitempty"`
+	Timeframe           *TimeFrame `yaml:"timeframe,omitempty"`
+	ScanEntireTimeframe bool       `yaml:"scan_entire_timeframe,omitempty"`
+	QueryKey            []string   `yaml:"query_key,omitempty"`
+	SummaryTemplate     *string    `yaml:"summary_template,omitempty"`
 }
 
 type TimeFrame struct {
@@ -2059,6 +2246,13 @@ func (dur *TimeFrame) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return err
 }
 
+func secondsFrame(d time.Duration) *TimeFrame {
+	frame := &TimeFrame{}
+	frame.SetSeconds(int(d.Seconds()))
+
+	return frame
+}
+
 func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, error) {
 	severities := map[model.Severity]int{
 		model.SeverityUnknown:       0,
@@ -2072,6 +2266,12 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	var sigmaTags []string
 	sigmaRule, err := ParseElastAlertRule([]byte(det.Content))
 	if err != nil {
+		// without its settings a correlation would deploy as a plain rule
+		collection, parseErr := parseRuleCollection([]byte(det.Content))
+		if parseErr == nil && collection.IsCorrelation() {
+			return "", fmt.Errorf("unable to parse correlation rule: %w", err)
+		}
+
 		log.WithError(err).WithField("detectionPublicId", det.PublicID).Error("failed to parse Sigma rule content")
 	} else {
 		sigmaTags = sigmaRule.Tags
@@ -2088,6 +2288,7 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 	timestampField := "@timestamp"
 	filterType := "eql"
 	if e.useEsql {
+		timestampField = esqlTimestampField
 		filterType = "esql"
 	}
 
@@ -2108,6 +2309,17 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 		Type:              "any",
 		Filter:            []map[string]interface{}{{filterType: rule}},
 		TimestampField:    timestampField,
+	}
+
+	if e.useEsql && e.esqlQueryDelay > 0 {
+		wrapper.QueryDelay = secondsFrame(e.esqlQueryDelay)
+	}
+
+	if sigmaRule != nil && sigmaRule.Correlation != nil {
+		err = e.applyCorrelation(wrapper, det.PublicID, rule, sigmaRule)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if slices.Contains(sigmaTags, "so.notification") {
@@ -2136,10 +2348,6 @@ func (e *ElastAlertEngine) wrapRule(det *model.Detection, rule string) (string, 
 			strYaml += "\n" + params + "\n"
 		}
 	}
-
-	// ES|QL sigma converter rename hardcoded timebucket refs to @timestamp
-	strYaml = strings.ReplaceAll(strYaml, " | eval timebucket", " | eval "+timestampField)
-	strYaml = strings.ReplaceAll(strYaml, " by timebucket", " by "+timestampField)
 
 	if len(wrapper.Alert) == 0 {
 		log.WithFields(log.Fields{

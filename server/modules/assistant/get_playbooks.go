@@ -133,7 +133,7 @@ func (t *GetPlaybooksTool) Execute(ctx context.Context, srv *server.Server, req 
 		}).Error("retrieved detection with unsupported engine")
 	}
 
-	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection.PublicID, detection.Category, detection.Engine)
+	playbooks, err := srv.Playbookstore.GetPlaybooksForDetection(ctx, detection)
 	if err != nil || len(playbooks) == 0 {
 		logger.WithError(err).WithFields(log.Fields{
 			"publicId":                detection.PublicID,

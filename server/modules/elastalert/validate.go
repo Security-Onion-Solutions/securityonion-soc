@@ -6,12 +6,23 @@
 package elastalert
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"slices"
 	"strings"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
+
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	errRuleInvalidCorrelation   = errors.New("ERROR_RULE_INVALID__CORRELATION")
+	errRuleInvalidExtraDocument = errors.New("ERROR_RULE_INVALID__EXTRA_DOCUMENT")
 )
 
 type SigmaStatus string
@@ -48,6 +59,7 @@ const (
 type SigmaRule struct {
 	Title          string                 `yaml:"title"`
 	ID             *string                `yaml:"id"`
+	Name           *string                `yaml:"name,omitempty"`
 	Related        []*RelatedRule         `yaml:"related,omitempty"`
 	Status         *SigmaStatus           `yaml:"status"`
 	Description    *string                `yaml:"description,omitempty"`
@@ -59,6 +71,7 @@ type SigmaRule struct {
 	LogSource      LogSource              `yaml:"logsource"`
 	Detection      SigmaDetection         `yaml:"detection"`
 	Correlation    *SigmaCorrelation      `yaml:"correlation,omitempty"`
+	Summary        *string                `yaml:"summary,omitempty"`
 	Fields         []string               `yaml:"fields,omitempty"`
 	FalsePositives OneOrMore[string]      `yaml:"falsepositives,omitempty"`
 	Level          *SigmaLevel            `yaml:"level"`
@@ -118,71 +131,256 @@ type RelatedRule struct {
 	Type RelatedRuleType `yaml:"type"`
 }
 
-type SigmaCorrelation struct {
-	Type     string        `yaml:"type"`
-	Rules    []string      `yaml:"rules,omitempty"`
-	GroupBy  []string      `yaml:"group-by,omitempty"`
-	Timespan *string       `yaml:"timespan,omitempty"`
-	Condition map[string]int `yaml:"condition,omitempty"`
-	Rest     map[string]interface{} `yaml:",inline"`
+// SigmaRuleCollection is a detection's documents: a rule, or a correlation and its rules.
+type SigmaRuleCollection struct {
+	Primary *SigmaRule
+	// a correlation's rules, or a plain rule's filter documents
+	Referenced []*SigmaRule
 }
 
-func (c *SigmaCorrelation) HasRequiredFields() bool {
-	return c.Type != "" && c.Rules != nil && c.Timespan != nil
+func (c *SigmaRuleCollection) IsCorrelation() bool {
+	return c.Primary != nil && c.Primary.Correlation != nil
 }
 
+// decodeDocuments decodes every non-empty YAML document; yaml.Unmarshal keeps only the first.
+func decodeDocuments[T any](r io.Reader) ([]*T, error) {
+	decoder := yaml.NewDecoder(r)
+
+	docs := []*T{}
+
+	for {
+		node := &yaml.Node{}
+
+		err := decoder.Decode(node)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if len(node.Content) == 0 || node.Content[0].Tag == "!!null" {
+			continue
+		}
+
+		doc := new(T)
+
+		err = node.Decode(doc)
+		if err != nil {
+			return nil, err
+		}
+
+		docs = append(docs, doc)
+	}
+
+	return docs, nil
+}
+
+func encodeDocuments[T any](docs []T) (string, error) {
+	buf := &bytes.Buffer{}
+	encoder := yaml.NewEncoder(buf)
+	encoder.SetIndent(4)
+
+	for _, doc := range docs {
+		err := encoder.Encode(doc)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	err := encoder.Close()
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func parseRuleCollection(data []byte) (*SigmaRuleCollection, error) {
+	rules, err := decodeDocuments[SigmaRule](bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rules) == 0 {
+		return nil, errors.New("no Sigma rule documents found")
+	}
+
+	return &SigmaRuleCollection{Primary: rules[0], Referenced: rules[1:]}, nil
+}
+
+// filters reports whether this document is a Sigma filter naming the given rule.
+func (r *SigmaRule) filters(rule *SigmaRule) bool {
+	filter, ok := r.Rest["filter"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	names := func(ref interface{}) bool {
+		s, ok := ref.(string)
+		return ok && s != "" && (s == lo.FromPtr(rule.ID) || s == lo.FromPtr(rule.Name))
+	}
+
+	switch rules := filter["rules"].(type) {
+	case string:
+		return strings.EqualFold(rules, "any") || names(rules)
+	case []interface{}:
+		// an empty list means any rule
+		return len(rules) == 0 || slices.ContainsFunc(rules, names)
+	}
+
+	return false
+}
+
+// Validate checks the primary rule, any correlation and every referenced rule.
+func (c *SigmaRuleCollection) Validate() error {
+	err := c.Primary.Validate()
+	if err != nil {
+		return err
+	}
+
+	if !c.IsCorrelation() {
+		// sigma-cli applies Sigma filter documents to the rule they name
+		for i, doc := range c.Referenced {
+			if !doc.filters(c.Primary) {
+				return fmt.Errorf("%w: document %d is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it",
+					errRuleInvalidExtraDocument, i+2)
+			}
+		}
+
+		return nil
+	}
+
+	err = c.Primary.Correlation.Validate()
+	if err == nil {
+		err = c.validateReferences()
+	}
+
+	if err != nil {
+		return fmt.Errorf("%w: %w", errRuleInvalidCorrelation, err)
+	}
+
+	return nil
+}
+
+func (c *SigmaRuleCollection) validateReferences() error {
+	// a reference names another document's id or name
+	known := map[string]struct{}{}
+	for _, rule := range c.Referenced {
+		if rule.ID != nil && *rule.ID != "" {
+			known[*rule.ID] = struct{}{}
+		}
+		if rule.Name != nil && *rule.Name != "" {
+			known[*rule.Name] = struct{}{}
+		}
+	}
+
+	unresolved := []string{}
+	for _, ref := range c.Primary.Correlation.Rules {
+		if _, ok := known[ref]; !ok {
+			unresolved = append(unresolved, ref)
+		}
+	}
+
+	if len(unresolved) > 0 {
+		return fmt.Errorf("correlation references %d rule(s) not defined in this detection: %s; "+
+			"add each referenced rule as an additional YAML document (separated by ---) with a matching id or name",
+			len(unresolved), strings.Join(unresolved, ", "))
+	}
+
+	for i, rule := range c.Referenced {
+		label := fmt.Sprintf("document %d", i+2)
+		if rule.Name != nil && *rule.Name != "" {
+			label = fmt.Sprintf("referenced rule %q", *rule.Name)
+		}
+
+		if rule.Correlation != nil {
+			return fmt.Errorf("%s is itself a correlation, which is not supported; refer to the rules it correlates directly", label)
+		}
+
+		err := rule.validateReferenced()
+		if err != nil {
+			return fmt.Errorf("%s is invalid: %w", label, err)
+		}
+
+		// sigma-cli would convert it as a separate query in the same filter
+		refs := c.Primary.Correlation.Rules
+		if !slices.Contains(refs, lo.FromPtr(rule.ID)) && !slices.Contains(refs, lo.FromPtr(rule.Name)) {
+			return fmt.Errorf("document %d is not used by the correlation; list its id or name in correlation.rules or remove it", i+2)
+		}
+	}
+
+	return nil
+}
+
+// ParseElastAlertRuleCollection parses and validates every document of a detection.
+func ParseElastAlertRuleCollection(data []byte) (*SigmaRuleCollection, error) {
+	collection, err := parseRuleCollection(data)
+	if err != nil {
+		return nil, err
+	}
+
+	err = collection.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	collection.Primary.OriginalSource = string(data)
+
+	return collection, nil
+}
+
+// ParseElastAlertRule validates only the primary document, as 3.3 did, so stored rules stay readable.
 func ParseElastAlertRule(data []byte) (*SigmaRule, error) {
-	rule := &SigmaRule{}
-
-	err := yaml.Unmarshal(data, rule)
+	collection, err := parseRuleCollection(data)
 	if err != nil {
 		return nil, err
 	}
 
-	err = rule.Validate()
+	err = collection.Primary.Validate()
 	if err != nil {
 		return nil, err
 	}
 
-	rule.OriginalSource = string(data)
+	collection.Primary.OriginalSource = string(data)
 
-	return rule, nil
+	return collection.Primary, nil
 }
 
-func (e *SigmaRule) Validate() error {
-	// check required fields
+func (r *SigmaRule) Validate() error {
 	requiredFields := []string{}
 
-	if e.ID == nil || len(*e.ID) == 0 {
+	if r.ID == nil || len(*r.ID) == 0 {
 		requiredFields = append(requiredFields, "id")
 	}
 
-	if len(e.Title) == 0 {
+	return r.validate(requiredFields)
+}
+
+// validateReferenced checks a referenced rule, which may have a name in place of an id.
+func (r *SigmaRule) validateReferenced() error {
+	requiredFields := []string{}
+
+	hasID := r.ID != nil && len(*r.ID) > 0
+	hasName := r.Name != nil && len(*r.Name) > 0
+
+	if !hasID && !hasName {
+		requiredFields = append(requiredFields, "id or name")
+	}
+
+	return r.validate(requiredFields)
+}
+
+func (r *SigmaRule) validate(requiredFields []string) error {
+	if len(r.Title) == 0 {
 		requiredFields = append(requiredFields, "title")
 	}
 
-	hasCorrelation := e.Correlation != nil && e.Correlation.HasRequiredFields()
-
-	if hasCorrelation {
-		return checkNoError(requiredFields)
-	}
-
-	if e.Correlation != nil {
-		correlation := e.Correlation
-		if correlation.Type == "" {
-			requiredFields = append(requiredFields, "correlation.type")
-		}
-		if correlation.Rules == nil {
-			requiredFields = append(requiredFields, "correlation.rules")
-		}
-		if correlation.Timespan == nil || *correlation.Timespan == "" {
-			requiredFields = append(requiredFields, "correlation.timespan")
-		}
-	} else {
-		if e.LogSource == (LogSource{}) {
+	if r.Correlation == nil {
+		if r.LogSource == (LogSource{}) {
 			requiredFields = append(requiredFields, "logsource")
 		}
-		if len(e.Detection.Condition.Values) == 0 && e.Detection.Condition.Value == "" {
+		if len(r.Detection.Condition.Values) == 0 && r.Detection.Condition.Value == "" {
 			requiredFields = append(requiredFields, "detection.condition")
 		}
 	}
@@ -191,13 +389,6 @@ func (e *SigmaRule) Validate() error {
 		return fmt.Errorf("missing required fields: %s", strings.Join(requiredFields, ", "))
 	}
 
-	return nil
-}
-
-func checkNoError(requiredFields []string) error {
-	if len(requiredFields) > 0 {
-		return fmt.Errorf("missing required fields: %s", strings.Join(requiredFields, ", "))
-	}
 	return nil
 }
 

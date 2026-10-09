@@ -2119,6 +2119,10 @@ $(document).ready(function () {
 
           return null;
         },
+        parseMultiDocYaml(content) {
+          // FAILSAFE loads an empty document as '' rather than null
+          return jsyaml.loadAll(content, { schema: jsyaml.FAILSAFE_SCHEMA }).filter((doc) => doc !== null && doc !== '');
+        },
       },
       created() {
         this.log("Initializing application components");

@@ -140,7 +140,7 @@ components.push({
 
 						break;
 					case 'elastalert':
-						const yaml = jsyaml.load(this.detection.content, { schema: jsyaml.FAILSAFE_SCHEMA });
+						const yaml = this.$root.parseMultiDocYaml(this.detection.content)[0] ?? {};
 						if (yaml.description) {
 							this.extractedSummary = yaml.description;
 							break;
@@ -441,8 +441,7 @@ components.push({
 				return results[1];
 			},
 			extractElastAlertPublicID() {
-				const yaml = jsyaml.load(this.detection.content, {schema: jsyaml.FAILSAFE_SCHEMA});
-				return yaml['id'];
+				return this.$root.parseMultiDocYaml(this.detection.content)[0]?.id;
 			},
 			pickValue(item, field) {
 				let value = '';

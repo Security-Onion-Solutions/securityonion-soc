@@ -488,7 +488,7 @@ func TestGetPlaybooksTool_Execute(t *testing.T) {
 			// Setup playbook store expectations
 			if tc.mockDetection != nil && tc.mockDetectionError == nil {
 				if tc.mockPlaybooks != nil || tc.mockPlaybookError != nil {
-					mockPlaybookstore.EXPECT().GetPlaybooksForDetection(gomock.Any(), tc.mockDetection.PublicID, tc.mockDetection.Category, tc.mockDetection.Engine).Return(tc.mockPlaybooks, tc.mockPlaybookError)
+					mockPlaybookstore.EXPECT().GetPlaybooksForDetection(gomock.Any(), tc.mockDetection).Return(tc.mockPlaybooks, tc.mockPlaybookError)
 				}
 
 				// Only expect ExecutePlaybookSearches if we have playbooks and no error, and the function won't return early
