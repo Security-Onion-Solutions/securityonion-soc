@@ -134,7 +134,7 @@ func seedAutomationAgent(ac *AssistantCoordinator) {
 const (
 	automationTestId      = "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"
 	otherAutomationTestId = "1d7e3a44-88b6-4c0f-9a21-70f5e9c3b812"
-	automationTestAgent   = "Investigator"
+	automationTestAgent   = "AlertTriage"
 )
 
 func automationSaveCtx() context.Context {

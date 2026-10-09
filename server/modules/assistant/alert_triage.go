@@ -528,7 +528,7 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 	fields, _ := r.run.Srv.AssistantManager.FilterEvents([]*model.EventRecord{alert})[0]["payload"].(map[string]any)
 
 	result, err := r.run.RunAgentSession(ctx, item.Id, &model.AgentSessionRequest{
-		Objective: alertTriageObjective(fields, payload.Count, payload.GroupFilter),
+		Objective: alertTriageObjective(fields, alert.Id, payload.Count, payload.GroupFilter, r.run.RunId),
 		Agent:     r.run.Task.Agent,
 	})
 
@@ -884,19 +884,20 @@ func (r *alertTriageRun) updateFailedAlerts(ctx context.Context, payload *alertT
 	return err
 }
 
-// alertTriageObjective opens the session: one alert standing for its group, and a request for a
-// report a person will read.
-func alertTriageObjective(alert map[string]any, count int, groupFilter string) string {
+// alertTriageObjective opens the session: one alert standing for its group. The agent's prompt
+// sets the investigation and the report it ends with.
+func alertTriageObjective(alert map[string]any, alertId string, count int, groupFilter string, runId string) string {
 	fields, err := json.MarshalIndent(alert, "", "  ")
 	if err != nil {
 		fields = []byte(fmt.Sprintf("%v", alert))
 	}
 
-	return fmt.Sprintf(`Investigate the alert below. It is the most recent of %d unprocessed alerts matching:
+	return fmt.Sprintf(`Triage the alert below. It is the most recent of %d unprocessed alerts matching:
 %s
 
-Write a report for the analyst who will read it: what you found, what you checked, and what you could not determine.
+SOC Alert ID: %s
+Run ID: %s
 
 Alert:
-%s`, count, groupFilter, fields)
+%s`, count, groupFilter, alertId, runId, fields)
 }

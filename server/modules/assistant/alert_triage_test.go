@@ -1395,12 +1395,13 @@ func TestAlertTriageClaimErrorsAreReported(t *testing.T) {
 }
 
 func TestAlertTriageObjective(t *testing.T) {
-	objective := alertTriageObjective(map[string]any{"rule.name": "ET SCAN", "source.ip": "1.2.3.4"}, 7, `rule.name:"ET SCAN"`)
+	objective := alertTriageObjective(map[string]any{"rule.name": "ET SCAN", "source.ip": "1.2.3.4"}, "alert-9", 7, `rule.name:"ET SCAN"`, "run-3")
 
+	assert.Contains(t, objective, "Triage the alert below")
 	assert.Contains(t, objective, "7 unprocessed alerts")
 	assert.Contains(t, objective, `rule.name:"ET SCAN"`)
+	assert.Contains(t, objective, "SOC Alert ID: alert-9\nRun ID: run-3")
 	assert.Contains(t, objective, `"source.ip": "1.2.3.4"`)
-	assert.Contains(t, objective, "report for the analyst")
 }
 
 func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
@@ -1547,6 +1548,7 @@ func TestBuiltinAlertTriageDefinitionIsValid(t *testing.T) {
 	require.NoError(t, validateAutomation(builtin))
 	require.NoError(t, (&AlertTriageKind{}).ValidateParams(builtin.Params))
 	assert.Equal(t, alertTriageKindName, builtin.AutomationKind)
+	assert.Equal(t, "AlertTriage", builtin.Agent)
 
 	params, err := parseAlertTriageParams(builtin.Params)
 	require.NoError(t, err)
