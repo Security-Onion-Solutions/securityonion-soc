@@ -619,10 +619,13 @@ const huntComponent = {
         this.autoRefreshInterval = found ? parseInt(this.$route.query.ar) : 0;
       }
       if (this.$route.query.expand) {
+        // loadData keeps a deep link's expansion, so a reused component's tabs are
+        // cleared here instead.
         this.deepLinked = true;
         this.expandedEvents = this.$route.query.expand.split('|');
-        this.activeTabs = this.$route.query.tab ? { 0: this.$route.query.tab } : {};
-      } else if (this.$route.query.tab) {
+        this.activeTabs = {};
+      }
+      if (this.$route.query.tab) {
         this.activeTabs[0] = this.$route.query.tab;
       }
       if (Array.isArray(this.filterToggles)) {
@@ -996,6 +999,12 @@ const huntComponent = {
         }
       }
       return null;
+    },
+    parseToggleFilter(filter) {
+      const match = /^\s*"?([^\s:"]+)"?\s*:\s*(?:"([^"]*)"|([^\s"]+))\s*$/.exec(filter || '');
+      if (!match) return null;
+
+      return { field: match[1], value: match[2] !== undefined ? match[2] : match[3] };
     },
     isFilterToggleEnabled(name) {
       var toggle = this.getFilterToggle(name);
@@ -1823,18 +1832,19 @@ const huntComponent = {
       if (!this.deepLinked) return;
       this.deepLinked = false;
 
-      if (!this.isCategory('alerts')) return;
+      const event = this.eventData.find(item => item.soc_id === this.expandedEvents[0]);
+      if (!event || !Array.isArray(this.filterToggles)) return;
 
-      const alert = this.eventData.find(item => item.soc_id === this.expandedEvents[0]);
-      if (!alert) return;
+      this.filterToggles.forEach(toggle => {
+        if (!toggle.exclusive) return;
 
-      const acknowledged = this.getFilterToggle('acknowledged');
-      if (acknowledged) acknowledged.enabled = String(alert['event.acknowledged']) === 'true';
+        // A filter that is not a single field:value cannot be evaluated against the
+        // loaded event, so its toggle keeps its state.
+        const term = this.parseToggleFilter(toggle.filter);
+        if (term) toggle.enabled = String(event[term.field]) === term.value;
+      });
 
-      const escalated = this.getFilterToggle('escalated');
-      if (escalated) escalated.enabled = String(alert['event.escalated']) === 'true';
-
-      // Reloading would collapse the deep-linked alert; the URL only needs to carry the
+      // Reloading would collapse the deep-linked event; the URL only needs to carry the
       // toggles so a refresh still finds it.
       this.navigateWithoutReload(this.buildCurrentRoute(), true);
     },

@@ -28,8 +28,11 @@ import (
 // Emoji rather than text, like the PCAP job links, so the labels need no translation and read
 // the same in SOC and in every other destination.
 const chatLinkLabel = "💬"
+
+// Temporary: remove once deterministic automation actions send triage notifications.
 const alertLinkLabel = "🔔"
 
+// Temporary: remove once deterministic automation actions send triage notifications.
 // The Alerts page measures a relative range from when the link is opened, not when it was
 // sent, so the window is wide enough to keep a notification useful for weeks.
 const alertLinkRelativeTime = 30
@@ -52,6 +55,8 @@ func (t *SendNotificationTool) GetName() string {
 	return "send_notification"
 }
 
+// Temporary: remove once deterministic automation actions send triage notifications.
+// This covers the alert triage sentences in this description and in the share_chat schema.
 func (t *SendNotificationTool) GetDescription() string {
 	return `Send a notification to the Security Onion operators. The notification appears in the SOC
 	notification bell for every user and is delivered to any other configured destination, so use it only
@@ -212,6 +217,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		}
 	}
 
+	// Temporary: remove once deterministic automation actions send triage notifications.
 	if rootSession != nil && rootSession.Type == alertTriageKindName && rootSession.EntityId != "" {
 		dropLinksTo(payload, rootSession.EntityId)
 		setLink(payload, alertLinkLabel, triageAlertLink(rootSession.EntityId))
@@ -231,6 +237,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 	return result, nil
 }
 
+// Temporary: remove once deterministic automation actions send triage notifications.
 // triageAlertLink opens the alert on its AI investigation tab.
 func triageAlertLink(alertId string) string {
 	query := url.Values{}
@@ -250,6 +257,7 @@ func setLink(payload *model.NotificationPayload, label, link string) {
 	payload.Links[label] = link
 }
 
+// Temporary: remove once deterministic automation actions send triage notifications.
 // dropLinksTo removes links the model added that mention the alert, encoded or not, so the
 // alert link appears once.
 func dropLinksTo(payload *model.NotificationPayload, alertId string) {

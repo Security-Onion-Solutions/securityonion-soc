@@ -1004,6 +1004,15 @@ test('expand query string deep links to the alert', () => {
   expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
 });
 
+test('expand query string without tab clears stale tabs', () => {
+  comp.activeTabs = { 3: 'playbook' };
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"', expand: 'abc' } };
+  comp.parseUrlParameters();
+
+  expect(comp.expandedEvents).toStrictEqual(['abc']);
+  expect(comp.activeTabs).toStrictEqual({});
+});
+
 test('tab query string without expand', () => {
   comp.$route = { path: "alerts", query: { tab: 'playbook' } };
   comp.parseUrlParameters();
@@ -1113,16 +1122,42 @@ describe('syncDeepLinkedToggles', () => {
     expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
   });
 
-  test('other categories only clear the flag', () => {
+  test('custom exclusive toggles in any category follow the event', () => {
     comp.category = 'hunt';
-    comp.eventData = [{ soc_id: 'abc', 'event.acknowledged': true }];
+    comp.filterToggles = [
+      { name: 'custom', filter: 'event.foo:"bar baz"', enabled: false, exclusive: true },
+      { name: 'other', filter: 'event.foo:qux', enabled: true, exclusive: true },
+      { name: 'inclusive', filter: 'event.foo:qux', enabled: false, exclusive: false },
+      { name: 'complex', filter: 'NOT event.foo:"bar baz"', enabled: true, exclusive: true },
+    ];
+    comp.eventData = [{ soc_id: 'abc', 'event.foo': 'bar baz' }];
 
     comp.syncDeepLinkedToggles();
 
     expect(comp.deepLinked).toBe(false);
-    expect(comp.isFilterToggleEnabled('acknowledged')).toBe(false);
-    expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
+    expect(comp.isFilterToggleEnabled('custom')).toBe(true);
+    expect(comp.isFilterToggleEnabled('other')).toBe(false);
+    expect(comp.isFilterToggleEnabled('inclusive')).toBe(false);
+    expect(comp.isFilterToggleEnabled('complex')).toBe(true);
+    expect(comp.navigateWithoutReload).toHaveBeenCalledWith(expect.any(Object), true);
   });
+});
+
+test.each([
+  { filter: 'event.acknowledged:true', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: ' event.acknowledged : true ', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: 'rule.name:"A B"', expected: { field: 'rule.name', value: 'A B' } },
+  { filter: '"event.module":"soc"', expected: { field: 'event.module', value: 'soc' } },
+  { filter: 'rule.name:""', expected: { field: 'rule.name', value: '' } },
+  { filter: 'NOT event.module:"soc"', expected: null },
+  { filter: 'a:1 AND b:2', expected: null },
+  { filter: 'a:1 b', expected: null },
+  { filter: 'a:', expected: null },
+  { filter: 'event.acknowledged', expected: null },
+  { filter: '', expected: null },
+  { filter: undefined, expected: null },
+])('parseToggleFilter $filter', ({ filter, expected }) => {
+  expect(comp.parseToggleFilter(filter)).toStrictEqual(expected);
 });
 
 test('autoRefresh query string', () => {
