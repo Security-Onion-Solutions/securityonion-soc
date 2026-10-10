@@ -426,6 +426,17 @@ test('getQuery', async () => {
   expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5");
 });
 
+test('getQuery deep link skips exclusive toggle exclusions', async () => {
+  comp.query = "a:1";
+  comp.queryBaseFilter = "c:3";
+  comp.filterToggles = [{ enabled: true, filter: "e:4", exclusive: true }, { enabled: false, filter: "f:5", exclusive: true }, { enabled: true, filter: "g:6" }];
+  comp.deepLinked = true;
+  mock = mockPapi("get", {'data':'a:1 AND c:3 AND e:4 AND g:6'});
+
+  await comp.getQuery();
+  expect(mock).toHaveBeenCalledWith('query/filtered', { params: { query: 'a:1', field: '', value: 'c:3 AND e:4 AND g:6', scalar: true, mode: 'INCLUDE', condense: true } });
+});
+
 test('buildGroupByNew', () => {
   comp.groupBys = ['foo', 'bar'];
   var route = comp.buildGroupByRoute('car');
@@ -973,6 +984,180 @@ test('relative query string', async () => {
   expect(comp.setupDateRangePicker).toHaveBeenCalled();
 
   comp.setupDateRangePicker = orig;
+});
+
+test('expand query string deep links to the alert', () => {
+  comp.activeTabs = { 3: 'playbook' };
+  comp.expandedEvents = ['stale'];
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"', tab: 'investigation', expand: 'abc|def' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(true);
+  expect(comp.expandedEvents).toStrictEqual(['abc', 'def']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(true);
+  expect(comp.expandedEvents).toStrictEqual(['abc', 'def']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+});
+
+test('expand query string without tab clears stale tabs', () => {
+  comp.activeTabs = { 3: 'playbook' };
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"', expand: 'abc' } };
+  comp.parseUrlParameters();
+
+  expect(comp.expandedEvents).toStrictEqual(['abc']);
+  expect(comp.activeTabs).toStrictEqual({});
+});
+
+test('tab query string without expand', () => {
+  comp.$route = { path: "alerts", query: { tab: 'playbook' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(false);
+  expect(comp.expandedEvents).toStrictEqual([]);
+  expect(comp.activeTabs[0]).toBe('playbook');
+});
+
+test('navigateWithoutReload', () => {
+  jest.useFakeTimers();
+  comp.$router.replace = jest.fn();
+
+  comp.navigateWithoutReload({ path: 'alerts' });
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.$router[0]).toStrictEqual({ path: 'alerts' });
+  expect(comp.$router.replace).not.toHaveBeenCalled();
+
+  jest.runAllTimers();
+  expect(comp.disableRouteLoad).toBe(false);
+
+  comp.navigateWithoutReload({ path: 'hunt' }, true);
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.$router.replace).toHaveBeenCalledWith({ path: 'hunt' });
+  expect(comp.$router.length).toBe(1);
+
+  jest.runAllTimers();
+  expect(comp.disableRouteLoad).toBe(false);
+  jest.useRealTimers();
+});
+
+test('loadData on a reused component keeps a deep link expansion', async () => {
+  resetPapi().mockPapi('get', { data: { events: [{ soc_id: 'abc', payload: {} }], metrics: {}, totalEvents: 1 } }, null);
+  comp.populateChart = jest.fn();
+  comp.populateEventTable = jest.fn();
+  comp.syncDeepLinkedToggles = jest.fn();
+  comp.loaded = true;
+  comp.activeTabs = { 2: 'playbook' };
+  comp.expandedEvents = ['stale'];
+  comp.$route = { path: 'alerts', query: { q: '_id:"abc"', tab: 'investigation', expand: 'abc' } };
+
+  await comp.loadData();
+
+  expect(comp.expandedEvents).toStrictEqual(['abc']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+  expect(comp.syncDeepLinkedToggles).toHaveBeenCalled();
+
+  comp.$route = { path: 'alerts', query: { q: '_id:"abc"' } };
+
+  await comp.loadData();
+
+  expect(comp.expandedEvents).toStrictEqual([]);
+  expect(comp.activeTabs).toStrictEqual({});
+});
+
+describe('syncDeepLinkedToggles', () => {
+  const toggles = () => [
+    { name: 'acknowledged', filter: 'event.acknowledged:true', enabled: false, exclusive: true },
+    { name: 'escalated', filter: 'event.escalated:true', enabled: false, exclusive: true },
+  ];
+
+  beforeEach(() => {
+    comp.category = 'alerts';
+    comp.filterToggles = toggles();
+    comp.expandedEvents = ['abc'];
+    comp.deepLinked = true;
+    comp.navigateWithoutReload = jest.fn();
+  });
+
+  test.each([
+    { name: 'acknowledged', alert: { 'event.acknowledged': true }, ack: true, esc: false },
+    { name: 'escalated', alert: { 'event.acknowledged': true, 'event.escalated': true }, ack: true, esc: true },
+    { name: 'string values', alert: { 'event.acknowledged': 'true', 'event.escalated': 'false' }, ack: true, esc: false },
+    { name: 'unacknowledged', alert: {}, ack: false, esc: false },
+  ])('$name alert', ({ alert, ack, esc }) => {
+    comp.filterToggles[0].enabled = !ack;
+    comp.eventData = [{ soc_id: 'other', 'event.acknowledged': !ack }, { soc_id: 'abc', ...alert }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.isFilterToggleEnabled('acknowledged')).toBe(ack);
+    expect(comp.isFilterToggleEnabled('escalated')).toBe(esc);
+    expect(comp.navigateWithoutReload).toHaveBeenCalledWith(expect.objectContaining({ path: 'alerts' }), true);
+    expect(comp.navigateWithoutReload.mock.calls[0][0].query.acknowledged).toBe(ack);
+  });
+
+  test('alert not found leaves the toggles alone', () => {
+    comp.filterToggles[0].enabled = true;
+    comp.eventData = [{ soc_id: 'other' }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.filterToggles).toStrictEqual([{ ...toggles()[0], enabled: true }, toggles()[1]]);
+    expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
+  });
+
+  test('not deep linked', () => {
+    comp.deepLinked = false;
+    comp.eventData = [{ soc_id: 'abc', 'event.acknowledged': true }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.isFilterToggleEnabled('acknowledged')).toBe(false);
+    expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
+  });
+
+  test('custom exclusive toggles in any category follow the event', () => {
+    comp.category = 'hunt';
+    comp.filterToggles = [
+      { name: 'custom', filter: 'event.foo:"bar baz"', enabled: false, exclusive: true },
+      { name: 'other', filter: 'event.foo:qux', enabled: true, exclusive: true },
+      { name: 'inclusive', filter: 'event.foo:qux', enabled: false, exclusive: false },
+      { name: 'complex', filter: 'NOT event.foo:"bar baz"', enabled: true, exclusive: true },
+    ];
+    comp.eventData = [{ soc_id: 'abc', 'event.foo': 'bar baz' }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.isFilterToggleEnabled('custom')).toBe(true);
+    expect(comp.isFilterToggleEnabled('other')).toBe(false);
+    expect(comp.isFilterToggleEnabled('inclusive')).toBe(false);
+    expect(comp.isFilterToggleEnabled('complex')).toBe(true);
+    expect(comp.navigateWithoutReload).toHaveBeenCalledWith(expect.any(Object), true);
+  });
+});
+
+test.each([
+  { filter: 'event.acknowledged:true', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: ' event.acknowledged : true ', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: 'rule.name:"A B"', expected: { field: 'rule.name', value: 'A B' } },
+  { filter: '"event.module":"soc"', expected: { field: 'event.module', value: 'soc' } },
+  { filter: 'rule.name:""', expected: { field: 'rule.name', value: '' } },
+  { filter: 'NOT event.module:"soc"', expected: null },
+  { filter: 'a:1 AND b:2', expected: null },
+  { filter: 'a:1 b', expected: null },
+  { filter: 'a:', expected: null },
+  { filter: 'event.acknowledged', expected: null },
+  { filter: '', expected: null },
+  { filter: undefined, expected: null },
+])('parseToggleFilter $filter', ({ filter, expected }) => {
+  expect(comp.parseToggleFilter(filter)).toStrictEqual(expected);
 });
 
 test('autoRefresh query string', () => {

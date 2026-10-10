@@ -624,6 +624,9 @@ type AgentSessionRequest struct {
 	SessionId string
 	// Tags stamped on the created session in addition to AutomationSessionTags.
 	Tags []string
+	// Optional. The session type and entity it concerns, stamped on the root session.
+	Type     string
+	EntityId string
 	// Ceiling on model turns across the session and every sub-agent it delegates
 	// to, so an agent that loops cannot bill indefinitely. 0 means the configured
 	// default, not unlimited.
