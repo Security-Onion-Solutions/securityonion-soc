@@ -3161,6 +3161,15 @@ test('the microchip reflects automated investigations', () => {
   expect(comp.getAIInvestigationTooltip({ count: 5, newest: { soc_id: 'n' }, newestTriaged: automated })).toContain(comp.i18n.aiInvestigateViewAutomated);
 });
 
+test('the microchip tooltip and menu name the automated assessment', async () => {
+  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': 't1', 'event.so_alerttriage.assessment': 'likely_malicious' };
+  expect(comp.getAIInvestigationTooltip(automated)).toMatch(/^View Automated Investigation · Likely Malicious · /);
+
+  comp.$root.formatDateTime = t => t;
+  await comp.startAIInvestigation(automated, { button: 0, currentTarget: {} });
+  expect(comp.investigationMenu.items[0].subtitle).toBe('Likely Malicious · t1');
+});
+
 test('routeForQuery swaps only the query', () => {
   comp.query = '* | groupby rule.name';
   const route = comp.routeForQuery('rule.name:"X"');

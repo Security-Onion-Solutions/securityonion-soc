@@ -6,6 +6,7 @@
       <div class="d-flex align-center flex-wrap mb-3">
         <v-icon class="mr-2" size="small">fa-robot</v-icon>
         <h4 class="my-0 mr-4">{{ i18n.aiInvestigationAutomated }}</h4>
+        <v-chip v-if="automatedId() && assessment()" :color="assessment().color" size="small" variant="flat" class="mr-4" :title="i18n.aiAssessment" data-aid="alert_investigation_assessment">{{ assessment().label }}</v-chip>
         <template v-if="automatedId() && summary(automatedId()).time">
           <span class="text-medium-emphasis mr-4">{{ $root.formatDateTime(summary(automatedId()).time) }}</span>
           <span v-if="summary(automatedId()).agent" class="text-medium-emphasis mr-4">{{ summary(automatedId()).agent }}</span>

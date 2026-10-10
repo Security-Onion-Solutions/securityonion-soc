@@ -629,6 +629,7 @@ func alertTriageAlertFromEvent(prefix string, event *model.EventRecord) *model.A
 		RuleName:         payloadString(event.Payload, "rule.name"),
 		Severity:         payloadString(event.Payload, "event.severity_label"),
 		SessionId:        payloadString(event.Payload, model.AlertTriageFieldSessionId(prefix)),
+		Assessment:       payloadString(event.Payload, model.AlertTriageFieldAssessment(prefix)),
 		FailedSessionIds: payloadStrings(event.Payload, model.AlertTriageFieldFailedSessionIds(prefix)),
 		FailedRunIds:     payloadStrings(event.Payload, model.AlertTriageFieldFailedRunIds(prefix)),
 		FailedCount:      payloadInt(event.Payload, model.AlertTriageFieldFailedCount(prefix)),

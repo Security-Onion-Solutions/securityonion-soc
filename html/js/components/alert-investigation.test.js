@@ -90,6 +90,23 @@ test('reads which investigations an alert has', () => {
   expect(comp.acknowledged()).toBe(true);
 });
 
+test('reads the automated assessment', () => {
+  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.assessment': 'likely_malicious' };
+  expect(comp.assessment()).toEqual({ label: 'Likely Malicious', color: 'error' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 'needs_review';
+  expect(comp.assessment()).toEqual({ label: 'Needs Review', color: 'warning' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 'likely_benign';
+  expect(comp.assessment()).toEqual({ label: 'Likely Benign', color: 'success' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 'suspicious';
+  expect(comp.assessment()).toBeNull();
+
+  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1' };
+  expect(comp.assessment()).toBeNull();
+});
+
 test('manual investigations are read from the alert\'s entries, newest first', () => {
   comp.alert = {
     'event.so_investigations': [
