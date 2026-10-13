@@ -76,10 +76,10 @@
         {{ form.isEdit ? i18n.editAlarm : i18n.addAlarm }}
       </v-card-title>
       <v-card-text>
-        <v-form ref="alarmForm" v-model="form.valid" @submit.prevent>
+        <v-form ref="alarmForm" v-model="form.valid" @submit.prevent="saveAlarm">
           <v-row dense>
             <v-col cols="12" sm="8">
-              <v-text-field v-model="form.name" :label="i18n.alarmName" :rules="[$root.validators.required]" maxlength="100" required autofocus data-aid="alarm_form_name"></v-text-field>
+              <v-text-field v-model="form.name" :label="i18n.alarmName + ' *'" :rules="[$root.validators.required]" maxlength="100" required autofocus data-aid="alarm_form_name"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="alarm_form_enabled"></v-switch>
@@ -90,7 +90,7 @@
             </v-col>
 
             <v-col cols="12" sm="6">
-              <v-select v-model="form.metric" :items="metricOptions" item-title="title" item-value="metric" :label="i18n.alarmMetric" density="comfortable" :rules="[$root.validators.required]" @update:model-value="onMetricChange" data-aid="alarm_form_metric"></v-select>
+              <v-select v-model="form.metric" :items="metricOptions" item-title="title" item-value="metric" :label="i18n.alarmMetric + ' *'" density="comfortable" :rules="[$root.validators.required]" @update:model-value="onMetricChange" data-aid="alarm_form_metric"></v-select>
             </v-col>
 
             <v-col v-if="metricKeyOptions.length > 1" cols="12" sm="6">
@@ -98,7 +98,7 @@
             </v-col>
 
             <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
-              <v-select v-model="form.operator" :items="operatorOptions" :label="i18n.alarmOperator" density="comfortable" :rules="[$root.validators.required]" data-aid="alarm_form_operator"></v-select>
+              <v-select v-model="form.operator" :items="operatorOptions" :label="i18n.alarmOperator + ' *'" density="comfortable" :rules="[$root.validators.required]" data-aid="alarm_form_operator"></v-select>
             </v-col>
 
             <v-col cols="12" :sm="metricKeyOptions.length > 1 ? 6 : 4">
@@ -108,7 +108,7 @@
                 :items="booleanThresholdOptions"
                 item-title="title"
                 item-value="value"
-                :label="i18n.alarmThreshold"
+                :label="i18n.alarmThreshold + ' *'"
                 :rules="[$root.validators.required]"
                 density="comfortable"
                 data-aid="alarm_form_threshold_bool">
@@ -116,7 +116,7 @@
               <v-text-field
                 v-else
                 v-model="form.threshold"
-                :label="i18n.alarmThreshold"
+                :label="i18n.alarmThreshold + ' *'"
                 :rules="[$root.validators.required]"
                 :hint="thresholdHint"
                 persistent-hint
@@ -131,7 +131,7 @@
             </v-col>
 
             <v-col cols="12" :sm="$root.isLicensed($root.FEAT_NTF) ? 6 : 12">
-              <v-select v-model="form.severity" :items="severityOptions" :label="i18n.alarmSeverity" :rules="[$root.validators.required]" density="comfortable" data-aid="alarm_form_severity"></v-select>
+              <v-select v-model="form.severity" :items="severityOptions" :label="i18n.alarmSeverity + ' *'" :rules="[$root.validators.required]" density="comfortable" data-aid="alarm_form_severity"></v-select>
             </v-col>
 
             <v-col v-if="$root.isLicensed($root.FEAT_NTF)" cols="12" sm="6">
@@ -181,7 +181,7 @@
       <v-card-actions class="px-6 py-4">
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="alarmDialog = false" data-aid="alarm_form_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn color="primary" variant="flat" :disabled="!form.valid" @click="saveAlarm()" data-aid="alarm_form_save">{{ i18n.save }}</v-btn>
+        <v-btn color="primary" variant="flat" @click="saveAlarm()" data-aid="alarm_form_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

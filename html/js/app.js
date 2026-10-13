@@ -317,6 +317,11 @@ $(document).ready(function () {
           AGENT_USER_ID: AGENT_USER_ID,
           validators: {
             required: value => !!value || _i18n.required,
+            email: value => {
+              if (!value) return true;
+              const v = typeof value === 'string' ? value.trim() : String(value);
+              return /^([^@\s<>]+@[^@\s<>]+\.[^@\s<>]+|[^<]*<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>)$/.test(v) || _i18n.invalidEmail;
+            },
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
             hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
             shortLengthLimit: value => (value.length < 100) || _i18n.required,

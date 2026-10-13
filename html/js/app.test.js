@@ -1600,6 +1600,26 @@ test('validator: required', () => {
   expect(v(1)).toBe(true);
 });
 
+test('validator: email', () => {
+  const v = app.validators.email;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('x@x.x')).toBe(true);
+  expect(v('user@example.com')).toBe(true);
+  expect(v('Something <x@x.x>')).toBe(true);
+  expect(v('Security Onion <alerts@example.com>')).toBe(true);
+  expect(v('"Security Onion" <alerts@example.com>')).toBe(true);
+  expect(v('  x@x.x  ')).toBe(true);
+  expect(v('invalid')).toBe(_i18n.invalidEmail);
+  expect(v('no-at-sign.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain')).toBe(_i18n.invalidEmail);
+  expect(v('@domain.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain.')).toBe(_i18n.invalidEmail);
+  expect(v('Something user@example.com')).toBe(_i18n.invalidEmail);
+  expect(v('Something <user@domain>')).toBe(_i18n.invalidEmail);
+});
+
 test('validator: number', () => {
   const v = app.validators.number;
   expect(v('a')).toBe(_i18n.required);

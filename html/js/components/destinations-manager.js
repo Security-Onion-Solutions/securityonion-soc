@@ -301,7 +301,14 @@ components.push({
         this.deleteDestinationDialog = false;
       },
       async saveDestination() {
-        if (!this.form.name) {
+        const formRef = Array.isArray(this.$refs?.destinationForm) ? this.$refs.destinationForm[0] : this.$refs?.destinationForm;
+        if (typeof formRef?.validate === 'function') {
+          const res = await formRef.validate();
+          if (res && res.valid === false) {
+            return;
+          }
+        }
+        if (!this.form.name || !this.form.name.trim()) {
           return;
         }
 

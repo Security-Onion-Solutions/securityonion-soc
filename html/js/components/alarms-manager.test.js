@@ -508,3 +508,43 @@ test('alarms-manager template sets autofocus on alarm name field', () => {
   expect(match[0]).toContain('autofocus');
 });
 
+test('saveAlarm validates form and aborts when invalid', async () => {
+  const validateSpy = jest.fn().mockResolvedValue({ valid: false });
+  comp.$refs = {
+    alarmForm: {
+      validate: validateSpy,
+    },
+  };
+  const postMock = mockPapi('post', {});
+
+  await comp.saveAlarm();
+
+  expect(validateSpy).toHaveBeenCalled();
+  expect(postMock).not.toHaveBeenCalled();
+});
+
+test('alarms-manager template does not disable save button and wires form submit', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/alarms-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('@submit.prevent="saveAlarm"');
+  const saveBtn = tmpl.match(/<v-btn[^>]*data-aid="alarm_form_save"[^>]*>/);
+  expect(saveBtn).not.toBeNull();
+  expect(saveBtn[0]).not.toContain(':disabled');
+});
+
+test('alarms-manager template adds required indicator to required field labels', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/alarms-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':label="i18n.alarmName + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.alarmMetric + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.alarmOperator + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.alarmThreshold + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.alarmSeverity + \' *\'"');
+});
+

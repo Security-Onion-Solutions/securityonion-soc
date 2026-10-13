@@ -339,3 +339,42 @@ test('schedules-manager template sets autofocus on schedule name field', () => {
   expect(match).not.toBeNull();
   expect(match[0]).toContain('autofocus');
 });
+
+test('saveSchedule validates form and aborts when invalid', async () => {
+  const validateSpy = jest.fn().mockResolvedValue({ valid: false });
+  comp.$refs = {
+    scheduleForm: {
+      validate: validateSpy,
+    },
+  };
+  comp.form.name = 'Test Schedule';
+  const postMock = mockPapi('post', {});
+
+  await comp.saveSchedule();
+
+  expect(validateSpy).toHaveBeenCalled();
+  expect(postMock).not.toHaveBeenCalled();
+});
+
+test('schedules-manager template does not disable save button and wraps fields with v-form', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/schedules-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('<v-form ref="scheduleForm"');
+  expect(tmpl).toContain('@submit.prevent="saveSchedule"');
+  const saveBtn = tmpl.match(/<v-btn[^>]*data-aid="schedule_editor_save"[^>]*>/);
+  expect(saveBtn).not.toBeNull();
+  expect(saveBtn[0]).not.toContain(':disabled');
+});
+
+test('schedules-manager template adds required indicator to required field labels', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/schedules-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':label="i18n.name + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.timezone + \' *\'"');
+});
