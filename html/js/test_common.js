@@ -289,7 +289,6 @@ global.mockShowError = function(logError = false) {
 ////////////////////////////////////
 require('./i18n.js');
 require('./graphing.js');
-require('./notifications.js');
 
 // stub Promise.all so it's synchronous
 const orig = Promise.all;
@@ -300,6 +299,8 @@ Promise.all = () => {
 };
 
 require('./app.js');
+require('./notifications.js');
+Object.assign(app, ...global.rootMethods);
 
 // restore Promise.all
 Promise.all = orig;

@@ -62,24 +62,25 @@
         {{ form.isEdit ? i18n.editDestination : i18n.addDestination }}
       </v-card-title>
       <v-card-text>
-        <v-row dense>
-          <v-col cols="12" sm="6">
-            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required density="comfortable" autofocus data-aid="destination_form_name"></v-text-field>
-          </v-col>
-          <v-col cols="12" sm="6">
-            <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType" density="comfortable" :disabled="form.isEdit" @update:model-value="onChannelTypeChange" data-aid="destination_form_type"></v-select>
-          </v-col>
+        <v-form ref="destinationForm" v-model="form.valid" @submit.prevent="saveDestination">
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field v-model="form.name" :label="i18n.name + ' *'" :rules="[$root.validators.required]" maxlength="50" required density="comfortable" autofocus data-aid="destination_form_name"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType + ' *'" density="comfortable" :disabled="form.isEdit" :rules="[$root.validators.required]" @update:model-value="onChannelTypeChange" data-aid="destination_form_type"></v-select>
+            </v-col>
 
           <!-- SMTP Parameters -->
           <template v-if="form.type === 'smtp'">
             <v-col cols="12" sm="8">
-              <v-text-field v-model="form.params.host" :label="i18n.smtpHost" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_smtp_host"></v-text-field>
+              <v-text-field v-model="form.params.host" :label="i18n.smtpHost + ' *'" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_smtp_host"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-text-field v-model="form.params.port" :label="i18n.smtpPort" type="number" density="comfortable" data-aid="destination_form_smtp_port"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="form.params.from" :label="i18n.smtpFrom" :rules="[$root.validators.required]" required density="comfortable" data-aid="destination_form_smtp_from"></v-text-field>
+              <v-text-field v-model="form.params.from" :label="i18n.smtpFrom + ' *'" :rules="[$root.validators.required, $root.validators.email]" required density="comfortable" data-aid="destination_form_smtp_from"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field v-model="form.params.to" :label="i18n.smtpTo" density="comfortable" data-aid="destination_form_smtp_to"></v-text-field>
@@ -103,7 +104,7 @@
 
           <template v-if="isWebhookType(form.type)">
             <v-col cols="12">
-              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl" :rules="[$root.validators.required]" required density="comfortable" :data-aid="'destination_form_' + form.type + '_url'"></v-text-field>
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl + ' *'" :rules="[$root.validators.required, $root.validators.url]" required density="comfortable" :data-aid="'destination_form_' + form.type + '_url'"></v-text-field>
             </v-col>
             <v-col cols="12">
               <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.insecureSkipVerify" density="compact" :data-aid="'destination_form_' + form.type + '_insecure_skip_verify'"></v-switch>
@@ -167,11 +168,12 @@
             </v-select>
           </v-col>
         </v-row>
+      </v-form>
       </v-card-text>
       <v-card-actions class="pa-4">
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="destinationDialog = false" data-aid="destination_editor_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveDestination()" data-aid="destination_editor_save">{{ i18n.save }}</v-btn>
+        <v-btn color="primary" variant="flat" @click="saveDestination()" data-aid="destination_editor_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

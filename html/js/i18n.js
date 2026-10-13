@@ -1193,6 +1193,8 @@ const i18n = {
       interval10h: "10 hours",
       interval24h: "24 hours",
       invalid: 'Invalid',
+      invalidEmail: 'Invalid email address',
+      invalidUrl: 'Invalid URL',
       invalidDetectionElastAlertMissingDetectionLogic: `This Sigma rule is missing its detection logic. A "detection" field is required.`,
       invalidDetectionElastAlertMissingID: 'This Sigma rule is missing its ID. An "id" field is required.',
       invalidDetectionStrelkaMissingCondition: 'This YARA rule is missing its condition. A "condition" section is required.',

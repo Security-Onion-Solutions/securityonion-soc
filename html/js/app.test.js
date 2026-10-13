@@ -1600,6 +1600,42 @@ test('validator: required', () => {
   expect(v(1)).toBe(true);
 });
 
+test('validator: email', () => {
+  const v = app.validators.email;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('x@x.x')).toBe(true);
+  expect(v('user@example.com')).toBe(true);
+  expect(v('Something <x@x.x>')).toBe(true);
+  expect(v('Security Onion <alerts@example.com>')).toBe(true);
+  expect(v('"Security Onion" <alerts@example.com>')).toBe(true);
+  expect(v('  x@x.x  ')).toBe(true);
+  expect(v('invalid')).toBe(_i18n.invalidEmail);
+  expect(v('no-at-sign.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain')).toBe(_i18n.invalidEmail);
+  expect(v('@domain.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain.')).toBe(_i18n.invalidEmail);
+  expect(v('Something user@example.com')).toBe(_i18n.invalidEmail);
+  expect(v('Something <user@domain>')).toBe(_i18n.invalidEmail);
+});
+
+test('validator: url', () => {
+  const v = app.validators.url;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('https://hooks.slack.com/services/xxx')).toBe(true);
+  expect(v('http://localhost:8080/hook')).toBe(true);
+  expect(v('https://matrix.example.com/_matrix/hookshot/123')).toBe(true);
+  expect(v('http://192.168.1.100/webhook')).toBe(true);
+  expect(v('ftp://example.com')).toBe(_i18n.invalidUrl);
+  expect(v('not-a-url')).toBe(_i18n.invalidUrl);
+  expect(v('http://')).toBe(_i18n.invalidUrl);
+  expect(v('https://')).toBe(_i18n.invalidUrl);
+  expect(v('javascript:alert(1)')).toBe(_i18n.invalidUrl);
+});
+
 test('validator: number', () => {
   const v = app.validators.number;
   expect(v('a')).toBe(_i18n.required);

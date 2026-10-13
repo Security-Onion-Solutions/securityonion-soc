@@ -384,6 +384,13 @@ components.push({
         }
       },
       async saveAlarm() {
+        const formRef = Array.isArray(this.$refs?.alarmForm) ? this.$refs.alarmForm[0] : this.$refs?.alarmForm;
+        if (typeof formRef?.validate === 'function') {
+          const res = await formRef.validate();
+          if (res && res.valid === false) {
+            return;
+          }
+        }
         try {
           const payload = {
             id: this.form.id || undefined,

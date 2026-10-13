@@ -44,16 +44,17 @@
         {{ form.isEdit ? i18n.editSchedule : i18n.addSchedule }}
       </v-card-title>
       <v-card-text>
-        <v-row dense>
-          <v-col cols="12">
-            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required autofocus data-aid="schedule_form_name"></v-text-field>
-          </v-col>
-          <v-col cols="12">
-            <v-textarea v-model="form.description" :label="i18n.description" rows="2" auto-grow maxlength="1000" density="comfortable" data-aid="schedule_form_description"></v-textarea>
-          </v-col>
-          <v-col cols="12" sm="8">
-            <v-autocomplete v-model="form.timezone" :items="timezones" :label="i18n.timezone" density="comfortable" data-aid="schedule_form_timezone"></v-autocomplete>
-          </v-col>
+        <v-form ref="scheduleForm" v-model="form.valid" @submit.prevent="saveSchedule">
+          <v-row dense>
+            <v-col cols="12">
+              <v-text-field v-model="form.name" :label="i18n.name + ' *'" :rules="[$root.validators.required]" maxlength="50" required autofocus data-aid="schedule_form_name"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <v-textarea v-model="form.description" :label="i18n.description" rows="2" auto-grow maxlength="1000" density="comfortable" data-aid="schedule_form_description"></v-textarea>
+            </v-col>
+            <v-col cols="12" sm="8">
+              <v-autocomplete v-model="form.timezone" :items="timezones" :label="i18n.timezone + ' *'" density="comfortable" :rules="[$root.validators.required]" data-aid="schedule_form_timezone"></v-autocomplete>
+            </v-col>
           <v-col cols="12" sm="4" class="d-flex align-center">
             <v-btn variant="outlined" size="small" prepend-icon="fa-location-crosshairs" @click="detectBrowserTimezone()" data-aid="schedule_form_detect_tz">
               {{ i18n.autoDetect }}
@@ -188,11 +189,12 @@
             </v-expansion-panel-text>
           </v-expansion-panel>
         </v-expansion-panels>
+        </v-form>
       </v-card-text>
       <v-card-actions class="pa-4">
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="scheduleDialog = false" data-aid="schedule_editor_cancel">{{ i18n.cancel }}</v-btn>
-        <v-btn color="primary" variant="flat" :disabled="!form.name" @click="saveSchedule()" data-aid="schedule_editor_save">{{ i18n.save }}</v-btn>
+        <v-btn color="primary" variant="flat" @click="saveSchedule()" data-aid="schedule_editor_save">{{ i18n.save }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

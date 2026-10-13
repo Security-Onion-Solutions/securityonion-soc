@@ -4,7 +4,7 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-globalThis.socNotifications = {
+rootMethods.push({
   loadNotifications() {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
     const filter = this.notificationShowDismissed ? 'all' : 'active';
@@ -219,16 +219,4 @@ globalThis.socNotifications = {
       this.loadNotifications();
     }
   }
-};
-
-var socNotifications = globalThis.socNotifications;
-
-if (typeof window !== 'undefined') {
-  window.socNotifications = socNotifications;
-}
-if (typeof global !== 'undefined') {
-  global.socNotifications = socNotifications;
-}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = socNotifications;
-}
+});

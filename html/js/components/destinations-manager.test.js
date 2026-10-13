@@ -638,3 +638,63 @@ test('destinations-manager template sets autofocus on destination name field', (
   expect(match[0]).toContain('autofocus');
 });
 
+test('saveDestination validates form and aborts when invalid', async () => {
+  const validateSpy = jest.fn().mockResolvedValue({ valid: false });
+  comp.$refs = {
+    destinationForm: {
+      validate: validateSpy,
+    },
+  };
+  comp.form.name = 'Test Destination';
+  const postMock = mockPapi('post', {});
+
+  await comp.saveDestination();
+
+  expect(validateSpy).toHaveBeenCalled();
+  expect(postMock).not.toHaveBeenCalled();
+});
+
+test('destinations-manager template does not disable save button and wraps fields with v-form', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain('<v-form ref="destinationForm"');
+  expect(tmpl).toContain('@submit.prevent="saveDestination"');
+  const saveBtn = tmpl.match(/<v-btn[^>]*data-aid="destination_editor_save"[^>]*>/);
+  expect(saveBtn).not.toBeNull();
+  expect(saveBtn[0]).not.toContain(':disabled');
+});
+
+test('destinations-manager template adds required indicator to required field labels', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':label="i18n.name + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.channelType + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.smtpHost + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.smtpFrom + \' *\'"');
+  expect(tmpl).toContain(':label="i18n.webhookUrl + \' *\'"');
+});
+
+test('destinations-manager template applies email validation rule to smtp from field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':rules="[$root.validators.required, $root.validators.email]"');
+});
+
+test('destinations-manager template applies url validation rule to webhook url field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':rules="[$root.validators.required, $root.validators.url]"');
+});
+

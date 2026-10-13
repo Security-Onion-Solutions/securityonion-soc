@@ -292,8 +292,12 @@ components.push({
         });
       },
       async saveSchedule() {
-        if (!this.form.name || !this.form.name.trim()) {
-          return;
+        const formRef = Array.isArray(this.$refs?.scheduleForm) ? this.$refs.scheduleForm[0] : this.$refs?.scheduleForm;
+        if (typeof formRef?.validate === 'function') {
+          const res = await formRef.validate();
+          if (res && res.valid === false) {
+            return;
+          }
         }
 
         const payload = {
