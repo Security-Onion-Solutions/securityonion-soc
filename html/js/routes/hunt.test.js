@@ -3167,7 +3167,7 @@ test('the microchip reflects automated investigations', () => {
 });
 
 test('the microchip tooltip and menu name the automated assessment', async () => {
-  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': 't1', 'event.so_alerttriage.assessment': 'likely_malicious' };
+  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': 't1', 'event.so_alerttriage.assessment': 90 };
   expect(comp.getAIInvestigationTooltip(automated)).toMatch(/^View Automated Investigation · Likely Malicious · /);
 
   comp.$root.formatDateTime = t => t;

@@ -69,7 +69,7 @@ type alertTriagePayload struct {
 // alertTriageResult is what a work item carries from its session to its update.
 type alertTriageResult struct {
 	SessionId  string `json:"sessionId"`
-	Assessment string `json:"assessment,omitempty"`
+	Assessment int    `json:"assessment,omitempty"`
 }
 
 func (k *AlertTriageKind) GetName() string        { return alertTriageKindName }
@@ -926,7 +926,7 @@ Alert:
 // alertTriageAssessments maps the values a triage report's status line may carry to the
 // assessment recorded on the alerts. The VERDICT forms are what the prompt asked for before it
 // named the field ASSESSMENT.
-var alertTriageAssessments = map[string]string{
+var alertTriageAssessments = map[string]int{
 	"LIKELY MALICIOUS": model.AlertTriageAssessmentLikelyMalicious,
 	"NEEDS REVIEW":     model.AlertTriageAssessmentNeedsReview,
 	"LIKELY BENIGN":    model.AlertTriageAssessmentLikelyBenign,
@@ -938,7 +938,7 @@ var alertTriageAssessments = map[string]string{
 // parseAlertTriageAssessment reads the ASSESSMENT field of the report's status line, e.g.
 // "STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | DETAIL: FALSE POSITIVE | ...". A report without
 // a recognisable one still records, as needing review, and reports that it was not recognised.
-func parseAlertTriageAssessment(report string) (string, bool) {
+func parseAlertTriageAssessment(report string) (int, bool) {
 	for _, line := range strings.Split(report, "\n") {
 		line = strings.ToUpper(strings.Trim(strings.TrimSpace(line), "*_`#> "))
 		if !strings.HasPrefix(line, "STATUS:") {

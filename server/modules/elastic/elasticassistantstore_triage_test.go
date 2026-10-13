@@ -95,7 +95,7 @@ func TestAddAlertTriageScript(t *testing.T) {
 	assert.Equal(t, int64(1257894000000), criteria.Params["triageNowMillis"])
 	assert.Equal(t, "run-1", criteria.Params["triageRunId"])
 	assert.Equal(t, "session-1", criteria.Params["triageSessionId"])
-	assert.Equal(t, "likely_malicious", criteria.Params["triageAssessment"])
+	assert.Equal(t, 90, criteria.Params["triageAssessment"])
 	assert.Equal(t, "so_alerttriage", criteria.Params["triageObject"])
 
 	other := model.NewEventUpdateCriteria()
@@ -111,7 +111,6 @@ func TestAddAlertTriageScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	update := triageUpdate()
 	update.Failed = true
-	update.Assessment = ""
 	update.FailedRunIds = []string{"run-0", "run-1"}
 	store.addAlertTriageScript(criteria, timeNow, update)
 	require.Len(t, criteria.UpdateScripts, 1)
@@ -137,7 +136,6 @@ func TestAddAlertTriageScript_InjectionAttack(t *testing.T) {
 	update.RunId = `run'; ctx._source.other = 'leaked`
 	update.SessionId = `session'; ctx._source.more = 'leaked`
 	update.Failed = true
-	update.Assessment = ""
 	update.FailedRunIds = []string{`run'; ctx._source.most = 'leaked`}
 	store.addAlertTriageScript(criteria, time.Now(), update)
 
@@ -173,7 +171,7 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 	assert.NotContains(t, source, "acknowledged")
 	assert.False(t, gjson.Get(body, "script.params.userId").Exists())
 	assert.Equal(t, "session-1", gjson.Get(body, "script.params.triageSessionId").String())
-	assert.Equal(t, "likely_malicious", gjson.Get(body, "script.params.triageAssessment").String())
+	assert.Equal(t, int64(90), gjson.Get(body, "script.params.triageAssessment").Int())
 	assert.Equal(t, "so_alerttriage", gjson.Get(body, "script.params.triageObject").String())
 }
 
@@ -184,7 +182,6 @@ func TestAlertTriageUpdateFailure(t *testing.T) {
 	update := triageUpdate()
 	update.Query = `_id:"abc"`
 	update.Failed = true
-	update.Assessment = ""
 	update.SessionId = ""
 	update.FailedRunIds = []string{"run-0", "run-1"}
 	results, err := store.AlertTriageUpdate(context.Background(), update)

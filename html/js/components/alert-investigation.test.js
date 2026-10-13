@@ -91,16 +91,16 @@ test('reads which investigations an alert has', () => {
 });
 
 test('reads the automated assessment', () => {
-  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.assessment': 'likely_malicious' };
+  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.assessment': 90 };
   expect(comp.assessment()).toEqual({ label: 'Likely Malicious', color: 'error' });
 
-  comp.alert['event.so_alerttriage.assessment'] = 'needs_review';
+  comp.alert['event.so_alerttriage.assessment'] = 50;
   expect(comp.assessment()).toEqual({ label: 'Needs Review', color: 'warning' });
 
-  comp.alert['event.so_alerttriage.assessment'] = 'likely_benign';
+  comp.alert['event.so_alerttriage.assessment'] = 10;
   expect(comp.assessment()).toEqual({ label: 'Likely Benign', color: 'success' });
 
-  comp.alert['event.so_alerttriage.assessment'] = 'suspicious';
+  comp.alert['event.so_alerttriage.assessment'] = 75;
   expect(comp.assessment()).toBeNull();
 
   comp.alert = { 'event.so_alerttriage.session_id': 'triage_1' };

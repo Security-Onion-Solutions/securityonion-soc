@@ -19,12 +19,14 @@ const (
 	// param omits or zeroes the cap so no group is ever retried without bound.
 	DefaultAlertTriageMaxFailures = 3
 
-	AlertTriageAssessmentLikelyMalicious = "likely_malicious"
-	AlertTriageAssessmentNeedsReview     = "needs_review"
-	AlertTriageAssessmentLikelyBenign    = "likely_benign"
+	// Assessments are numbers rather than words so the UI owns, and can localize or rename,
+	// what each one is called.
+	AlertTriageAssessmentLikelyBenign    = 10
+	AlertTriageAssessmentNeedsReview     = 50
+	AlertTriageAssessmentLikelyMalicious = 90
 )
 
-func IsValidAlertTriageAssessment(assessment string) bool {
+func IsValidAlertTriageAssessment(assessment int) bool {
 	switch assessment {
 	case AlertTriageAssessmentLikelyMalicious, AlertTriageAssessmentNeedsReview, AlertTriageAssessmentLikelyBenign:
 		return true
@@ -76,8 +78,8 @@ type AlertTriageUpdate struct {
 	Count     int
 	RunId     string
 	SessionId string
-	// The agent's conclusion for the group; set only on success.
-	Assessment string
+	// The agent's conclusion for the group; ignored when Failed.
+	Assessment int
 	Failed     bool
 	// Every run that failed the alerts' work item; required when Failed.
 	FailedRunIds []string
@@ -90,9 +92,7 @@ func (update *AlertTriageUpdate) Validate() error {
 	case !update.Failed && update.SessionId == "":
 		return errors.New("alert triage update requires a session id")
 	case !update.Failed && !IsValidAlertTriageAssessment(update.Assessment):
-		return fmt.Errorf("alert triage update has an invalid assessment %q", update.Assessment)
-	case update.Failed && update.Assessment != "":
-		return errors.New("failed alert triage update must not carry an assessment")
+		return fmt.Errorf("alert triage update has an invalid assessment %d", update.Assessment)
 	case update.Failed && (len(update.FailedRunIds) == 0 || slices.Contains(update.FailedRunIds, "")):
 		return errors.New("failed alert triage update requires its failed run ids")
 	case update.Floor.IsZero():
@@ -213,8 +213,8 @@ type AlertTriageAlert struct {
 	Severity  string `json:"severity,omitempty" example:"high"`
 	// The session whose report covers this alert; empty until one succeeds.
 	SessionId string `json:"sessionId,omitempty" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d"`
-	// The successful session's assessment: likely_malicious, needs_review or likely_benign.
-	Assessment string `json:"assessment,omitempty" example:"needs_review"`
+	// The successful session's assessment: 10 likely benign, 50 needs review, 90 likely malicious.
+	Assessment int `json:"assessment,omitempty" example:"50"`
 	// Sessions that produced no report for this alert.
 	FailedSessionIds []string `json:"failedSessionIds"`
 	// Runs that failed this alert's group; the retry budget.

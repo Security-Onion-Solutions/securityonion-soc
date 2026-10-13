@@ -952,7 +952,7 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	assert.NotEmpty(t, sessionId)
 	assert.Equal(t, model.AutomationWorkItemDone, item.State)
 	assert.Equal(t, []string{sessionId}, item.SessionIds)
-	assert.JSONEq(t, `{"sessionId":"`+sessionId+`","assessment":"likely_malicious"}`, string(item.Result))
+	assert.JSONEq(t, `{"sessionId":"`+sessionId+`","assessment":90}`, string(item.Result))
 
 	updates := f.alerts.recorded()
 	require.Len(t, updates, 1)
@@ -1278,7 +1278,7 @@ func TestAlertTriageUpdateErrorSpendsARetry(t *testing.T) {
 	// The checkpoint survives with this run charged against it, so the next run replays only
 	// the update.
 	assert.Equal(t, model.AutomationWorkItemApplying, item.State)
-	assert.JSONEq(t, `{"sessionId":"`+f.sessionId(t)+`","assessment":"likely_malicious"}`, string(item.Result))
+	assert.JSONEq(t, `{"sessionId":"`+f.sessionId(t)+`","assessment":90}`, string(item.Result))
 	assert.Equal(t, []string{"run-1"}, item.FailedRunIds)
 }
 
@@ -1415,7 +1415,7 @@ func TestParseAlertTriageAssessment(t *testing.T) {
 	tests := []struct {
 		name       string
 		report     string
-		want       string
+		want       int
 		recognized bool
 	}{
 		{"likely malicious", status("LIKELY MALICIOUS"), model.AlertTriageAssessmentLikelyMalicious, true},
@@ -1469,6 +1469,28 @@ func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
 	// Checkpointed before assessments existed.
 	assert.Equal(t, model.AlertTriageAssessmentNeedsReview, updates[0].Assessment)
 	assert.Equal(t, `tags:alert AND rule.name:"A"`, updates[0].Query)
+}
+
+func TestDecodeAlertTriageCheckpointAssessment(t *testing.T) {
+	tests := []struct {
+		name   string
+		result string
+		want   int
+	}{
+		{"likely benign", `{"sessionId":"s","assessment":10}`, model.AlertTriageAssessmentLikelyBenign},
+		{"likely malicious", `{"sessionId":"s","assessment":90}`, model.AlertTriageAssessmentLikelyMalicious},
+		{"missing", `{"sessionId":"s"}`, model.AlertTriageAssessmentNeedsReview},
+		{"zero", `{"sessionId":"s","assessment":0}`, model.AlertTriageAssessmentNeedsReview},
+		{"unknown", `{"sessionId":"s","assessment":75}`, model.AlertTriageAssessmentNeedsReview},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := &model.AutomationWorkItem{Payload: triageTestPayload(t), Result: json.RawMessage(tt.result)}
+			_, result, err := decodeAlertTriageCheckpoint(item)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, result.Assessment)
+		})
+	}
 }
 
 func TestAlertTriageReclaimKeepsApplyingItemsItCannotRecord(t *testing.T) {

@@ -8,9 +8,9 @@ loadPageTemplate('component-alert-investigation', 'pages/alert-investigation.htm
 const ALERT_INVESTIGATIONS_FIELD = 'event.so_investigations';
 
 const ALERT_TRIAGE_ASSESSMENTS = {
-  likely_malicious: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
-  needs_review: { label: 'aiAssessmentNeedsReview', color: 'warning' },
-  likely_benign: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+  90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
+  50: { label: 'aiAssessmentNeedsReview', color: 'warning' },
+  10: { label: 'aiAssessmentLikelyBenign', color: 'success' },
 };
 
 globalThis.alertTriageAssessment = function(alert, i18n) {
