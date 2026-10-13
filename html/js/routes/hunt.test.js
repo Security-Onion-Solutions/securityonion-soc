@@ -3166,6 +3166,21 @@ test('the microchip reflects automated investigations', () => {
   expect(comp.getAIInvestigationTooltip({ count: 5, newest: { soc_id: 'n' }, newestTriaged: automated })).toContain(comp.i18n.aiInvestigateViewAutomated);
 });
 
+test('alertTriageField', () => {
+  expect(comp.alertTriageField('assessment')).toBe('event.so_alerttriage.assessment');
+  expect(comp.alertTriageField('session_id')).toBe('event.so_alerttriage.session_id');
+});
+
+test('alertTriageAssessment', () => {
+  expect(comp.alertTriageAssessment(90)).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.alertTriageAssessment(50)).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(comp.alertTriageAssessment(10)).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(comp.alertTriageAssessment('90')).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.alertTriageAssessment(0)).toBeNull();
+  expect(comp.alertTriageAssessment(75)).toBeNull();
+  expect(comp.alertTriageAssessment(undefined)).toBeNull();
+});
+
 test('the microchip tooltip and menu name the automated assessment', async () => {
   const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': 't1', 'event.so_alerttriage.assessment': 90 };
   expect(comp.getAIInvestigationTooltip(automated)).toMatch(/^View Automated Investigation · Likely Malicious · /);

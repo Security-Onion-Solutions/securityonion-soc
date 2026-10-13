@@ -6,6 +6,7 @@
 require('../test_common.js');
 require('../routes/assistant.js');
 require('./alert-investigation.js');
+require('../routes/hunt.js');
 
 let comp;
 
@@ -14,6 +15,9 @@ beforeEach(() => {
   comp = getComponent('alert-investigation');
   comp.summaries = {};
   comp.routeForQuery = (q) => ({ path: 'alerts', query: { q } });
+  const hunt = getComponent('hunt');
+  comp.alertTriageField = hunt.alertTriageField.bind(hunt);
+  comp.alertTriageAssessment = hunt.alertTriageAssessment.bind(hunt);
   comp.$root.showError = jest.fn();
 });
 

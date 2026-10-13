@@ -42,6 +42,8 @@ components.push({
       grouped: { type: Boolean, default: false },
       routeForQuery: { type: Function, required: true },
       newInvestigationLink: { type: Function, required: true },
+      alertTriageField: { type: Function, required: true },
+      alertTriageAssessment: { type: Function, required: true },
     },
     data() {
       return {
@@ -93,7 +95,7 @@ components.push({
       },
       triageField(name) {
         const subject = this.subject();
-        return subject ? subject[this.$root.alertTriageField(name)] : undefined;
+        return subject ? subject[this.alertTriageField(name)] : undefined;
       },
       automatedId() {
         return this.triageField('session_id') || '';
@@ -116,7 +118,7 @@ components.push({
         return this.newLinks[subject.soc_id];
       },
       assessment() {
-        return this.$root.alertTriageAssessment(this.triageField('assessment'));
+        return this.alertTriageAssessment(this.triageField('assessment'));
       },
       failedCount() {
         return this.triageField('failed_count') || 0;
@@ -210,7 +212,7 @@ components.push({
         return link;
       },
       bucketLink() {
-        return this.routeForQuery(this.$root.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
+        return this.routeForQuery(this.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
       },
       failedLabel() {
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());
