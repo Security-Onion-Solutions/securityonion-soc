@@ -3329,7 +3329,7 @@ const huntComponent = {
       const others = items.filter(i => i.manual && !i.mine);
       if (!others.length) return items;
       try {
-        const access = await fetchSessionAccess(this.$root.papi, others.map(i => i.sessionId));
+        const access = await this.$root.fetchSessionAccess(others.map(i => i.sessionId));
         return items.filter(i => !i.manual || i.mine || access[i.sessionId] !== false);
       } catch (error) {
         return items;
@@ -3381,7 +3381,7 @@ const huntComponent = {
         });
       }
       const me = (this.$root.user || {}).id;
-      for (const inv of alertManualInvestigations(item).reverse()) {
+      for (const inv of this.$root.alertManualInvestigations(item).reverse()) {
         const mine = !!me && inv.by === me;
         const user = inv.by && !mine ? this.$root.getUserByIdViaCache(inv.by) : null;
         const who = mine ? this.i18n.aiInvestigationYou : (user ? this.$root.getUserDisplayName(user) : inv.by);
@@ -3408,7 +3408,7 @@ const huntComponent = {
     getAIInvestigationButtonColor(item) {
       const subject = this.investigationSubject(item);
       if (!subject) return '';
-      if (subject['event.investigated'] || alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
+      if (subject['event.investigated'] || this.$root.alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
       if (subject[ALERT_TRIAGE_PREFIX + 'failed_count']) return 'warning';
       return '';
     },
@@ -3416,7 +3416,7 @@ const huntComponent = {
     getAIInvestigationTooltip(item) {
       const subject = this.investigationSubject(item);
       if (!subject) return this.i18n.aiInvestigateMostRecent;
-      const manualCount = alertManualInvestigations(subject).length;
+      const manualCount = this.$root.alertManualInvestigations(subject).length;
       const automatedId = this.automatedInvestigationId(subject);
       if (manualCount + (automatedId ? 1 : 0) > 1) return this.i18n.aiInvestigateViewBoth;
       if (manualCount) return this.i18n.aiInvestigateView;

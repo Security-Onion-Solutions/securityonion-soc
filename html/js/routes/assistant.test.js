@@ -8,12 +8,12 @@ const { TextEncoder, TextDecoder } = require('util');
 Object.assign(global, { TextDecoder, TextEncoder });
 
 require('../test_common.js');
-// Method packs must load before assistant.js, which merges them into the component.
+// Same order as index.html.
+require('./assistant.js');
 require('./assistant.sessions.js');
 require('./assistant.streaming.js');
 require('./assistant.tools.js');
 require('./assistant.utils.js');
-require('./assistant.js');
 require('../components/tool-use-card.js');
 require('../components/delegation-child.js');
 
@@ -7323,13 +7323,6 @@ test('compressCurrentSession sends compression message and reloads chat', async 
   expect(comp.loadChatFromBackend).toHaveBeenCalledWith('test-session');
 });
 
-test('stripChoiceMarkers leaves each choice as its label', () => {
-  expect(AssistantUtils.stripChoiceMarkers('1. [[CHOICE]] Acknowledge the alert [[/CHOICE]]\n2. [[CHOICE]]Escalate[[/CHOICE]]'))
-    .toBe('1. Acknowledge the alert\n2. Escalate');
-  expect(AssistantUtils.stripChoiceMarkers('No choices here')).toBe('No choices here');
-  expect(AssistantUtils.stripChoiceMarkers('')).toBe('');
-});
-
 // Choice buttons tests
 test('applyChoiceButtons converts choice markers to buttons', () => {
   const text = 'Choose an option: [[CHOICE]]Option 1[[/CHOICE]] or [[CHOICE]]Option 2[[/CHOICE]]';
@@ -7809,20 +7802,6 @@ test('isMessageTooLong uses large context limit when toggled', () => {
   // maxChars = 2000 * 4 * 1.1 = 8800
   // usedChars = 4400
   expect(comp.isMessageTooLong()).toBe(false);
-});
-
-test('buildModelIdentifier', () => {
-  const tests = [
-    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
-    { input: { id: '', adapter: '' }, expected: '@' },
-    { input: {}, expected: '@' },
-    { input: null, expected: '' },
-  ];
-
-  for (let t of tests) {
-    const output = comp.buildModelIdentifier(t.input);
-    expect(output).toBe(t.expected);
-  }
 });
 
 test('buildGroupedModels - groups models by adapter with headers', () => {

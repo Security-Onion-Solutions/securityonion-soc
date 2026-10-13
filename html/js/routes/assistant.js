@@ -6,8 +6,18 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
-// Methods are split by concern across sibling files that load first (see index.html)
-// and publish method objects on globalThis, merged into `methods` below.
+// The assistant.*.js files add this route's methods.
+
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+const MSGTAG_PARTIAL = "partial";
+// A message copied from another session: its usage is shown but never billed again.
+const MSGTAG_CLONE = "clone";
+
+if (typeof global !== 'undefined') {
+  global.MSGTAG_CONTEXTCOMPRESSION = MSGTAG_CONTEXTCOMPRESSION;
+  global.MSGTAG_PARTIAL = MSGTAG_PARTIAL;
+  global.MSGTAG_CLONE = MSGTAG_CLONE;
+}
 
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
@@ -157,10 +167,5 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         .sort((a, b) => b.credits - a.credits);
     },
   },
-  methods: Object.assign({},
-    AssistantSessions,
-    AssistantStreaming,
-    AssistantTools,
-    AssistantUtils,
-  ),
+  methods: {},
 }});

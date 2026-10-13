@@ -7,14 +7,8 @@
 // reconstruction of chats (including delegated sub-agent sessions) loaded from the
 // backend.
 
-// Shared with assistant.streaming.js and assistant.tools.js, so it lives on
-// globalThis (this file loads first).
-globalThis.MSGTAG_CONTEXTCOMPRESSION = "context_compression";
-globalThis.MSGTAG_PARTIAL = "partial";
-// A message copied from another session: its usage is shown but never billed again.
-globalThis.MSGTAG_CLONE = "clone";
-
-globalThis.AssistantSessions = (function() {
+const assistantRouteForSessions = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForSessions.component.methods, (function() {
   return {
     onAgenticUpdate() {
       if (!this.agentic) return;
@@ -48,13 +42,13 @@ globalThis.AssistantSessions = (function() {
         this.agentMapping = params["agentMapping"] || {};
         const allModels = params["availableModels"] || [];
         this.availableModels = this.availableAgents.map(a => {
-          const mapped = this.resolveMappedModel(allModels, this.agentMapping[a.name]);
+          const mapped = this.$root.resolveMappedModel(allModels, this.agentMapping[a.name]);
           return {
             ...a,
             key: a.name,
             displayName: a.name,
             adapter: 'Agents',
-            mappedModelName: mapped ? (mapped.displayName || this.buildModelIdentifier(mapped)) : '',
+            mappedModelName: mapped ? (mapped.displayName || this.$root.buildModelIdentifier(mapped)) : '',
             mappedAdapter: mapped?.adapter || '',
             contextLimitSmall: mapped?.contextLimitSmall || 0,
             contextLimitLarge: mapped?.contextLimitLarge || 0,
@@ -72,7 +66,7 @@ globalThis.AssistantSessions = (function() {
         this.availableModels = params["availableModels"];
         if (this.availableModels && this.availableModels.length > 0) {
           this.availableModels.forEach(m => {
-            m.key = this.buildModelIdentifier(m);
+            m.key = this.$root.buildModelIdentifier(m);
             // displayName is optional, cosmetic-only; fall back to the selector
             if (!m.displayName) m.displayName = m.key;
           });
@@ -919,4 +913,4 @@ globalThis.AssistantSessions = (function() {
       return processedMessages;
     },
   };
-})();
+})());

@@ -6,11 +6,11 @@
 // Assistant page methods: scrolling, markdown/formatting helpers, context/model
 // helpers, local settings persistence, and sharing/export/case-attach utilities.
 
-globalThis.AssistantUtils = (function() {
+const assistantRouteForUtils = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForUtils.component.methods, (function() {
   const SESTAG_SHARED = 'shared';
   const SESTAG_INCOGNITO = 'incognito';
   const SESTAG_AUTOMATION = 'automation';
-  const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
 
   return {
     isNearBottom(container, thresholdPx = 48) {
@@ -408,27 +408,6 @@ globalThis.AssistantUtils = (function() {
       this.lowBalanceColorAlert = m.lowBalanceColorAlert || 0;
     },
 
-    // Canonical id@adapter model selector: used as the model key and sent to
-    // the backend to identify the model.
-    buildModelIdentifier(model) {
-      if (!model) return '';
-      return `${model?.id||''}@${model?.adapter||''}`;
-    },
-
-    // resolveMappedModel resolves a model selector (id@adapter or bare id,
-    // mirroring the backend's resolveModel: prefer an enabled model, else
-    // first match) against a model list; null when nothing matches.
-    resolveMappedModel(models, selector) {
-      if (!selector) return null;
-      let fallback = null;
-      for (const m of models || []) {
-        if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
-        if (m.enabled) return m;
-        if (!fallback) fallback = m;
-      }
-      return fallback;
-    },
-
     buildGroupedModels() {
       const groupedByAdapter = {};
       for (const model of this.modelsMap.values()) {
@@ -573,10 +552,6 @@ globalThis.AssistantUtils = (function() {
         this.sendMessage();
       });
     },
-    stripChoiceMarkers(text) {
-      if (!text || typeof text !== 'string') return text;
-      return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
-    },
     stripNewlines(text) {
       if (typeof text !== 'string') return text;
       return text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
@@ -635,4 +610,4 @@ globalThis.AssistantUtils = (function() {
       return match ? match[1] : this.i18n.thinking;
     }
   };
-})();
+})());

@@ -5,7 +5,8 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
-// agentmonitor.js picks from these globals, so they load first, as in index.html.
+// Same order as index.html.
+require('./assistant.js');
 require('./assistant.sessions.js');
 require('./assistant.utils.js');
 require('./assistant.tools.js');

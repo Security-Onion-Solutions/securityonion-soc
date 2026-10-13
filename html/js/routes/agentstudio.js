@@ -263,8 +263,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.models = (params.availableModels || []).map(m => ({
         id: m.id,
         adapter: m.adapter,
-        selector: AssistantUtils.buildModelIdentifier(m),
-        displayName: m.displayName || AssistantUtils.buildModelIdentifier(m),
+        selector: this.$root.buildModelIdentifier(m),
+        displayName: m.displayName || this.$root.buildModelIdentifier(m),
         enabled: !!m.enabled,
         contextWindow: m.contextLimitLarge || m.contextLimitSmall || 0,
       }));
@@ -338,7 +338,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       const mapping = params.agentMapping || {};
       return (params.availableAgents || []).map(a => {
         const selector = mapping[a.name] || '';
-        const m = AssistantUtils.resolveMappedModel(this.models, selector);
+        const m = this.$root.resolveMappedModel(this.models, selector);
         return {
           id: a.name,
           name: a.name,
@@ -374,7 +374,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.agents.forEach(a => { if (!this.agentTabs[a.id]) this.agentTabs[a.id] = 'identity'; });
     },
     resolveAgentModel(agent) {
-      const m = AssistantUtils.resolveMappedModel(this.models, agent.modelSelector);
+      const m = this.$root.resolveMappedModel(this.models, agent.modelSelector);
       return Object.assign({}, agent, {
         // A row's id is its stored name; after a rename the next write must address
         // the row by its new name or the server reads it as another rename.
@@ -424,7 +424,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     memoryRoleResolves(field) {
       const selector = this.memoryOptions[field];
       if (!selector) return false;
-      const m = AssistantUtils.resolveMappedModel(this.models, selector);
+      const m = this.$root.resolveMappedModel(this.models, selector);
       return !!(m && m.enabled);
     },
     memoryRoleHint(field, help) {
@@ -435,7 +435,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       return this.memoryRoleResolves(field) ? undefined : 'error';
     },
     providerFor(selector) {
-      const m = AssistantUtils.resolveMappedModel(this.models, selector);
+      const m = this.$root.resolveMappedModel(this.models, selector);
       return m ? m.adapter : '';
     },
 

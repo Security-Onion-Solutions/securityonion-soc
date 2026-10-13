@@ -6,7 +6,8 @@
 // Assistant page methods: tool request posting, execution, approval/rejection,
 // tool status display, and the per-session tool-queue state (see sessionTools).
 
-globalThis.AssistantTools = (function() {
+const assistantRouteForTools = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForTools.component.methods, (function() {
   return {
     // POSTs a tool result and streams the continuation. A 409 (another tool turn is already
     // running for this session) is retried a bounded number of times, then re-thrown.
@@ -538,4 +539,4 @@ globalThis.AssistantTools = (function() {
       if (oldMsg) this.newMessage = oldMsg;
     },
   };
-})();
+})());
