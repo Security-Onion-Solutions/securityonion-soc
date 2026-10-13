@@ -1176,11 +1176,6 @@ ul ul ul {
   background-color: rgba(var(--v-theme-primary), 0.08);
 }
 
-.chat-history-sidebar .v-list-item.bg-primary {
-  background-color: rgba(var(--v-theme-primary), 0.12) !important;
-  color: rgb(var(--v-theme-altprimary));
-}
-
 .chat-history-sidebar .v-list-item-title {
   font-size: 14px;
   line-height: 1.3;
