@@ -46,6 +46,7 @@ func TestRecordAssessmentTool_Execute(t *testing.T) {
 		params    string
 		sessions  []*model.AssistantSession
 		getErr    error
+		requestId string
 		wantErr   string
 		want      string
 	}{
@@ -57,12 +58,19 @@ func TestRecordAssessmentTool_Execute(t *testing.T) {
 		{name: "refused in a chat", sessionId: "chat", params: `{"assessment":90}`, sessions: chat, wantErr: "ERROR_ASSISTANT_ASSESSMENT_OUTSIDE_TRIAGE"},
 		{name: "a sub-session resolves to its triage root", sessionId: "child", params: `{"assessment":50}`, sessions: triageTree, want: "Assessment 50 recorded"},
 		{name: "refused when the session cannot be found", sessionId: "triage", params: `{"assessment":90}`, sessions: triageTree, getErr: errors.New("down"), wantErr: "ERROR_ASSISTANT_ASSESSMENT_OUTSIDE_TRIAGE"},
+		{name: "refused in an analyst's follow-up", sessionId: "triage", params: `{"assessment":90}`, sessions: triageTree, requestId: "web-request-1", wantErr: "ERROR_ASSISTANT_ASSESSMENT_AFTER_TRIAGE_RUN"},
+		{name: "refused in another automated run", sessionId: "triage", params: `{"assessment":90}`, sessions: triageTree, requestId: automationRequestId("other"), wantErr: "ERROR_ASSISTANT_ASSESSMENT_AFTER_TRIAGE_RUN"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			srv := &server.Server{Assistantstore: sessionTreeStore(ctrl, tt.sessions, tt.getErr)}
 			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "user-1")
+			requestId := tt.requestId
+			if requestId == "" {
+				requestId = automationRequestId("triage")
+			}
+			ctx = context.WithValue(ctx, web.ContextKeyRequestId, requestId)
 
 			result, err := (&RecordAssessmentTool{}).Execute(ctx, srv, &model.ToolRequest{SessionId: tt.sessionId, ToolUseId: "tu-1", Params: json.RawMessage(tt.params)})
 

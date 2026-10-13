@@ -28,7 +28,9 @@ func init() {
 
 // RecordAssessmentTool carries the triage agent's assessment to SOC as a number, so it is
 // read the same whatever language the agent writes its report in. It writes nothing itself:
-// the alert triage run records the last valid call when the session ends.
+// the alert triage run records the last valid call when the session ends. Calls after the run, in
+// an analyst's follow-up, are refused: the alerts keep the run's assessment, which is what tuning
+// is measured against.
 type RecordAssessmentTool struct{}
 
 func (t *RecordAssessmentTool) GetName() string {
@@ -38,8 +40,9 @@ func (t *RecordAssessmentTool) GetName() string {
 // The description and schema are read by the model, never shown in the UI, so they are not localized.
 func (t *RecordAssessmentTool) GetDescription() string {
 	return `Record your assessment of the alert you are triaging. Call it once your assessment is settled,
-	before you write the final report, and again if you revise it; the last call is the one recorded on
-	the alerts. Only available during alert triage.`
+	before you write the final report. If you revise it before the report, call it again; the last call
+	is the one recorded on the alerts. Only available during the automated alert triage run, not in
+	follow-up with an analyst.`
 }
 
 func (t *RecordAssessmentTool) GetSchema() model.JSONSchema {
@@ -92,10 +95,16 @@ func (t *RecordAssessmentTool) Execute(ctx context.Context, srv *server.Server, 
 
 	result.Parameters = args
 
-	_, rootSession := resolveRootSession(ctx, srv, req.SessionId)
+	rootSessionId, rootSession := resolveRootSession(ctx, srv, req.SessionId)
 	if rootSession == nil || rootSession.Type != alertTriageKindName {
 		logger.Error("record_assessment called outside an alert triage session")
 		return nil, errors.New("ERROR_ASSISTANT_ASSESSMENT_OUTSIDE_TRIAGE")
+	}
+
+	// Only the automated run carries its own request id; a follow-up chat arrives on a web request.
+	if requestId, _ := ctx.Value(web.ContextKeyRequestId).(string); requestId != automationRequestId(rootSessionId) {
+		logger.Info("record_assessment called after the alert triage run; the alerts keep the run's assessment")
+		return nil, errors.New("ERROR_ASSISTANT_ASSESSMENT_AFTER_TRIAGE_RUN: the alerts keep the assessment recorded by the automated run")
 	}
 
 	result.Result = fmt.Sprintf("Assessment %d recorded. It is written to the alerts when this triage ends.", args.Assessment)
