@@ -627,3 +627,14 @@ test('destinations-manager template collapses webhook templates and uses insecur
   expect(tmpl).not.toContain('i18n.smtpInsecureSkipVerify');
 });
 
+test('destinations-manager template sets autofocus on destination name field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  const match = tmpl.match(/<v-text-field[^>]*data-aid="destination_form_name"[^>]*>/);
+  expect(match).not.toBeNull();
+  expect(match[0]).toContain('autofocus');
+});
+

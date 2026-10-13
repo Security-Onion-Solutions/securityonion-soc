@@ -79,7 +79,7 @@
         <v-form ref="alarmForm" v-model="form.valid" @submit.prevent>
           <v-row dense>
             <v-col cols="12" sm="8">
-              <v-text-field v-model="form.name" :label="i18n.alarmName" :rules="[$root.validators.required]" maxlength="100" required data-aid="alarm_form_name"></v-text-field>
+              <v-text-field v-model="form.name" :label="i18n.alarmName" :rules="[$root.validators.required]" maxlength="100" required autofocus data-aid="alarm_form_name"></v-text-field>
             </v-col>
             <v-col cols="12" sm="4">
               <v-switch v-model="form.enabled" color="primary" inset :label="form.enabled ? i18n.enabled : i18n.disabled" density="compact" data-aid="alarm_form_enabled"></v-switch>

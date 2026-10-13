@@ -328,3 +328,14 @@ test('recurrenceTypes and patternModeOptions computed properties return translat
     { title: 'On the Nth weekday', value: 'nthWeekday' },
   ]);
 });
+
+test('schedules-manager template sets autofocus on schedule name field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/schedules-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  const match = tmpl.match(/<v-text-field[^>]*data-aid="schedule_form_name"[^>]*>/);
+  expect(match).not.toBeNull();
+  expect(match[0]).toContain('autofocus');
+});
