@@ -477,7 +477,7 @@ func newTriageFixture(t *testing.T, params string, open ...*model.AutomationWork
 
 	f := &triageFixture{es: server.NewFakeEventstore(), store: &triageWorkStore{}, kind: &AlertTriageKind{}, pinned: map[string]*model.EventRecord{}}
 	f.alerts = &triageAssistantstore{prefix: "so_", work: f.store}
-	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{FinalText: "STATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | DETAIL: — | CONFIDENCE: 80\n\nreport"}}
+	f.manager = &triageAssistantManager{result: &model.AgentSessionResult{FinalText: "STATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | DETAIL: — | CONFIDENCE: 80\n\nreport", ToolUses: []model.ContentBlock{assessmentToolUse(`{"assessment":90}`)}}}
 	f.es.MSearchResults = []*model.EventMSearchResults{model.NewEventMSearchResults()}
 
 	// An item ends only after its alerts carry the outcome.
@@ -1407,37 +1407,30 @@ func TestAlertTriageObjective(t *testing.T) {
 	assert.Contains(t, objective, `"source.ip": "1.2.3.4"`)
 }
 
-func TestParseAlertTriageAssessment(t *testing.T) {
-	status := func(assessment string) string {
-		return "STATUS: COMPLETE | ASSESSMENT: " + assessment + " | DETAIL: — | CONFIDENCE: 80 | ACTION: NONE\n\n🔍 TRIAGE REPORT — ET SCAN\n\n✅ Assessment: LIKELY MALICIOUS — not this line"
-	}
+func assessmentToolUse(input string) model.ContentBlock {
+	return model.ContentBlock{Type: "tool_use", Name: recordAssessmentToolName, Input: json.RawMessage(input)}
+}
+
+func TestAlertTriageAssessmentFromToolUses(t *testing.T) {
+	other := model.ContentBlock{Type: "tool_use", Name: "query_events", Input: json.RawMessage(`{"assessment":90}`)}
 
 	tests := []struct {
 		name       string
-		report     string
+		toolUses   []model.ContentBlock
 		want       int
 		recognized bool
 	}{
-		{"likely malicious", status("LIKELY MALICIOUS"), model.AlertTriageAssessmentLikelyMalicious, true},
-		{"needs review", status("NEEDS REVIEW"), model.AlertTriageAssessmentNeedsReview, true},
-		{"likely benign", status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
-		{"lower case", status("likely benign"), model.AlertTriageAssessmentLikelyBenign, true},
-		{"underscored", status("LIKELY_BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
-		{"extra spacing", "STATUS:COMPLETE|ASSESSMENT:  LIKELY   MALICIOUS  |CONFIDENCE: 60", model.AlertTriageAssessmentLikelyMalicious, true},
-		{"in a code fence", "```\nSTATUS: COMPLETE | ASSESSMENT: LIKELY MALICIOUS | CONFIDENCE: 90\n```", model.AlertTriageAssessmentLikelyMalicious, true},
-		{"markdown bold", "**STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | CONFIDENCE: 90**", model.AlertTriageAssessmentLikelyBenign, true},
-		{"preceded by text", "NEEDS ANALYST INPUT: which host is the scanner\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
-		{"revised", "STATUS: REVISED | ASSESSMENT: LIKELY MALICIOUS | DETAIL: —", model.AlertTriageAssessmentLikelyMalicious, true},
-		{"unknown value", status("SUSPICIOUS"), model.AlertTriageAssessmentNeedsReview, false},
-		{"unfilled template", status("{LIKELY BENIGN|NEEDS REVIEW|LIKELY MALICIOUS}"), model.AlertTriageAssessmentNeedsReview, false},
-		{"unable to complete", "STATUS: UNABLE TO COMPLETE | REASON: alert not found", model.AlertTriageAssessmentNeedsReview, false},
-		{"later status lines are ignored", "STATUS: COMPLETE | ASSESSMENT: SUSPICIOUS\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentNeedsReview, false},
-		{"no status line", "A report with no status line.\nASSESSMENT: LIKELY BENIGN", model.AlertTriageAssessmentNeedsReview, false},
-		{"empty", "", model.AlertTriageAssessmentNeedsReview, false},
+		{"one call", []model.ContentBlock{other, assessmentToolUse(`{"assessment":10}`)}, model.AlertTriageAssessmentLikelyBenign, true},
+		{"revised, last wins", []model.ContentBlock{assessmentToolUse(`{"assessment":10}`), other, assessmentToolUse(`{"assessment":90}`)}, model.AlertTriageAssessmentLikelyMalicious, true},
+		{"invalid last call is skipped", []model.ContentBlock{assessmentToolUse(`{"assessment":50}`), assessmentToolUse(`{"assessment":75}`)}, model.AlertTriageAssessmentNeedsReview, true},
+		{"unreadable call is skipped", []model.ContentBlock{assessmentToolUse(`{"assessment":90}`), assessmentToolUse(`{"assessment":"high"}`)}, model.AlertTriageAssessmentLikelyMalicious, true},
+		{"only invalid calls", []model.ContentBlock{assessmentToolUse(`{"assessment":0}`)}, model.AlertTriageAssessmentNeedsReview, false},
+		{"other tools only", []model.ContentBlock{other}, model.AlertTriageAssessmentNeedsReview, false},
+		{"none", nil, model.AlertTriageAssessmentNeedsReview, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assessment, recognized := parseAlertTriageAssessment(tt.report)
+			assessment, recognized := alertTriageAssessment(tt.toolUses)
 			assert.Equal(t, tt.want, assessment)
 			assert.Equal(t, tt.recognized, recognized)
 		})

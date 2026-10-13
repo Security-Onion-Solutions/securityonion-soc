@@ -559,12 +559,12 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 		return r.fail(ctx, item, payload, sessionId, err)
 	}
 
-	assessment, recognized := parseAlertTriageAssessment(result.FinalText)
+	assessment, recognized := alertTriageAssessment(result.ToolUses)
 	if !recognized {
 		log.FromContext(ctx).WithFields(log.Fields{
 			"workItemId":           item.Id,
 			"alertTriageSessionId": sessionId,
-		}).Warn("alert triage report has no recognisable assessment; recording it as needing review")
+		}).Warn("alert triage session recorded no assessment; recording it as needing review")
 	}
 
 	return r.record(ctx, item, payload, alertTriageResult{
@@ -922,38 +922,19 @@ Alert:
 %s`, count, groupFilter, alertId, runId, fields)
 }
 
-// alertTriageAssessments maps the values a triage report's status line may carry to the
-// assessment recorded on the alerts.
-var alertTriageAssessments = map[string]int{
-	"LIKELY MALICIOUS": model.AlertTriageAssessmentLikelyMalicious,
-	"NEEDS REVIEW":     model.AlertTriageAssessmentNeedsReview,
-	"LIKELY BENIGN":    model.AlertTriageAssessmentLikelyBenign,
-}
-
-// parseAlertTriageAssessment reads the ASSESSMENT field of the report's status line, e.g.
-// "STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | DETAIL: FALSE POSITIVE | ...". A report without
-// a recognisable one still records, as needing review, and reports that it was not recognised.
-func parseAlertTriageAssessment(report string) (int, bool) {
-	for _, line := range strings.Split(report, "\n") {
-		line = strings.ToUpper(strings.Trim(strings.TrimSpace(line), "*_`#> "))
-		if !strings.HasPrefix(line, "STATUS:") {
+// alertTriageAssessment is the last valid record_assessment call the triage session made, so a
+// revised assessment wins. A session without one still records, as needing review, and reports
+// that it found none.
+func alertTriageAssessment(toolUses []model.ContentBlock) (int, bool) {
+	for i := len(toolUses) - 1; i >= 0; i-- {
+		if toolUses[i].Name != recordAssessmentToolName {
 			continue
 		}
 
-		for _, field := range strings.Split(line, "|") {
-			name, value, found := strings.Cut(field, ":")
-			name = strings.TrimSpace(name)
-			if !found || name != "ASSESSMENT" {
-				continue
-			}
-
-			value = strings.Join(strings.Fields(strings.NewReplacer("_", " ", "*", " ", "`", " ").Replace(value)), " ")
-			if assessment, ok := alertTriageAssessments[value]; ok {
-				return assessment, true
-			}
+		args, err := parseRecordAssessmentArgs(toolUses[i].Input)
+		if err == nil {
+			return args.Assessment, true
 		}
-
-		break
 	}
 
 	return model.AlertTriageAssessmentNeedsReview, false
