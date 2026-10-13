@@ -145,6 +145,8 @@ global.TextDecoderStream = class { };
 // Test Helper Functions
 ////////////////////////////////////
 global.getApp = function() {
+  // The app is created before later-required files push their root methods.
+  Object.assign(app, ...global.rootMethods);
   return app;
 }
 
@@ -194,7 +196,7 @@ global.getComponent = function(name) {
     }
   }
 
-  comp.$root = app;
+  comp.$root = global.getApp();
 
   // Run callback function passed to nextTick
   comp.$nextTick = (fun) => { fun(); }

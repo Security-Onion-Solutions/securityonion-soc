@@ -9,6 +9,7 @@ const components = [];
 const iconSets = [];
 const templatePromises = [];
 const directives = [];
+const rootMethods = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -58,6 +59,7 @@ if (typeof global !== 'undefined') {
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
   global.directives = directives;
+  global.rootMethods = rootMethods;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
@@ -368,6 +370,7 @@ $(document).ready(function () {
       },
       methods: {
         ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        ...Object.assign({}, ...rootMethods),
         hasEnabledTools() {
           return this.tools.some(tool => tool.enabled);
         },
