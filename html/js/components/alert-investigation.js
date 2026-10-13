@@ -6,6 +6,7 @@
 loadPageTemplate('component-alert-investigation', 'pages/alert-investigation.html');
 
 const ALERT_INVESTIGATIONS_FIELD = 'event.so_investigations';
+
 const MAX_SESSION_ACCESS_IDS = 50;
 
 rootMethods.push({
@@ -28,6 +29,17 @@ rootMethods.push({
     if (!sessionIds.length) return {};
     const response = await this.papi.post('/assistant/sessions/access', { sessionIds: sessionIds.slice(0, MAX_SESSION_ACCESS_IDS) });
     return response.data || {};
+  },
+  alertTriageField(name) {
+    return 'event.so_alerttriage.' + name;
+  },
+  alertTriageAssessment(value) {
+    const assessment = {
+      90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
+      50: { label: 'aiAssessmentNeedsReview', color: 'warning' },
+      10: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+    }[value];
+    return assessment ? { label: this.i18n[assessment.label], color: assessment.color } : null;
   },
 });
 
@@ -92,7 +104,7 @@ components.push({
       },
       triageField(name) {
         const subject = this.subject();
-        return subject ? subject['event.so_alerttriage.' + name] : undefined;
+        return subject ? subject[this.$root.alertTriageField(name)] : undefined;
       },
       automatedId() {
         return this.triageField('session_id') || '';
@@ -113,6 +125,9 @@ components.push({
         if (!subject || !subject.soc_id) return null;
         if (!this.newLinks[subject.soc_id]) this.newLinks[subject.soc_id] = this.newInvestigationLink(subject);
         return this.newLinks[subject.soc_id];
+      },
+      assessment() {
+        return this.$root.alertTriageAssessment(this.triageField('assessment'));
       },
       failedCount() {
         return this.triageField('failed_count') || 0;
@@ -206,7 +221,7 @@ components.push({
         return link;
       },
       bucketLink() {
-        return this.routeForQuery('event.so_alerttriage.session_id:"' + this.automatedId() + '"');
+        return this.routeForQuery(this.$root.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
       },
       failedLabel() {
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());

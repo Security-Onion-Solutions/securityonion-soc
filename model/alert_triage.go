@@ -18,7 +18,21 @@ const (
 	// Failed runs a group may accumulate before the scan stops returning it, applied when a
 	// param omits or zeroes the cap so no group is ever retried without bound.
 	DefaultAlertTriageMaxFailures = 3
+
+	// Assessments are numbers rather than words so the UI owns, and can localize or rename,
+	// what each one is called.
+	AlertTriageAssessmentLikelyBenign    = 10
+	AlertTriageAssessmentNeedsReview     = 50
+	AlertTriageAssessmentLikelyMalicious = 90
 )
+
+func IsValidAlertTriageAssessment(assessment int) bool {
+	switch assessment {
+	case AlertTriageAssessmentLikelyMalicious, AlertTriageAssessmentNeedsReview, AlertTriageAssessmentLikelyBenign:
+		return true
+	}
+	return false
+}
 
 // AlertTriageObject is the event sub-object holding triage state, e.g. so_alerttriage.
 func AlertTriageObject(schemaPrefix string) string { return schemaPrefix + "alerttriage" }
@@ -37,6 +51,10 @@ func AlertTriageFieldSessionId(schemaPrefix string) string {
 
 func AlertTriageFieldFailedCount(schemaPrefix string) string {
 	return alertTriageField(schemaPrefix, "failed_count")
+}
+
+func AlertTriageFieldAssessment(schemaPrefix string) string {
+	return alertTriageField(schemaPrefix, "assessment")
 }
 
 func AlertTriageFieldRunIds(schemaPrefix string) string {
@@ -60,7 +78,9 @@ type AlertTriageUpdate struct {
 	Count     int
 	RunId     string
 	SessionId string
-	Failed    bool
+	// The agent's conclusion for the group; ignored when Failed.
+	Assessment int
+	Failed     bool
 	// Every run that failed the alerts' work item; required when Failed.
 	FailedRunIds []string
 }
@@ -71,6 +91,8 @@ func (update *AlertTriageUpdate) Validate() error {
 		return errors.New("alert triage update requires a run id")
 	case !update.Failed && update.SessionId == "":
 		return errors.New("alert triage update requires a session id")
+	case !update.Failed && !IsValidAlertTriageAssessment(update.Assessment):
+		return fmt.Errorf("alert triage update has an invalid assessment %d", update.Assessment)
 	case update.Failed && (len(update.FailedRunIds) == 0 || slices.Contains(update.FailedRunIds, "")):
 		return errors.New("failed alert triage update requires its failed run ids")
 	case update.Floor.IsZero():
@@ -191,6 +213,8 @@ type AlertTriageAlert struct {
 	Severity  string `json:"severity,omitempty" example:"high"`
 	// The session whose report covers this alert; empty until one succeeds.
 	SessionId string `json:"sessionId,omitempty" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d"`
+	// The successful session's assessment: 10 likely benign, 50 needs review, 90 likely malicious.
+	Assessment int `json:"assessment,omitempty" example:"50"`
 	// Sessions that produced no report for this alert.
 	FailedSessionIds []string `json:"failedSessionIds"`
 	// Runs that failed this alert's group; the retry budget.

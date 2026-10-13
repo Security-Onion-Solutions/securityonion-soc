@@ -348,10 +348,10 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 		},
 		"AlertTriage": {
 			Name:          "AlertTriage",
-			AllowedSkills: []string{"Hunt", "Playbooks"},
+			AllowedSkills: []string{"Hunt", "Playbooks", "Assess"},
 			CanDelegateTo: []string{"Notifier", "DetectionEngineer"},
 			Prompt:        prompts["prompt_agent_alert_triage"],
-			Description: "Triages an alert autonomously, without a person in the loop, and ends with a report whose status line carries its assessment. " +
+			Description: "Triages an alert autonomously, without a person in the loop, records its assessment and ends with a report. " +
 				"Notifies through the Notifier; never acknowledges or escalates. " +
 				"Objectives must include all identifiers verbatim.",
 		},
@@ -411,6 +411,11 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 			Name:             "Notify",
 			Tools:            []string{"send_notification"},
 			AdditionalPrompt: prompts["prompt_skill_notify"],
+		},
+		// The alert triage prompt says when to call it.
+		"Assess": {
+			Name:  "Assess",
+			Tools: []string{recordAssessmentToolName},
 		},
 	}
 

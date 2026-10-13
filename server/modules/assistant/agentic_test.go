@@ -305,8 +305,8 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
 	// Triage runs unattended, so it can neither respond to alerts nor notify directly; only the
-	// Notifier sends.
-	assert.ElementsMatch(t, []string{"Hunt", "Playbooks"}, ac.agents["AlertTriage"].AllowedSkills)
+	// Notifier sends. It records its assessment through Assess.
+	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Assess"}, ac.agents["AlertTriage"].AllowedSkills)
 	assert.Equal(t, []string{"Notify"}, ac.agents["Notifier"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
@@ -315,6 +315,8 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
 	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
 	assert.Contains(t, ac.builtinSkills, "Notify")
+	assert.Equal(t, []string{"record_assessment"}, ac.SkillLibrary["Assess"].Tools)
+	assert.True(t, ac.SkillLibrary["Assess"].IsSystem)
 	for name, agent := range ac.agents {
 		if name != "Notifier" {
 			assert.NotContains(t, agent.AllowedSkills, "Notify", name)

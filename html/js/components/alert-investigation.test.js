@@ -90,6 +90,23 @@ test('reads which investigations an alert has', () => {
   expect(comp.acknowledged()).toBe(true);
 });
 
+test('reads the automated assessment', () => {
+  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.assessment': 90 };
+  expect(comp.assessment()).toEqual({ label: 'Likely Malicious', color: 'error' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 50;
+  expect(comp.assessment()).toEqual({ label: 'Needs Review', color: 'warning' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 10;
+  expect(comp.assessment()).toEqual({ label: 'Likely Benign', color: 'success' });
+
+  comp.alert['event.so_alerttriage.assessment'] = 75;
+  expect(comp.assessment()).toBeNull();
+
+  comp.alert = { 'event.so_alerttriage.session_id': 'triage_1' };
+  expect(comp.assessment()).toBeNull();
+});
+
 test('manual investigations are read from the alert\'s entries, newest first', () => {
   comp.alert = {
     'event.so_investigations': [
@@ -114,6 +131,21 @@ test('an older alert\'s single values still count, before any entries and withou
     'event.investigation_session_id': 'old', 'event.investigated_by': 'u0',
     'event.so_investigations': [{ session_id: 'old', user_id: 'u0' }, { session_id: 'new', user_id: 'u1' }],
   }).map(inv => inv.sessionId)).toEqual(['old', 'new']);
+});
+
+test('alertTriageField', () => {
+  expect(comp.$root.alertTriageField('assessment')).toBe('event.so_alerttriage.assessment');
+  expect(comp.$root.alertTriageField('session_id')).toBe('event.so_alerttriage.session_id');
+});
+
+test('alertTriageAssessment', () => {
+  expect(comp.$root.alertTriageAssessment(90)).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.$root.alertTriageAssessment(50)).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(comp.$root.alertTriageAssessment(10)).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(comp.$root.alertTriageAssessment('90')).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.$root.alertTriageAssessment(0)).toBeNull();
+  expect(comp.$root.alertTriageAssessment(75)).toBeNull();
+  expect(comp.$root.alertTriageAssessment(undefined)).toBeNull();
 });
 
 test('the start link is built once per alert, so re-renders keep one session id', () => {

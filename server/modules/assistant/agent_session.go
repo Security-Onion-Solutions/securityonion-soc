@@ -97,7 +97,7 @@ func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.
 		EntityId:  req.EntityId,
 	}
 
-	result.FinalText, result.Truncated, err = ac.driveAgentSession(ownerCtx, sess, sessionId, req.Objective, budget)
+	result.FinalText, result.Truncated, err = ac.driveAgentSession(ownerCtx, sess, sessionId, req.Objective, budget, &result.ToolUses)
 
 	return result, err
 }
@@ -123,8 +123,9 @@ func (ac *AssistantCoordinator) ValidateAgentSessionRequest(req *model.AgentSess
 }
 
 // driveAgentSession creates sess, seeds the objective and runs its turns. The root
-// and every delegated child come through here.
-func (ac *AssistantCoordinator) driveAgentSession(ctx context.Context, sess *model.AssistantSession, rootSessionId, objective string, budget *turnBudget) (finalText string, truncated bool, err error) {
+// and every delegated child come through here. toolUses, when not nil, collects the
+// tool calls this session ran.
+func (ac *AssistantCoordinator) driveAgentSession(ctx context.Context, sess *model.AssistantSession, rootSessionId, objective string, budget *turnBudget, toolUses *[]model.ContentBlock) (finalText string, truncated bool, err error) {
 	logger := log.FromContext(ctx)
 
 	if !ac.sessionLocks.tryLock(sess.SessionId) {
@@ -146,12 +147,12 @@ func (ac *AssistantCoordinator) driveAgentSession(ctx context.Context, sess *mod
 		return "", false, causeOr(ctx, err)
 	}
 
-	return ac.runAgentTurns(ctx, sess, rootSessionId, []*model.Message{userMsg}, budget)
+	return ac.runAgentTurns(ctx, sess, rootSessionId, []*model.Message{userMsg}, budget, toolUses)
 }
 
 // runAgentTurns loops model turns and tool executions until the agent ends its turn
 // or the budget trips.
-func (ac *AssistantCoordinator) runAgentTurns(ctx context.Context, sess *model.AssistantSession, rootSessionId string, history []*model.Message, budget *turnBudget) (finalText string, truncated bool, err error) {
+func (ac *AssistantCoordinator) runAgentTurns(ctx context.Context, sess *model.AssistantSession, rootSessionId string, history []*model.Message, budget *turnBudget, toolUses *[]model.ContentBlock) (finalText string, truncated bool, err error) {
 	spent := 0
 
 	for {
@@ -211,6 +212,9 @@ func (ac *AssistantCoordinator) runAgentTurns(ctx context.Context, sess *model.A
 			}
 
 			history = append(history, result)
+			if toolUses != nil {
+				*toolUses = append(*toolUses, cb)
+			}
 		}
 	}
 }
@@ -471,7 +475,7 @@ func (ac *AssistantCoordinator) runAgentDelegation(ctx context.Context, sess *mo
 		"agent":           child.Model,
 	}))
 
-	text, _, err := ac.driveAgentSession(childCtx, child, rootSessionId, kickoff.Objective, budget)
+	text, _, err := ac.driveAgentSession(childCtx, child, rootSessionId, kickoff.Objective, budget, nil)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, context.Cause(ctx)

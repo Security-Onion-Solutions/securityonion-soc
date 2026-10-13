@@ -61,12 +61,13 @@ func esResponse(body string) *http.Response {
 
 func triageUpdate() *model.AlertTriageUpdate {
 	return &model.AlertTriageUpdate{
-		Query:     `rule.name:"Foo"`,
-		Floor:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
-		Ceiling:   time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC),
-		Count:     3,
-		RunId:     "run-1",
-		SessionId: "session-1",
+		Query:      `rule.name:"Foo"`,
+		Floor:      time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Ceiling:    time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC),
+		Count:      3,
+		RunId:      "run-1",
+		SessionId:  "session-1",
+		Assessment: model.AlertTriageAssessmentLikelyMalicious,
 	}
 }
 
@@ -87,18 +88,20 @@ func TestAddAlertTriageScript(t *testing.T) {
 	assert.Contains(t, script, "def triage_rec = ctx._source.event[params.triageObject];")
 	assert.Contains(t, script, "if (triage_rec.session_id == null) {")
 	assert.Contains(t, script, "triage_rec.session_id = params.triageSessionId;")
+	assert.Contains(t, script, "triage_rec.assessment = params.triageAssessment;")
 	assert.Contains(t, script, "triage_rec.automation_run_ids.add(params.triageRunId);")
 	assert.Contains(t, script, "triage_rec.timestamp = triage_date;")
 	assert.NotContains(t, script, "failed_session_ids")
 	assert.Equal(t, int64(1257894000000), criteria.Params["triageNowMillis"])
 	assert.Equal(t, "run-1", criteria.Params["triageRunId"])
 	assert.Equal(t, "session-1", criteria.Params["triageSessionId"])
+	assert.Equal(t, 90, criteria.Params["triageAssessment"])
 	assert.Equal(t, "so_alerttriage", criteria.Params["triageObject"])
 
 	other := model.NewEventUpdateCriteria()
 	(&ElasticAssistantstore{schemaPrefix: "x_"}).addAlertTriageScript(other, timeNow, triageUpdate())
 	assert.Equal(t, "x_alerttriage", other.Params["triageObject"])
-	assert.Len(t, criteria.Params, 4)
+	assert.Len(t, criteria.Params, 5)
 
 	// Locals must not collide with the other update scripts.
 	for _, local := range []string{"now_instant", "now_date", "track_timing"} {
@@ -119,6 +122,8 @@ func TestAddAlertTriageScript(t *testing.T) {
 	assert.Contains(t, script, "triage_rec.failed_count = triage_rec.failed_run_ids.size();")
 	assert.Contains(t, script, "triage_rec.automation_run_ids.add(params.triageRunId);")
 	assert.NotContains(t, script, "triage_rec.session_id")
+	assert.NotContains(t, script, "triage_rec.assessment")
+	assert.NotContains(t, criteria.Params, "triageAssessment")
 	assert.Equal(t, []string{"run-0", "run-1"}, criteria.Params["triageFailedRunIds"])
 	assert.Len(t, criteria.Params, 5)
 }
@@ -166,6 +171,7 @@ func TestAlertTriageUpdateSuccess(t *testing.T) {
 	assert.NotContains(t, source, "acknowledged")
 	assert.False(t, gjson.Get(body, "script.params.userId").Exists())
 	assert.Equal(t, "session-1", gjson.Get(body, "script.params.triageSessionId").String())
+	assert.Equal(t, int64(90), gjson.Get(body, "script.params.triageAssessment").Int())
 	assert.Equal(t, "so_alerttriage", gjson.Get(body, "script.params.triageObject").String())
 }
 

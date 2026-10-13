@@ -640,6 +640,10 @@ type AgentSessionResult struct {
 	// The agent's final assistant text, where a caller looks for the structured
 	// conclusion it asked for.
 	FinalText string
+	// The tool calls the session's own turns ran, oldest first, where a caller reads a
+	// conclusion it asked the agent to report through a tool. Delegated sessions' calls are
+	// not included.
+	ToolUses []ContentBlock
 	// Model turns actually executed.
 	Turns int
 	// True when the run stopped on MaxTurns rather than the agent ending its turn,

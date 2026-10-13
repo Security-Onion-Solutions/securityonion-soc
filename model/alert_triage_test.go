@@ -17,11 +17,12 @@ import (
 
 func validAlertTriageUpdate() *AlertTriageUpdate {
 	return &AlertTriageUpdate{
-		Query:     `rule.name:"Foo"`,
-		Floor:     time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC),
-		Ceiling:   time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC),
-		RunId:     "run-1",
-		SessionId: "session-1",
+		Query:      `rule.name:"Foo"`,
+		Floor:      time.Date(2026, 9, 22, 0, 0, 0, 0, time.UTC),
+		Ceiling:    time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC),
+		RunId:      "run-1",
+		SessionId:  "session-1",
+		Assessment: AlertTriageAssessmentLikelyBenign,
 	}
 }
 
@@ -129,6 +130,7 @@ func TestAlertTriageUpdateValidate(t *testing.T) {
 	failed := validAlertTriageUpdate()
 	failed.Failed = true
 	failed.FailedRunIds = []string{"run-0", "run-1"}
+	failed.Assessment = 1
 	assert.NoError(t, failed.Validate())
 
 	// A failed attempt may not have got as far as opening a session.
@@ -153,6 +155,9 @@ func TestAlertTriageUpdateValidate(t *testing.T) {
 		{"missing session id", func(u *AlertTriageUpdate) { u.SessionId = "" }},
 		{"failed without run ids", func(u *AlertTriageUpdate) { u.Failed = true }},
 		{"failed with an empty run id", func(u *AlertTriageUpdate) { u.Failed = true; u.FailedRunIds = []string{"run-0", ""} }},
+		{"unknown assessment", func(u *AlertTriageUpdate) { u.Assessment = 75 }},
+		{"negative assessment", func(u *AlertTriageUpdate) { u.Assessment = -1 }},
+		{"unset assessment", func(u *AlertTriageUpdate) { u.Assessment = 0 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,4 +178,14 @@ func TestAlertTriageLedgerFieldNames(t *testing.T) {
 	assert.Equal(t, "event.so_alerttriage.failed_run_ids", AlertTriageFieldFailedRunIds("so_"))
 	assert.Equal(t, "event.so_alerttriage.automation_run_id", AlertTriageFieldRunId("so_"))
 	assert.Equal(t, "event.so_alerttriage.timestamp", AlertTriageFieldTimestamp("so_"))
+	assert.Equal(t, "event.so_alerttriage.assessment", AlertTriageFieldAssessment("so_"))
+}
+
+func TestIsValidAlertTriageAssessment(t *testing.T) {
+	for _, assessment := range []int{10, 50, 90} {
+		assert.True(t, IsValidAlertTriageAssessment(assessment), assessment)
+	}
+	for _, assessment := range []int{-1, 0, 9, 11, 49, 51, 89, 91, 100} {
+		assert.False(t, IsValidAlertTriageAssessment(assessment), assessment)
+	}
 }

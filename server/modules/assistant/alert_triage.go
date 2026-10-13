@@ -68,7 +68,8 @@ type alertTriagePayload struct {
 
 // alertTriageResult is what a work item carries from its session to its update.
 type alertTriageResult struct {
-	SessionId string `json:"sessionId"`
+	SessionId  string `json:"sessionId"`
+	Assessment int    `json:"assessment,omitempty"`
 }
 
 func (k *AlertTriageKind) GetName() string        { return alertTriageKindName }
@@ -558,7 +559,18 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 		return r.fail(ctx, item, payload, sessionId, err)
 	}
 
-	return r.record(ctx, item, payload, sessionId)
+	assessment, recognized := alertTriageAssessment(result.ToolUses)
+	if !recognized {
+		log.FromContext(ctx).WithFields(log.Fields{
+			"workItemId":           item.Id,
+			"alertTriageSessionId": sessionId,
+		}).Warn("alert triage session recorded no assessment; recording it as needing review")
+	}
+
+	return r.record(ctx, item, payload, alertTriageResult{
+		SessionId:  sessionId,
+		Assessment: assessment,
+	})
 }
 
 func decodeAlertTriagePayload(item *model.AutomationWorkItem) (*alertTriagePayload, error) {
@@ -641,8 +653,8 @@ func (r *alertTriageRun) repin(ctx context.Context, item *model.AutomationWorkIt
 }
 
 // record checkpoints the session on the item, then updates its alerts from the checkpoint.
-func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
-	result, err := json.Marshal(alertTriageResult{SessionId: sessionId})
+func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, outcome alertTriageResult) error {
+	result, err := json.Marshal(outcome)
 	if err != nil {
 		return err
 	}
@@ -663,7 +675,7 @@ func (r *alertTriageRun) record(ctx context.Context, item *model.AutomationWorkI
 	item.State = model.AutomationWorkItemApplying
 	item.Result = result
 
-	return r.finish(ctx, item, payload, sessionId)
+	return r.finish(ctx, item, payload, &outcome)
 }
 
 // apply replays the checkpoint a previous run left on an item.
@@ -675,7 +687,7 @@ func (r *alertTriageRun) apply(ctx context.Context, item *model.AutomationWorkIt
 		return r.drop(ctx, item, err)
 	}
 
-	return r.finish(ctx, item, payload, result.SessionId)
+	return r.finish(ctx, item, payload, result)
 }
 
 // drop ends an item with nothing to record on its alerts; the next scan re-derives its group.
@@ -697,7 +709,7 @@ func (r *alertTriageRun) drop(ctx context.Context, item *model.AutomationWorkIte
 
 // finish records a checkpointed session on the group's alerts and completes the item. The update
 // is idempotent, so a replay is safe.
-func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, sessionId string) error {
+func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkItem, payload *alertTriagePayload, outcome *alertTriageResult) error {
 	if shuttingDown(ctx) {
 		return context.Cause(ctx)
 	}
@@ -711,12 +723,13 @@ func (r *alertTriageRun) finish(ctx context.Context, item *model.AutomationWorkI
 	}
 
 	_, err := r.updater.AlertTriageUpdate(writeCtx, &model.AlertTriageUpdate{
-		Query:     payload.GroupFilter,
-		Floor:     payload.Floor,
-		Ceiling:   payload.Ceiling,
-		Count:     payload.Count,
-		RunId:     runId,
-		SessionId: sessionId,
+		Query:      payload.GroupFilter,
+		Floor:      payload.Floor,
+		Ceiling:    payload.Ceiling,
+		Count:      payload.Count,
+		RunId:      runId,
+		SessionId:  outcome.SessionId,
+		Assessment: outcome.Assessment,
 	})
 	if err != nil {
 		failed := item
@@ -767,6 +780,10 @@ func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePa
 
 	if result.SessionId == "" {
 		return nil, nil, errors.New("alert triage item has no session to record")
+	}
+
+	if !model.IsValidAlertTriageAssessment(result.Assessment) {
+		return nil, nil, fmt.Errorf("alert triage item has an invalid assessment %d", result.Assessment)
 	}
 
 	return payload, result, nil
@@ -903,4 +920,22 @@ Run ID: %s
 
 Alert:
 %s`, count, groupFilter, alertId, runId, fields)
+}
+
+// alertTriageAssessment is the last valid record_assessment call the triage session made, so a
+// revised assessment wins. A session without one still records, as needing review, and reports
+// that it found none.
+func alertTriageAssessment(toolUses []model.ContentBlock) (int, bool) {
+	for i := len(toolUses) - 1; i >= 0; i-- {
+		if toolUses[i].Name != recordAssessmentToolName {
+			continue
+		}
+
+		args, err := parseRecordAssessmentArgs(toolUses[i].Input)
+		if err == nil {
+			return args.Assessment, true
+		}
+	}
+
+	return model.AlertTriageAssessmentNeedsReview, false
 }
