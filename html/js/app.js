@@ -374,7 +374,6 @@ $(document).ready(function () {
         'selectedGridId': 'onGridSelected',
       },
       methods: {
-        ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
         ...Object.assign({}, ...rootMethods),
         hasEnabledTools() {
           return this.tools.some(tool => tool.enabled);
