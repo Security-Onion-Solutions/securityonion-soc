@@ -1428,9 +1428,6 @@ func TestParseAlertTriageAssessment(t *testing.T) {
 		{"markdown bold", "**STATUS: COMPLETE | ASSESSMENT: LIKELY BENIGN | CONFIDENCE: 90**", model.AlertTriageAssessmentLikelyBenign, true},
 		{"preceded by text", "NEEDS ANALYST INPUT: which host is the scanner\n" + status("LIKELY BENIGN"), model.AlertTriageAssessmentLikelyBenign, true},
 		{"revised", "STATUS: REVISED | ASSESSMENT: LIKELY MALICIOUS | DETAIL: —", model.AlertTriageAssessmentLikelyMalicious, true},
-		{"older verdict field, malicious", "STATUS: COMPLETE | VERDICT: MALICIOUS | CONFIDENCE: 80", model.AlertTriageAssessmentLikelyMalicious, true},
-		{"older verdict field, needs human", "STATUS: COMPLETE | VERDICT: NEEDS HUMAN | CONFIDENCE: 60", model.AlertTriageAssessmentNeedsReview, true},
-		{"older verdict field, benign", "STATUS: COMPLETE | VERDICT: BENIGN | CONFIDENCE: 90", model.AlertTriageAssessmentLikelyBenign, true},
 		{"unknown value", status("SUSPICIOUS"), model.AlertTriageAssessmentNeedsReview, false},
 		{"unfilled template", status("{LIKELY BENIGN|NEEDS REVIEW|LIKELY MALICIOUS}"), model.AlertTriageAssessmentNeedsReview, false},
 		{"unable to complete", "STATUS: UNABLE TO COMPLETE | REASON: alert not found", model.AlertTriageAssessmentNeedsReview, false},
@@ -1449,7 +1446,7 @@ func TestParseAlertTriageAssessment(t *testing.T) {
 
 func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`)}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`)}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 
@@ -1466,8 +1463,7 @@ func TestAlertTriageReclaimAppliesCheckpointedItems(t *testing.T) {
 	assert.False(t, updates[0].Failed)
 	assert.Equal(t, "run-0", updates[0].RunId)
 	assert.Equal(t, "sess-old", updates[0].SessionId)
-	// Checkpointed before assessments existed.
-	assert.Equal(t, model.AlertTriageAssessmentNeedsReview, updates[0].Assessment)
+	assert.Equal(t, model.AlertTriageAssessmentLikelyMalicious, updates[0].Assessment)
 	assert.Equal(t, `tags:alert AND rule.name:"A"`, updates[0].Query)
 }
 
@@ -1478,15 +1474,19 @@ func TestDecodeAlertTriageCheckpointAssessment(t *testing.T) {
 		want   int
 	}{
 		{"likely benign", `{"sessionId":"s","assessment":10}`, model.AlertTriageAssessmentLikelyBenign},
+		{"needs review", `{"sessionId":"s","assessment":50}`, model.AlertTriageAssessmentNeedsReview},
 		{"likely malicious", `{"sessionId":"s","assessment":90}`, model.AlertTriageAssessmentLikelyMalicious},
-		{"missing", `{"sessionId":"s"}`, model.AlertTriageAssessmentNeedsReview},
-		{"zero", `{"sessionId":"s","assessment":0}`, model.AlertTriageAssessmentNeedsReview},
-		{"unknown", `{"sessionId":"s","assessment":75}`, model.AlertTriageAssessmentNeedsReview},
+		{"missing", `{"sessionId":"s"}`, 0},
+		{"unknown", `{"sessionId":"s","assessment":75}`, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			item := &model.AutomationWorkItem{Payload: triageTestPayload(t), Result: json.RawMessage(tt.result)}
 			_, result, err := decodeAlertTriageCheckpoint(item)
+			if tt.want == 0 {
+				assert.ErrorContains(t, err, "invalid assessment")
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, result.Assessment)
 		})
@@ -1495,7 +1495,7 @@ func TestDecodeAlertTriageCheckpointAssessment(t *testing.T) {
 
 func TestAlertTriageReclaimKeepsApplyingItemsItCannotRecord(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`)}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`)}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
@@ -1512,7 +1512,7 @@ func TestAlertTriageReclaimKeepsApplyingItemsItCannotRecord(t *testing.T) {
 
 func TestAlertTriageApplyOutOfRetriesGivesUp(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b"}}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`), FailedRunIds: []string{"run-a", "run-b"}}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
@@ -1535,7 +1535,7 @@ func TestAlertTriageApplyOutOfRetriesGivesUp(t *testing.T) {
 
 func TestAlertTriageApplyAtTheCapStillRecordsAReport(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
@@ -1551,7 +1551,7 @@ func TestAlertTriageApplyAtTheCapStillRecordsAReport(t *testing.T) {
 // the failures it has and it ends.
 func TestAlertTriageApplyFailurePastTheCapChargesNoRun(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
@@ -1567,7 +1567,7 @@ func TestAlertTriageApplyFailurePastTheCapChargesNoRun(t *testing.T) {
 // gain a run for every run that tries it.
 func TestAlertTriageStuckApplyPastTheCapDoesNotGrow(t *testing.T) {
 	checkpointed := &model.AutomationWorkItem{Id: "item-old", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
-		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`), FailedRunIds: []string{"run-a", "run-b", "run-c"}}
 
 	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, checkpointed)
 	f.store.applying = map[string]*model.AutomationWorkItem{checkpointed.Id: checkpointed}
@@ -1587,8 +1587,9 @@ func TestAlertTriageReclaimEndsUnusableCheckpoints(t *testing.T) {
 		item *model.AutomationWorkItem
 	}{
 		{"no session", &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`, Payload: triageTestPayload(t), Result: json.RawMessage(`{}`)}},
+		{"no assessment", &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`, Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-old"}`)}},
 		{"unreadable result", &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`, Payload: triageTestPayload(t), Result: json.RawMessage(`{`)}},
-		{"unreadable payload", &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`, Payload: json.RawMessage(`{`), Result: json.RawMessage(`{"sessionId":"sess-old"}`)}},
+		{"unreadable payload", &model.AutomationWorkItem{Id: "item-old", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`, Payload: json.RawMessage(`{`), Result: json.RawMessage(`{"sessionId":"sess-old","assessment":90}`)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

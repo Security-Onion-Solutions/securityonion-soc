@@ -782,9 +782,8 @@ func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePa
 		return nil, nil, errors.New("alert triage item has no session to record")
 	}
 
-	// Checkpoints written before assessments existed still carry a report worth recording.
 	if !model.IsValidAlertTriageAssessment(result.Assessment) {
-		result.Assessment = model.AlertTriageAssessmentNeedsReview
+		return nil, nil, fmt.Errorf("alert triage item has an invalid assessment %d", result.Assessment)
 	}
 
 	return payload, result, nil
@@ -924,15 +923,11 @@ Alert:
 }
 
 // alertTriageAssessments maps the values a triage report's status line may carry to the
-// assessment recorded on the alerts. The VERDICT forms are what the prompt asked for before it
-// named the field ASSESSMENT.
+// assessment recorded on the alerts.
 var alertTriageAssessments = map[string]int{
 	"LIKELY MALICIOUS": model.AlertTriageAssessmentLikelyMalicious,
 	"NEEDS REVIEW":     model.AlertTriageAssessmentNeedsReview,
 	"LIKELY BENIGN":    model.AlertTriageAssessmentLikelyBenign,
-	"MALICIOUS":        model.AlertTriageAssessmentLikelyMalicious,
-	"NEEDS HUMAN":      model.AlertTriageAssessmentNeedsReview,
-	"BENIGN":           model.AlertTriageAssessmentLikelyBenign,
 }
 
 // parseAlertTriageAssessment reads the ASSESSMENT field of the report's status line, e.g.
@@ -948,7 +943,7 @@ func parseAlertTriageAssessment(report string) (int, bool) {
 		for _, field := range strings.Split(line, "|") {
 			name, value, found := strings.Cut(field, ":")
 			name = strings.TrimSpace(name)
-			if !found || (name != "ASSESSMENT" && name != "VERDICT") {
+			if !found || name != "ASSESSMENT" {
 				continue
 			}
 
