@@ -689,3 +689,12 @@ test('destinations-manager template applies email validation rule to smtp from f
   expect(tmpl).toContain(':rules="[$root.validators.required, $root.validators.email]"');
 });
 
+test('destinations-manager template applies url validation rule to webhook url field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/destinations-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':rules="[$root.validators.required, $root.validators.url]"');
+});
+

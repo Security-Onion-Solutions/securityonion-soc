@@ -1620,6 +1620,22 @@ test('validator: email', () => {
   expect(v('Something <user@domain>')).toBe(_i18n.invalidEmail);
 });
 
+test('validator: url', () => {
+  const v = app.validators.url;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('https://hooks.slack.com/services/xxx')).toBe(true);
+  expect(v('http://localhost:8080/hook')).toBe(true);
+  expect(v('https://matrix.example.com/_matrix/hookshot/123')).toBe(true);
+  expect(v('http://192.168.1.100/webhook')).toBe(true);
+  expect(v('ftp://example.com')).toBe(_i18n.invalidUrl);
+  expect(v('not-a-url')).toBe(_i18n.invalidUrl);
+  expect(v('http://')).toBe(_i18n.invalidUrl);
+  expect(v('https://')).toBe(_i18n.invalidUrl);
+  expect(v('javascript:alert(1)')).toBe(_i18n.invalidUrl);
+});
+
 test('validator: number', () => {
   const v = app.validators.number;
   expect(v('a')).toBe(_i18n.required);

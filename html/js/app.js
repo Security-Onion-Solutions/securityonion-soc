@@ -324,6 +324,16 @@ $(document).ready(function () {
               const v = typeof value === 'string' ? value.trim() : String(value);
               return /^([^@\s<>]+@[^@\s<>]+\.[^@\s<>]+|[^<]*<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>)$/.test(v) || _i18n.invalidEmail;
             },
+            url: value => {
+              if (!value) return true;
+              const v = typeof value === 'string' ? value.trim() : String(value);
+              try {
+                const parsed = new URL(v);
+                return ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host)) || _i18n.invalidUrl;
+              } catch (e) {
+                return _i18n.invalidUrl;
+              }
+            },
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
             hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
             shortLengthLimit: value => (value.length < 100) || _i18n.required,

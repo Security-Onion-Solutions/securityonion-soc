@@ -104,7 +104,7 @@
 
           <template v-if="isWebhookType(form.type)">
             <v-col cols="12">
-              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl + ' *'" :rules="[$root.validators.required]" required density="comfortable" :data-aid="'destination_form_' + form.type + '_url'"></v-text-field>
+              <v-text-field v-model="form.params.webhookUrl" :label="i18n.webhookUrl + ' *'" :rules="[$root.validators.required, $root.validators.url]" required density="comfortable" :data-aid="'destination_form_' + form.type + '_url'"></v-text-field>
             </v-col>
             <v-col cols="12">
               <v-switch v-model="form.params.insecureSkipVerify" color="primary" inset :label="i18n.insecureSkipVerify" density="compact" :data-aid="'destination_form_' + form.type + '_insecure_skip_verify'"></v-switch>
