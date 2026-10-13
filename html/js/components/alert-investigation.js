@@ -5,6 +5,32 @@
 
 loadPageTemplate('component-alert-investigation', 'pages/alert-investigation.html');
 
+const ALERT_INVESTIGATIONS_FIELD = 'event.so_investigations';
+const MAX_SESSION_ACCESS_IDS = 50;
+
+rootMethods.push({
+  // Oldest first. Older alerts hold single values until their next investigation write converts them.
+  alertManualInvestigations(alert) {
+    if (!alert) return [];
+    const list = value => (Array.isArray(value) ? value : (value === undefined || value === null || value === '' ? [] : [value]));
+    const by = list(alert['event.investigated_by']);
+    const times = list(alert['event.investigated_timestamp']);
+    const older = list(alert['event.investigation_session_id'])
+      .map((sessionId, i) => ({ sessionId: sessionId, by: by[i] || '', time: times[i] || '' }));
+    const entries = list(alert[ALERT_INVESTIGATIONS_FIELD])
+      .filter(entry => entry && typeof entry === 'object')
+      .map(entry => ({ sessionId: entry.session_id, by: entry.user_id || '', time: entry.timestamp || '' }));
+    const seen = new Set();
+    return older.concat(entries).filter(inv => inv.sessionId && !seen.has(inv.sessionId) && seen.add(inv.sessionId));
+  },
+  // { id: bool } for the first MAX_SESSION_ACCESS_IDS; the rest stay unknown, never a no.
+  async fetchSessionAccess(sessionIds) {
+    if (!sessionIds.length) return {};
+    const response = await this.papi.post('/assistant/sessions/access', { sessionIds: sessionIds.slice(0, MAX_SESSION_ACCESS_IDS) });
+    return response.data || {};
+  },
+});
+
 components.push({
   name: "alert-investigation", component: {
     template: '#component-alert-investigation',

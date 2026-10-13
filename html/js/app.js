@@ -9,6 +9,7 @@ const components = [];
 const iconSets = [];
 const templatePromises = [];
 const directives = [];
+const rootMethods = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -40,11 +41,6 @@ const MARKDOWN_PURIFY_CONFIG = {
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-const ALERT_INVESTIGATIONS_FIELD = 'event.so_investigations';
-const MAX_SESSION_ACCESS_IDS = 50;
-
-const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
-
 function moveAriaToPrismTextarea(wrapperEl) {
   const textarea = wrapperEl.querySelector('.prism-editor__textarea');
   if (!textarea) return;
@@ -63,8 +59,8 @@ if (typeof global !== 'undefined') {
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
   global.directives = directives;
+  global.rootMethods = rootMethods;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
-  global.CHOICE_MARKER_REGEX = CHOICE_MARKER_REGEX;
 }
 
 $(document).ready(function () {
@@ -374,6 +370,7 @@ $(document).ready(function () {
       },
       methods: {
         ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        ...Object.assign({}, ...rootMethods),
         hasEnabledTools() {
           return this.tools.some(tool => tool.enabled);
         },
@@ -1138,49 +1135,6 @@ $(document).ready(function () {
           const md = this.formatMarkdown(authored ? text : this.performMermaidRegexes(text), true, authored);
           if (render) this.$nextTick(() => this.renderMermaid());
           return md;
-        },
-        // Oldest first. Older alerts hold single values until their next investigation write converts them.
-        alertManualInvestigations(alert) {
-          if (!alert) return [];
-          const list = value => (Array.isArray(value) ? value : (value === undefined || value === null || value === '' ? [] : [value]));
-          const by = list(alert['event.investigated_by']);
-          const times = list(alert['event.investigated_timestamp']);
-          const older = list(alert['event.investigation_session_id'])
-            .map((sessionId, i) => ({ sessionId: sessionId, by: by[i] || '', time: times[i] || '' }));
-          const entries = list(alert[ALERT_INVESTIGATIONS_FIELD])
-            .filter(entry => entry && typeof entry === 'object')
-            .map(entry => ({ sessionId: entry.session_id, by: entry.user_id || '', time: entry.timestamp || '' }));
-          const seen = new Set();
-          return older.concat(entries).filter(inv => inv.sessionId && !seen.has(inv.sessionId) && seen.add(inv.sessionId));
-        },
-        // { id: bool } for the first MAX_SESSION_ACCESS_IDS; the rest stay unknown, never a no.
-        async fetchSessionAccess(sessionIds) {
-          if (!sessionIds.length) return {};
-          const response = await this.papi.post('/assistant/sessions/access', { sessionIds: sessionIds.slice(0, MAX_SESSION_ACCESS_IDS) });
-          return response.data || {};
-        },
-        stripChoiceMarkers(text) {
-          if (!text || typeof text !== 'string') return text;
-          return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
-        },
-        // Canonical id@adapter model selector: used as the model key and sent to
-        // the backend to identify the model.
-        buildModelIdentifier(model) {
-          if (!model) return '';
-          return `${model?.id||''}@${model?.adapter||''}`;
-        },
-        // resolveMappedModel resolves a model selector (id@adapter or bare id,
-        // mirroring the backend's resolveModel: prefer an enabled model, else
-        // first match) against a model list; null when nothing matches.
-        resolveMappedModel(models, selector) {
-          if (!selector) return null;
-          let fallback = null;
-          for (const m of models || []) {
-            if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
-            if (m.enabled) return m;
-            if (!fallback) fallback = m;
-          }
-          return fallback;
         },
         colorSeverity(value) {
           const val = (value || '').toLowerCase();

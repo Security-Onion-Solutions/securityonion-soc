@@ -7804,6 +7804,27 @@ test('isMessageTooLong uses large context limit when toggled', () => {
   expect(comp.isMessageTooLong()).toBe(false);
 });
 
+test('buildModelIdentifier', () => {
+  const tests = [
+    { input: { id: 'model', adapter: 'adapter' }, expected: 'model@adapter' },
+    { input: { id: '', adapter: '' }, expected: '@' },
+    { input: {}, expected: '@' },
+    { input: null, expected: '' },
+  ];
+
+  for (let t of tests) {
+    const output = comp.$root.buildModelIdentifier(t.input);
+    expect(output).toBe(t.expected);
+  }
+});
+
+test('stripChoiceMarkers leaves each choice as its label', () => {
+  expect(comp.$root.stripChoiceMarkers('1. [[CHOICE]] Acknowledge the alert [[/CHOICE]]\n2. [[CHOICE]]Escalate[[/CHOICE]]'))
+    .toBe('1. Acknowledge the alert\n2. Escalate');
+  expect(comp.$root.stripChoiceMarkers('No choices here')).toBe('No choices here');
+  expect(comp.$root.stripChoiceMarkers('')).toBe('');
+});
+
 test('buildGroupedModels - groups models by adapter with headers', () => {
   // Setup test data
   comp.modelsMap = new Map([

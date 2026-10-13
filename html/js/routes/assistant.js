@@ -13,11 +13,40 @@ const MSGTAG_PARTIAL = "partial";
 // A message copied from another session: its usage is shown but never billed again.
 const MSGTAG_CLONE = "clone";
 
+const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
+
 if (typeof global !== 'undefined') {
   global.MSGTAG_CONTEXTCOMPRESSION = MSGTAG_CONTEXTCOMPRESSION;
   global.MSGTAG_PARTIAL = MSGTAG_PARTIAL;
   global.MSGTAG_CLONE = MSGTAG_CLONE;
+  global.CHOICE_MARKER_REGEX = CHOICE_MARKER_REGEX;
 }
+
+rootMethods.push({
+  stripChoiceMarkers(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
+  },
+  // Canonical id@adapter model selector: used as the model key and sent to
+  // the backend to identify the model.
+  buildModelIdentifier(model) {
+    if (!model) return '';
+    return `${model?.id||''}@${model?.adapter||''}`;
+  },
+  // resolveMappedModel resolves a model selector (id@adapter or bare id,
+  // mirroring the backend's resolveModel: prefer an enabled model, else
+  // first match) against a model list; null when nothing matches.
+  resolveMappedModel(models, selector) {
+    if (!selector) return null;
+    let fallback = null;
+    for (const m of models || []) {
+      if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
+      if (m.enabled) return m;
+      if (!fallback) fallback = m;
+    }
+    return fallback;
+  },
+});
 
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
