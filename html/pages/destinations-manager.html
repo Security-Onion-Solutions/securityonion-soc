@@ -64,7 +64,7 @@
       <v-card-text>
         <v-row dense>
           <v-col cols="12" sm="6">
-            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required density="comfortable" data-aid="destination_form_name"></v-text-field>
+            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required density="comfortable" autofocus data-aid="destination_form_name"></v-text-field>
           </v-col>
           <v-col cols="12" sm="6">
             <v-select v-model="form.type" :items="channelTypeOptions" :label="i18n.channelType" density="comfortable" :disabled="form.isEdit" @update:model-value="onChannelTypeChange" data-aid="destination_form_type"></v-select>

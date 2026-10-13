@@ -46,7 +46,7 @@
       <v-card-text>
         <v-row dense>
           <v-col cols="12">
-            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required data-aid="schedule_form_name"></v-text-field>
+            <v-text-field v-model="form.name" :label="i18n.name" :rules="[$root.validators.required]" maxlength="50" required autofocus data-aid="schedule_form_name"></v-text-field>
           </v-col>
           <v-col cols="12">
             <v-textarea v-model="form.description" :label="i18n.description" rows="2" auto-grow maxlength="1000" density="comfortable" data-aid="schedule_form_description"></v-textarea>

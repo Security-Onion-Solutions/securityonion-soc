@@ -497,3 +497,14 @@ test('alarms-manager template references root functions directly without removed
   expect(tmpl).not.toContain('notificationsLicensed');
 });
 
+test('alarms-manager template sets autofocus on alarm name field', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/alarms-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  const match = tmpl.match(/<v-text-field[^>]*data-aid="alarm_form_name"[^>]*>/);
+  expect(match).not.toBeNull();
+  expect(match[0]).toContain('autofocus');
+});
+
