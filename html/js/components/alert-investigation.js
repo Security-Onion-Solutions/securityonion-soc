@@ -30,6 +30,17 @@ rootMethods.push({
     const response = await this.papi.post('/assistant/sessions/access', { sessionIds: sessionIds.slice(0, MAX_SESSION_ACCESS_IDS) });
     return response.data || {};
   },
+  alertTriageField(name) {
+    return 'event.so_alerttriage.' + name;
+  },
+  alertTriageAssessment(value) {
+    const assessment = {
+      90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
+      50: { label: 'aiAssessmentNeedsReview', color: 'warning' },
+      10: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+    }[value];
+    return assessment ? { label: this.i18n[assessment.label], color: assessment.color } : null;
+  },
 });
 
 components.push({
@@ -42,8 +53,6 @@ components.push({
       grouped: { type: Boolean, default: false },
       routeForQuery: { type: Function, required: true },
       newInvestigationLink: { type: Function, required: true },
-      alertTriageField: { type: Function, required: true },
-      alertTriageAssessment: { type: Function, required: true },
     },
     data() {
       return {
@@ -95,7 +104,7 @@ components.push({
       },
       triageField(name) {
         const subject = this.subject();
-        return subject ? subject[this.alertTriageField(name)] : undefined;
+        return subject ? subject[this.$root.alertTriageField(name)] : undefined;
       },
       automatedId() {
         return this.triageField('session_id') || '';
@@ -118,7 +127,7 @@ components.push({
         return this.newLinks[subject.soc_id];
       },
       assessment() {
-        return this.alertTriageAssessment(this.triageField('assessment'));
+        return this.$root.alertTriageAssessment(this.triageField('assessment'));
       },
       failedCount() {
         return this.triageField('failed_count') || 0;
@@ -212,7 +221,7 @@ components.push({
         return link;
       },
       bucketLink() {
-        return this.routeForQuery(this.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
+        return this.routeForQuery(this.$root.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
       },
       failedLabel() {
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());

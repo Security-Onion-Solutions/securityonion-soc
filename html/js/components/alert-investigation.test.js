@@ -6,7 +6,6 @@
 require('../test_common.js');
 require('../routes/assistant.js');
 require('./alert-investigation.js');
-require('../routes/hunt.js');
 
 let comp;
 
@@ -15,9 +14,6 @@ beforeEach(() => {
   comp = getComponent('alert-investigation');
   comp.summaries = {};
   comp.routeForQuery = (q) => ({ path: 'alerts', query: { q } });
-  const hunt = getComponent('hunt');
-  comp.alertTriageField = hunt.alertTriageField.bind(hunt);
-  comp.alertTriageAssessment = hunt.alertTriageAssessment.bind(hunt);
   comp.$root.showError = jest.fn();
 });
 
@@ -135,6 +131,21 @@ test('an older alert\'s single values still count, before any entries and withou
     'event.investigation_session_id': 'old', 'event.investigated_by': 'u0',
     'event.so_investigations': [{ session_id: 'old', user_id: 'u0' }, { session_id: 'new', user_id: 'u1' }],
   }).map(inv => inv.sessionId)).toEqual(['old', 'new']);
+});
+
+test('alertTriageField', () => {
+  expect(comp.$root.alertTriageField('assessment')).toBe('event.so_alerttriage.assessment');
+  expect(comp.$root.alertTriageField('session_id')).toBe('event.so_alerttriage.session_id');
+});
+
+test('alertTriageAssessment', () => {
+  expect(comp.$root.alertTriageAssessment(90)).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.$root.alertTriageAssessment(50)).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(comp.$root.alertTriageAssessment(10)).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(comp.$root.alertTriageAssessment('90')).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.$root.alertTriageAssessment(0)).toBeNull();
+  expect(comp.$root.alertTriageAssessment(75)).toBeNull();
+  expect(comp.$root.alertTriageAssessment(undefined)).toBeNull();
 });
 
 test('the start link is built once per alert, so re-renders keep one session id', () => {

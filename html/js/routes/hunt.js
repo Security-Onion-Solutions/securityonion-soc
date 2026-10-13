@@ -3188,7 +3188,7 @@ const huntComponent = {
       if (item.newestTriaged || this.automatedInvestigationId(item.newest)) return;
 
       const params = {
-        query: parts.concat(['_exists_:' + this.alertTriageField('session_id')]).join(' AND ') + ' | sortby @timestamp',
+        query: parts.concat(['_exists_:' + this.$root.alertTriageField('session_id')]).join(' AND ') + ' | sortby @timestamp',
         range: this.dateRange,
         format: this.i18n.timePickerSample,
         zone: this.zone,
@@ -3375,7 +3375,7 @@ const huntComponent = {
       if (automatedId) {
         items.push({
           icon: 'fa-robot', title: this.i18n.aiInvestigateViewAutomated,
-          subtitle: [(this.alertTriageAssessment(item[this.alertTriageField('assessment')]) || {}).label, this.formatInvestigationTime(item[this.alertTriageField('timestamp')])].filter(s => s).join(' · '),
+          subtitle: [(this.$root.alertTriageAssessment(item[this.$root.alertTriageField('assessment')]) || {}).label, this.formatInvestigationTime(item[this.$root.alertTriageField('timestamp')])].filter(s => s).join(' · '),
           to: this.investigationLink(automatedId, item.soc_id),
         });
       }
@@ -3396,19 +3396,8 @@ const huntComponent = {
     formatInvestigationTime(time) {
       return time ? this.$root.formatDateTime(time) : '';
     },
-    alertTriageField(name) {
-      return 'event.so_alerttriage.' + name;
-    },
-    alertTriageAssessment(value) {
-      const assessment = {
-        90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
-        50: { label: 'aiAssessmentNeedsReview', color: 'warning' },
-        10: { label: 'aiAssessmentLikelyBenign', color: 'success' },
-      }[value];
-      return assessment ? { label: this.i18n[assessment.label], color: assessment.color } : null;
-    },
     automatedInvestigationId(item) {
-      return (item && item[this.alertTriageField('session_id')]) || '';
+      return (item && item[this.$root.alertTriageField('session_id')]) || '';
     },
     // Groups use their newest triaged alert (where continued copies attach), else their newest.
     investigationSubject(item) {
@@ -3419,7 +3408,7 @@ const huntComponent = {
       const subject = this.investigationSubject(item);
       if (!subject) return '';
       if (subject['event.investigated'] || this.$root.alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
-      if (subject[this.alertTriageField('failed_count')]) return 'warning';
+      if (subject[this.$root.alertTriageField('failed_count')]) return 'warning';
       return '';
     },
 
@@ -3431,10 +3420,10 @@ const huntComponent = {
       if (manualCount + (automatedId ? 1 : 0) > 1) return this.i18n.aiInvestigateViewBoth;
       if (manualCount) return this.i18n.aiInvestigateView;
       if (automatedId) {
-        const assessment = this.alertTriageAssessment(subject[this.alertTriageField('assessment')]);
-        return [this.i18n.aiInvestigateViewAutomated, assessment && assessment.label, moment(subject[this.alertTriageField('timestamp')]).fromNow()].filter(s => s).join(' · ');
+        const assessment = this.$root.alertTriageAssessment(subject[this.$root.alertTriageField('assessment')]);
+        return [this.i18n.aiInvestigateViewAutomated, assessment && assessment.label, moment(subject[this.$root.alertTriageField('timestamp')]).fromNow()].filter(s => s).join(' · ');
       }
-      const failed = subject[this.alertTriageField('failed_count')];
+      const failed = subject[this.$root.alertTriageField('failed_count')];
       if (failed) return this.i18n.aiInvestigationFailedAttempts.replace('{count}', failed);
       return item.count ? this.i18n.aiInvestigateMostRecent : this.i18n.aiInvestigate;
     },

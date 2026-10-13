@@ -566,7 +566,7 @@
 																</template>
 															</v-tabs-window-item>
 															<v-tabs-window-item v-if="investigateEnabled" value="investigation">
-																<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item.newest" :triaged-alert="item.newestTriaged" grouped :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink" :alert-triage-field="alertTriageField" :alert-triage-assessment="alertTriageAssessment"></alert-investigation>
+																<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item.newest" :triaged-alert="item.newestTriaged" grouped :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
 															</v-tabs-window-item>
 														</v-tabs-window>
 													</div>
@@ -867,7 +867,7 @@
 														</template>
 													</v-tabs-window-item>
 													<v-tabs-window-item v-if="investigateEnabled" value="investigation">
-														<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item" :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink" :alert-triage-field="alertTriageField" :alert-triage-assessment="alertTriageAssessment"></alert-investigation>
+														<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item" :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
 													</v-tabs-window-item>
 												</v-tabs-window>
 											</div>
