@@ -3376,7 +3376,7 @@ const huntComponent = {
       if (automatedId) {
         items.push({
           icon: 'fa-robot', title: this.i18n.aiInvestigateViewAutomated,
-          subtitle: [(alertTriageAssessment(item, this.i18n) || {}).label, this.formatInvestigationTime(item[ALERT_TRIAGE_PREFIX + 'timestamp'])].filter(s => s).join(' · '),
+          subtitle: [(this.$root.alertTriageAssessment(item[ALERT_TRIAGE_PREFIX + 'assessment']) || {}).label, this.formatInvestigationTime(item[ALERT_TRIAGE_PREFIX + 'timestamp'])].filter(s => s).join(' · '),
           to: this.investigationLink(automatedId, item.soc_id),
         });
       }
@@ -3421,7 +3421,7 @@ const huntComponent = {
       if (manualCount + (automatedId ? 1 : 0) > 1) return this.i18n.aiInvestigateViewBoth;
       if (manualCount) return this.i18n.aiInvestigateView;
       if (automatedId) {
-        const assessment = alertTriageAssessment(subject, this.i18n);
+        const assessment = this.$root.alertTriageAssessment(subject[ALERT_TRIAGE_PREFIX + 'assessment']);
         return [this.i18n.aiInvestigateViewAutomated, assessment && assessment.label, moment(subject[ALERT_TRIAGE_PREFIX + 'timestamp']).fromNow()].filter(s => s).join(' · ');
       }
       const failed = subject[ALERT_TRIAGE_PREFIX + 'failed_count'];

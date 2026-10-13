@@ -382,6 +382,16 @@ test('isMyUser', () => {
   expect(app.isMyUser()).toBe(false);
 });
 
+test('alertTriageAssessment', () => {
+  expect(app.alertTriageAssessment(90)).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(app.alertTriageAssessment(50)).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(app.alertTriageAssessment(10)).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(app.alertTriageAssessment('90')).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(app.alertTriageAssessment(0)).toBeNull();
+  expect(app.alertTriageAssessment(75)).toBeNull();
+  expect(app.alertTriageAssessment(undefined)).toBeNull();
+});
+
 test('loadServerSettings', async () => {
   app.subgrids = [];
   app.gridInfo = {};

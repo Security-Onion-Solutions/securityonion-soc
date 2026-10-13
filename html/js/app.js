@@ -1746,6 +1746,14 @@ $(document).ready(function () {
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },
+        alertTriageAssessment(value) {
+          const assessment = {
+            90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },
+            50: { label: 'aiAssessmentNeedsReview', color: 'warning' },
+            10: { label: 'aiAssessmentLikelyBenign', color: 'success' },
+          }[value];
+          return assessment ? { label: this.i18n[assessment.label], color: assessment.color } : null;
+        },
         userHasRole(role, user = null) {
           if (!user) {
             user = this.user;
