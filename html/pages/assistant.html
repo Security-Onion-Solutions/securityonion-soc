@@ -357,9 +357,9 @@
 					<v-list id="chat-history-list" v-if="chatHistory.length > 0">
 						<v-list-item
 							v-for="chat in chatHistory.slice().reverse()"
-							:key="chat.id"
+							:key="chat.sessionId"
 							@click="loadChat(chat)"
-							:class="{ 'bg-primary': chat.id === currentChatId }"
+							:active="chat.sessionId === currentChatId"
 							data-aid="assistant_chat_history_item"
 						>
 							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
