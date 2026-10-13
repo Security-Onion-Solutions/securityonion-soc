@@ -1746,6 +1746,9 @@ $(document).ready(function () {
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },
+        alertTriageField(name) {
+          return 'event.so_alerttriage.' + name;
+        },
         alertTriageAssessment(value) {
           const assessment = {
             90: { label: 'aiAssessmentLikelyMalicious', color: 'error' },

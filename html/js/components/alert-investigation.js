@@ -93,7 +93,7 @@ components.push({
       },
       triageField(name) {
         const subject = this.subject();
-        return subject ? subject['event.so_alerttriage.' + name] : undefined;
+        return subject ? subject[this.$root.alertTriageField(name)] : undefined;
       },
       automatedId() {
         return this.triageField('session_id') || '';
@@ -210,7 +210,7 @@ components.push({
         return link;
       },
       bucketLink() {
-        return this.routeForQuery('event.so_alerttriage.session_id:"' + this.automatedId() + '"');
+        return this.routeForQuery(this.$root.alertTriageField('session_id') + ':"' + this.automatedId() + '"');
       },
       failedLabel() {
         return this.i18n.aiInvestigationFailedAttempts.replace('{count}', this.failedCount());

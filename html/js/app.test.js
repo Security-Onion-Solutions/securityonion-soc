@@ -382,6 +382,11 @@ test('isMyUser', () => {
   expect(app.isMyUser()).toBe(false);
 });
 
+test('alertTriageField', () => {
+  expect(app.alertTriageField('assessment')).toBe('event.so_alerttriage.assessment');
+  expect(app.alertTriageField('session_id')).toBe('event.so_alerttriage.session_id');
+});
+
 test('alertTriageAssessment', () => {
   expect(app.alertTriageAssessment(90)).toEqual({ label: 'Likely Malicious', color: 'error' });
   expect(app.alertTriageAssessment(50)).toEqual({ label: 'Needs Review', color: 'warning' });
