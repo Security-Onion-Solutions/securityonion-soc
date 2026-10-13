@@ -944,6 +944,8 @@ func TestAlertTriageWorkItemRecordsReport(t *testing.T) {
 	assert.Contains(t, requests[0].Objective, `tags:alert AND rule.name:"A"`)
 	assert.Contains(t, requests[0].Objective, `"_id": "alert-1"`)
 	assert.Contains(t, requests[0].Objective, `"ip": "1.2.3.4"`)
+	assert.Equal(t, alertTriageKindName, requests[0].Type)
+	assert.Equal(t, "alert-1", requests[0].EntityId)
 
 	// The item, its result and its alerts all hold the id the session was started with.
 	sessionId := requests[0].SessionId

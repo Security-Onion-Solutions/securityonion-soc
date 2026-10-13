@@ -93,6 +93,8 @@ func (ac *AssistantCoordinator) RunAgentSession(ctx context.Context, req *model.
 		Title:     req.Objective,
 		Model:     req.Agent,
 		Tags:      automationTags(req.Tags),
+		Type:      req.Type,
+		EntityId:  req.EntityId,
 	}
 
 	result.FinalText, result.Truncated, err = ac.driveAgentSession(ownerCtx, sess, sessionId, req.Objective, budget)

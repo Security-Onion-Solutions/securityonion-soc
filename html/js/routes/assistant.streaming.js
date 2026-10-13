@@ -7,7 +7,8 @@
 // callAIAPI streaming loop, tool-execution streaming, and delegation (sub-agent)
 // stream handling.
 
-globalThis.AssistantStreaming = (function() {
+const assistantRouteForStreaming = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForStreaming.component.methods, (function() {
   return {
     async sendMessage(tags) {
       if (!this.newMessage.trim()) return;
@@ -670,4 +671,4 @@ globalThis.AssistantStreaming = (function() {
       }
     },
   };
-})();
+})());

@@ -153,6 +153,7 @@ const huntComponent = {
       mruCases: [],
       selectedMruCase: null,
       disableRouteLoad: false,
+      deepLinked: false,
       selectAllState: false,
       selectAllIndeterminate: false,
       selectedCount: 0,
@@ -549,7 +550,9 @@ const huntComponent = {
               q = q + " AND ";
             }
             q = q + filter.filter;
-          } else if (filter.exclusive) {
+          } else if (filter.exclusive && !this.deepLinked) {
+            // A link to one alert must find it whatever its state; syncDeepLinkedToggles
+            // then sets the toggles to match it.
             if (q.length > 0) {
               q = q + " AND ";
             }
@@ -615,14 +618,15 @@ const huntComponent = {
 
         this.autoRefreshInterval = found ? parseInt(this.$route.query.ar) : 0;
       }
+      if (this.$route.query.expand) {
+        // loadData keeps a deep link's expansion, so a reused component's tabs are
+        // cleared here instead.
+        this.deepLinked = true;
+        this.expandedEvents = this.$route.query.expand.split('|');
+        this.activeTabs = {};
+      }
       if (this.$route.query.tab) {
         this.activeTabs[0] = this.$route.query.tab;
-      }
-      if (this.$route.query.expand) {
-        const items = this.$route.query.expand.split('|');
-        for (let item of items) {
-          this.expandedEvents.push(item);
-        }
       }
       if (Array.isArray(this.filterToggles)) {
         for (const q in this.$route.query) {
@@ -685,7 +689,9 @@ const huntComponent = {
           params.gridId = this.gridId;
         }
 
-        if (this.loaded) {
+        // A reused component keeps the state of the previous load, but a deep link's
+        // expansion was just set from this route.
+        if (this.loaded && !this.$route.query.expand) {
           this.activeTabs = {};
           this.expandedEvents = [];
         }
@@ -699,6 +705,7 @@ const huntComponent = {
         this.roundTripTimeSecs = Math.abs(moment(response.data.completeTime) - moment(response.data.createTime)) / 1000;
         this.populateChart(this.timelineChartData, response.data.metrics["timeline"]);
         this.populateEventTable(response.data.events);
+        this.syncDeepLinkedToggles();
 
         this.metricsEnabled = false;
         if (response.data.metrics["bottom"] != undefined) {
@@ -721,6 +728,7 @@ const huntComponent = {
         var subtitle = this.isAdvanced() ? this.query : this.queryName;
         this.$root.setSubtitle(this.i18n[this.category] + " - " + subtitle);
       } catch (error) {
+        this.deepLinked = false;
         this.$root.showError(error);
       }
 
@@ -991,6 +999,12 @@ const huntComponent = {
         }
       }
       return null;
+    },
+    parseToggleFilter(filter) {
+      const match = /^\s*"?([^\s:"]+)"?\s*:\s*(?:"([^"]*)"|([^\s"]+))\s*$/.exec(filter || '');
+      if (!match) return null;
+
+      return { field: match[1], value: match[2] !== undefined ? match[2] : match[3] };
     },
     isFilterToggleEnabled(name) {
       var toggle = this.getFilterToggle(name);
@@ -1801,11 +1815,38 @@ const huntComponent = {
       var route = this.buildCurrentRoute();
       route.query.q = newQuery;
 
-      this.disableRouteLoad = true;
-      this.$router.push(route);
+      this.navigateWithoutReload(route);
       this.query = newQuery;
+    },
+    navigateWithoutReload(route, replace = false) {
+      this.disableRouteLoad = true;
+      if (replace) {
+        this.$router.replace(route);
+      } else {
+        this.$router.push(route);
+      }
       const thisRoute = this;
       setTimeout(function () { thisRoute.disableRouteLoad = false; }, 1000);
+    },
+    syncDeepLinkedToggles() {
+      if (!this.deepLinked) return;
+      this.deepLinked = false;
+
+      const event = this.eventData.find(item => item.soc_id === this.expandedEvents[0]);
+      if (!event || !Array.isArray(this.filterToggles)) return;
+
+      this.filterToggles.forEach(toggle => {
+        if (!toggle.exclusive) return;
+
+        // A filter that is not a single field:value cannot be evaluated against the
+        // loaded event, so its toggle keeps its state.
+        const term = this.parseToggleFilter(toggle.filter);
+        if (term) toggle.enabled = String(event[term.field]) === term.value;
+      });
+
+      // Reloading would collapse the deep-linked event; the URL only needs to carry the
+      // toggles so a refresh still finds it.
+      this.navigateWithoutReload(this.buildCurrentRoute(), true);
     },
     toggleColumnHeader(field) {
       if (!this.isColumnHeader(field)) {
@@ -3288,7 +3329,7 @@ const huntComponent = {
       const others = items.filter(i => i.manual && !i.mine);
       if (!others.length) return items;
       try {
-        const access = await fetchSessionAccess(this.$root.papi, others.map(i => i.sessionId));
+        const access = await this.$root.fetchSessionAccess(others.map(i => i.sessionId));
         return items.filter(i => !i.manual || i.mine || access[i.sessionId] !== false);
       } catch (error) {
         return items;
@@ -3340,7 +3381,7 @@ const huntComponent = {
         });
       }
       const me = (this.$root.user || {}).id;
-      for (const inv of alertManualInvestigations(item).reverse()) {
+      for (const inv of this.$root.alertManualInvestigations(item).reverse()) {
         const mine = !!me && inv.by === me;
         const user = inv.by && !mine ? this.$root.getUserByIdViaCache(inv.by) : null;
         const who = mine ? this.i18n.aiInvestigationYou : (user ? this.$root.getUserDisplayName(user) : inv.by);
@@ -3367,7 +3408,7 @@ const huntComponent = {
     getAIInvestigationButtonColor(item) {
       const subject = this.investigationSubject(item);
       if (!subject) return '';
-      if (subject['event.investigated'] || alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
+      if (subject['event.investigated'] || this.$root.alertManualInvestigations(subject).length || this.automatedInvestigationId(subject)) return 'icon';
       if (subject[ALERT_TRIAGE_PREFIX + 'failed_count']) return 'warning';
       return '';
     },
@@ -3375,7 +3416,7 @@ const huntComponent = {
     getAIInvestigationTooltip(item) {
       const subject = this.investigationSubject(item);
       if (!subject) return this.i18n.aiInvestigateMostRecent;
-      const manualCount = alertManualInvestigations(subject).length;
+      const manualCount = this.$root.alertManualInvestigations(subject).length;
       const automatedId = this.automatedInvestigationId(subject);
       if (manualCount + (automatedId ? 1 : 0) > 1) return this.i18n.aiInvestigateViewBoth;
       if (manualCount) return this.i18n.aiInvestigateView;

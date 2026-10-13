@@ -4,7 +4,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
-require('../routes/assistant.utils.js');
+require('../routes/assistant.js');
 require('./alert-investigation.js');
 
 let comp;
@@ -104,13 +104,13 @@ test('manual investigations are read from the alert\'s entries, newest first', (
     { sessionId: 's2', by: 'u2', time: '' },
     { sessionId: 's1', by: 'u1', time: '2026-09-28T10:00:00.000Z' },
   ]);
-  expect(alertManualInvestigations(null)).toEqual([]);
+  expect(comp.$root.alertManualInvestigations(null)).toEqual([]);
 });
 
 test('an older alert\'s single values still count, before any entries and without duplicates', () => {
-  expect(alertManualInvestigations({ 'event.investigation_session_id': 'only' })).toEqual([{ sessionId: 'only', by: '', time: '' }]);
+  expect(comp.$root.alertManualInvestigations({ 'event.investigation_session_id': 'only' })).toEqual([{ sessionId: 'only', by: '', time: '' }]);
 
-  expect(alertManualInvestigations({
+  expect(comp.$root.alertManualInvestigations({
     'event.investigation_session_id': 'old', 'event.investigated_by': 'u0',
     'event.so_investigations': [{ session_id: 'old', user_id: 'u0' }, { session_id: 'new', user_id: 'u1' }],
   }).map(inv => inv.sessionId)).toEqual(['old', 'new']);
@@ -172,8 +172,9 @@ test('access is asked for at most 50 sessions at a time', async () => {
   const ids = Array.from({ length: 60 }, (_, i) => 's' + i);
   const post = mockPapi('post', { data: { s0: true } });
 
-  expect(await fetchSessionAccess(comp.$root.papi, ids)).toEqual({ s0: true });
+  expect(await comp.$root.fetchSessionAccess(ids)).toEqual({ s0: true });
   expect(post.mock.calls[0][1].sessionIds).toEqual(ids.slice(0, 50));
+  expect(await comp.$root.fetchSessionAccess([])).toEqual({});
 });
 
 test('investigators are shown by name once resolved, else by id', async () => {

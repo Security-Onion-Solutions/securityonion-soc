@@ -21,18 +21,17 @@ const emptyPool = () => ({
 });
 
 // Assistant methods that tool-use-card, delegation-child and session conversion rely on.
-const monitorDelegationCtx = () => Object.assign(
-  {},
-  pickMethods(globalThis.AssistantTools, ['displayStatus', 'hasPendingDescendantApproval', 'getToolStatusIcon', 'getToolStatusColor', 'getToolStatusTitle',
-    'sessionTools', 'getSessionToolMap']),
-  pickMethods(globalThis.AssistantStreaming, ['pendingChildTools', 'delegateOwnCredits', 'delegateOwnOutputTokens', 'delegationHasCollapsedContent',
-    'ensureChildSession']),
+const monitorDelegationCtx = () => pickMethods(routes.find(r => r.name === 'assistant').component.methods, [
+  'displayStatus', 'hasPendingDescendantApproval', 'getToolStatusIcon', 'getToolStatusColor', 'getToolStatusTitle',
+  'sessionTools', 'getSessionToolMap',
+  'pendingChildTools', 'delegateOwnCredits', 'delegateOwnOutputTokens', 'delegationHasCollapsedContent',
+  'ensureChildSession',
   // Not formatMarkdown: the assistant's renders clickable choice buttons.
-  pickMethods(globalThis.AssistantUtils, ['formatCount', 'formatTimestamp', 'dedupeToolUseBlocks', 'nbspRegexOp', 'calculateContextOfMessage']),
-  pickMethods(globalThis.AssistantSessions, ['convertBackendMessagesToFrontend', 'processToolResultMessage', 'processOldFormatToolResult',
-    'extractMessageContent', 'processToolUseBlocks', 'collectResolvedToolUseIds', 'isPartialMessage', 'isActiveToolTurn', 'indexSubSessions',
-    'reconstructDelegateChildSessions', 'reconstructChildSession', 'finalizeResolvedDelegations', 'updateContextLength', 'calculateContextFromUsage']),
-);
+  'formatCount', 'formatTimestamp', 'dedupeToolUseBlocks', 'nbspRegexOp', 'calculateContextOfMessage',
+  'convertBackendMessagesToFrontend', 'processToolResultMessage', 'processOldFormatToolResult',
+  'extractMessageContent', 'processToolUseBlocks', 'collectResolvedToolUseIds', 'isPartialMessage', 'isActiveToolTurn', 'indexSubSessions',
+  'reconstructDelegateChildSessions', 'reconstructChildSession', 'finalizeResolvedDelegations', 'updateContextLength', 'calculateContextFromUsage',
+]);
 
 function pickMethods(module, names) {
   const picked = {};
@@ -187,7 +186,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     rejectTool() {},
 
     formatMarkdown(text) {
-      return this.$root.formatMarkdownMermaid(AssistantUtils.stripChoiceMarkers(text));
+      return this.$root.formatMarkdownMermaid(this.$root.stripChoiceMarkers(text));
     },
 
     reload() {

@@ -530,6 +530,9 @@ func (r *alertTriageRun) workItem(ctx context.Context, item *model.AutomationWor
 	result, err := r.run.RunAgentSession(ctx, item.Id, &model.AgentSessionRequest{
 		Objective: alertTriageObjective(fields, alert.Id, payload.Count, payload.GroupFilter, r.run.RunId),
 		Agent:     r.run.Task.Agent,
+		// Temporary: remove once deterministic automation actions send triage notifications.
+		Type:     alertTriageKindName,
+		EntityId: alert.Id,
 	})
 
 	if shuttingDown(ctx) {
