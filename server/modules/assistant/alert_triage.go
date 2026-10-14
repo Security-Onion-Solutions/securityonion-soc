@@ -89,7 +89,7 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"groupBy": {
 					Type:        "array",
-					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. An alert missing one of these fields is investigated on its own. Append * to a field to group alerts missing it together instead; this only works for keyword fields",
+					Description: "Alert field names whose values define a group, such as rule.name and source.ip; one investigation per group. An alert missing one of these fields is investigated on its own. Append * to a field to group alerts missing it together instead; this only works for keyword fields",
 				},
 				"maxGroupsPerScan": {
 					Type:        "integer",
