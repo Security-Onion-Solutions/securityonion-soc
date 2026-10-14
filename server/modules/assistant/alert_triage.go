@@ -89,7 +89,7 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"groupBy": {
 					Type:        "array",
-					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. Append * to a field to group alerts missing it together",
+					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. An alert missing one of these fields is investigated on its own. Append * to a field to group alerts missing it together instead; this only works for keyword fields",
 				},
 				"maxGroupsPerScan": {
 					Type:        "integer",
@@ -334,26 +334,34 @@ func (r *alertTriageRun) claim(ctx context.Context) error {
 // Dispatch is left to claim.
 func (r *alertTriageRun) scan(ctx context.Context) error {
 	groups, err := r.groups(ctx)
-	if err != nil || len(groups) == 0 {
-		return err
-	}
-
-	items, err := r.latestAlerts(ctx, groups)
-	if err != nil || len(items) == 0 {
-		return err
-	}
-
-	inserted, err := r.run.Store.EnsureAutomationWorkItems(ctx, r.run.RunId, items)
 	if err != nil {
 		return err
 	}
 
+	// A failed search for ungrouped alerts leaves them for a later scan; the groups still go ahead.
+	ungrouped, ungroupedErr := r.ungrouped(ctx)
+	groups = append(groups, ungrouped...)
+	if len(groups) == 0 {
+		return ungroupedErr
+	}
+
+	items, err := r.latestAlerts(ctx, groups)
+	if err != nil || len(items) == 0 {
+		return errors.Join(ungroupedErr, err)
+	}
+
+	inserted, err := r.run.Store.EnsureAutomationWorkItems(ctx, r.run.RunId, items)
+	if err != nil {
+		return errors.Join(ungroupedErr, err)
+	}
+
 	log.FromContext(ctx).WithFields(log.Fields{
-		"groupCount":    len(groups),
-		"enqueuedCount": len(inserted),
+		"groupCount":     len(groups),
+		"ungroupedCount": len(ungrouped),
+		"enqueuedCount":  len(inserted),
 	}).Info("alert triage scan finished")
 
-	return nil
+	return ungroupedErr
 }
 
 func (r *alertTriageRun) dateRange() string {
@@ -401,6 +409,72 @@ func (r *alertTriageRun) groups(ctx context.Context) ([]alertTriageGroup, error)
 		}
 
 		groups = append(groups, alertTriageGroup{terms: terms, count: int(metric.Value)})
+	}
+
+	return groups, nil
+}
+
+// ungrouped makes a group of each unprocessed alert missing a field the groupby needs, since the
+// groupby has no bucket for it and would otherwise never triage it. These are not deduplicated,
+// newest first, and capped per scan like the groups.
+func (r *alertTriageRun) ungrouped(ctx context.Context) ([]alertTriageGroup, error) {
+	logger := log.FromContext(ctx)
+
+	// A field ending in * groups its missing values itself, so it never leaves an alert ungrouped.
+	required := model.NewSearchSegmentEmpty()
+	for _, field := range r.params.GroupBy {
+		if strings.HasSuffix(field, "*") {
+			continue
+		}
+
+		if err := required.AddFilter(field, "__missing__", false, false, false); err != nil {
+			return nil, err
+		}
+	}
+
+	if required.String() == "" {
+		return nil, nil
+	}
+
+	// Open alerts still come back from the search, so ask for enough to see past them.
+	limit := r.params.MaxGroupsPerScan + len(r.open)
+
+	criteria := model.NewEventSearchCriteria()
+	if err := criteria.Populate(r.base+" AND NOT ("+required.String()+")", r.dateRange(), time.RFC3339, "", "0", strconv.Itoa(limit)); err != nil {
+		return nil, err
+	}
+
+	criteria.SortFields = []*model.SortCriteria{{Field: "@timestamp", Order: "desc"}}
+
+	results, err := r.run.Srv.Eventstore.Search(ctx, criteria)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(results.Errors) > 0 {
+		return nil, fmt.Errorf("alert triage search for ungrouped alerts failed: %s", strings.Join(results.Errors, "; "))
+	}
+
+	groups := make([]alertTriageGroup, 0)
+
+	for _, alert := range results.Events {
+		if len(groups) == r.params.MaxGroupsPerScan {
+			break
+		}
+
+		segment := model.NewSearchSegmentEmpty()
+		if err := segment.AddFilter("_id", alert.Id, false, true, false); err != nil {
+			logger.WithError(err).WithField("alertId", alert.Id).Warn("skipping an ungrouped alert whose id cannot be searched")
+
+			continue
+		}
+
+		terms := segment.String()
+		if _, isOpen := r.open[terms]; isOpen {
+			continue
+		}
+
+		groups = append(groups, alertTriageGroup{terms: terms, count: 1})
 	}
 
 	return groups, nil
