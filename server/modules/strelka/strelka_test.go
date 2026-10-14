@@ -1556,6 +1556,94 @@ func TestValidateRule(t *testing.T) {
 			Input:         strings.ReplaceAll(MyBasicRule, "ExampleRule", ""),
 			ExpectedError: "unexpected character in rule identifier around 6",
 		},
+		// One rule of each preamble form shipped by
+		// https://github.com/Security-Onion-Solutions/securityonion-yara
+		// Bodies are trimmed. The preamble and rule name are from the cited file.
+		// ValidateRule is the save path, so these must stay accepted or a duplicated
+		// community detection cannot be saved.
+		{
+			Name: "import and block comment yara/apt_apt29_nobelium_may21.yar",
+			Input: `import "math"
+import "pe"
+
+/*
+    YARA Rules by Volexity
+    Reference: https://www.volexity.com/blog/2021/05/27/suspected-apt29-operation-launches-election-fraud-themed-phishing-campaigns/
+*/
+
+rule APT_APT29_Win_FlipFlop_LDR : APT29 {
+	condition:
+		true
+}`,
+		},
+		{
+			Name: "block comment yara/apt_buckeye.yar",
+			Input: `/*
+	Yara Rule Set
+	Author: Florian Roth
+	Date: 2016-09-05
+	Identifier: Buckeye
+*/
+
+rule Buckeye_Osinfo {
+	condition:
+		true
+}`,
+		},
+		{
+			Name: "import yara/apt_nk_tradingtech_apr23.yar",
+			Input: `import "pe"
+rule APT_MAL_VEILEDSIGNAL_Backdoor_Apr23 {
+	condition:
+		true
+}`,
+		},
+		{
+			Name: "line comment yara/apt_lnx_kobalos.yar",
+			Input: `// For feedback or questions contact us at: github@eset.com
+// https://github.com/eset/malware-ioc/
+
+rule APT_MAL_LNX_Kobalos {
+	condition:
+		true
+}`,
+		},
+		{
+			Name: "condition space before colon yara/apt_blackenergy_installer.yar",
+			Input: `
+rule blackenergy3_installer
+{
+	condition :
+		true
+}`,
+		},
+		{
+			Name: "rule tag yara/expl_adselfservice_cve_2021_40539.yar",
+			Input: `rule LOG_EXPL_ADSelfService_CVE_2021_40539_ADSLOG_Sep21 : LOG {
+	condition:
+		true
+}`,
+		},
+		{
+			Name:  "import and private rule",
+			Input: BasicRuleWMeta,
+		},
+		{
+			Name:  "import tags and spaced condition",
+			Input: WeirdRule,
+		},
+		{
+			Name: "import with trailing comment",
+			Input: `import "pe" /* c */
+rule X {
+	condition:
+		true
+}`,
+		},
+		{
+			Name:  "CRLF import",
+			Input: "import \"pe\"\r\nrule X {\r\n\tcondition:\r\n\t\ttrue\r\n}",
+		},
 	}
 
 	e := &StrelkaEngine{}

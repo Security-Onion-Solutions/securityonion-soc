@@ -367,9 +367,9 @@ $(document).ready(function () {
               { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
             ],
             yara: [
-              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
-              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
-              { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
+              { pattern: /^rule\s+{/i, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/i, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /condition\s*:/i, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
             ],
           },
         }
@@ -2135,13 +2135,38 @@ $(document).ready(function () {
         },
         verifyRuleSyntax(det) {
           const rules = this.ruleValidators[det.language.toLowerCase()];
+          let content = det.content;
+          if (det.language.toLowerCase() === 'yara') {
+            content = this.yaraContentForSyntaxCheck(content);
+          }
           for (let i = 0; i < rules.length; i++) {
-            if (rules[i].pattern.test(det.content) === rules[i].match) {
+            if (rules[i].pattern.test(content) === rules[i].match) {
               return rules[i].message;
             }
           }
 
           return null;
+        },
+        // Drop the preamble the Strelka parser already accepts so a duplicated
+        // community rule can be saved. securityonion-yara rules often start with
+        // imports, comments, or whitespace rather than "rule". Do not skip
+        // "global" or "include"; ValidateRule rejects those.
+        yaraContentForSyntaxCheck(content) {
+          if (!content) {
+            return '';
+          }
+
+          // Whitespace, // and /* */ comments, and import "x" lines. An import may
+          // be followed by a comment on the same line, as the parser allows. \r is
+          // included because the parser skips CR before it checks the import line.
+          // Single quotes are not skipped: YARA requires double quotes. The parser
+          // would still treat "import 'pe'" as an import, but that form is invalid
+          // YARA and is not used by securityonion-yara.
+          const preamble = /^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|import[ \t]+"[^"\n]*"(?=[ \t]*(?:\/[/*]|\r?\n|$)))*/;
+          // The parser strips only a lowercase "private " prefix, then matches rule case-insensitively.
+          const privatePrefix = /^private \s*(?=[Rr][Uu][Ll][Ee]\b)/;
+
+          return String(content).replace(preamble, '').replace(privatePrefix, '');
         },
         parseMultiDocYaml(content) {
           // FAILSAFE loads an empty document as '' rather than null
