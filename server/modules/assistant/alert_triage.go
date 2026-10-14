@@ -415,8 +415,8 @@ func (r *alertTriageRun) groups(ctx context.Context) ([]alertTriageGroup, error)
 }
 
 // ungrouped makes a group of each unprocessed alert missing a field the groupby needs, since the
-// groupby has no bucket for it and would otherwise never triage it. These are not deduplicated,
-// newest first, and capped per scan like the groups.
+// groupby has no bucket for it and would otherwise never triage it. They are not deduplicated;
+// the newest come first, up to the same per-scan cap as the groups.
 func (r *alertTriageRun) ungrouped(ctx context.Context) ([]alertTriageGroup, error) {
 	logger := log.FromContext(ctx)
 
@@ -428,7 +428,7 @@ func (r *alertTriageRun) ungrouped(ctx context.Context) ([]alertTriageGroup, err
 		}
 
 		if err := required.AddFilter(field, "__missing__", false, false, false); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("alert triage cannot require groupBy field %q for ungrouped alerts: %w", field, err)
 		}
 	}
 
@@ -458,10 +458,6 @@ func (r *alertTriageRun) ungrouped(ctx context.Context) ([]alertTriageGroup, err
 	groups := make([]alertTriageGroup, 0)
 
 	for _, alert := range results.Events {
-		if len(groups) == r.params.MaxGroupsPerScan {
-			break
-		}
-
 		segment := model.NewSearchSegmentEmpty()
 		if err := segment.AddFilter("_id", alert.Id, false, true, false); err != nil {
 			logger.WithError(err).WithField("alertId", alert.Id).Warn("skipping an ungrouped alert whose id cannot be searched")
@@ -472,6 +468,12 @@ func (r *alertTriageRun) ungrouped(ctx context.Context) ([]alertTriageGroup, err
 		terms := segment.String()
 		if _, isOpen := r.open[terms]; isOpen {
 			continue
+		}
+
+		if len(groups) == r.params.MaxGroupsPerScan {
+			logger.WithField("alertTriageMaxGroupsPerScan", r.params.MaxGroupsPerScan).Warn("alert triage reached the per-scan cap for ungrouped alerts; the rest wait for a later scan")
+
+			break
 		}
 
 		groups = append(groups, alertTriageGroup{terms: terms, count: 1})
