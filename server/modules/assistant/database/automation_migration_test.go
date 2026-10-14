@@ -122,6 +122,14 @@ func TestMigrationIndexesWorkItemsByRun(t *testing.T) {
 	assert.Contains(t, sql, "USING GIN (failed_run_ids)")
 }
 
+// Tools resolve a session to its item by session id, which no other index covers.
+func TestMigrationIndexesWorkItemsBySession(t *testing.T) {
+	sql := automationMigration(t)
+
+	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_ids")
+	assert.Contains(t, sql, "USING GIN (session_ids)")
+}
+
 // Listing runs across automations orders by started_at alone, which the per-automation index
 // can't serve.
 func TestMigrationIndexesRunsByStartTime(t *testing.T) {

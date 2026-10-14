@@ -488,6 +488,49 @@ func TestListAutomationWorkItemsRequiresARunId(t *testing.T) {
 	assertNoStatements(t, mDB)
 }
 
+// A root session id appears on exactly one item; the read must not count as a change.
+func TestGetAutomationWorkItemBySessionFindsTheItem(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	changed := 0
+	s.OnAutomationChange(func() { changed++ })
+
+	mDB.On("Query", mock.Anything, sqlContainsAll(automationWorkItemColumns, "WHERE session_ids @> ARRAY[$1::text]", "LIMIT 1"), "session-1").
+		Return(automationWorkItemRows(fullWorkItemRow()), nil)
+
+	item, err := s.GetAutomationWorkItemBySession(context.Background(), "session-1")
+
+	require.NoError(t, err)
+	require.NotNil(t, item)
+	assert.Equal(t, "item-1", item.Id)
+	assert.Equal(t, testAutomationId, item.AutomationId)
+	assert.Equal(t, 0, changed)
+	mDB.AssertExpectations(t)
+}
+
+func TestGetAutomationWorkItemBySessionReturnsNilWhenUnattached(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, mock.Anything, "chat-1").Return(emptyRows(), nil)
+
+	item, err := s.GetAutomationWorkItemBySession(context.Background(), "chat-1")
+
+	require.NoError(t, err)
+	assert.Nil(t, item)
+}
+
+func TestGetAutomationWorkItemBySessionRequiresASessionId(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	_, err := s.GetAutomationWorkItemBySession(context.Background(), "")
+
+	assert.Error(t, err)
+	assertNoStatements(t, mDB)
+}
+
 // The caller submits what it receives, so a skipped group must not appear in the
 // return even though it was in the batch.
 func TestEnsureAutomationWorkItemsReturnsOnlyWhatItInserted(t *testing.T) {

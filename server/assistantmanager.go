@@ -71,6 +71,7 @@ type AssistantManager interface {
 	DeleteSkill(ctx context.Context, name string) error
 	ListAutomations(ctx context.Context) ([]*model.Automation, error)
 	GetAutomation(ctx context.Context, id string) (*model.Automation, error)
+	AutomationForSession(ctx context.Context, sessionId string) (*model.Automation, error)
 	SaveAutomation(ctx context.Context, automation *model.Automation) error
 	DeleteAutomation(ctx context.Context, id string) error
 	GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error)

@@ -480,6 +480,11 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	return ac.loadAutomation(ctx, id)
+}
+
+// loadAutomation reads the automation with the builtin overlay applied and no permission check.
+func (ac *AssistantCoordinator) loadAutomation(ctx context.Context, id string) (*model.Automation, error) {
 	stored, err := ac.getStoredAutomation(ctx, id)
 
 	if !ac.isBuiltinAutomation(id) {

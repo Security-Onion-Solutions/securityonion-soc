@@ -396,6 +396,31 @@ func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId st
 	return collectWorkItems(rows)
 }
 
+// GetAutomationWorkItemBySession returns the item one root session was an attempt at, or nil.
+func (s *Store) GetAutomationWorkItemBySession(ctx context.Context, sessionId string) (*model.AutomationWorkItem, error) {
+	if sessionId == "" {
+		return nil, fmt.Errorf("cannot look up a work item without a session id")
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT `+automationWorkItemColumns+`
+		FROM automation_work_items
+		WHERE session_ids @> ARRAY[$1::text]
+		ORDER BY created_at DESC
+		LIMIT 1`, sessionId)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, rows.Err()
+	}
+
+	return scanAutomationWorkItemRow(rows)
+}
+
 // ListAutomationWorkItems returns the items one run last worked or failed; a claim re-points run_id.
 func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*model.AutomationWorkItem, error) {
 	if runId == "" {

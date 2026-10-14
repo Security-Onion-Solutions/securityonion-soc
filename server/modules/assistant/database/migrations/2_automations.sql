@@ -66,3 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_automation_work_items_run_id
 
 CREATE INDEX IF NOT EXISTS idx_automation_work_items_failed_run_ids
     ON automation_work_items USING GIN (failed_run_ids);
+
+-- Tools resolve a session to its automation through the item that ran it.
+CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_ids
+    ON automation_work_items USING GIN (session_ids);

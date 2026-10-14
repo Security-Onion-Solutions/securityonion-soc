@@ -71,6 +71,21 @@ func (mr *MockAssistantManagerMockRecorder) AttachInvestigation(ctx, socId, sess
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).AttachInvestigation), ctx, socId, sessionId)
 }
 
+// AutomationForSession mocks base method.
+func (m *MockAssistantManager) AutomationForSession(ctx context.Context, sessionId string) (*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AutomationForSession", ctx, sessionId)
+	ret0, _ := ret[0].(*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AutomationForSession indicates an expected call of AutomationForSession.
+func (mr *MockAssistantManagerMockRecorder) AutomationForSession(ctx, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AutomationForSession", reflect.TypeOf((*MockAssistantManager)(nil).AutomationForSession), ctx, sessionId)
+}
+
 // Balance mocks base method.
 func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
