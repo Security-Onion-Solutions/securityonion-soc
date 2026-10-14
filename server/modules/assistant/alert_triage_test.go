@@ -851,6 +851,119 @@ func TestAlertTriageScanErrorsStopTheScan(t *testing.T) {
 	assert.Empty(t, f.store.ensured)
 }
 
+const triageModuleParams = `{"groupBy":["rule.uuid"],"maxGroupsPerScan":1,"groupByModule":{
+	"strelka":["rule.uuid","hash.sha256*"],
+	"sigma":["rule.uuid","event_data.host.name"]}}`
+
+func TestAlertTriageLanes(t *testing.T) {
+	params, err := parseAlertTriageParams(json.RawMessage(triageModuleParams))
+	require.NoError(t, err)
+
+	sigma := `event.module:"sigma" AND _exists_:"rule.uuid" AND _exists_:"event_data.host.name"`
+	strelka := `event.module:"strelka" AND _exists_:"rule.uuid"`
+
+	// Modules in name order, then the fallback.
+	require.Len(t, params.lanes, 3)
+	assert.Equal(t, alertTriageLane{selector: sigma, groupBy: []string{"rule.uuid", "event_data.host.name"}}, params.lanes[0])
+	assert.Equal(t, alertTriageLane{selector: strelka, groupBy: []string{"rule.uuid", "hash.sha256*"}}, params.lanes[1])
+	assert.Equal(t, alertTriageLane{selector: "NOT (" + sigma + ") AND NOT (" + strelka + ")", groupBy: []string{"rule.uuid"}}, params.lanes[2])
+
+	for _, lane := range params.lanes {
+		assert.NoError(t, model.ValidateAlertTriageSearch(lane.selector))
+	}
+
+	params, err = parseAlertTriageParams(json.RawMessage(`{"groupBy":["rule.name"],"groupByModule":{" sigma ":[" rule.name ","host.name"]}}`))
+	require.NoError(t, err)
+	assert.Equal(t, map[string][]string{"sigma": {"rule.name", "host.name"}}, params.GroupByModule)
+
+	params, err = parseAlertTriageParams(json.RawMessage(`{"groupBy":["rule.name"]}`))
+	require.NoError(t, err)
+	assert.Equal(t, []alertTriageLane{{groupBy: []string{"rule.name"}}}, params.lanes)
+}
+
+func TestAlertTriageValidateGroupByModule(t *testing.T) {
+	tests := []struct {
+		name    string
+		params  string
+		wantErr string
+	}{
+		{"not an object", `{"groupBy":["rule.uuid"],"groupByModule":["sigma"]}`, "groupByModule"},
+		{"blank module", `{"groupBy":["rule.uuid"],"groupByModule":{" ":["rule.name"]}}`, "blank module"},
+		{"module twice once trimmed", `{"groupBy":["rule.uuid"],"groupByModule":{"sigma":["rule.name"]," sigma":["host.name"]}}`, "more than once"},
+		{"no fields", `{"groupBy":["rule.uuid"],"groupByModule":{"sigma":[]}}`, `groupByModule "sigma" requires`},
+		{"bad field", `{"groupBy":["rule.uuid"],"groupByModule":{"sigma":["a|b"]}}`, "not a field name"},
+		{"same fields as fallback", `{"groupBy":["rule.uuid"],"groupByModule":{"sigma":["rule.uuid"]}}`, "same fields as groupBy"},
+		{"same fields as another module", `{"groupBy":["rule.uuid"],"groupByModule":{"sigma":["rule.name"],"strelka":["rule.name*"]}}`, `"strelka" groups on the same fields as groupByModule "sigma"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (&AlertTriageKind{}).ValidateParams(json.RawMessage(tt.params))
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+// Each lane runs its own groupby with its own cap; a group's key is its terms alone.
+func TestAlertTriageScansEachLane(t *testing.T) {
+	f := newTriageFixture(t, triageModuleParams)
+	f.allowUnrecordedEnd = true
+	results := model.NewEventSearchResults()
+	results.Metrics["groupby_0|rule.uuid|event_data.host.name"] = []*model.EventMetric{bucket(9, "sigma-1", "somn24"), bucket(4, "sigma-1", "soidh1")}
+	results.Metrics["groupby_0|rule.uuid|hash.sha256"] = []*model.EventMetric{bucket(2, "yara-1", "abc")}
+	results.Metrics["groupby_0|rule.uuid"] = []*model.EventMetric{bucket(1, "other-1")}
+	f.es.SearchResults = []*model.EventSearchResults{results}
+	f.withLatest("alert-sigma", "alert-strelka", "alert-other")
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	params, err := parseAlertTriageParams(json.RawMessage(triageModuleParams))
+	require.NoError(t, err)
+
+	searches := f.es.InputSearchCriterias[:3]
+	base := strings.TrimSuffix(searches[0].RawQuery, " AND "+params.lanes[0].selector+" | groupby rule.uuid event_data.host.name")
+	assert.Equal(t, base+" AND "+params.lanes[1].selector+" | groupby rule.uuid hash.sha256*", searches[1].RawQuery)
+	assert.Equal(t, base+" AND "+params.lanes[2].selector+" | groupby rule.uuid", searches[2].RawQuery)
+
+	// The cap of one holds per lane: soidh1's group waits, and the others still go ahead.
+	require.Len(t, f.store.ensured, 1)
+	items := f.store.ensured[0]
+	require.Len(t, items, 3)
+	assert.Equal(t, `rule.uuid:"sigma-1" AND event_data.host.name:"somn24"`, items[0].GroupKey)
+	assert.Equal(t, `rule.uuid:"yara-1" AND hash.sha256:"abc"`, items[1].GroupKey)
+	assert.Equal(t, `rule.uuid:"other-1"`, items[2].GroupKey)
+
+	slots := f.es.InputMSearchCriterias[0]
+	require.Len(t, slots, 3)
+	assert.Equal(t, base+" AND "+params.lanes[0].selector+` AND rule.uuid:"sigma-1" AND event_data.host.name:"somn24"`, slots[0].RawQuery)
+	assert.Equal(t, base+" AND "+params.lanes[2].selector+` AND rule.uuid:"other-1"`, slots[2].RawQuery)
+
+	var payload alertTriagePayload
+	require.NoError(t, json.Unmarshal(items[0].Payload, &payload))
+	assert.Equal(t, slots[0].RawQuery, payload.GroupFilter)
+	assert.Equal(t, 9, payload.Count)
+}
+
+// A lane whose groupby fails is left for a later scan without holding back the others.
+func TestAlertTriageLaneErrorKeepsOtherLanes(t *testing.T) {
+	f := newTriageFixture(t, triageModuleParams)
+	f.allowUnrecordedEnd = true
+	failed := model.NewEventSearchResults()
+	failed.Errors = []string{"shard failure"}
+	ok := model.NewEventSearchResults()
+	ok.Metrics["groupby_0|rule.uuid|hash.sha256"] = []*model.EventMetric{bucket(2, "yara-1", "abc")}
+	f.es.SearchResults = []*model.EventSearchResults{failed, ok}
+	f.withLatest("alert-strelka")
+
+	err := f.kind.Execute(context.Background(), f.run)
+	assert.ErrorContains(t, err, "shard failure")
+
+	require.Len(t, f.store.ensured, 1)
+	require.Len(t, f.store.ensured[0], 1)
+	assert.Equal(t, `rule.uuid:"yara-1" AND hash.sha256:"abc"`, f.store.ensured[0][0].GroupKey)
+}
+
 func TestAlertTriageStoreUnsupported(t *testing.T) {
 	f := newTriageFixture(t, triageTestParams)
 	f.run.Srv.Assistantstore = nil
@@ -1613,6 +1726,12 @@ func TestBuiltinAlertTriageDefinitionIsValid(t *testing.T) {
 
 	params, err := parseAlertTriageParams(builtin.Params)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"source.ip", "rule.uuid", "destination.ip"}, params.GroupBy)
-	assert.Equal(t, "groupby_0|source.ip|rule.uuid|destination.ip", alertTriageMetricName(params.GroupBy))
+	require.Len(t, params.lanes, 4)
+
+	assert.Equal(t, alertTriageLane{selector: `event.module:"sigma" AND _exists_:"rule.uuid" AND _exists_:"event_data.host.name"`, groupBy: []string{"rule.uuid", "event_data.host.name"}}, params.lanes[0])
+	assert.Equal(t, alertTriageLane{selector: `event.module:"strelka" AND _exists_:"rule.uuid" AND _exists_:"hash.sha256"`, groupBy: []string{"rule.uuid", "hash.sha256"}}, params.lanes[1])
+
+	// Suricata keeps the fields it was grouped on before, so its open items keep their keys.
+	assert.Equal(t, alertTriageLane{selector: `event.module:"suricata" AND _exists_:"source.ip" AND _exists_:"rule.uuid" AND _exists_:"destination.ip"`, groupBy: []string{"source.ip", "rule.uuid", "destination.ip"}}, params.lanes[2])
+	assert.Equal(t, []string{"rule.uuid"}, params.lanes[3].groupBy)
 }

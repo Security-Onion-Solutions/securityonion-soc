@@ -1,4 +1,18 @@
 <v-switch v-if="field.type === 'boolean'" v-model="params[field.key]" color="primary" density="compact" inset :label="label()" :hint="field.hint" persistent-hint :readonly="readonly" :data-aid="'automation_param_' + field.key"></v-switch>
 <v-combobox v-else-if="field.type === 'array'" v-model="params[field.key]" :label="label()" variant="outlined" density="comfortable" multiple chips :closable-chips="!readonly" :hint="field.hint" persistent-hint :readonly="readonly" :data-aid="'automation_param_' + field.key"></v-combobox>
+<div v-else-if="field.type === 'object'" :data-aid="'automation_param_' + field.key">
+  <div class="text-body-medium mb-2">{{ label() }}</div>
+  <v-combobox v-for="key in objectKeys()" :key="key" :model-value="params[field.key][key]" @update:model-value="setObjectValues(key, $event)" :label="key" variant="outlined" density="comfortable" multiple chips :closable-chips="!readonly" :readonly="readonly" hide-details class="mb-3" :data-aid="'automation_param_' + field.key + '_' + key">
+    <template v-if="!readonly" #append>
+      <v-btn icon="fa-xmark" variant="text" size="small" :title="i18n.remove" @click="removeObjectKey(key)" :data-aid="'automation_param_' + field.key + '_' + key + '_remove'"></v-btn>
+    </template>
+  </v-combobox>
+  <v-text-field v-if="!readonly" v-model="newKey" :label="i18n.agentStudioAutomationParamAddKey" variant="outlined" density="comfortable" hide-details class="mb-2" @keydown.enter.prevent="addObjectKey()" :data-aid="'automation_param_' + field.key + '_new'">
+    <template #append>
+      <v-btn icon="fa-plus" variant="text" size="small" :title="i18n.add" :disabled="!newKey.trim()" @click="addObjectKey()" :data-aid="'automation_param_' + field.key + '_add'"></v-btn>
+    </template>
+  </v-text-field>
+  <div class="text-body-small text-medium-emphasis">{{ field.hint }}</div>
+</div>
 <v-text-field v-else-if="field.type === 'integer' || field.type === 'number'" v-model.number="params[field.key]" type="number" min="0" :placeholder="placeholder()" :persistent-placeholder="!!placeholder()" :label="label()" variant="outlined" density="comfortable" :hint="field.hint" persistent-hint :readonly="readonly" :data-aid="'automation_param_' + field.key"></v-text-field>
 <v-text-field v-else v-model="params[field.key]" :label="label()" variant="outlined" density="comfortable" :hint="field.hint" persistent-hint :readonly="readonly" :data-aid="'automation_param_' + field.key"></v-text-field>

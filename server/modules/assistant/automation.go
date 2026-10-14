@@ -249,6 +249,17 @@ func (run *AutomationRun) recoverOrphanedWorkItems(ctx context.Context, items []
 	return recovered
 }
 
+// Sigma alerts carry the matched event under event_data, and Strelka alerts are about files, so
+// neither has the network fields Suricata alerts are grouped on.
+const builtinAlertTriageParams = `{
+	"groupBy": ["rule.uuid"],
+	"groupByModule": {
+		"suricata": ["source.ip", "rule.uuid", "destination.ip"],
+		"sigma": ["rule.uuid", "event_data.host.name"],
+		"strelka": ["rule.uuid", "hash.sha256"]
+	}
+}`
+
 // setupBuiltinAutomations defines the automations that ship with the product.
 func (ac *AssistantCoordinator) setupBuiltinAutomations() {
 	ac.builtinAutomations = map[string]*model.Automation{
@@ -257,7 +268,7 @@ func (ac *AssistantCoordinator) setupBuiltinAutomations() {
 			AutomationKind:  alertTriageKindName,
 			Agent:           "AlertTriage",
 			IntervalSeconds: int(ac.getAutomationTickInterval().Seconds()),
-			Params:          json.RawMessage(`{"groupBy":["source.ip","rule.uuid","destination.ip"]}`),
+			Params:          json.RawMessage(builtinAlertTriageParams),
 		},
 	}
 }

@@ -1033,7 +1033,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       const params = {};
       for (const field of this.automationKindFields(name)) {
         if (field.default !== undefined) params[field.key] = field.default;
-        else params[field.key] = field.type === 'array' ? [] : '';
+        else if (field.type === 'array') params[field.key] = [];
+        else if (field.type === 'object') params[field.key] = {};
+        else params[field.key] = '';
       }
       return params;
     },
@@ -1050,6 +1052,14 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         } else if (field.type === 'array') {
           value = (value || []).map(v => String(v).trim()).filter(v => v);
           if (!value.length) continue;
+        } else if (field.type === 'object') {
+          const entries = {};
+          for (const [key, values] of Object.entries(value || {})) {
+            const trimmed = (values || []).map(v => String(v).trim()).filter(v => v);
+            if (key.trim() && trimmed.length) entries[key.trim()] = trimmed;
+          }
+          if (!Object.keys(entries).length) continue;
+          value = entries;
         } else if (typeof value === 'string') {
           value = value.trim();
           if (!value) continue;

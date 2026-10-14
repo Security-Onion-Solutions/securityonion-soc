@@ -1757,6 +1757,7 @@ const alertTriageKind = () => ({
     properties: {
       filter: { type: 'string', description: 'OQL search' },
       groupBy: { type: 'array', description: 'Group fields' },
+      groupByModule: { type: 'object', description: 'Group fields per module' },
       maxGroupsPerScan: { type: 'integer', description: 'Groups per scan', default: 25 },
       maxFailures: { type: 'integer', description: 'Failed runs', default: 3 },
       floor: { type: 'string', description: 'RFC3339 time' },
@@ -2021,10 +2022,19 @@ test('params are shaped for the server\'s strict decoder', () => {
   comp.initAssistant(automationParams());
   const a = {
     automationKind: 'alert_triage',
-    params: { filter: '  ', groupBy: [' rule.name ', ''], maxGroupsPerScan: '', maxFailures: '5', floor: '2026-09-25T00:00:00Z', stray: 'x' },
+    params: {
+      filter: '  ', groupBy: [' rule.name ', ''], maxGroupsPerScan: '', maxFailures: '5', floor: '2026-09-25T00:00:00Z', stray: 'x',
+      groupByModule: { ' sigma ': [' rule.uuid ', '', 'event_data.host.name'], strelka: [''], ' ': ['rule.name'] },
+    },
   };
 
-  expect(comp.automationParams(a)).toEqual({ groupBy: ['rule.name'], maxFailures: 5, floor: '2026-09-25T00:00:00Z' });
+  expect(comp.automationParams(a)).toEqual({
+    groupBy: ['rule.name'], maxFailures: 5, floor: '2026-09-25T00:00:00Z',
+    groupByModule: { sigma: ['rule.uuid', 'event_data.host.name'] },
+  });
+
+  a.params.groupByModule = { strelka: [] };
+  expect(comp.automationParams(a).groupByModule).toBeUndefined();
 
   expect(comp.automationParams({ automationKind: 'nope', params: { anything: 1 } })).toEqual({ anything: 1 });
 });
@@ -2047,11 +2057,12 @@ test('the settings form is built from the kind\'s paramSchema, required fields f
   comp.initAssistant(automationParams());
   const fields = comp.automationKindFields('alert_triage');
 
-  expect(fields.map(f => f.key)).toEqual(['groupBy', 'filter', 'maxGroupsPerScan', 'maxFailures', 'floor']);
+  expect(fields.map(f => f.key)).toEqual(['groupBy', 'filter', 'groupByModule', 'maxGroupsPerScan', 'maxFailures', 'floor']);
   expect(fields[0]).toMatchObject({ label: 'Group By', type: 'array', required: true });
-  expect(fields[2]).toMatchObject({ label: 'Max Groups Per Scan', type: 'integer', default: 25, required: false });
+  expect(fields[2]).toMatchObject({ label: 'Group By Module', type: 'object', required: false });
+  expect(fields[3]).toMatchObject({ label: 'Max Groups Per Scan', type: 'integer', default: 25, required: false });
   expect(comp.automationKindFields('nope')).toEqual([]);
-  expect(comp.automationParamDefaults('alert_triage')).toEqual({ groupBy: [], filter: '', maxGroupsPerScan: 25, maxFailures: 3, floor: '' });
+  expect(comp.automationParamDefaults('alert_triage')).toEqual({ groupBy: [], filter: '', groupByModule: {}, maxGroupsPerScan: 25, maxFailures: 3, floor: '' });
 });
 
 test('an automation is only valid when the server would accept it', () => {

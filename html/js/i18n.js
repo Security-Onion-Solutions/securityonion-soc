@@ -504,6 +504,7 @@ const i18n = {
       agentStudioViewInAgentMonitor: 'View in Agent Monitor',
       agentStudioAutomationLastRun: 'Last run',
       agentStudioAutomationNextRun: 'Next run',
+      agentStudioAutomationParamAddKey: 'Add entry',
       agentStudioAutomationRunsEmpty: 'This automation has not run yet.',
       agentStudioAutomationOutcome: 'Outcome',
       agentUser: 'Agent',

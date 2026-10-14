@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,15 +46,28 @@ var (
 // headless session, and records that session on every alert in the group.
 type AlertTriageKind struct{}
 
-// alertTriageParams is what GetParamSchema describes, as stored.
+// alertTriageParams is what GetParamSchema describes, as stored. GroupByModule groups each listed
+// event.module by its own fields, for alert types that lack the fields others are grouped on;
+// GroupBy is for every other module.
 type alertTriageParams struct {
-	Filter           string   `json:"filter"`
-	GroupBy          []string `json:"groupBy"`
-	MaxGroupsPerScan int      `json:"maxGroupsPerScan"`
-	MaxFailures      int      `json:"maxFailures"`
-	Floor            string   `json:"floor"`
+	Filter           string              `json:"filter"`
+	GroupBy          []string            `json:"groupBy"`
+	GroupByModule    map[string][]string `json:"groupByModule"`
+	MaxGroupsPerScan int                 `json:"maxGroupsPerScan"`
+	MaxFailures      int                 `json:"maxFailures"`
+	Floor            string              `json:"floor"`
 
 	floor time.Time
+	lanes []alertTriageLane
+}
+
+// alertTriageLane is one groupby of a scan. Each alert falls in exactly one lane: a module's lane
+// takes its alerts that have every field it groups on, and the fallback takes the rest. The
+// fallback of params with no modules has no selector, so its searches are what they were before
+// modules could be grouped apart.
+type alertTriageLane struct {
+	selector string
+	groupBy  []string
 }
 
 // alertTriagePayload is what a work item carries: enough to select its alerts again and to
@@ -89,7 +104,11 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"groupBy": {
 					Type:        "array",
-					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. Append * to a field to group alerts missing it together",
+					Description: "Alert field names whose values define a group, e.g. [\"rule.name\", \"source.ip\"]; one investigation per group. Applies to every module not listed in Group By Module. Append * to a field to group alerts missing it together",
+				},
+				"groupByModule": {
+					Type:        "object",
+					Description: "Per event.module, the alert fields that define its groups instead of Group By. An alert missing one of its module's fields is grouped by Group By",
 				},
 				"maxGroupsPerScan": {
 					Type:        "integer",
@@ -131,23 +150,36 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 		}
 	}
 
-	if len(params.GroupBy) == 0 {
-		return nil, fmt.Errorf("%w: groupBy requires at least one field", ErrInvalidAutomationParams)
+	if err := validateAlertTriageGroupBy("groupBy", params.GroupBy); err != nil {
+		return nil, err
 	}
 
-	for i, field := range params.GroupBy {
-		field = strings.TrimSpace(field)
-
-		if field == "" || strings.ContainsAny(field, " \t\r\n|\"'") || strings.HasPrefix(field, "-") || strings.Trim(field, "*") == "" {
-			return nil, fmt.Errorf("%w: groupBy field %q is not a field name", ErrInvalidAutomationParams, field)
+	modules := make(map[string][]string, len(params.GroupByModule))
+	for module, fields := range params.GroupByModule {
+		trimmed := strings.TrimSpace(module)
+		if trimmed == "" {
+			return nil, fmt.Errorf("%w: groupByModule has a blank module", ErrInvalidAutomationParams)
 		}
 
-		params.GroupBy[i] = field
+		if _, dup := modules[trimmed]; dup {
+			return nil, fmt.Errorf("%w: groupByModule lists %q more than once", ErrInvalidAutomationParams, trimmed)
+		}
+
+		if err := validateAlertTriageGroupBy(fmt.Sprintf("groupByModule %q", trimmed), fields); err != nil {
+			return nil, err
+		}
+
+		modules[trimmed] = fields
 	}
 
-	if err := model.NewQuery().Parse("tags:alert | groupby " + strings.Join(params.GroupBy, " ")); err != nil {
-		return nil, fmt.Errorf("%w: groupBy: %v", ErrInvalidAutomationParams, err)
+	params.GroupByModule = modules
+
+	lanes, err := buildAlertTriageLanes(params)
+	if err != nil {
+		return nil, err
 	}
+
+	params.lanes = lanes
 
 	params.Filter = strings.TrimSpace(params.Filter)
 	if params.Filter != "" {
@@ -181,6 +213,85 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 	}
 
 	return params, nil
+}
+
+func validateAlertTriageGroupBy(name string, fields []string) error {
+	if len(fields) == 0 {
+		return fmt.Errorf("%w: %s requires at least one field", ErrInvalidAutomationParams, name)
+	}
+
+	for i, field := range fields {
+		field = strings.TrimSpace(field)
+
+		if field == "" || strings.ContainsAny(field, " \t\r\n|\"'") || strings.HasPrefix(field, "-") || strings.Trim(field, "*") == "" {
+			return fmt.Errorf("%w: %s field %q is not a field name", ErrInvalidAutomationParams, name, field)
+		}
+
+		fields[i] = field
+	}
+
+	if err := model.NewQuery().Parse("tags:alert | groupby " + strings.Join(fields, " ")); err != nil {
+		return fmt.Errorf("%w: %s: %v", ErrInvalidAutomationParams, name, err)
+	}
+
+	return nil
+}
+
+// buildAlertTriageLanes turns the modules, in name order, and the fallback into lanes. A group's
+// key is its bucket terms alone, so a key the scan has always produced stays the same; two lanes
+// grouping on the same fields would share keys, so that is refused.
+func buildAlertTriageLanes(params *alertTriageParams) ([]alertTriageLane, error) {
+	lanes := make([]alertTriageLane, 0, len(params.GroupByModule)+1)
+	exclusions := make([]string, 0, len(params.GroupByModule))
+	seen := map[string]string{alertTriageMetricName(params.GroupBy): "groupBy"}
+
+	for _, module := range slices.Sorted(maps.Keys(params.GroupByModule)) {
+		fields := params.GroupByModule[module]
+		name := fmt.Sprintf("groupByModule %q", module)
+
+		metric := alertTriageMetricName(fields)
+		if other, dup := seen[metric]; dup {
+			return nil, fmt.Errorf("%w: %s groups on the same fields as %s", ErrInvalidAutomationParams, name, other)
+		}
+		seen[metric] = name
+
+		selector, err := alertTriageModuleSelector(module, fields)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s: %v", ErrInvalidAutomationParams, name, err)
+		}
+
+		lanes = append(lanes, alertTriageLane{selector: selector, groupBy: fields})
+		exclusions = append(exclusions, "NOT ("+selector+")")
+	}
+
+	lanes = append(lanes, alertTriageLane{
+		selector: strings.Join(exclusions, " AND "),
+		groupBy:  params.GroupBy,
+	})
+
+	return lanes, nil
+}
+
+// alertTriageModuleSelector is the module's alerts that have every field it groups on, so one
+// missing a field is left to the fallback rather than silently dropped from the groupby. A field
+// ending in * groups its missing values itself and is not required.
+func alertTriageModuleSelector(module string, fields []string) (string, error) {
+	segment := model.NewSearchSegmentEmpty()
+	if err := segment.AddFilter("event.module", module, false, true, false); err != nil {
+		return "", err
+	}
+
+	for _, field := range fields {
+		if strings.HasSuffix(field, "*") {
+			continue
+		}
+
+		if err := segment.AddFilter(field, "__missing__", false, false, false); err != nil {
+			return "", err
+		}
+	}
+
+	return segment.String(), nil
 }
 
 // alertTriageFloor is the param clamped to the epoch; a blank param is the epoch itself.
@@ -218,8 +329,9 @@ type alertTriageRun struct {
 }
 
 type alertTriageGroup struct {
-	terms string
-	count int
+	terms  string
+	filter string
+	count  int
 }
 
 func (k *AlertTriageKind) Execute(ctx context.Context, run *AutomationRun) error {
@@ -333,19 +445,20 @@ func (r *alertTriageRun) claim(ctx context.Context) error {
 // scan finds the unprocessed groups, the latest alert of each, and enqueues one item per group.
 // Dispatch is left to claim.
 func (r *alertTriageRun) scan(ctx context.Context) error {
-	groups, err := r.groups(ctx)
-	if err != nil || len(groups) == 0 {
-		return err
+	// A lane that fails is left for a later scan; the groups the others found still go ahead.
+	groups, laneErr := r.groups(ctx)
+	if len(groups) == 0 {
+		return laneErr
 	}
 
 	items, err := r.latestAlerts(ctx, groups)
 	if err != nil || len(items) == 0 {
-		return err
+		return errors.Join(laneErr, err)
 	}
 
 	inserted, err := r.run.Store.EnsureAutomationWorkItems(ctx, r.run.RunId, items)
 	if err != nil {
-		return err
+		return errors.Join(laneErr, err)
 	}
 
 	log.FromContext(ctx).WithFields(log.Fields{
@@ -353,23 +466,46 @@ func (r *alertTriageRun) scan(ctx context.Context) error {
 		"enqueuedCount": len(inserted),
 	}).Info("alert triage scan finished")
 
-	return nil
+	return laneErr
 }
 
 func (r *alertTriageRun) dateRange() string {
 	return model.AlertTriageDateRange(r.floor, r.ceiling)
 }
 
-// groups runs the groupby and rebuilds each bucket's terms, skipping groups already open and
-// stopping at the per-scan cap.
+// groups collects every lane's groups. Each lane has its own per-scan cap, so a flood of one
+// alert type cannot hold back the others.
 func (r *alertTriageRun) groups(ctx context.Context) ([]alertTriageGroup, error) {
+	var groups []alertTriageGroup
+	var errs []error
+
+	for _, lane := range r.params.lanes {
+		laneGroups, err := r.laneGroups(ctx, lane)
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		groups = append(groups, laneGroups...)
+	}
+
+	return groups, errors.Join(errs...)
+}
+
+// laneGroups runs one lane's groupby and rebuilds each bucket's terms, skipping groups already
+// open and stopping at the per-scan cap.
+func (r *alertTriageRun) laneGroups(ctx context.Context, lane alertTriageLane) ([]alertTriageGroup, error) {
 	logger := log.FromContext(ctx)
 
 	// Open groups still come back from the aggregation, so ask for enough buckets to see past them.
 	limit := r.params.MaxGroupsPerScan + len(r.open)
 
+	scope := r.base
+	if lane.selector != "" {
+		scope += " AND " + lane.selector
+	}
+
 	criteria := model.NewEventSearchCriteria()
-	if err := criteria.Populate(r.base+" | groupby "+strings.Join(r.params.GroupBy, " "), r.dateRange(), time.RFC3339, "", strconv.Itoa(limit), "0"); err != nil {
+	if err := criteria.Populate(scope+" | groupby "+strings.Join(lane.groupBy, " "), r.dateRange(), time.RFC3339, "", strconv.Itoa(limit), "0"); err != nil {
 		return nil, err
 	}
 
@@ -384,12 +520,12 @@ func (r *alertTriageRun) groups(ctx context.Context) ([]alertTriageGroup, error)
 
 	groups := make([]alertTriageGroup, 0)
 
-	for _, metric := range results.Metrics[alertTriageMetricName(r.params.GroupBy)] {
+	for _, metric := range results.Metrics[alertTriageMetricName(lane.groupBy)] {
 		if len(groups) == r.params.MaxGroupsPerScan {
 			break
 		}
 
-		terms, err := model.BuildAlertTriageGroupTerms(r.params.GroupBy, metric.Keys)
+		terms, err := model.BuildAlertTriageGroupTerms(lane.groupBy, metric.Keys)
 		if err != nil {
 			logger.WithError(err).Warn("skipping an alert group whose key cannot be rebuilt")
 
@@ -400,7 +536,7 @@ func (r *alertTriageRun) groups(ctx context.Context) ([]alertTriageGroup, error)
 			continue
 		}
 
-		groups = append(groups, alertTriageGroup{terms: terms, count: int(metric.Value)})
+		groups = append(groups, alertTriageGroup{terms: terms, filter: scope + " AND " + terms, count: int(metric.Value)})
 	}
 
 	return groups, nil
@@ -415,10 +551,9 @@ func (r *alertTriageRun) latestAlerts(ctx context.Context, groups []alertTriageG
 	criterias := make([]*model.EventMSearchCriteria, 0, len(groups))
 
 	for _, group := range groups {
-		filter := r.base + " AND " + group.terms
-		filters = append(filters, filter)
+		filters = append(filters, group.filter)
 
-		criteria, err := latestAlertCriteria(filter, r.dateRange())
+		criteria, err := latestAlertCriteria(group.filter, r.dateRange())
 		if err != nil {
 			return nil, err
 		}

@@ -17,3 +17,40 @@ test('marks required settings and shows the default as a placeholder', () => {
   expect(methods.label.call(optional)).toBe('Max Failures');
   expect(methods.placeholder.call(optional)).toBe('3');
 });
+
+test('an object param edits each key\'s values, in key order', () => {
+  const comp = { field: { key: 'groupByModule' }, params: { groupByModule: { sigma: ['rule.uuid'], strelka: ['hash.sha256'] } }, newKey: '' };
+  Object.assign(comp, methods);
+  expect(comp.objectKeys()).toEqual(['sigma', 'strelka']);
+
+  const before = comp.params.groupByModule;
+  comp.setObjectValues('sigma', ['rule.uuid', 'event_data.host.name']);
+  expect(comp.params.groupByModule).toEqual({ sigma: ['rule.uuid', 'event_data.host.name'], strelka: ['hash.sha256'] });
+  expect(comp.params.groupByModule).not.toBe(before);
+
+  comp.newKey = ' suricata ';
+  comp.addObjectKey();
+  expect(comp.params.groupByModule.suricata).toEqual([]);
+  expect(comp.newKey).toBe('');
+
+  comp.newKey = 'sigma';
+  comp.addObjectKey();
+  expect(comp.params.groupByModule.sigma).toEqual(['rule.uuid', 'event_data.host.name'], 'an existing key keeps its values');
+  expect(comp.newKey).toBe('sigma');
+
+  comp.newKey = '  ';
+  comp.addObjectKey();
+  expect(comp.objectKeys()).toEqual(['sigma', 'strelka', 'suricata']);
+
+  comp.removeObjectKey('strelka');
+  expect(comp.objectKeys()).toEqual(['sigma', 'suricata']);
+});
+
+test('an object param starts empty when the params lack it', () => {
+  const comp = { field: { key: 'groupByModule' }, params: {}, newKey: 'sigma' };
+  Object.assign(comp, methods);
+  expect(comp.objectKeys()).toEqual([]);
+
+  comp.addObjectKey();
+  expect(comp.params.groupByModule).toEqual({ sigma: [] });
+});

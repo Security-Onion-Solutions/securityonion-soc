@@ -14,7 +14,32 @@ components.push({
       params: { type: Object, required: true },
       readonly: { type: Boolean, default: false },
     },
+    data() {
+      return {
+        i18n: this.$root?.i18n || {},
+        newKey: '',
+      };
+    },
     methods: {
+      // An object param maps each key to a list of values, e.g. a module to the fields it is grouped on.
+      objectKeys() {
+        return Object.keys(this.params[this.field.key] || {}).sort();
+      },
+      // Assigned whole so the edit is reactive.
+      setObjectValues(key, values) {
+        this.params[this.field.key] = Object.assign({}, this.params[this.field.key], { [key]: values });
+      },
+      addObjectKey() {
+        const key = this.newKey.trim();
+        if (!key || (this.params[this.field.key] || {})[key] !== undefined) return;
+        this.setObjectValues(key, []);
+        this.newKey = '';
+      },
+      removeObjectKey(key) {
+        const remaining = Object.assign({}, this.params[this.field.key]);
+        delete remaining[key];
+        this.params[this.field.key] = remaining;
+      },
       label() {
         return this.field.required ? this.field.label + ' *' : this.field.label;
       },
