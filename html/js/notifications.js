@@ -144,6 +144,16 @@ rootMethods.push({
     return '#';
   },
 
+  deepLinkTitle(name) {
+    switch (name) {
+      case '🔔': return this.i18n.aiInvestigation;
+      case '💬': return this.i18n.openInOnionAi;
+      case '🌐': return this.i18n.view;
+      case '⬇': return this.i18n.download;
+    }
+    return name;
+  },
+
   toggleNotificationExpand(notif) {
     if (!notif || !notif.id) return;
     if (!this.expandedNotifications) {
