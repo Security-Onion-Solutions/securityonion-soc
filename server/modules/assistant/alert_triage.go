@@ -103,7 +103,7 @@ func (k *AlertTriageKind) GetParamSchema() model.JSONSchema {
 				},
 				"floor": {
 					Type:        "string",
-					Description: "RFC3339 time; alerts before it are never triaged. Blank means the automationSettings.alertTriageEpoch setting, and it is never earlier than that",
+					Description: "Date and time in UTC, such as 2026-10-01T00:00:00Z; alerts before it are never triaged. Blank means the automationSettings.alertTriageEpoch setting, and it is never earlier than that",
 				},
 			},
 			Required: []string{"groupBy"},
@@ -174,7 +174,7 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 	if params.Floor != "" {
 		floor, err := time.Parse(time.RFC3339, params.Floor)
 		if err != nil {
-			return nil, fmt.Errorf("%w: floor must be RFC3339: %v", ErrInvalidAutomationParams, err)
+			return nil, fmt.Errorf("%w: floor must be a date and time such as 2026-10-01T00:00:00Z: %v", ErrInvalidAutomationParams, err)
 		}
 
 		params.floor = floor
