@@ -90,6 +90,16 @@ describe('notifications.js', () => {
     });
   });
 
+  describe('deepLinkTitle', () => {
+    it('names the emoji links the server sends, and leaves other labels as-is', () => {
+      expect(app.deepLinkTitle('🔔')).toBe('AI Investigation');
+      expect(app.deepLinkTitle('💬')).toBe('Open in Onion AI');
+      expect(app.deepLinkTitle('🌐')).toBe('View');
+      expect(app.deepLinkTitle('⬇')).toBe('Download');
+      expect(app.deepLinkTitle('SOC')).toBe('SOC');
+    });
+  });
+
   describe('loadNotifications', () => {
     it('skips loading when username is missing or unlicensed or notifications not started', async () => {
       const mockPapiGet = jest.fn();
