@@ -255,11 +255,25 @@ func buildAlertTriageLanes(params *alertTriageParams) ([]alertTriageLane, error)
 		}
 		seen[metric] = name
 
-		selector, err := alertTriageModuleSelector(module, fields)
-		if err != nil {
+		// The module's alerts that have every field it groups on, so one missing a field is left
+		// to the fallback rather than silently dropped from the groupby. A field ending in *
+		// groups its missing values itself and is not required.
+		segment := model.NewSearchSegmentEmpty()
+		if err := segment.AddFilter("event.module", module, false, true, false); err != nil {
 			return nil, fmt.Errorf("%w: %s: %v", ErrInvalidAutomationParams, name, err)
 		}
 
+		for _, field := range fields {
+			if strings.HasSuffix(field, "*") {
+				continue
+			}
+
+			if err := segment.AddFilter(field, "__missing__", false, false, false); err != nil {
+				return nil, fmt.Errorf("%w: %s field %q: %v", ErrInvalidAutomationParams, name, field, err)
+			}
+		}
+
+		selector := segment.String()
 		lanes = append(lanes, alertTriageLane{selector: selector, groupBy: fields})
 		exclusions = append(exclusions, "NOT ("+selector+")")
 	}
@@ -270,28 +284,6 @@ func buildAlertTriageLanes(params *alertTriageParams) ([]alertTriageLane, error)
 	})
 
 	return lanes, nil
-}
-
-// alertTriageModuleSelector is the module's alerts that have every field it groups on, so one
-// missing a field is left to the fallback rather than silently dropped from the groupby. A field
-// ending in * groups its missing values itself and is not required.
-func alertTriageModuleSelector(module string, fields []string) (string, error) {
-	segment := model.NewSearchSegmentEmpty()
-	if err := segment.AddFilter("event.module", module, false, true, false); err != nil {
-		return "", err
-	}
-
-	for _, field := range fields {
-		if strings.HasSuffix(field, "*") {
-			continue
-		}
-
-		if err := segment.AddFilter(field, "__missing__", false, false, false); err != nil {
-			return "", err
-		}
-	}
-
-	return segment.String(), nil
 }
 
 // alertTriageFloor is the param clamped to the epoch; a blank param is the epoch itself.
