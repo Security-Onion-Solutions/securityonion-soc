@@ -679,7 +679,7 @@ func TestAlertTriageScanCarriesPredicateAndBounds(t *testing.T) {
 
 	require.NoError(t, f.kind.Execute(context.Background(), f.run))
 
-	require.Len(t, f.es.InputSearchCriterias, 1)
+	require.Len(t, f.es.InputSearchCriterias, 2)
 	criteria := f.es.InputSearchCriterias[0]
 	assert.Equal(t, "(tags:alert AND NOT event.acknowledged:true AND NOT _exists_:event.so_alerttriage.session_id"+
 		" AND NOT event.so_alerttriage.failed_count:>=5) AND (event.module:suricata) | groupby rule.name source.ip", criteria.RawQuery)
@@ -688,6 +688,19 @@ func TestAlertTriageScanCarriesPredicateAndBounds(t *testing.T) {
 	assert.True(t, criteria.EndTime.Equal(criteria.EndTime.Truncate(time.Second)))
 	assert.Equal(t, 10, criteria.MetricLimit)
 	assert.Equal(t, 0, criteria.EventLimit)
+
+	// Alerts missing a grouped field have no bucket, so they are searched for one by one, newest
+	// first, inside the same bounds.
+	ungrouped := f.es.InputSearchCriterias[1]
+	assert.Equal(t, "(tags:alert AND NOT event.acknowledged:true AND NOT _exists_:event.so_alerttriage.session_id"+
+		` AND NOT event.so_alerttriage.failed_count:>=5) AND (event.module:suricata) AND NOT (_exists_:"rule.name" AND _exists_:"source.ip")`, ungrouped.RawQuery)
+	assert.True(t, ungrouped.BeginTime.Equal(criteria.BeginTime))
+	assert.True(t, ungrouped.EndTime.Equal(criteria.EndTime))
+	assert.Equal(t, 0, ungrouped.MetricLimit)
+	assert.Equal(t, 10, ungrouped.EventLimit)
+	require.Len(t, ungrouped.SortFields, 1)
+	assert.Equal(t, "@timestamp", ungrouped.SortFields[0].Field)
+	assert.Equal(t, "desc", ungrouped.SortFields[0].Order)
 
 	// No groups, so nothing to look up, nothing to enqueue and nothing to claim.
 	assert.Empty(t, f.es.InputMSearchCriterias)
@@ -849,6 +862,95 @@ func TestAlertTriageScanErrorsStopTheScan(t *testing.T) {
 	assert.ErrorContains(t, err, "shard failure")
 	assert.Empty(t, f.es.InputMSearchCriterias)
 	assert.Empty(t, f.store.ensured)
+}
+
+func ungroupedAlerts(ids ...string) *model.EventSearchResults {
+	results := model.NewEventSearchResults()
+	for _, id := range ids {
+		results.Events = append(results.Events, &model.EventRecord{Id: id, Timestamp: "2026-09-26T10:00:00.000Z"})
+	}
+
+	return results
+}
+
+// A Sigma or YARA alert has no IPs, so the groupby has no bucket for it; it is triaged on its own.
+func TestAlertTriageTriagesUngroupedAlertsOneByOne(t *testing.T) {
+	held := &model.AutomationWorkItem{Id: "item-held", State: model.AutomationWorkItemRunning, GroupKey: `_id:"sigma-0"`}
+
+	f := newTriageFixture(t, `{"groupBy":["source.ip","rule.uuid","destination.ip"],"maxGroupsPerScan":2}`, held)
+	grouped := model.NewEventSearchResults()
+	grouped.Metrics["groupby_0|source.ip|rule.uuid|destination.ip"] = []*model.EventMetric{bucket(7, "1.2.3.4", "suricata-1", "5.6.7.8")}
+	f.es.SearchResults = []*model.EventSearchResults{grouped, ungroupedAlerts("sigma-0", "sigma-1", "sigma-2", "sigma-3")}
+	f.withLatest("alert-a", "sigma-1", "sigma-2")
+	for _, id := range []string{"alert-a", "sigma-1", "sigma-2"} {
+		f.withAlert(id, nil)
+	}
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	scan := f.es.InputSearchCriterias[0]
+	base := strings.TrimSuffix(scan.RawQuery, " | groupby source.ip rule.uuid destination.ip")
+	search := f.es.InputSearchCriterias[1]
+	assert.Equal(t, base+` AND NOT (_exists_:"source.ip" AND _exists_:"rule.uuid" AND _exists_:"destination.ip")`, search.RawQuery)
+
+	// The held alert still comes back from the search, so the search asks for one more and skips it.
+	assert.Equal(t, 3, search.EventLimit)
+
+	// The cap holds for ungrouped alerts on their own, so the group is not counted against it.
+	require.Len(t, f.store.ensured, 1)
+	items := f.store.ensured[0]
+	require.Len(t, items, 3)
+	assert.Equal(t, `source.ip:"1.2.3.4" AND rule.uuid:"suricata-1" AND destination.ip:"5.6.7.8"`, items[0].GroupKey)
+	assert.Equal(t, `_id:"sigma-1"`, items[1].GroupKey)
+	assert.Equal(t, `_id:"sigma-2"`, items[2].GroupKey)
+
+	slots := f.es.InputMSearchCriterias[0]
+	require.Len(t, slots, 3)
+	assert.Equal(t, base+` AND _id:"sigma-1"`, slots[1].RawQuery)
+
+	var payload alertTriagePayload
+	require.NoError(t, json.Unmarshal(items[1].Payload, &payload))
+	assert.Equal(t, slots[1].RawQuery, payload.GroupFilter)
+	assert.Equal(t, "sigma-1", payload.LatestAlertId)
+	assert.Equal(t, 1, payload.Count)
+	assert.NoError(t, model.ValidateAlertTriageSearch(payload.GroupFilter))
+}
+
+// A field ending in * buckets its missing values, so an alert lacking it is grouped, not left out.
+func TestAlertTriageMissingBucketFieldsLeaveNothingUngrouped(t *testing.T) {
+	f := newTriageFixture(t, `{"groupBy":["rule.name","event.module*"]}`)
+	f.withGroups("rule.name|event.module")
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	require.Len(t, f.es.InputSearchCriterias, 2)
+	assert.True(t, strings.HasSuffix(f.es.InputSearchCriterias[1].RawQuery, ` AND NOT (_exists_:"rule.name")`))
+
+	f = newTriageFixture(t, `{"groupBy":["event.module*"]}`)
+	f.withGroups("event.module")
+
+	require.NoError(t, f.kind.Execute(context.Background(), f.run))
+
+	assert.Len(t, f.es.InputSearchCriterias, 1)
+}
+
+// A failed search for ungrouped alerts leaves them for a later scan without holding back the groups.
+func TestAlertTriageUngroupedSearchErrorKeepsGroups(t *testing.T) {
+	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`)
+	grouped := model.NewEventSearchResults()
+	grouped.Metrics["groupby_0|rule.name"] = []*model.EventMetric{bucket(3, "A")}
+	failed := ungroupedAlerts()
+	failed.Errors = []string{"shard failure"}
+	f.es.SearchResults = []*model.EventSearchResults{grouped, failed}
+	f.withLatest("alert-a")
+	f.withAlert("alert-a", nil)
+
+	err := f.kind.Execute(context.Background(), f.run)
+	assert.ErrorContains(t, err, "ungrouped alerts failed: shard failure")
+
+	require.Len(t, f.store.ensured, 1)
+	require.Len(t, f.store.ensured[0], 1)
+	assert.Equal(t, `rule.name:"A"`, f.store.ensured[0][0].GroupKey)
 }
 
 func TestAlertTriageStoreUnsupported(t *testing.T) {
@@ -1393,8 +1495,8 @@ func TestAlertTriageClaimErrorsAreReported(t *testing.T) {
 
 	err := f.kind.Execute(context.Background(), f.run)
 	assert.ErrorContains(t, err, "postgres is down")
-	// The scan still ran; a stuck claim must not hide new work.
-	assert.Len(t, f.es.InputSearchCriterias, 1)
+	// The scan still ran, groups and ungrouped alerts both; a stuck claim must not hide new work.
+	assert.Len(t, f.es.InputSearchCriterias, 2)
 }
 
 func TestAlertTriageObjective(t *testing.T) {
