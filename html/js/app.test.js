@@ -1588,6 +1588,26 @@ test('verifyRuleSyntax - implementation', () => {
   app.ruleValidators = _old;
 });
 
+test('yaraContentForSyntaxCheck skips securityonion-yara preambles', () => {
+  expect(app.yaraContentForSyntaxCheck('rule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('\n\n  rule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe"\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe" /* c */\r\nimport "math" // c\r\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('import "pe"\r\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('import "pe"\r\n\r\nprivate  rule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('/* rule NotTheRule */\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('// c\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('/* Rule Set */\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('private rule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('private\trule X { condition: true }').startsWith('private')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('global rule X { condition: true }').startsWith('global')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('include "x.yar"\nrule X { condition: true }').startsWith('include')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import \'pe\'\nrule X { condition: true }').startsWith('import')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe"rule X { condition: true }').startsWith('import')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('/* no end')).toBe('');
+  expect(app.yaraContentForSyntaxCheck('')).toBe('');
+});
+
 test('validator: required', () => {
   const v = app.validators.required;
   expect(v('')).toBe(_i18n.required);

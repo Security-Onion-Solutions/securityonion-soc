@@ -1051,6 +1051,116 @@ test('validateStrelka', () => {
 	comp.detect.content = 'rule X { condition: }';
 	msg = comp.validateStrelka();
 	expect(msg).toBe(null);
+
+	// One of each preamble shipped by securityonion-yara. Bodies are trimmed; the
+	// preamble and rule name are from the cited file. Community rules are read-only,
+	// so save runs on a duplicate, and that path must accept these forms.
+	const forms = [
+		{
+			name: 'import and block comment (yara/apt_apt29_nobelium_may21.yar)',
+			content: `import "math"
+import "pe"
+
+/*
+    YARA Rules by Volexity
+    Reference: https://www.volexity.com/blog/2021/05/27/suspected-apt29-operation-launches-election-fraud-themed-phishing-campaigns/
+*/
+
+rule APT_APT29_Win_FlipFlop_LDR : APT29 {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'block comment (yara/apt_buckeye.yar)',
+			content: `/*
+	Yara Rule Set
+	Author: Florian Roth
+	Date: 2016-09-05
+	Identifier: Buckeye
+*/
+
+rule Buckeye_Osinfo {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'import (yara/apt_nk_tradingtech_apr23.yar)',
+			content: `import "pe"
+rule APT_MAL_VEILEDSIGNAL_Backdoor_Apr23 {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'line comment (yara/apt_lnx_kobalos.yar)',
+			content: `// For feedback or questions contact us at: github@eset.com
+// https://github.com/eset/malware-ioc/
+
+rule APT_MAL_LNX_Kobalos {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'condition space before colon (yara/apt_blackenergy_installer.yar)',
+			content: `
+rule blackenergy3_installer
+{
+	condition :
+		true
+}`,
+		},
+		{
+			name: 'rule tag (yara/expl_adselfservice_cve_2021_40539.yar)',
+			content: `rule LOG_EXPL_ADSelfService_CVE_2021_40539_ADSLOG_Sep21 : LOG {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'private rule',
+			content: `import "pe"
+
+private rule MetadataExample {
+	condition:
+		true
+}`,
+		},
+	];
+
+	forms.push({
+		name: 'CRLF import',
+		content: 'import "pe"\r\nrule CRLFExample {\r\n\tcondition:\r\n\t\ttrue\r\n}',
+	});
+	forms.push({
+		name: 'private rule keyword is case-insensitive',
+		content: 'private RULE Example {\n\tcondition:\n\t\ttrue\n}',
+	});
+
+	forms.forEach((form) => {
+		comp.detect = { language: 'yara', content: form.content };
+		expect([form.name, comp.validateStrelka()]).toEqual([form.name, null]);
+	});
+
+	comp.detect = {
+		language: 'yara',
+		content: 'import "pe"\nrule 5 {\n\tcondition:\n\t\ttrue\n}',
+	};
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
+	comp.detect.content = 'import "pe"\nrule {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
+
+	comp.detect.content = 'import "pe"\nrule X {}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
+
+	comp.detect.content = 'global rule Foo {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
+	comp.detect.content = 'include "other.yar"\nrule Foo {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
 });
 
 
