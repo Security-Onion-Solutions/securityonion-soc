@@ -186,7 +186,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     rejectTool() {},
 
     formatMarkdown(text) {
-      return this.$root.formatMarkdownMermaid(this.$root.stripChoiceMarkers(text));
+      return this.$root.formatMarkdownMermaid(this.$root.stripChoiceMarkers(text), !this.transcriptStreaming());
     },
 
     reload() {
@@ -474,6 +474,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         agent: session.model || '',
         messages: messages,
         subSessionIds: (data.subSessions || []).map(s => (s.session || {}).sessionId).filter(Boolean),
+        streaming: this.messagesStreaming(messages),
       };
     },
     // Automated sessions have no approver; a tool without a result is still running.
@@ -529,6 +530,15 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     watchedTranscript() {
       return this.transcripts[this.selectedSessionId] || null;
+    },
+    // A cut-off turn keeps its partial tag after the item ends, so only a live item counts.
+    transcriptStreaming() {
+      const transcript = this.watchedTranscript();
+      return !!transcript && !!transcript.streaming && this.watchedIsLive();
+    },
+    messagesStreaming(messages) {
+      return (messages || []).some(message => this.isPartialMessage(message) ||
+        (message.toolUses || []).some(toolUse => toolUse.childSession && this.messagesStreaming(toolUse.childSession.messages)));
     },
     watchedIsLive() {
       const item = this.selectedItem();

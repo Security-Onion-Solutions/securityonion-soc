@@ -1521,6 +1521,14 @@ graph TD
 \`\`\``;
 
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
+
+  expect(app.performMermaidRegexes('a: b\n\n```mermaid\nA: B\n\nC\n```\nc: d\n\n```mermaid\nE:F\n```'))
+    .toBe('a: b\n\n```mermaid\nA∶ B\nC\n```\nc: d\n\n```mermaid\nE∶F\n```');
+  expect(app.performMermaidRegexes('```mermaid\nA: B\n\nC')).toBe('```mermaid\nA: B\n\nC');
+  expect(app.performMermaidRegexes('```js\na: b\n\nc\n```')).toBe('```js\na: b\n\nc\n```');
+
+  const long = 'key: value\n\n'.repeat(20000);
+  expect(app.performMermaidRegexes(long)).toBe(long);
 });
 
 test('formatMarkdownMermaid', () => {
