@@ -3019,6 +3019,39 @@ test('startAIInvestigation - grouped alert', async () => {
   expect(comp.investigationMenu.newLink.query).toEqual({ investigation: true, socId: 'alert456' });
 });
 
+test('openAssessment expands the row onto its AI Investigation tab', () => {
+  const item = { _row_idx_: 3, count: 5 };
+  const domEvent = { stopPropagation: jest.fn() };
+  comp.investigateEnabled = true;
+  comp.expandedEvents = [];
+  comp.activeTabs = { 3: 'alert' };
+  comp.fetchNewestEvent = jest.fn();
+
+  comp.openAssessment(domEvent, item);
+  expect(domEvent.stopPropagation).toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([3]);
+  expect(comp.activeTabs[3]).toBe('investigation');
+  expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
+
+  comp.activeTabs[3] = 'alert';
+  comp.openAssessment(domEvent, item);
+  expect(comp.expandedEvents).toEqual([3]);
+  expect(comp.activeTabs[3]).toBe('investigation');
+  expect(comp.fetchNewestEvent).toHaveBeenCalledTimes(1);
+});
+
+test('openAssessment leaves the click to quick actions without the AI Investigation tab', () => {
+  const domEvent = { stopPropagation: jest.fn() };
+  comp.investigateEnabled = false;
+  comp.expandedEvents = [];
+  comp.activeTabs = {};
+
+  comp.openAssessment(domEvent, { _row_idx_: 3, count: 5 });
+  expect(domEvent.stopPropagation).not.toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([]);
+  expect(comp.activeTabs).toEqual({});
+});
+
 test('startAIInvestigation - an existing investigation is offered, not opened', async () => {
   const item = {
     soc_id: 'alert123',
