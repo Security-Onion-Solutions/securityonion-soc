@@ -3427,6 +3427,15 @@ const huntComponent = {
     investigationSubject(item) {
       return item.count ? (item.newestTriaged || item.newest) : item;
     },
+    openAssessment(domEvent, item) {
+      if (!this.investigateEnabled) return;
+      domEvent.stopPropagation();
+      this.activeTabs[item._row_idx_] = 'investigation';
+      if (!this.expandedEvents.includes(item._row_idx_)) {
+        this.expandedEvents.push(item._row_idx_);
+        this.fetchNewestEvent(item);
+      }
+    },
 
     getAIInvestigationButtonColor(item) {
       const subject = this.investigationSubject(item);
