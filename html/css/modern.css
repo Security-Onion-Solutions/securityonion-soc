@@ -1356,7 +1356,7 @@ dfn {
 }
 
 /* Sits in an expanded table row too, so it needs the same nowrap undo. */
-.alert-investigation-report {
+.alert-investigation {
   white-space: normal;
   overflow-wrap: anywhere;
 }
