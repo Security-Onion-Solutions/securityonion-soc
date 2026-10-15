@@ -42,6 +42,10 @@ type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (
 
 var protocols = map[string]ProtocolConstructor{}
 
+// cloudProtocols holds the protocols whose provider is always on the Internet. Airgapped
+// grids never load these adapters, so no chat, memory, or automation can reach out.
+var cloudProtocols = map[string]bool{}
+
 var (
 	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
 	ErrRequestTooLarge    = errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE")
@@ -567,6 +571,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 	ac.adapters = map[string]server.AssistantAdapter{}
 	logger := log.FromContext(ac.srv.Context)
+	airgap := ac.srv.Config != nil && ac.srv.Config.AirgapEnabled
+	skipped := map[string]bool{}
 
 	adapterConfig, ok := config["adapters"].([]any)
 	if ok && adapterConfig != nil {
@@ -593,6 +599,16 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 			ctor, ok := protocols[protocol]
 			if !ok {
 				logger.WithField("protocol", protocol).Warn("unknown protocol, skipping")
+				continue
+			}
+
+			if airgap && cloudProtocols[protocol] {
+				logger.WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Info("airgap enabled; skipping assistant adapter that requires Internet access")
+
+				skipped[name] = true
 				continue
 			}
 
@@ -623,6 +639,22 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 	} else {
 		logger.Warn("no adapter config, no adapters loaded")
 		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
+	}
+
+	ac.disableModelsOnAdapters(skipped)
+}
+
+// disableModelsOnAdapters disables the models routed to the given adapters, so agents
+// mapped to them are dropped by validateAgentMappings and the UI does not offer them.
+func (ac *AssistantCoordinator) disableModelsOnAdapters(adapters map[string]bool) {
+	logger := log.FromContext(ac.srv.Context)
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+
+	for i := range models {
+		if models[i].Enabled && adapters[models[i].Adapter] {
+			models[i].Enabled = false
+			logger.WithField("selector", models[i].Selector()).Warn("airgap enabled; disabling model whose adapter requires Internet access")
+		}
 	}
 }
 
