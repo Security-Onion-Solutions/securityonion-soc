@@ -890,6 +890,8 @@ func (ac *AssistantCoordinator) Start() error {
 	ac.reloadMemoryConfiguration(ac.srv.Context)
 
 	ac.reloadAutomationTickInterval(ac.srv.Context)
+	ac.reloadAlertTriageEpoch(ac.srv.Context)
+	ac.reloadAutomationTurnTimeout(ac.srv.Context)
 	ac.exposeAutomationSettings()
 	ac.startAutomationScheduler()
 
