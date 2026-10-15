@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = NewOpenAIResponsesAdapter
+	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = ProtocolRegistration{New: NewOpenAIResponsesAdapter}
 }
 
 type OpenAIResponsesAdapter struct {

@@ -30,8 +30,7 @@ import (
 )
 
 func init() {
-	protocols[(&SOAiCloudAdapter{}).Protocol()] = NewSOAiCloudAdapter
-	cloudProtocols[(&SOAiCloudAdapter{}).Protocol()] = true
+	protocols[(&SOAiCloudAdapter{}).Protocol()] = ProtocolRegistration{New: NewSOAiCloudAdapter, RequiresInternet: true}
 }
 
 const (

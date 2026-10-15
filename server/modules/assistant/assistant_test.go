@@ -2925,13 +2925,13 @@ func TestAssistantCoordinator_Init(t *testing.T) {
 	// Disable embedded prompt so getPrompt() is a no-op.
 	embeddedSystemPrompt = []byte{}
 
-	protocols = map[string]ProtocolConstructor{
-		fakeProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+	protocols = map[string]ProtocolRegistration{
+		fakeProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return &mockAdapter{protocol: fakeProtocol}, nil
-		},
-		failProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+		}},
+		failProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return nil, errors.New("constructor failed")
-		},
+		}},
 	}
 
 	validAdapter := func(name, proto string) map[string]any {
@@ -3171,34 +3171,36 @@ func TestAssistantCoordinator_Init_ToolUseTurnPollingConfig(t *testing.T) {
 	}
 }
 
-func TestCloudProtocols(t *testing.T) {
-	assert.True(t, cloudProtocols[(&SOAiCloudAdapter{}).Protocol()])
-	assert.True(t, cloudProtocols[(&GeminiAdapter{}).Protocol()])
-	assert.False(t, cloudProtocols[(&OpenAIChatAdapter{}).Protocol()], "points at a configurable, possibly local, URL")
-	assert.False(t, cloudProtocols[(&OpenAIResponsesAdapter{}).Protocol()], "points at a configurable, possibly local, URL")
-	assert.False(t, cloudProtocols[(&OpenAIEmbeddingsAdapter{}).Protocol()], "points at a configurable, possibly local, URL")
+func TestProtocolsRequiringInternet(t *testing.T) {
+	assert.True(t, protocols[(&SOAiCloudAdapter{}).Protocol()].RequiresInternet)
+	assert.True(t, protocols[(&GeminiAdapter{}).Protocol()].RequiresInternet)
+	assert.False(t, protocols[(&OpenAIChatAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIResponsesAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIEmbeddingsAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
 }
 
 func TestLoadAdapters_AirgapSkipsCloudProtocols(t *testing.T) {
 	const cloudProtocol = "cloud_protocol"
 	const localProtocol = "local_protocol"
 
-	origProtocols, origCloud := protocols, cloudProtocols
+	origProtocols := protocols
 	t.Cleanup(func() {
-		protocols, cloudProtocols = origProtocols, origCloud
+		protocols = origProtocols
 	})
 
 	cloudBuilt := false
-	protocols = map[string]ProtocolConstructor{
-		cloudProtocol: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
-			cloudBuilt = true
-			return &mockAdapter{protocol: cloudProtocol}, nil
+	protocols = map[string]ProtocolRegistration{
+		cloudProtocol: {
+			New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+				cloudBuilt = true
+				return &mockAdapter{protocol: cloudProtocol}, nil
+			},
+			RequiresInternet: true,
 		},
-		localProtocol: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+		localProtocol: {New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
 			return &mockAdapter{protocol: localProtocol}, nil
-		},
+		}},
 	}
-	cloudProtocols = map[string]bool{cloudProtocol: true}
 
 	adapterConfig := module.ModuleConfig{
 		"adapters": []any{

@@ -40,11 +40,14 @@ import (
 
 type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
 
-var protocols = map[string]ProtocolConstructor{}
+type ProtocolRegistration struct {
+	New ProtocolConstructor
+	// RequiresInternet marks a provider that is always on the Internet. Airgapped grids
+	// never load these adapters, so no chat, memory, or automation can reach out.
+	RequiresInternet bool
+}
 
-// cloudProtocols holds the protocols whose provider is always on the Internet. Airgapped
-// grids never load these adapters, so no chat, memory, or automation can reach out.
-var cloudProtocols = map[string]bool{}
+var protocols = map[string]ProtocolRegistration{}
 
 var (
 	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
@@ -596,13 +599,13 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 				continue
 			}
 
-			ctor, ok := protocols[protocol]
+			reg, ok := protocols[protocol]
 			if !ok {
 				logger.WithField("protocol", protocol).Warn("unknown protocol, skipping")
 				continue
 			}
 
-			if airgap && cloudProtocols[protocol] {
+			if airgap && reg.RequiresInternet {
 				logger.WithFields(log.Fields{
 					"adapter":  name,
 					"protocol": protocol,
@@ -612,7 +615,7 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 				continue
 			}
 
-			adapt, err := ctor(ac.srv.Context, ac.srv, adapterEntry)
+			adapt, err := reg.New(ac.srv.Context, ac.srv, adapterEntry)
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
 					"adapter":  name,
