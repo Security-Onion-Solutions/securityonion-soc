@@ -186,7 +186,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     rejectTool() {},
 
     formatMarkdown(text) {
-      return this.$root.formatMarkdownMermaid(this.$root.stripChoiceMarkers(text));
+      return this.$root.formatMarkdownMermaid(this.$root.stripChoiceMarkers(text), !this.transcriptStreaming());
     },
 
     reload() {
@@ -529,6 +529,15 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     watchedTranscript() {
       return this.transcripts[this.selectedSessionId] || null;
+    },
+    // Like the assistant's isStreaming: charts wait until no message is mid-stream.
+    transcriptStreaming() {
+      const transcript = this.watchedTranscript();
+      return !!transcript && this.messagesStreaming(transcript.messages);
+    },
+    messagesStreaming(messages) {
+      return (messages || []).some(message => this.isPartialMessage(message) ||
+        (message.toolUses || []).some(toolUse => toolUse.childSession && this.messagesStreaming(toolUse.childSession.messages)));
     },
     watchedIsLive() {
       const item = this.selectedItem();

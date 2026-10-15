@@ -723,7 +723,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
         // Only the sub-agent's assistant turns render nested; skip the objective/user msgs.
         if (m.role !== 'assistant') continue;
 
-        const childMsg = { role: 'assistant', thoughts: '', content: '', toolUses: [], timestamp: sm.createTime };
+        const childMsg = { role: 'assistant', thoughts: '', content: '', toolUses: [], timestamp: sm.createTime, tags: sm.tags || [] };
 
         // Split the turn like the live stream: prose -> content, reasoning -> thoughts.
         // Folding prose into thoughts would hide the sub-agent's answer after reload

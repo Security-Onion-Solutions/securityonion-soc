@@ -667,6 +667,30 @@ test('every helper the transcript components call works against this page', asyn
   expect(comp.formatMarkdown('')).toBe('');
 });
 
+test('charts wait to render until no message in the transcript is mid-stream', () => {
+  const format = jest.spyOn(comp.$root, 'formatMarkdownMermaid').mockReturnValue('');
+  const child = { messages: [{ role: 'assistant', tags: [] }] };
+  comp.selectedSessionId = 's-chart';
+  comp.transcripts['s-chart'] = { messages: [{ role: 'assistant', tags: [], toolUses: [{ childSession: child }] }] };
+
+  expect(comp.transcriptStreaming()).toBe(false);
+  comp.formatMarkdown('done');
+  expect(format).toHaveBeenLastCalledWith('done', true);
+
+  child.messages[0].tags = ['partial'];
+  expect(comp.transcriptStreaming()).toBe(true);
+  comp.formatMarkdown('child streaming');
+  expect(format).toHaveBeenLastCalledWith('child streaming', false);
+
+  child.messages[0].tags = [];
+  comp.transcripts['s-chart'].messages.push({ role: 'assistant', tags: ['partial'] });
+  expect(comp.transcriptStreaming()).toBe(true);
+
+  comp.selectedSessionId = '';
+  expect(comp.transcriptStreaming()).toBe(false);
+  format.mockRestore();
+});
+
 test('watch opens the newest session, and only a started item has one', async () => {
   await load();
 
