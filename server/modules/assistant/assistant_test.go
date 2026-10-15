@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2923,13 +2925,13 @@ func TestAssistantCoordinator_Init(t *testing.T) {
 	// Disable embedded prompt so getPrompt() is a no-op.
 	embeddedSystemPrompt = []byte{}
 
-	protocols = map[string]ProtocolConstructor{
-		fakeProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+	protocols = map[string]ProtocolRegistration{
+		fakeProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return &mockAdapter{protocol: fakeProtocol}, nil
-		},
-		failProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+		}},
+		failProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return nil, errors.New("constructor failed")
-		},
+		}},
 	}
 
 	validAdapter := func(name, proto string) map[string]any {
@@ -3165,6 +3167,84 @@ func TestAssistantCoordinator_Init_ToolUseTurnPollingConfig(t *testing.T) {
 			assert.NoError(t, ac.Init(tc.moduleConfig))
 			assert.Equal(t, tc.wantAttempts, ac.toolUseTurnAttempts)
 			assert.Equal(t, tc.wantDelay, ac.toolUseTurnDelay)
+		})
+	}
+}
+
+func TestProtocolsRequiringInternet(t *testing.T) {
+	assert.True(t, protocols[(&SOAiCloudAdapter{}).Protocol()].RequiresInternet)
+	assert.True(t, protocols[(&GeminiAdapter{}).Protocol()].RequiresInternet)
+	assert.False(t, protocols[(&OpenAIChatAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIResponsesAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIEmbeddingsAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+}
+
+func TestLoadAdapters_AirgapSkipsCloudProtocols(t *testing.T) {
+	const cloudProtocol = "cloud_protocol"
+	const localProtocol = "local_protocol"
+
+	origProtocols := protocols
+	t.Cleanup(func() {
+		protocols = origProtocols
+	})
+
+	cloudBuilt := false
+	protocols = map[string]ProtocolRegistration{
+		cloudProtocol: {
+			New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+				cloudBuilt = true
+				return &mockAdapter{protocol: cloudProtocol}, nil
+			},
+			RequiresInternet: true,
+		},
+		localProtocol: {New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+			return &mockAdapter{protocol: localProtocol}, nil
+		}},
+	}
+
+	adapterConfig := module.ModuleConfig{
+		"adapters": []any{
+			map[string]any{"name": "cloud", "protocol": cloudProtocol},
+			map[string]any{"name": "local", "protocol": localProtocol},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		airgap       bool
+		wantAdapters []string
+		wantEnabled  map[string]bool
+	}{
+		{"online loads every adapter", false, []string{"cloud", "local"}, map[string]bool{"a@cloud": true, "b@local": true}},
+		{"airgap skips cloud adapters and their models", true, []string{"local"}, map[string]bool{"a@cloud": false, "b@local": true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cloudBuilt = false
+			srv := &server.Server{
+				Context: context.Background(),
+				Config: &config.ServerConfig{
+					AirgapEnabled: tt.airgap,
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{
+								{ID: "a", Adapter: "cloud", Enabled: true},
+								{ID: "b", Adapter: "local", Enabled: true},
+							},
+						},
+					},
+				},
+			}
+			ac := &AssistantCoordinator{srv: srv}
+
+			ac.loadAdapters(adapterConfig)
+
+			assert.ElementsMatch(t, tt.wantAdapters, slices.Collect(maps.Keys(ac.adapters)))
+			assert.Equal(t, !tt.airgap, cloudBuilt, "a skipped adapter is never constructed")
+			for _, m := range srv.Config.ClientParams.AssistantParams.AvailableModels {
+				assert.Equal(t, tt.wantEnabled[m.Selector()], m.Enabled, m.Selector())
+			}
 		})
 	}
 }

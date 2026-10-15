@@ -33,7 +33,7 @@ const (
 )
 
 func init() {
-	protocols[(&GeminiAdapter{}).Protocol()] = NewGeminiAdapter
+	protocols[(&GeminiAdapter{}).Protocol()] = ProtocolRegistration{New: NewGeminiAdapter, RequiresInternet: true}
 }
 
 type GeminiAdapter struct {

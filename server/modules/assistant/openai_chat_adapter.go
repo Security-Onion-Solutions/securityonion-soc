@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-	protocols[(&OpenAIChatAdapter{}).Protocol()] = NewOpenAIChatAdapter
+	protocols[(&OpenAIChatAdapter{}).Protocol()] = ProtocolRegistration{New: NewOpenAIChatAdapter}
 }
 
 type OpenAIChatAdapter struct {

@@ -40,7 +40,14 @@ import (
 
 type ProtocolConstructor func(context.Context, *server.Server, map[string]any) (server.AssistantAdapter, error)
 
-var protocols = map[string]ProtocolConstructor{}
+type ProtocolRegistration struct {
+	New ProtocolConstructor
+	// RequiresInternet marks a provider that is always on the Internet. Airgapped grids
+	// never load these adapters, so no chat, memory, or automation can reach out.
+	RequiresInternet bool
+}
+
+var protocols = map[string]ProtocolRegistration{}
 
 var (
 	ErrToolNotFound       = errors.New("ERROR_ASSISTANT_TOOL_NOT_FOUND")
@@ -567,6 +574,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 	ac.adapters = map[string]server.AssistantAdapter{}
 	logger := log.FromContext(ac.srv.Context)
+	airgap := ac.srv.Config != nil && ac.srv.Config.AirgapEnabled
+	skipped := map[string]bool{}
 
 	adapterConfig, ok := config["adapters"].([]any)
 	if ok && adapterConfig != nil {
@@ -590,13 +599,23 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 				continue
 			}
 
-			ctor, ok := protocols[protocol]
+			reg, ok := protocols[protocol]
 			if !ok {
 				logger.WithField("protocol", protocol).Warn("unknown protocol, skipping")
 				continue
 			}
 
-			adapt, err := ctor(ac.srv.Context, ac.srv, adapterEntry)
+			if airgap && reg.RequiresInternet {
+				logger.WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Info("airgap enabled; skipping assistant adapter that requires Internet access")
+
+				skipped[name] = true
+				continue
+			}
+
+			adapt, err := reg.New(ac.srv.Context, ac.srv, adapterEntry)
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
 					"adapter":  name,
@@ -623,6 +642,22 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 	} else {
 		logger.Warn("no adapter config, no adapters loaded")
 		ac.srv.Config.ClientParams.AssistantParams.AvailableAdapters = []model.AdapterParameters{}
+	}
+
+	ac.disableModelsOnAdapters(skipped)
+}
+
+// disableModelsOnAdapters disables the models routed to the given adapters, so agents
+// mapped to them are dropped by validateAgentMappings and the UI does not offer them.
+func (ac *AssistantCoordinator) disableModelsOnAdapters(adapters map[string]bool) {
+	logger := log.FromContext(ac.srv.Context)
+	models := ac.srv.Config.ClientParams.AssistantParams.AvailableModels
+
+	for i := range models {
+		if models[i].Enabled && adapters[models[i].Adapter] {
+			models[i].Enabled = false
+			logger.WithField("selector", models[i].Selector()).Warn("airgap enabled; disabling model whose adapter requires Internet access")
+		}
 	}
 }
 
