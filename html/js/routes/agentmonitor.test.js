@@ -648,6 +648,7 @@ test('every helper the transcript components call works against this page', asyn
   comp.$root.formatTimestamp = jest.fn(t => t);
   await comp.loadTranscript('s-ps');
   const toolUse = comp.transcripts['s-ps'].messages[0].toolUses[0];
+  expect(comp.transcripts['s-ps'].streaming).toBe(false);
 
   expect(() => {
     comp.displayStatus(toolUse);
@@ -670,21 +671,28 @@ test('every helper the transcript components call works against this page', asyn
 test('charts wait to render until no message in the transcript is mid-stream', () => {
   const format = jest.spyOn(comp.$root, 'formatMarkdownMermaid').mockReturnValue('');
   const child = { messages: [{ role: 'assistant', tags: [] }] };
-  comp.selectedSessionId = 's-chart';
-  comp.transcripts['s-chart'] = { messages: [{ role: 'assistant', tags: [], toolUses: [{ childSession: child }] }] };
+  const messages = [{ role: 'assistant', tags: [], toolUses: [{ childSession: child }] }];
+  expect(comp.messagesStreaming(messages)).toBe(false);
+  child.messages[0].tags = ['partial'];
+  expect(comp.messagesStreaming(messages)).toBe(true);
+  child.messages[0].tags = [];
+  messages.push({ role: 'assistant', tags: ['partial'] });
+  expect(comp.messagesStreaming(messages)).toBe(true);
 
-  expect(comp.transcriptStreaming()).toBe(false);
+  comp.selectedSessionId = 's-chart';
+  comp.transcripts['s-chart'] = { messages: messages, streaming: true };
+  comp.watchedIsLive = jest.fn().mockReturnValue(true);
+  comp.formatMarkdown('streaming');
+  expect(format).toHaveBeenLastCalledWith('streaming', false);
+
+  comp.watchedIsLive.mockReturnValue(false);
+  comp.formatMarkdown('finished');
+  expect(format).toHaveBeenLastCalledWith('finished', true);
+
+  comp.watchedIsLive.mockReturnValue(true);
+  comp.transcripts['s-chart'].streaming = false;
   comp.formatMarkdown('done');
   expect(format).toHaveBeenLastCalledWith('done', true);
-
-  child.messages[0].tags = ['partial'];
-  expect(comp.transcriptStreaming()).toBe(true);
-  comp.formatMarkdown('child streaming');
-  expect(format).toHaveBeenLastCalledWith('child streaming', false);
-
-  child.messages[0].tags = [];
-  comp.transcripts['s-chart'].messages.push({ role: 'assistant', tags: ['partial'] });
-  expect(comp.transcriptStreaming()).toBe(true);
 
   comp.selectedSessionId = '';
   expect(comp.transcriptStreaming()).toBe(false);

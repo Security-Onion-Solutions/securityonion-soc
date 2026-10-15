@@ -474,6 +474,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         agent: session.model || '',
         messages: messages,
         subSessionIds: (data.subSessions || []).map(s => (s.session || {}).sessionId).filter(Boolean),
+        streaming: this.messagesStreaming(messages),
       };
     },
     // Automated sessions have no approver; a tool without a result is still running.
@@ -530,10 +531,10 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     watchedTranscript() {
       return this.transcripts[this.selectedSessionId] || null;
     },
-    // Like the assistant's isStreaming: charts wait until no message is mid-stream.
+    // A cut-off turn keeps its partial tag after the item ends, so only a live item counts.
     transcriptStreaming() {
       const transcript = this.watchedTranscript();
-      return !!transcript && this.messagesStreaming(transcript.messages);
+      return !!transcript && !!transcript.streaming && this.watchedIsLive();
     },
     messagesStreaming(messages) {
       return (messages || []).some(message => this.isPartialMessage(message) ||
