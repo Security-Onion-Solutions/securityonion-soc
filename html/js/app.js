@@ -1137,11 +1137,11 @@ $(document).ready(function () {
           }
         },
         performMermaidRegexes(text) {
-          // removes double blank lines from mermaid charts
-          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
-          // converts non-separator colons to ratio characters in mermaid charts
-          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
-          return text
+          return text.replace(/```mermaid(?:(?!```)[\s\S])*```/g, (chart) => chart
+            // removes double blank lines from mermaid charts
+            .replace(/\n\s*\n/g, '\n')
+            // converts non-separator colons to ratio characters in mermaid charts
+            .replace(/(?<!\s):/g, '\u2236'));
         },
         // The Mermaid cleanup breaks some valid Mermaid, so authored text skips it.
         formatMarkdownMermaid(text, render = true, authored = false) {
