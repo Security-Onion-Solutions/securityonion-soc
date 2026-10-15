@@ -897,21 +897,25 @@ test('options save writes the automation settings that changed', async () => {
   const params = agenticParams();
   params.automationTickIntervalSeconds = 60;
   params.alertTriageEpoch = '2026-09-24T00:00:00Z';
+  params.automationTurnTimeoutSeconds = 300;
   comp.initAssistant(params);
   const put = mockPapi('put', {});
 
   comp.showOptions();
   expect(comp.automationTickSeconds).toBe(60);
   expect(comp.alertTriageEpoch).toBe('2026-09-24T00:00:00Z');
+  expect(comp.automationTurnTimeoutSeconds).toBe(300);
   expect(comp.optionsDirty()).toBe(false);
 
   comp.automationTickSeconds = 30;
   comp.alertTriageEpoch = '2026-01-01T00:00:00Z';
+  comp.automationTurnTimeoutSeconds = 0;
   await comp.persistOptions();
 
   expect(put.mock.calls.map(call => [call[1].id, call[1].value])).toEqual([
     ['soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds', '30'],
     ['soc.config.server.modules.assistant.automationSettings.alertTriageEpoch', '2026-01-01T00:00:00Z'],
+    ['soc.config.server.modules.assistant.automationSettings.turnTimeoutSeconds', '0'],
   ]);
   expect(comp.optionsDirty()).toBe(false);
 });

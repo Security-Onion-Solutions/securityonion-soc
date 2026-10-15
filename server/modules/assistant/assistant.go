@@ -62,6 +62,8 @@ var (
 	ErrAgentSessionBusy = errors.New("ERROR_AGENT_SESSION_BUSY")
 	// The model stopped sending for longer than agentStreamIdleTimeout.
 	ErrAgentTurnStalled = errors.New("ERROR_AGENT_TURN_STALLED")
+	// The model turn ran longer than automationTurnTimeout, streaming or not.
+	ErrAgentTurnTimedOut = errors.New("ERROR_AGENT_TURN_TIMED_OUT")
 	// The stream ended without a message.
 	ErrAgentTurnEmpty = errors.New("ERROR_AGENT_TURN_EMPTY")
 
@@ -107,10 +109,12 @@ const (
 	// are never held back by it. 0 is unlimited.
 	DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS = 4
 	// Work items waiting to start; 0 is unlimited.
-	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS  = 0
-	DEFAULT_USE_MEMORY_SCANNER           = false
-	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS = 300
-	DEFAULT_DONT_SCAN_BEFORE             = ""
+	DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS = 0
+	// A headless model turn running this long is abandoned even while still streaming; 0 disables it.
+	DEFAULT_AUTOMATION_TURN_TIMEOUT_SECONDS = 300
+	DEFAULT_USE_MEMORY_SCANNER              = false
+	DEFAULT_MEMORY_SCAN_INTERVAL_SECONDS    = 300
+	DEFAULT_DONT_SCAN_BEFORE                = ""
 
 	DEFAULT_MEMORY_TO_MEMORY_PROXIMITY_THRESHOLD  = 0.8
 	DEFAULT_MEMORY_TO_MESSAGE_PROXIMITY_THRESHOLD = 0.5
@@ -208,6 +212,9 @@ type AssistantCoordinator struct {
 	// Hot-reloadable like the tick interval; UnixNano.
 	alertTriageEpoch        atomic.Int64
 	alertTriageDefaultEpoch time.Time
+	// Hot-reloadable like the tick interval; nanoseconds.
+	automationTurnTimeout        atomic.Int64
+	automationDefaultTurnTimeout time.Duration
 	// The pool is built with these at Init, so they are read only then.
 	automationMaxConcurrentItems int
 	automationMaxQueuedItems     int
@@ -375,6 +382,8 @@ const (
 	ConfigSettingAutomationTickInterval = ConfigSettingAutomationSettingsPrefix + "tickIntervalSeconds"
 	// The earliest alert triage may reach, hot-reloadable.
 	ConfigSettingAlertTriageEpoch = ConfigSettingAutomationSettingsPrefix + "alertTriageEpoch"
+	// Wall-clock bound on one headless model turn, hot-reloadable.
+	ConfigSettingAutomationTurnTimeout = ConfigSettingAutomationSettingsPrefix + "turnTimeoutSeconds"
 
 	ConfigSettingUseMemory                    = "soc.config.server.modules.assistant.useMemory"
 	ConfigSettingUseMemoryScanner             = "soc.config.server.modules.assistant.useMemoryScanner"
@@ -472,6 +481,8 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.automationTickInterval.Store(int64(ac.automationDefaultTickInterval))
 	ac.automationMaxConcurrentItems = max(module.GetIntDefault(automationSettings, "maxConcurrentItems", DEFAULT_AUTOMATION_MAX_CONCURRENT_ITEMS), 0)
 	ac.automationMaxQueuedItems = max(module.GetIntDefault(automationSettings, "maxQueuedItems", DEFAULT_AUTOMATION_MAX_QUEUED_ITEMS), 0)
+	ac.automationDefaultTurnTimeout = time.Duration(max(module.GetIntDefault(automationSettings, "turnTimeoutSeconds", DEFAULT_AUTOMATION_TURN_TIMEOUT_SECONDS), 0)) * time.Second
+	ac.automationTurnTimeout.Store(int64(ac.automationDefaultTurnTimeout))
 	ac.activityEvents = newActivityNotifier(automationActivityWindow, ac.broadcastAutomationActivity)
 	ac.execPool = ac.newExecPool()
 
@@ -879,6 +890,8 @@ func (ac *AssistantCoordinator) Start() error {
 	ac.reloadMemoryConfiguration(ac.srv.Context)
 
 	ac.reloadAutomationTickInterval(ac.srv.Context)
+	ac.reloadAlertTriageEpoch(ac.srv.Context)
+	ac.reloadAutomationTurnTimeout(ac.srv.Context)
 	ac.exposeAutomationSettings()
 	ac.startAutomationScheduler()
 
@@ -944,6 +957,7 @@ func (ac *AssistantCoordinator) registerConfigCallbacks() {
 		ConfigSettingAutomations,
 		ConfigSettingAutomationTickInterval,
 		ConfigSettingAlertTriageEpoch,
+		ConfigSettingAutomationTurnTimeout,
 	}
 	ids = append(ids, memoryConfigSettings...)
 
@@ -968,16 +982,17 @@ func (ac *AssistantCoordinator) OnConfigSettingUpdated(ctx context.Context, sett
 		return
 	}
 
-	if setting.Id == ConfigSettingAutomationTickInterval {
-		ac.reloadAutomationTickInterval(ctx)
-		ac.exposeAutomationSettings()
-		ac.broadcastAgenticUpdate()
-
-		return
+	var reload func(context.Context)
+	switch setting.Id {
+	case ConfigSettingAutomationTickInterval:
+		reload = ac.reloadAutomationTickInterval
+	case ConfigSettingAlertTriageEpoch:
+		reload = ac.reloadAlertTriageEpoch
+	case ConfigSettingAutomationTurnTimeout:
+		reload = ac.reloadAutomationTurnTimeout
 	}
-
-	if setting.Id == ConfigSettingAlertTriageEpoch {
-		ac.reloadAlertTriageEpoch(ctx)
+	if reload != nil {
+		reload(ctx)
 		ac.exposeAutomationSettings()
 		ac.broadcastAgenticUpdate()
 

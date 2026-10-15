@@ -208,6 +208,8 @@ type AssistantParameters struct {
 	AutomationTickIntervalSeconds int `json:"automationTickIntervalSeconds" example:"60"`
 	// The earliest alert time Alert Triage considers, in RFC3339.
 	AlertTriageEpoch string `json:"alertTriageEpoch" example:"2026-09-24T00:00:00Z"`
+	// Longest one model turn of an automation's session may run. 0 disables the timeout.
+	AutomationTurnTimeoutSeconds int `json:"automationTurnTimeoutSeconds" example:"300"`
 }
 
 type MemoryParameters struct {

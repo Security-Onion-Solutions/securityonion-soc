@@ -15,6 +15,7 @@ const LIMIT_DEPTH_SETTING_ID = 'soc.config.server.modules.assistant.maxDelegatio
 const LIMIT_TOKENS_SETTING_ID = 'soc.config.server.modules.assistant.maxSubSessionTokens';
 const AUTOMATION_TICK_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.tickIntervalSeconds';
 const ALERT_TRIAGE_EPOCH_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.alertTriageEpoch';
+const AUTOMATION_TURN_TIMEOUT_SETTING_ID = 'soc.config.server.modules.assistant.automationSettings.turnTimeoutSeconds';
 
 // Matches the soc_soc.yaml regex, which is stricter than the server's parse.
 const ALERT_TRIAGE_EPOCH_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)?$/;
@@ -104,8 +105,10 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     savedMaxSubSessionTokens: 0,
     automationTickSeconds: 0,
     alertTriageEpoch: '',
+    automationTurnTimeoutSeconds: 0,
     savedAutomationTickSeconds: 0,
     savedAlertTriageEpoch: '',
+    savedAutomationTurnTimeoutSeconds: 0,
     // Null until validated, which Save treats as valid.
     optionsFormValid: null,
     optionRules: {
@@ -283,6 +286,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.savedMaxSubSessionTokens = params.maxSubSessionTokens || 0;
       this.savedAutomationTickSeconds = params.automationTickIntervalSeconds || 0;
       this.savedAlertTriageEpoch = params.alertTriageEpoch || '';
+      this.savedAutomationTurnTimeoutSeconds = params.automationTurnTimeoutSeconds || 0;
       this.savedMemoryOptions = Object.assign({}, params.memoryParams || {});
       this.staleMemoryCount = (params.memoryParams || {}).staleMemoryCount || 0;
       if (!this.showOptionsDialog) {
@@ -294,6 +298,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.maxSubSessionTokens = this.savedMaxSubSessionTokens;
       this.automationTickSeconds = this.savedAutomationTickSeconds;
       this.alertTriageEpoch = this.savedAlertTriageEpoch;
+      this.automationTurnTimeoutSeconds = this.savedAutomationTurnTimeoutSeconds;
       this.memoryOptions = Object.assign({}, this.savedMemoryOptions);
     },
     // The server pushes agentic changes over the websocket, so a save just waits for
@@ -484,6 +489,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.maxSubSessionTokens !== this.savedMaxSubSessionTokens ||
         this.automationTickSeconds !== this.savedAutomationTickSeconds ||
         this.alertTriageEpoch !== this.savedAlertTriageEpoch ||
+        this.automationTurnTimeoutSeconds !== this.savedAutomationTurnTimeoutSeconds ||
         this.dirtyMemoryOptions().length > 0;
     },
     alertTriageEpochRule(value) {
@@ -509,6 +515,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         if (this.alertTriageEpoch !== this.savedAlertTriageEpoch) {
           await this.saveLimit(ALERT_TRIAGE_EPOCH_SETTING_ID, this.alertTriageEpoch);
         }
+        if (this.automationTurnTimeoutSeconds !== this.savedAutomationTurnTimeoutSeconds) {
+          await this.saveLimit(AUTOMATION_TURN_TIMEOUT_SETTING_ID, this.automationTurnTimeoutSeconds);
+        }
         for (const [settingId, value] of this.dirtyMemoryOptions()) {
           await this.saveLimit(settingId, value);
         }
@@ -516,6 +525,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.savedMaxSubSessionTokens = this.maxSubSessionTokens;
         this.savedAutomationTickSeconds = this.automationTickSeconds;
         this.savedAlertTriageEpoch = this.alertTriageEpoch;
+        this.savedAutomationTurnTimeoutSeconds = this.automationTurnTimeoutSeconds;
         this.savedMemoryOptions = Object.assign({}, this.memoryOptions);
         this.showOptionsDialog = false;
       } catch (error) {

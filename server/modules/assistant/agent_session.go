@@ -236,6 +236,11 @@ func (ac *AssistantCoordinator) streamAgentTurn(ctx context.Context, sess *model
 		touch = func() { timer.Reset(idle) }
 	}
 
+	if limit := ac.getAutomationTurnTimeout(); limit > 0 {
+		timer := time.AfterFunc(limit, func() { cancelTurn(ErrAgentTurnTimedOut) })
+		defer timer.Stop()
+	}
+
 	ac.setAgentPhase(sess.SessionId, rootSessionId, sess.Model, model.AgentPhaseWaitingLLM)
 
 	res, aux, err := ac.SendStream(turnCtx, sess.Model, history, opts...)

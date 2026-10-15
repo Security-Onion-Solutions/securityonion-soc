@@ -106,6 +106,38 @@ func (b *blockingBody) Read([]byte) (int, error) {
 
 func (b *blockingBody) Close() error { return nil }
 
+// tricklingBody streams a text delta every interval for as long as the request
+// lives, so the idle watchdog never fires.
+type tricklingBody struct {
+	ctx      context.Context
+	interval time.Duration
+	pending  []byte
+	delta    []byte
+}
+
+func newTricklingBody(ctx context.Context, interval time.Duration) *tricklingBody {
+	var head, delta bytes.Buffer
+	newSSEEventWriter(log.Log, &head).writeMessageStart("test-model")
+	newSSEEventWriter(log.Log, &delta).writeContentBlockDelta(0, "text_delta", "and on ")
+	return &tricklingBody{ctx: ctx, interval: interval, pending: head.Bytes(), delta: delta.Bytes()}
+}
+
+func (b *tricklingBody) Read(p []byte) (int, error) {
+	if len(b.pending) == 0 {
+		select {
+		case <-b.ctx.Done():
+			return 0, b.ctx.Err()
+		case <-time.After(b.interval):
+		}
+		b.pending = b.delta
+	}
+	n := copy(p, b.pending)
+	b.pending = b.pending[n:]
+	return n, nil
+}
+
+func (b *tricklingBody) Close() error { return nil }
+
 // --- coordinator fixture ---------------------------------------------------
 
 // headlessScript answers each model call with the next body and keeps what the
@@ -983,6 +1015,64 @@ func TestRunAgentSession_StalledStreamIsAbandoned(t *testing.T) {
 	})
 }
 
+// A turn that keeps streaming past the wall-clock limit is abandoned even though the
+// idle watchdog never fires.
+func TestRunAgentSession_LongTurnIsAbandoned(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		const limit = 5 * time.Minute
+		f := newHeadlessFixture(t, ctrl)
+		f.ac.agentStreamIdleTimeout = time.Minute
+		f.ac.automationTurnTimeout.Store(int64(limit))
+		f.script.respond = func(_ int, req *http.Request) (io.ReadCloser, error) {
+			return newTricklingBody(req.Context(), time.Second), nil
+		}
+
+		start := time.Now()
+		res, err := f.ac.RunAgentSession(userCtx(), baseRequest())
+		assert.ErrorIs(t, err, ErrAgentTurnTimedOut)
+		assert.Equal(t, limit, time.Since(start))
+		require.NotNil(t, res)
+		assert.NotEmpty(t, res.SessionId)
+		assert.Equal(t, 1, res.Turns)
+		assertUnlocked(t, f.ac, res.SessionId)
+		assert.Empty(t, f.ac.AgentSessionPhases())
+
+		msgs := f.store.messages(res.SessionId)
+		require.Len(t, msgs, 2)
+		assert.True(t, msgs[1].IsPartial(), "an abandoned turn is never finished")
+		assert.Contains(t, msgs[1].Message.ContentBlocks[0].Text, "and on ")
+	})
+}
+
+// Each model turn gets the whole wall-clock limit, and tool time is not charged to it.
+func TestRunAgentSession_TurnTimeoutIsPerTurn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		const limit = 5 * time.Minute
+		f := newHeadlessFixture(t, ctrl, sseToolUses(sseToolCall{"t1", "query_events", `{}`}), sseText("done"))
+		f.ac.automationTurnTimeout.Store(int64(limit))
+		f.tool.executeFunc = func(context.Context, *server.Server, *model.ToolRequest) (*model.ToolResponse, error) {
+			time.Sleep(limit)
+			return &model.ToolResponse{ToolName: "query_events", Result: "ok"}, nil
+		}
+		bodies := f.script.bodies
+		f.script.respond = func(n int, _ *http.Request) (io.ReadCloser, error) {
+			time.Sleep(limit - time.Nanosecond)
+			return io.NopCloser(strings.NewReader(bodies[n-1])), nil
+		}
+
+		res, err := f.ac.RunAgentSession(userCtx(), baseRequest())
+		require.NoError(t, err)
+		assert.Equal(t, "done", res.FinalText)
+		assert.Equal(t, 2, res.Turns)
+	})
+}
+
 // cancelledStreamAdapter streams one text delta, waits for ctx to be cancelled and
 // ends the stream the way finish says.
 type cancelledStreamAdapter struct {
@@ -1038,6 +1128,13 @@ func TestRunAgentSession_CancelReachesStreamingAdapters(t *testing.T) {
 				f.ac.agentStreamIdleTimeout = time.Minute
 			},
 			want: ErrAgentTurnStalled,
+		},
+		{
+			name: "turn timeout",
+			run: func(f *headlessFixture, _ context.CancelCauseFunc, _ <-chan struct{}) {
+				f.ac.automationTurnTimeout.Store(int64(time.Minute))
+			},
+			want: ErrAgentTurnTimedOut,
 		},
 		{
 			name: "params change",
@@ -1208,16 +1305,20 @@ func TestAssistantCoordinator_Init_AgentSessionConfig(t *testing.T) {
 	assert.Equal(t, DEFAULT_AGENT_SESSION_MAX_TURNS, ac.agentSessionMaxTurns)
 	assert.Equal(t, DEFAULT_AGENT_STREAM_FLUSH_INTERVAL_MS*time.Millisecond, ac.agentStreamFlushInterval)
 	assert.Equal(t, DEFAULT_AGENT_STREAM_IDLE_TIMEOUT_SECONDS*time.Second, ac.agentStreamIdleTimeout)
+	assert.Equal(t, DEFAULT_AUTOMATION_TURN_TIMEOUT_SECONDS*time.Second, ac.getAutomationTurnTimeout())
+	assert.Equal(t, DEFAULT_AUTOMATION_TURN_TIMEOUT_SECONDS*time.Second, ac.automationDefaultTurnTimeout)
 
 	ac = newAC()
 	require.NoError(t, ac.Init(module.ModuleConfig{
 		"agentSessionMaxTurns":          float64(3),
 		"agentStreamFlushIntervalMs":    float64(50),
 		"agentStreamIdleTimeoutSeconds": float64(0),
+		"automationSettings":            map[string]any{"turnTimeoutSeconds": float64(0)},
 	}))
 	assert.Equal(t, 3, ac.agentSessionMaxTurns)
 	assert.Equal(t, 50*time.Millisecond, ac.agentStreamFlushInterval)
 	assert.Equal(t, time.Duration(0), ac.agentStreamIdleTimeout)
+	assert.Equal(t, time.Duration(0), ac.getAutomationTurnTimeout())
 }
 
 // A headless run's request id names the automation, replacing any web request id.
