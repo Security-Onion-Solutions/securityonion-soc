@@ -79,15 +79,6 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
-func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
-	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
-		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
-		return false
-	}
-	return true
-}
-
 // decodeIncomingMessage decodes a chat message body, generating a session id
 // when the client didn't supply one.
 func decodeIncomingMessage(r *http.Request) (*model.IncomingMessage, error) {
@@ -138,10 +129,6 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -272,10 +259,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
 	if err != nil {
 		web.Respond(w, r, http.StatusUnauthorized, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -528,10 +511,6 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	all := h.server.CheckAuthorized(ctx, "read_all", "assistant")
 	if self != nil && all != nil {
 		web.Respond(w, r, http.StatusUnauthorized, self)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -1774,10 +1753,6 @@ func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	agent := &model.StoredAgent{}
 	if !h.decodeConfigRequest(w, r, agent) {
 		return
@@ -1810,10 +1785,6 @@ func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(ctx, urlParamName(r)))
 }
 
@@ -1835,10 +1806,6 @@ func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -1874,10 +1841,6 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(ctx, urlParamName(r)))
 }
 
@@ -1896,10 +1859,6 @@ func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request
 
 	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -1924,10 +1883,6 @@ func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request)
 
 	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -1977,10 +1932,6 @@ func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	automation := &model.Automation{}
 	if err := json.NewDecoder(r.Body).Decode(automation); err != nil {
 		log.FromContext(ctx).WithError(err).Error("unable to decode automation request")
@@ -2018,10 +1969,6 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	err := h.server.AssistantManager.DeleteAutomation(ctx, urlParamId(r))
 
 	h.respondAutomation(w, r, nil, err)
@@ -2050,10 +1997,6 @@ func (h *AssistantHandler) GetAllAutomationRuns(w http.ResponseWriter, r *http.R
 
 	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -2096,10 +2039,6 @@ func (h *AssistantHandler) GetAutomationRuns(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
 	offset, _ := strconv.Atoi(query.Get("offset"))
@@ -2135,10 +2074,6 @@ func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	alertLimit, _ := strconv.Atoi(r.URL.Query().Get("alertLimit"))
 
 	details, err := h.server.AssistantManager.GetAutomationRunDetails(ctx, urlParamId(r), decodePathValue(chi.URLParam(r, "runId")), alertLimit)
@@ -2160,10 +2095,6 @@ func (h *AssistantHandler) GetAutomationActivity(w http.ResponseWriter, r *http.
 
 	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
 		web.Respond(w, r, http.StatusForbidden, err)
-		return
-	}
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
 		return
 	}
 
@@ -2190,10 +2121,6 @@ func (h *AssistantHandler) GetAutomationActivity(w http.ResponseWriter, r *http.
 // @Router       /connect/assistant/memories [get]
 func (h *AssistantHandler) GetMemories(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
 
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
@@ -2254,10 +2181,6 @@ func (h *AssistantHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) 
 func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	req := &model.MemoryRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
 		log.FromContext(ctx).WithError(err).Error("unable to decode memory request")
@@ -2307,10 +2230,6 @@ func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id
 // @Router       /connect/assistant/memories/{id} [delete]
 func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
 
 	if err := h.server.AssistantManager.RemoveMemory(ctx, urlParamId(r)); err != nil {
 		h.respondMemoryError(w, r, err, "unable to delete memory")

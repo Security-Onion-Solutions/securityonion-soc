@@ -813,12 +813,23 @@ func TestAutomationSchedulerLifecycle(t *testing.T) {
 		})
 	})
 
+	t.Run("runs on airgapped grids", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			f := newEngineFixture(t)
+			f.ac.srv.Config.AirgapEnabled = true
+
+			f.ac.startAutomationScheduler()
+			assert.NotNil(t, f.ac.automationScheduler)
+
+			f.ac.stopAutomationScheduler(t.Context())
+		})
+	})
+
 	t.Run("stays idle where nothing could run", func(t *testing.T) {
 		tests := []struct {
 			name  string
 			setup func(*engineFixture)
 		}{
-			{"airgapped", func(f *engineFixture) { f.ac.srv.Config.AirgapEnabled = true }},
 			{"not agentic", func(f *engineFixture) { f.ac.isAgentic = false }},
 			{"no database", func(f *engineFixture) { f.ac.store = nil }},
 			{"no tick interval", func(f *engineFixture) { f.ac.automationTickInterval.Store(0) }},
