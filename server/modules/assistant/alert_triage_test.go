@@ -1077,6 +1077,7 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 		wantErr string
 	}{
 		{"session error", &model.AgentSessionResult{}, errors.New("model is down"), "model is down"},
+		{"turn timeout", &model.AgentSessionResult{}, ErrAgentTurnTimedOut, ErrAgentTurnTimedOut.Error()},
 		{"truncated", &model.AgentSessionResult{FinalText: "half", Truncated: true}, nil, ErrAlertTriageNoReport.Error()},
 		{"empty report", &model.AgentSessionResult{FinalText: " \n"}, nil, ErrAlertTriageNoReport.Error()},
 	}

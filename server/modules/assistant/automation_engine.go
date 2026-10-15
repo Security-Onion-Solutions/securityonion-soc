@@ -161,6 +161,32 @@ func (ac *AssistantCoordinator) getAutomationTickInterval() time.Duration {
 	return time.Duration(ac.automationTickInterval.Load())
 }
 
+// reloadSecondsSetting reads a whole-seconds setting; an absent value is def and ok is false
+// when the stored value is unreadable or below minSeconds.
+func (ac *AssistantCoordinator) reloadSecondsSetting(ctx context.Context, id string, def time.Duration, minSeconds int) (time.Duration, bool) {
+	logger := log.FromContext(ctx).WithField("setting", id)
+
+	setting, err := ac.srv.Configstore.GetSetting(ctx, id)
+	if err != nil {
+		logger.WithError(err).Warn("unable to read automation setting; keeping previous value")
+
+		return 0, false
+	}
+
+	if setting == nil || strings.TrimSpace(setting.Value) == "" {
+		return def, true
+	}
+
+	seconds, err := parseIntSetting(setting.Value)
+	if err != nil || seconds < minSeconds {
+		logger.WithFields(log.Fields{"value": setting.Value, "minSeconds": minSeconds}).Warn("automation setting must be an integer number of seconds; keeping previous value")
+
+		return 0, false
+	}
+
+	return time.Duration(seconds) * time.Second, true
+}
+
 // reloadAutomationTickInterval overlays the stored tick interval; an absent value restores the
 // Init one and an unusable value keeps the current one.
 func (ac *AssistantCoordinator) reloadAutomationTickInterval(ctx context.Context) {
@@ -168,29 +194,12 @@ func (ac *AssistantCoordinator) reloadAutomationTickInterval(ctx context.Context
 		return
 	}
 
-	logger := log.FromContext(ctx).WithField("setting", ConfigSettingAutomationTickInterval)
-
-	setting, err := ac.srv.Configstore.GetSetting(ctx, ConfigSettingAutomationTickInterval)
-	if err != nil {
-		logger.WithError(err).Warn("unable to read automation tick interval; keeping previous value")
-
+	next, ok := ac.reloadSecondsSetting(ctx, ConfigSettingAutomationTickInterval, ac.automationDefaultTickInterval, 1)
+	if !ok {
 		return
 	}
 
-	next := int64(ac.automationDefaultTickInterval)
-
-	if setting != nil && strings.TrimSpace(setting.Value) != "" {
-		seconds, err := parseIntSetting(setting.Value)
-		if err != nil || seconds <= 0 {
-			logger.WithField("value", setting.Value).Warn("automation tick interval must be a positive integer; keeping previous value")
-
-			return
-		}
-
-		next = int64(time.Duration(seconds) * time.Second)
-	}
-
-	if ac.automationTickInterval.Swap(next) != next {
+	if ac.automationTickInterval.Swap(int64(next)) != int64(next) {
 		ac.wakeAutomationScheduler()
 	}
 }
@@ -233,10 +242,27 @@ func (ac *AssistantCoordinator) reloadAlertTriageEpoch(ctx context.Context) {
 	ac.alertTriageEpoch.Store(next.UnixNano())
 }
 
+func (ac *AssistantCoordinator) getAutomationTurnTimeout() time.Duration {
+	return time.Duration(ac.automationTurnTimeout.Load())
+}
+
+// reloadAutomationTurnTimeout overlays the stored turn timeout; an absent value restores the
+// Init one and an unusable value keeps the current one. Turns already streaming keep theirs.
+func (ac *AssistantCoordinator) reloadAutomationTurnTimeout(ctx context.Context) {
+	if ac.srv.Configstore == nil {
+		return
+	}
+
+	if next, ok := ac.reloadSecondsSetting(ctx, ConfigSettingAutomationTurnTimeout, ac.automationDefaultTurnTimeout, 0); ok {
+		ac.automationTurnTimeout.Store(int64(next))
+	}
+}
+
 func (ac *AssistantCoordinator) exposeAutomationSettings() {
 	params := &ac.srv.Config.ClientParams.AssistantParams
 	params.AutomationTickIntervalSeconds = int(ac.getAutomationTickInterval().Seconds())
 	params.AlertTriageEpoch = ac.getAlertTriageEpoch().Format(time.RFC3339)
+	params.AutomationTurnTimeoutSeconds = int(ac.getAutomationTurnTimeout().Seconds())
 }
 
 // automationWorker ticks on the interval and on every wake.

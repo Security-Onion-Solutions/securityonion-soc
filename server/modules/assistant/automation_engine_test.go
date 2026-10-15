@@ -631,6 +631,37 @@ func TestAlertTriageEpochHotReload(t *testing.T) {
 	assert.True(t, f.ac.getAlertTriageEpoch().Equal(initial), "a removed setting restores the Init value")
 }
 
+func TestAutomationTurnTimeoutHotReload(t *testing.T) {
+	f := newBareEngineFixture(t)
+	f.ac.automationDefaultTurnTimeout = 5 * time.Minute
+	f.ac.automationTurnTimeout.Store(int64(5 * time.Minute))
+
+	f.ac.reloadAutomationTurnTimeout(context.Background())
+	assert.Equal(t, 5*time.Minute, f.ac.getAutomationTurnTimeout(), "an absent setting is the Init value")
+
+	timeout := &model.Setting{Id: ConfigSettingAutomationTurnTimeout, Value: " 120 "}
+	f.cfg.settings = append(f.cfg.settings, timeout)
+
+	f.ac.OnConfigSettingUpdated(context.Background(), timeout, false)
+	assert.Equal(t, 2*time.Minute, f.ac.getAutomationTurnTimeout())
+	assert.Equal(t, 120, f.ac.srv.Config.ClientParams.AssistantParams.AutomationTurnTimeoutSeconds)
+
+	for _, bad := range []string{"-1", "soon"} {
+		timeout.Value = bad
+		f.ac.OnConfigSettingUpdated(context.Background(), timeout, false)
+		assert.Equal(t, 2*time.Minute, f.ac.getAutomationTurnTimeout(), "a rejected value keeps the current one")
+	}
+
+	timeout.Value = "0"
+	f.ac.OnConfigSettingUpdated(context.Background(), timeout, false)
+	assert.Equal(t, time.Duration(0), f.ac.getAutomationTurnTimeout(), "0 disables the timeout")
+
+	f.cfg.settings = f.cfg.settings[:len(f.cfg.settings)-1]
+	f.ac.OnConfigSettingUpdated(context.Background(), timeout, true)
+	assert.Equal(t, 5*time.Minute, f.ac.getAutomationTurnTimeout(), "a removed setting restores the Init value")
+	assert.Equal(t, 300, f.ac.srv.Config.ClientParams.AssistantParams.AutomationTurnTimeoutSeconds)
+}
+
 func TestAutomationTickIntervalHotReload(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t)

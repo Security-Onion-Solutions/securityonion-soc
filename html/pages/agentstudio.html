@@ -20,11 +20,15 @@
             <v-divider class="my-4"></v-divider>
             <div class="text-overline mb-4">{{ i18n.agentStudioAutomations }}</div>
             <v-row>
-              <v-col cols="12" md="6">
+              <v-col cols="12" md="4">
                 <v-text-field v-model.number="automationTickSeconds" type="number" min="1" :label="i18n.agentStudioAutomationTickInterval" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-clock"
                   :hint="i18n.agentStudioAutomationTickIntervalHelp" persistent-hint :rules="optionRules.positive" data-aid="agentstudio_options_tick_interval"></v-text-field>
               </v-col>
-              <v-col cols="12" md="6">
+              <v-col cols="12" md="4">
+                <v-text-field v-model.number="automationTurnTimeoutSeconds" type="number" min="0" :label="i18n.agentStudioAutomationTurnTimeout" :suffix="i18n.secondsLabel" prepend-inner-icon="fa-hourglass-half"
+                  :hint="i18n.agentStudioAutomationTurnTimeoutHelp" persistent-hint :rules="optionRules.nonNegative" data-aid="agentstudio_options_automation_turn_timeout"></v-text-field>
+              </v-col>
+              <v-col cols="12" md="4">
                 <v-text-field v-model.trim="alertTriageEpoch" :label="i18n.agentStudioAlertTriageEpoch" prepend-inner-icon="fa-calendar"
                   :hint="i18n.agentStudioAlertTriageEpochHelp" persistent-hint :rules="[alertTriageEpochRule]" data-aid="agentstudio_options_alert_triage_epoch"></v-text-field>
               </v-col>
