@@ -583,13 +583,12 @@ func TestGetBalanceAirgapEnabled(t *testing.T) {
 
 	w := httptest.NewRecorder()
 
-	// No mock expectations needed - should return early due to airgap
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
+	mockManager.EXPECT().Balance(gomock.Any(), gomock.Any()).Return(&model.BalanceResponse{Balance: 10000}, nil)
 
-	// Execute the handler
 	handler.GetBalance(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestGetUsage(t *testing.T) {
@@ -953,59 +952,6 @@ data: [DONE]`
 	if assert.NotNil(t, msg) {
 		assert.Empty(t, msg.ContentBlocks)
 	}
-}
-
-func TestCheckAssistantAvailable_AirgapEnabled(t *testing.T) {
-	// Create mock server with airgap enabled
-	srv := &Server{
-		Config: &config.ServerConfig{
-			AirgapEnabled: true,
-		},
-	}
-
-	handler := NewAssistantHandler(srv)
-
-	req := httptest.NewRequest("GET", "/assistant/test", nil)
-	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
-	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
-	req = req.WithContext(ctx)
-
-	w := httptest.NewRecorder()
-
-	// Execute the check
-	result := handler.checkAssistantAvailable(ctx, w, req)
-
-	// Verify result is false
-	assert.False(t, result)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, []byte("\"ERROR_SERVICE_NOT_AVAILABLE\""), w.Body.Bytes())
-}
-
-func TestCheckAssistantAvailable_AirgapDisabled(t *testing.T) {
-	// Create mock server with airgap disabled
-	srv := &Server{
-		Config: &config.ServerConfig{
-			AirgapEnabled: false,
-		},
-	}
-
-	handler := NewAssistantHandler(srv)
-
-	req := httptest.NewRequest("GET", "/assistant/test", nil)
-	ctx := context.WithValue(req.Context(), web.ContextKeyRequestorId, "test-user-123")
-	req = req.WithContext(ctx)
-
-	w := httptest.NewRecorder()
-
-	// Execute the check
-	result := handler.checkAssistantAvailable(ctx, w, req)
-
-	// Verify result is true
-	assert.True(t, result)
-
-	// Verify no response was written
-	assert.Nil(t, w.Body.Bytes())
 }
 
 func TestGetSessionDetails(t *testing.T) {
@@ -3379,25 +3325,6 @@ func TestPostTool_Unauthorized(t *testing.T) {
 	handler.PostTool(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
-}
-
-func TestPostTool_Unavailable(t *testing.T) {
-	srv, _, _ := newAssistantTestServer(t, true)
-	srv.Config = &config.ServerConfig{AirgapEnabled: true}
-	handler := NewAssistantHandler(srv)
-
-	body, _ := json.Marshal(model.ToolRequest{SessionId: "s1", ToolUseId: "tu1", Model: "m"})
-	req := httptest.NewRequest("POST", "/assistant/tool/query_events", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("name", "query_events")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	req = withAssistantContext(req)
-	w := httptest.NewRecorder()
-
-	handler.PostTool(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // When resolving a finished sub-agent fails, the chain stops cleanly: the child's

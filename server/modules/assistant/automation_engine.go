@@ -38,16 +38,12 @@ type automationScheduler struct {
 	done   chan struct{}
 }
 
-// startAutomationScheduler starts the worker where a run could succeed: agentic, online, with Postgres.
+// startAutomationScheduler starts the worker where a run could succeed: agentic, with Postgres.
 func (ac *AssistantCoordinator) startAutomationScheduler() {
 	logger := log.FromContext(ac.srv.Context)
 
 	switch {
 	case !ac.isAgentic:
-		return
-	case ac.srv.Config != nil && ac.srv.Config.AirgapEnabled:
-		logger.Info("airgap enabled; automations will not run")
-
 		return
 	case ac.store == nil:
 		logger.Warn("no database connection; automations will not run")

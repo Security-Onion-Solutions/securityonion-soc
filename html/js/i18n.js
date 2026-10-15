@@ -349,7 +349,7 @@ const i18n = {
       agentMonitorRejectedHelp: 'Work refused because the queue was full.',
       agentMonitorDedupedHelp: 'Work skipped because it was already queued or running.',
       agentMonitorBusyHelp: 'Chats refused because their agent was at its instance limit.',
-      agentMonitorSchedulerStopped: 'The automation scheduler is not running, so no automation will start. It stays stopped while agentic mode is off, on airgapped grids, and without a database.',
+      agentMonitorSchedulerStopped: 'The automation scheduler is not running, so no automation will start. It stays stopped while agentic mode is off or without a database.',
       agentMonitorWaitingOnAgent: 'Waiting on',
       agentMonitorNoLimit: 'no limit',
       agentMonitorPause: 'Pause updates',
@@ -2143,7 +2143,6 @@ const i18n = {
       ERROR_SESSION_ATTACHED_TO_CASES: 'Unable to unshare session. The session is attached to {count} case(s).',
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
-      ERROR_SERVICE_NOT_AVAILABLE: 'The configuration of this grid does not support the requested operation. Contact your administrator for assistance with enabling additional features.',
       ERROR_TOOL_TURN_BUSY: 'This session is already processing a request. Please try again in a moment.',
       ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a class="text-white" target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
 
