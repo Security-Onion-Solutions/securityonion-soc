@@ -387,7 +387,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
         route.hideDateRangePicker();
       });
       $('#aimetrics-date-range').on('show.daterangepicker', function (ev, picker) {
-        route.$root.applyDateRangePickerAriaLabels(picker);
+        route.$root.applyDateRangePickerA11y(picker);
       });
     },
     showDateRangePicker() {

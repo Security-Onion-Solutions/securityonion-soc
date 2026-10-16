@@ -317,7 +317,7 @@ const jobsComponent = {
         $(this).val(value);
       });
       $('#jobtimeframe').on('show.daterangepicker', function (ev, picker) {
-        route.$root.applyDateRangePickerAriaLabels(picker);
+        route.$root.applyDateRangePickerA11y(picker);
       });
     },
     isComplete(job) {

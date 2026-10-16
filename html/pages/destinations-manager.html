@@ -89,7 +89,7 @@
               <v-text-field v-model="form.params.username" :label="i18n.smtpUsername" density="comfortable" data-aid="destination_form_smtp_username"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="form.params.password" :label="i18n.smtpPassword" :type="showPassword ? 'text' : 'password'" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" density="comfortable" data-aid="destination_form_smtp_password"></v-text-field>
+              <v-text-field autocomplete="new-password" v-model="form.params.password" :label="i18n.smtpPassword" :type="showPassword ? 'text' : 'password'" :append-inner-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" @click:append-inner="showPassword = !showPassword" density="comfortable" data-aid="destination_form_smtp_password"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
               <v-select v-model="form.params.attachmentMode" :items="attachmentModeOptions" :label="i18n.attachmentMode" density="comfortable" data-aid="destination_form_smtp_attachment_mode"></v-select>

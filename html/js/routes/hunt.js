@@ -2145,7 +2145,7 @@ const huntComponent = {
         route.hideDateRangePicker();
       });
       $('#huntdaterange').on('show.daterangepicker', function (ev, picker) {
-        route.$root.applyDateRangePickerAriaLabels(picker);
+        route.$root.applyDateRangePickerA11y(picker);
       });
     },
     showAbsoluteTime() {

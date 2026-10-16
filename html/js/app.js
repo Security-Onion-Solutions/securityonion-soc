@@ -1225,16 +1225,89 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
         },
-        applyDateRangePickerAriaLabels(picker) {
+        applyDateRangePickerA11y(picker) {
           const $c = picker.container;
-          $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
-          $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
-          $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
-          $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
-          $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
-          $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
-          $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
-          $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
+          const $input = picker.element;
+          const ns = '.soA11y';
+          const tabbables = () => $c.find('.ranges li, select:enabled, button:enabled').filter(':visible');
+
+          const labelSelects = () => {
+            $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
+            $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
+            $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
+            $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
+            $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
+            $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
+            $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
+            $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
+          };
+
+          // the library re-opens the picker whenever the input gains focus
+          const focusInput = () => {
+            $input.off('focus.daterangepicker');
+            $input.trigger('focus');
+            $input.on('focus.daterangepicker', $.proxy(picker.show, picker));
+          };
+
+          const focusAfterInput = () => {
+            const all = $('a[href], button, input, select, textarea, [tabindex]')
+              .not('[tabindex="-1"], :disabled').not($c.find('*')).filter(':visible').toArray();
+            const next = all[all.indexOf($input[0]) + 1];
+            if (next) next.focus(); else focusInput();
+          };
+
+          labelSelects();
+          $c.find('.ranges ul').attr('role', 'none');
+          $c.find('.ranges li').attr({ tabindex: '0', role: 'button' });
+
+          // the library hides the picker on Tab; move into it instead
+          $input.off('keydown.daterangepicker').on('keydown.daterangepicker', e => {
+            if (e.key === 'Tab' && !e.shiftKey && picker.isShowing && tabbables().length) {
+              e.preventDefault();
+              tabbables().first().trigger('focus');
+              return;
+            }
+            picker.keydown(e);
+          });
+
+          $c.off('keydown' + ns).on('keydown' + ns, e => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              picker.hide();
+              focusInput();
+            } else if ((e.key === 'Enter' || e.key === ' ') && $(e.target).is('.ranges li')) {
+              e.preventDefault();
+              $(e.target).trigger('click');
+            } else if (e.key === 'Tab') {
+              const $t = tabbables();
+              if (e.shiftKey && e.target === $t[0]) {
+                e.preventDefault();
+                focusInput();
+              } else if (!e.shiftKey && e.target === $t[$t.length - 1]) {
+                e.preventDefault();
+                picker.hide();
+                focusAfterInput();
+              }
+            }
+          });
+
+          $c.off('click' + ns).on('click' + ns, '.ranges li, .drp-buttons button', () => {
+            labelSelects();
+            if (!picker.isShowing) focusInput();
+          });
+
+          // the library re-renders the time selects on change, dropping their focus and labels
+          let lastSelect = null;
+          $c.off('focusin' + ns).on('focusin' + ns, 'select', e => {
+            lastSelect = {
+              side: $(e.target).closest('.drp-calendar').hasClass('left') ? 'left' : 'right',
+              cls: e.target.classList[0],
+            };
+          });
+          $c.off('change' + ns).on('change' + ns, () => {
+            labelSelects();
+            if (lastSelect) $c.find(`.drp-calendar.${lastSelect.side} select.${lastSelect.cls}`).trigger('focus');
+          });
         },
         localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
