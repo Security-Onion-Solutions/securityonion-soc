@@ -1166,7 +1166,6 @@ dfn {
   color: rgb(var(--v-theme-text)) !important;
   border: 1px solid rgba(var(--v-theme-text), 0.12) !important;
   border-radius: var(--so-radius-field) !important;
-  outline: none;
 }
 
 .daterangepicker .calendar-table .next span,
@@ -1237,9 +1236,15 @@ dfn {
   background-color: rgba(var(--v-theme-text), 0.12) !important;
 }
 
-.daterangepicker .drp-buttons .btn:focus-visible {
+.daterangepicker .drp-buttons .btn:focus-visible,
+.daterangepicker select:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
+}
+
+.daterangepicker .ranges li:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
 }
 
 /* Internal dividers between calendars / ranges panel */

@@ -8,6 +8,14 @@ require('./test_common.js');
 
 const app = global.getApp();
 const _i18n = global.i18n.getLocalizedTranslations('en-US');
+const origAppI18n = app.i18n;
+
+// some tests replace these outright; undo so later tests see the real ones
+afterEach(() => {
+  delete document.getElementById;
+  delete document.querySelector;
+  app.i18n = origAppI18n;
+});
 
 test('escape', () => {
   expect(app.escape('')).toBe('');
@@ -2063,4 +2071,174 @@ test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
 
   expect(app.alarmStates).toHaveLength(1);
   expect(app.updateStatus).not.toHaveBeenCalled();
+});
+
+describe('applyDateRangePickerA11y', () => {
+  const jq = require('./external/jquery-4.0.0.min.js');
+  let original$, origRects, picker, $input, $c;
+
+  const pressKey = (el, key, opts = {}) => {
+    const e = jq.Event('keydown', { key, ...opts });
+    jq(el).trigger(e);
+    return e;
+  };
+
+  beforeEach(() => {
+    original$ = global.$;
+    global.$ = jq;
+    // jsdom has no layout, so treat everything outside .hidden as visible
+    origRects = Element.prototype.getClientRects;
+    Element.prototype.getClientRects = function() { return this.closest('.hidden') ? [] : [{}]; };
+
+    document.body.innerHTML = `
+      <input id="before"><input id="dr"><button id="after">after</button>
+      <div class="daterangepicker">
+        <div class="ranges"><ul><li data-range-key="Today">Today</li><li data-range-key="Custom">Custom</li></ul></div>
+        <div class="drp-calendar left"><div class="calendar-time"><select class="hourselect"></select><select class="minuteselect"></select></div></div>
+        <div class="drp-calendar right"><div class="calendar-time"><select class="hourselect"></select></div></div>
+        <div class="drp-buttons"><button class="cancelBtn">Cancel</button><button class="applyBtn">Apply</button></div>
+      </div>`;
+    $input = jq('#dr');
+    $c = jq('.daterangepicker');
+    picker = {
+      container: $c,
+      element: $input,
+      isShowing: true,
+      show: jest.fn(function() { this.isShowing = true; }),
+      hide: jest.fn(function() { this.isShowing = false; }),
+      keydown: jest.fn(),
+    };
+
+    $input.on('focus.daterangepicker', jq.proxy(picker.show, picker));
+    $input.on('keydown.daterangepicker', jq.proxy(picker.keydown, picker));
+    $c.find('.ranges').on('click.daterangepicker', 'li', e => {
+      if (e.currentTarget.dataset.rangeKey !== 'Custom') picker.hide();
+    });
+    $c.find('.drp-calendar.left').on('change.daterangepicker', 'select', () => {
+      $c.find('.drp-calendar.left .calendar-time').html('<select class="hourselect"></select><select class="minuteselect"></select>');
+    });
+
+    app.applyDateRangePickerA11y(picker);
+    picker.show.mockClear();
+  });
+
+  afterEach(() => {
+    global.$ = original$;
+    Element.prototype.getClientRects = origRects;
+    document.body.innerHTML = '';
+  });
+
+  test('should label time selects and make presets focusable buttons', () => {
+    expect(_i18n.ariaPickerStartHour).toBeTruthy();
+    expect($c.find('.drp-calendar.left .hourselect').attr('aria-label')).toBe(_i18n.ariaPickerStartHour);
+    expect($c.find('.drp-calendar.right .hourselect').attr('aria-label')).toBe(_i18n.ariaPickerEndHour);
+    expect($c.find('.ranges ul').attr('role')).toBe('none');
+    $c.find('.ranges li').each((_, li) => {
+      expect(li.getAttribute('tabindex')).toBe('0');
+      expect(li.getAttribute('role')).toBe('button');
+    });
+  });
+
+  test('should move focus into the picker on Tab from the input instead of closing it', () => {
+    $input.trigger('focus');
+    const e = pressKey($input, 'Tab');
+    expect(e.isDefaultPrevented()).toBe(true);
+    expect(document.activeElement).toBe($c.find('.ranges li')[0]);
+    expect(picker.keydown).not.toHaveBeenCalled();
+  });
+
+  test('should pass other input keys, and Tab while hidden, to the library', () => {
+    pressKey($input, 'Escape');
+    expect(picker.keydown).toHaveBeenCalledTimes(1);
+
+    picker.isShowing = false;
+    const e = pressKey($input, 'Tab');
+    expect(e.isDefaultPrevented()).toBe(false);
+    expect(picker.keydown).toHaveBeenCalledTimes(2);
+  });
+
+  test('should select a preset on Enter or Space and return focus without reopening', () => {
+    const today = $c.find('.ranges li')[0];
+    today.focus();
+    expect(pressKey(today, 'Enter').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.show).not.toHaveBeenCalled();
+
+    picker.isShowing = true;
+    today.focus();
+    pressKey(today, ' ');
+    expect(picker.hide).toHaveBeenCalledTimes(2);
+  });
+
+  test('should keep the picker open and focus in place for the Custom preset', () => {
+    const custom = $c.find('.ranges li')[1];
+    custom.focus();
+    pressKey(custom, 'Enter');
+    expect(picker.hide).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(custom);
+  });
+
+  test('should close the picker on Escape and return focus to the input', () => {
+    const select = $c.find('select')[0];
+    select.focus();
+    expect(pressKey(select, 'Escape').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalled();
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.show).not.toHaveBeenCalled();
+  });
+
+  test('should return to the input on Shift+Tab from the first item with the picker open', () => {
+    const first = $c.find('.ranges li')[0];
+    first.focus();
+    expect(pressKey(first, 'Tab', { shiftKey: true }).isDefaultPrevented()).toBe(true);
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.hide).not.toHaveBeenCalled();
+  });
+
+  test('should close the picker on Tab from the last item and move past the input', () => {
+    const apply = $c.find('.applyBtn')[0];
+    apply.focus();
+    expect(pressKey(apply, 'Tab').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.getElementById('after'));
+  });
+
+  test('should leave Tab between middle items to the browser', () => {
+    const select = $c.find('select')[0];
+    select.focus();
+    expect(pressKey(select, 'Tab').isDefaultPrevented()).toBe(false);
+    expect(pressKey(select, 'Tab', { shiftKey: true }).isDefaultPrevented()).toBe(false);
+  });
+
+  test('should skip hidden elements when finding the last item', () => {
+    $c.find('.drp-buttons').addClass('hidden');
+    const lastSelect = $c.find('.drp-calendar.right select')[0];
+    lastSelect.focus();
+    pressKey(lastSelect, 'Tab');
+    expect(picker.hide).toHaveBeenCalled();
+  });
+
+  test('should keep time select focus and label after the library re-renders it', () => {
+    const minute = $c.find('.drp-calendar.left .minuteselect')[0];
+    minute.focus();
+    jq(minute).trigger('change');
+
+    const rerendered = $c.find('.drp-calendar.left .minuteselect')[0];
+    expect(rerendered).not.toBe(minute);
+    expect(document.activeElement).toBe(rerendered);
+    expect(rerendered.getAttribute('aria-label')).toBe(_i18n.ariaPickerStartMinute);
+  });
+
+  test('should not stack handlers when re-applied on each show', () => {
+    app.applyDateRangePickerA11y(picker);
+    app.applyDateRangePickerA11y(picker);
+    pressKey($input, 'Escape');
+    expect(picker.keydown).toHaveBeenCalledTimes(1);
+
+    const today = $c.find('.ranges li')[0];
+    today.focus();
+    pressKey(today, 'Enter');
+    expect(picker.hide).toHaveBeenCalledTimes(1);
+  });
 });

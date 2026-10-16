@@ -822,7 +822,7 @@ td {
   font-size: 14px;
   line-height: 1.5;
   padding: 5px;
-  border: 1px solid gray;
+  border: 1px solid rgba(var(--v-theme-text), 0.38);
   border-radius: 3px;
 }
 
@@ -830,9 +830,12 @@ td {
   min-height: 10em;
 }
 
-/* optional class for removing the outline */
 .prism-editor__textarea:focus {
   outline: none;
+}
+
+.prism:focus-within {
+  border-color: rgb(var(--v-theme-text));
 }
 
 code {
