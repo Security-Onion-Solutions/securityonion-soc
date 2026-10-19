@@ -400,6 +400,22 @@ test('$route watcher behavior', () => {
 	expect(comp.loadData).toHaveBeenCalled();
 });
 
+test('route watch switches to nodes tab and does not load metrics if selected grid does not support metrics', async () => {
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'metrics';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node1', metricsEnabled: false, historicalMetricsEnabled: false }];
+		comp.updateMetricsEnabled();
+	});
+
+	await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'metrics', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'metrics', gridId: 'grid1' } });
+
+	expect(comp.activeTab).toBe('nodes');
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+});
+
 test('initGrid initializes metrics when activeTab is metrics', () => {
 	comp.activeTab = 'metrics';
 	comp.initMetricsCharts = jest.fn();

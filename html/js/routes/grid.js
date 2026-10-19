@@ -119,7 +119,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       return !!this.historicalMetricsEnabled;
     },
     isAnyAlarmActive() {
-      return this.$root?.isAlarmActive ? this.$root.isAlarmActive() : false;
+      return this.$root?.isAlarmActive ? this.$root.isAlarmActive(this.$root.selectedGridId) : false;
     },
   },
   created() {
@@ -139,11 +139,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
     this.$root.loadParameters("grid", this.initGrid);
   },
   watch: {
-    '$route'(to, from) {
+    async '$route'(to, from) {
       this.loadUrlParameters();
       const gridIdChanged = (to.query && to.query.gridId) !== (from.query && from.query.gridId);
       if (to.path !== from.path || gridIdChanged) {
-        this.loadData();
+        await this.loadData();
         if (this.activeTab === 'metrics') {
           this.loadHistoricalMetrics(true);
         }
@@ -285,6 +285,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.adjustSubgridColVisibility(this.headers);
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
       this.historicalMetricsEnabled = !this.nodes.every(function(node) { return !node.historicalMetricsEnabled; });
+      const alarmsEnabled = typeof this.alarmsEnabled === 'function' ? this.alarmsEnabled() : !!this.alarmsEnabled;
+      if ((this.activeTab === 'metrics' && !this.historicalMetricsEnabled) || (this.activeTab === 'alarms' && !alarmsEnabled)) {
+        this.activeTab = 'nodes';
+      }
       this.metricsNodeItems = [
         { title: this.i18n.metricsAllHosts, value: '' }
       ].concat(this.nodes.map(n => ({ title: n.id, value: n.id })));
@@ -656,6 +660,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     updateRoute() {
       const query = {};
+      if (this.$route?.query?.gridId) {
+        query.gridId = this.$route.query.gridId;
+      }
       if (this.activeTab) {
         query.tab = this.activeTab;
       }

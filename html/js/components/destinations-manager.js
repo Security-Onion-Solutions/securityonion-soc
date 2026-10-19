@@ -131,6 +131,7 @@ components.push({
     methods: {
       async loadData() {
         this.$root?.startLoading?.();
+        this.users = [];
         await Promise.all([this.getDestinations(), this.getSchedules()]);
         this.$root?.stopLoading?.();
       },

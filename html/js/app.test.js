@@ -1027,13 +1027,29 @@ test('isAttentionNeeded', () => {
   app.statusByGridId[''].detections.elastalert.syncFailure = false;
 
   // Attention when active alarm exists
+  app.statusByGridId['subgrid1'] = {
+    grid: { unhealthyNodeCount: 0 },
+    alerts: { newCount: 0 },
+    detections: {
+      elastalert: {},
+      suricata: {},
+      strelka: {},
+    },
+  };
   app.alarmStates = [{ alarmId: 'alarm-1', status: 'alarm' }];
   expect(app.isAlarmActive()).toBe(true);
+  expect(app.isAlarmActive('')).toBe(true);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
   expect(app.isGridUnhealthy('')).toBe(true);
+  expect(app.isGridUnhealthy('subgrid1')).toBe(false);
+  expect(app.getSubgridIcon('')).toBe('fa-exclamation');
+  expect(app.getSubgridIcon('subgrid1')).toBe('');
   expect(app.isUnhealthy()).toBe(true);
   expect(app.isAttentionNeeded()).toBe(true);
   app.alarmStates = [{ alarmId: 'alarm-1', status: 'ok' }];
   expect(app.isAlarmActive()).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
 
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);

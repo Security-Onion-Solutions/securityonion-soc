@@ -17,6 +17,7 @@ routes.push({
       };
     },
     watch: {
+      '$route': 'loadData',
       tab(newTab) {
         if (newTab === 'destinations') {
           if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
@@ -30,6 +31,14 @@ routes.push({
       },
     },
     methods: {
+      loadData() {
+        if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.loadData === 'function') {
+          this.$refs.destinationsManager.loadData();
+        }
+        if (this.$refs.schedulesManager && typeof this.$refs.schedulesManager.loadData === 'function') {
+          this.$refs.schedulesManager.loadData();
+        }
+      },
       onScheduleUpdated() {
         if (this.$refs.destinationsManager && typeof this.$refs.destinationsManager.getSchedules === 'function') {
           this.$refs.destinationsManager.getSchedules();

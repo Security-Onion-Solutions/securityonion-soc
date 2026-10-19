@@ -1889,6 +1889,9 @@ $(document).ready(function () {
             .catch(() => {});
         },
         isAlarmActive(gridId) {
+          if (gridId && gridId !== LOCAL_GRID_ID) {
+            return false;
+          }
           if (!this.alarmStates || this.alarmStates.length === 0) return false;
           return this.alarmStates.some(s => s.status === 'alarm');
         },
