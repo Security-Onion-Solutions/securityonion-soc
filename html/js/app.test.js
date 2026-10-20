@@ -380,6 +380,22 @@ test('memory write permissions mirror the built-in roles', () => {
   expect(app.canWriteAllMemories(role('analyst'))).toBe(false);
 });
 
+test('Onion AI permissions mirror the built-in roles', () => {
+  const role = (r) => ({ id: '123', roles: [r] });
+  for (const r of ['analyst', 'auditor', 'superuser']) {
+    expect(app.canReadOnionAi(role(r))).toBe(true, r);
+  }
+  for (const r of ['limited-analyst', 'limited-auditor']) {
+    expect(app.canReadOnionAi(role(r))).toBe(false, r);
+  }
+  for (const r of ['analyst', 'superuser']) {
+    expect(app.canWriteOnionAi(role(r))).toBe(true, r);
+  }
+  for (const r of ['auditor', 'limited-analyst', 'limited-auditor']) {
+    expect(app.canWriteOnionAi(role(r))).toBe(false, r);
+  }
+});
+
 test('isMyUser', () => {
   app.user = null;
   expect(app.isMyUser()).toBe(false);
