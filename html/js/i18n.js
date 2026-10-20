@@ -566,7 +566,7 @@ const i18n = {
       assistantAttachToNewCase: 'Attach to new case',
       assistantAttachToNewCaseHelp: 'Attach this session to a new case (a new case will be created)',
       assistantAttachNoSession: 'Could not find session.',
-      assistantUnavailable: `This feature requires a valid Security Onion Pro license and Internet connection. Visit the <a class="px-1" target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai" data-aid="assistant_visit_pro_website">Security Onion website</a> to learn more about Security Onion Pro.`,
+      assistantUnavailable: `This feature requires a valid Security Onion Pro license. Visit the <a class="px-1" target="sos" href="https://securityonionsolutions.com/pro?utm_source=ainotice&utm_medium=app&utm_id=ai" data-aid="assistant_visit_pro_website">Security Onion website</a> to learn more about Security Onion Pro.`,
       assistantBalanceCheckUnhealthy: 'The AI model could not be reached or did not provide the expected response.',
       assistantChatNoResume: 'This session cannot be resumed.',
       assistantSessionAccessDenied: 'You don\'t have access to this session. Ask its owner to share it.',

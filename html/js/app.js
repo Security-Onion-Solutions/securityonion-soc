@@ -22,7 +22,7 @@ const SECURITYONION_PRO = "Security Onion Pro";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
+const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics','agentmonitor','agentstudio'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
