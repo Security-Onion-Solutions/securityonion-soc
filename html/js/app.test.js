@@ -1043,13 +1043,29 @@ test('isAttentionNeeded', () => {
   app.statusByGridId[''].detections.elastalert.syncFailure = false;
 
   // Attention when active alarm exists
+  app.statusByGridId['subgrid1'] = {
+    grid: { unhealthyNodeCount: 0 },
+    alerts: { newCount: 0 },
+    detections: {
+      elastalert: {},
+      suricata: {},
+      strelka: {},
+    },
+  };
   app.alarmStates = [{ alarmId: 'alarm-1', status: 'alarm' }];
   expect(app.isAlarmActive()).toBe(true);
+  expect(app.isAlarmActive('')).toBe(true);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
   expect(app.isGridUnhealthy('')).toBe(true);
+  expect(app.isGridUnhealthy('subgrid1')).toBe(false);
+  expect(app.getSubgridIcon('')).toBe('fa-exclamation');
+  expect(app.getSubgridIcon('subgrid1')).toBe('');
   expect(app.isUnhealthy()).toBe(true);
   expect(app.isAttentionNeeded()).toBe(true);
   app.alarmStates = [{ alarmId: 'alarm-1', status: 'ok' }];
   expect(app.isAlarmActive()).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
 
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);
@@ -1219,6 +1235,56 @@ test('loadGridInfo', async () => {
   expect(app.gridInfo['g2']).toStrictEqual({foo:2});
 });
 
+test('loadSubgridInfo collects alarm states from subgrids', async () => {
+  const mock = jest.fn((endpoint, options) => {
+    const gridId = options?.params?.gridId;
+    if (endpoint === 'info') {
+      return Promise.resolve({ data: { name: `Info-${gridId}` } });
+    }
+    if (endpoint === 'alarms/states') {
+      if (gridId === 'g1') {
+        return Promise.resolve({ data: [{ alarmId: 'alarm-g1', status: 'alarm' }] });
+      }
+      if (gridId === 'g2') {
+        return Promise.reject(new Error('alarms not supported'));
+      }
+    }
+    return Promise.resolve({ data: {} });
+  });
+  app.papi.get = mock;
+
+  app.gridInfo = {};
+  app.alarmStates = [{ alarmId: 'alarm-local', status: 'ok', gridId: '' }];
+  app.subgrids = [{ id: 'g1' }, { id: 'g2' }];
+
+  await app.loadSubgridInfo();
+
+  expect(app.gridInfo['g1']).toEqual({ name: 'Info-g1' });
+  expect(app.gridInfo['g2']).toEqual({ name: 'Info-g2' });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g1' } });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g2' } });
+
+  expect(app.isAlarmActive('g1')).toBe(true);
+  expect(app.isAlarmActive('g2')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+});
+
+test('setSubgridAlarmStates replaces states for specific grid and keeps other grids intact', () => {
+  app.alarmStates = [
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-1', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  app.setSubgridAlarmStates('subgrid1', [{ alarmId: 'sub-2', status: 'ok' }]);
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-2', status: 'ok', gridId: 'subgrid1' },
+  ]);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(true);
+});
+
 test('getSelectedGrid', () => {
   app.subgrids = [{id: 'g1', name: 'Grid 1'}, {id: 'g2', name: 'Grid 2'}];
   app.selectedGridId = 'g1';
@@ -1229,6 +1295,31 @@ test('getSelectedGrid', () => {
 
   app.selectedGridId = 'g3';
   expect(app.getSelectedGrid()).toBe(undefined);
+});
+
+test('onGridSelected updates route and reloads notifications when licensed', () => {
+  app.$route = { path: '/alerts', query: {} };
+  app.$router = { push: jest.fn() };
+  app.isLicensed = jest.fn(() => true);
+  app.FEAT_NTF = 'ntf';
+  app.notificationsStarted = true;
+  app.notifications = [{ id: 'main-1' }];
+  app.notificationsTruncated = true;
+  app.unreadCount = 3;
+  app.selectedGridId = 'subgrid-1';
+  app.loadUnreadCount = jest.fn();
+  app.loadNotifications = jest.fn();
+  app.notificationMenu = true;
+
+  app.onGridSelected();
+
+  expect(app.$router.push).toHaveBeenCalledWith({ path: '/alerts', query: { gridId: 'subgrid-1' } });
+  expect(app.notifications).toEqual([]);
+  expect(app.notificationsTruncated).toBe(false);
+  expect(app.unreadCount).toBe(0);
+  expect(app.lastLoadedNotificationGridId).toBe('subgrid-1');
+  expect(app.loadUnreadCount).toHaveBeenCalled();
+  expect(app.loadNotifications).toHaveBeenCalled();
 });
 
 describe('formatActionContent', () => {
@@ -1977,8 +2068,8 @@ test('loadAlarmStates populates alarmStates and marks alarmStatesLoaded even wit
 
   await app.loadAlarmStates();
 
-  expect(app.papi.get).toHaveBeenCalledWith('alarms/states');
-  expect(app.alarmStates).toEqual(mockStates);
+  expect(app.papi.get).toHaveBeenCalledWith('alarms/states', { params: { gridId: '' } });
+  expect(app.alarmStates).toEqual([{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm', gridId: '' }]);
   expect(app.alarmStatesLoaded).toBe(true);
 });
 
@@ -2087,6 +2178,28 @@ test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
 
   expect(app.alarmStates).toHaveLength(1);
   expect(app.updateStatus).not.toHaveBeenCalled();
+});
+
+test('onAlarmDelete scopes deletion by gridId when specified', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'shared-alarm', nodeId: 'node-1', status: 'alarm', gridId: '' },
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  // Deleting for local grid should only delete local alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: '' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ]);
+
+  // Deleting for subgrid1 should delete subgrid1 alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: 'subgrid1' });
+  expect(app.alarmStates).toEqual([]);
 });
 
 describe('applyDateRangePickerA11y', () => {

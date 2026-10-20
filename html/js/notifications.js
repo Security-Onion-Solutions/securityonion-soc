@@ -7,9 +7,17 @@
 rootMethods.push({
   loadNotifications() {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+    const currentGridId = this.selectedGridId || '';
+    const lastGridId = this.lastLoadedNotificationGridId !== undefined ? (this.lastLoadedNotificationGridId || '') : '';
+    if (lastGridId !== currentGridId) {
+      this.notifications = [];
+      this.notificationsTruncated = false;
+      this.unreadCount = 0;
+    }
     const filter = this.notificationShowDismissed ? 'all' : 'active';
     return this.papi.get('notifications?filter=' + filter)
       .then(response => {
+        this.lastLoadedNotificationGridId = currentGridId;
         const data = response?.data || {};
         if (Array.isArray(data)) {
           this.notifications = data;
@@ -22,6 +30,10 @@ rootMethods.push({
         return this.notifications;
       })
       .catch(err => {
+        this.lastLoadedNotificationGridId = currentGridId;
+        this.notifications = [];
+        this.notificationsTruncated = false;
+        this.unreadCount = 0;
         console.error('Failed to load notifications', err);
       });
   },
@@ -43,6 +55,7 @@ rootMethods.push({
         return this.unreadCount;
       })
       .catch(err => {
+        this.unreadCount = 0;
         console.error('Failed to load unread count', err);
       });
   },
@@ -218,12 +231,20 @@ rootMethods.push({
 
   handleIncomingNotification(payload) {
     if (!this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return;
+
+    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
+      this.showNotificationToast(payload);
+    }
+
+    const currentGridId = this.selectedGridId || '';
+    const notificationGridId = payload?.gridId || '';
+    if (notificationGridId !== currentGridId) {
+      return;
+    }
+
     this.unreadCount = (this.unreadCount || 0) + 1;
     if (payload && payload.timestamp) {
       this.lastUnreadNotificationTime = payload.timestamp;
-    }
-    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
-      this.showNotificationToast(payload);
     }
     if (this.notificationMenu) {
       this.loadNotifications();

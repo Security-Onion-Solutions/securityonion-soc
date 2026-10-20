@@ -698,3 +698,19 @@ test('destinations-manager template applies url validation rule to webhook url f
   expect(tmpl).toContain(':rules="[$root.validators.required, $root.validators.url]"');
 });
 
+test('loadData clears users and reloads destinations and schedules', async () => {
+  comp.users = [{ id: 'user-1', email: 'user1@example.com' }];
+  comp.getDestinations = jest.fn().mockResolvedValue([]);
+  comp.getSchedules = jest.fn().mockResolvedValue([]);
+  comp.$root.startLoading = jest.fn();
+  comp.$root.stopLoading = jest.fn();
+
+  await comp.loadData();
+
+  expect(comp.users).toEqual([]);
+  expect(comp.getDestinations).toHaveBeenCalled();
+  expect(comp.getSchedules).toHaveBeenCalled();
+  expect(comp.$root.startLoading).toHaveBeenCalled();
+  expect(comp.$root.stopLoading).toHaveBeenCalled();
+});
+

@@ -19,6 +19,7 @@ components.push({
     data() {
       return {
         i18n: this.$root?.i18n || {},
+        loading: false,
         alarms: [],
         metrics: [],
         states: [],
@@ -213,6 +214,9 @@ components.push({
       },
       async loadData() {
         this.$root?.startLoading?.();
+        this.loading = true;
+        this.alarms = [];
+        this.states = [];
         try {
           const promises = [
             this.getAlarms(),
@@ -225,6 +229,7 @@ components.push({
           }
           await Promise.all(promises);
         } finally {
+          this.loading = false;
           this.$root?.stopLoading?.();
         }
       },

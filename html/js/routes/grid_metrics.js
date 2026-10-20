@@ -74,6 +74,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
         };
 
         this.lastLoadedMetricsParams = {
+          gridId: this.$root?.selectedGridId || '',
           nodeId: this.metricsNodeId,
           container: this.metricsContainerId,
           timeRange: this.metricsTimeRange,

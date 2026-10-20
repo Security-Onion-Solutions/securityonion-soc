@@ -5,7 +5,7 @@
     </v-col>
   </v-row>
 
-  <v-data-table :sort-by="alarmSortBy" @update:sort-by="val => alarmSortBy = val" @update:items-per-page="val => alarmItemsPerPage = val"
+  <v-data-table :loading="loading" :sort-by="alarmSortBy" @update:sort-by="val => alarmSortBy = val" @update:items-per-page="val => alarmItemsPerPage = val"
     :items-per-page-options="alarmItemsPerPageOptions" :items-per-page="alarmItemsPerPage" :headers="tableHeaders" :items="alarms" :search="alarmSearch" data-aid="alarms_table">
     <template #item.state="{ item }">
       <v-chip size="small" :color="getAlarmStateColor(item)" :variant="getAlarmStateVariant(item)" density="compact" :prepend-icon="getAlarmStateIcon(item)" data-aid="alarm_state_chip">

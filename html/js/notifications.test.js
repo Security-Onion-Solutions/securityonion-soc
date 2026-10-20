@@ -218,6 +218,29 @@ describe('notifications.js', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to load notifications', expect.any(Error));
       consoleErrorSpy.mockRestore();
     });
+
+    it('clears notifications and does not show main grid notifications when subgrid notification fetch fails', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const mockPapiGet = jest.fn().mockRejectedValue(new Error('Subgrid notifications unavailable'));
+      const ctx = {
+        username: 'admin',
+        FEAT_NTF: 'ntf',
+        notificationsStarted: true,
+        isLicensed: jest.fn(() => true),
+        notificationShowDismissed: false,
+        selectedGridId: 'subgrid-1',
+        lastLoadedNotificationGridId: '',
+        notifications: [{ id: 'main-notif-1', title: 'Main Grid Alert' }],
+        unreadCount: 1,
+        papi: { get: mockPapiGet }
+      };
+
+      await app.loadNotifications.call(ctx);
+      expect(ctx.notifications).toEqual([]);
+      expect(ctx.unreadCount).toBe(0);
+      expect(ctx.lastLoadedNotificationGridId).toBe('subgrid-1');
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('loadUnreadCount', () => {
@@ -260,6 +283,23 @@ describe('notifications.js', () => {
       await app.loadUnreadCount.call(ctx);
       expect(mockPapiGet).toHaveBeenCalledWith('notifications?filter=unread');
       expect(ctx.unreadCount).toBe(3);
+    });
+
+    it('resets unreadCount to 0 when fetch fails', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const mockPapiGet = jest.fn().mockRejectedValue(new Error('Subgrid unread unavailable'));
+      const ctx = {
+        username: 'admin',
+        FEAT_NTF: 'ntf',
+        notificationsStarted: true,
+        isLicensed: jest.fn(() => true),
+        unreadCount: 5,
+        papi: { get: mockPapiGet }
+      };
+
+      await app.loadUnreadCount.call(ctx);
+      expect(ctx.unreadCount).toBe(0);
+      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -608,6 +648,35 @@ describe('notifications.js', () => {
       });
 
       expect(ctx.unreadCount).toBe(0);
+      expect(mockLoadNotifications).not.toHaveBeenCalled();
+    });
+
+    it('does not append notification to list and does not refresh list when viewing a subgrid', () => {
+      const mockLoadNotifications = jest.fn();
+      const mockShowToast = jest.fn();
+
+      const ctx = {
+        FEAT_NTF: 'ntf',
+        isLicensed: jest.fn(() => true),
+        notificationsStarted: true,
+        selectedGridId: 'subgrid1',
+        unreadCount: 1,
+        lastUnreadNotificationTime: null,
+        notificationMenu: true,
+        notifications: [{ id: 'subgrid-notif-1', title: 'Subgrid Alert' }],
+        loadNotifications: mockLoadNotifications,
+        showNotificationToast: mockShowToast,
+      };
+
+      app.handleIncomingNotification.call(ctx, {
+        id: 'notif-mom-1',
+        title: 'MoM Alert',
+        timestamp: '2026-08-20T17:15:00Z',
+      });
+
+      expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({ id: 'notif-mom-1' }));
+      expect(ctx.notifications).toEqual([{ id: 'subgrid-notif-1', title: 'Subgrid Alert' }]);
+      expect(ctx.unreadCount).toBe(1);
       expect(mockLoadNotifications).not.toHaveBeenCalled();
     });
   });

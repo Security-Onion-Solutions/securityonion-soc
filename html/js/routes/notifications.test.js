@@ -77,3 +77,39 @@ test('onScheduleUpdated triggers getSchedules on destinationsManager', () => {
   comp.onScheduleUpdated();
   expect(getSchedulesMock).toHaveBeenCalled();
 });
+
+test('watches $route and calls loadData', () => {
+  expect(comp.watch['$route']).toBe('loadData');
+
+  const loadDataSpy = jest.spyOn(comp, 'loadData');
+  comp[comp.watch['$route']]();
+  expect(loadDataSpy).toHaveBeenCalled();
+});
+
+test('loadData reloads both destinations and schedules managers when available', () => {
+  const loadDestDataMock = jest.fn();
+  const loadSchedDataMock = jest.fn();
+  comp.$refs = {
+    destinationsManager: {
+      loadData: loadDestDataMock,
+    },
+    schedulesManager: {
+      loadData: loadSchedDataMock,
+    },
+  };
+
+  comp.loadData();
+  expect(loadDestDataMock).toHaveBeenCalled();
+  expect(loadSchedDataMock).toHaveBeenCalled();
+});
+
+test('loadData safely handles missing or partial refs', () => {
+  comp.$refs = {};
+  expect(() => comp.loadData()).not.toThrow();
+
+  comp.$refs = {
+    destinationsManager: {},
+    schedulesManager: null,
+  };
+  expect(() => comp.loadData()).not.toThrow();
+});
