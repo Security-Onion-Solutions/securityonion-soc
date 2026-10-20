@@ -7,9 +7,17 @@
 rootMethods.push({
   loadNotifications() {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+    const currentGridId = this.selectedGridId || '';
+    const lastGridId = this.lastLoadedNotificationGridId !== undefined ? (this.lastLoadedNotificationGridId || '') : '';
+    if (lastGridId !== currentGridId) {
+      this.notifications = [];
+      this.notificationsTruncated = false;
+      this.unreadCount = 0;
+    }
     const filter = this.notificationShowDismissed ? 'all' : 'active';
     return this.papi.get('notifications?filter=' + filter)
       .then(response => {
+        this.lastLoadedNotificationGridId = currentGridId;
         const data = response?.data || {};
         if (Array.isArray(data)) {
           this.notifications = data;
@@ -22,6 +30,10 @@ rootMethods.push({
         return this.notifications;
       })
       .catch(err => {
+        this.lastLoadedNotificationGridId = currentGridId;
+        this.notifications = [];
+        this.notificationsTruncated = false;
+        this.unreadCount = 0;
         console.error('Failed to load notifications', err);
       });
   },
@@ -43,6 +55,7 @@ rootMethods.push({
         return this.unreadCount;
       })
       .catch(err => {
+        this.unreadCount = 0;
         console.error('Failed to load unread count', err);
       });
   },

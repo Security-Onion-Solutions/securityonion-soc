@@ -148,7 +148,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
           this.initMetricsCharts();
           this.loadHistoricalMetrics(true);
         }
-        if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+        if (this.activeTab === 'alarms' && this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
           this.$refs.alarmsManager.loadData();
         }
       }
@@ -224,7 +224,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     onAlarmDeleted(alarm) {
       if (alarm?.id && this.$root?.onAlarmDelete) {
-        this.$root.onAlarmDelete({ alarmId: alarm.id });
+        this.$root.onAlarmDelete({ alarmId: alarm.id, gridId: this.$root.selectedGridId });
       }
     },
     refresh() {

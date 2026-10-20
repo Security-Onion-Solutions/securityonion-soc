@@ -53,166 +53,164 @@ func (s *NotificationstoreImpl) GetDefaultLimit() int {
 	return s.defaultLimit
 }
 
-func (s *NotificationstoreImpl) getUser(ctx context.Context) *model.User {
-	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
-		if reqId, ok := val.(string); ok && reqId != "" {
-			if s.server != nil && s.server.Userstore != nil {
-				if u, err := s.server.Userstore.GetUserById(ctx, reqId); err == nil && u != nil {
-					return u
-				}
-			}
+func (s *NotificationstoreImpl) getStore(ctx context.Context) (*database.Store, error) {
+	if s.store == nil {
+		if s.server == nil || s.server.DB == nil {
+			return nil, errors.New("database not configured")
 		}
+		st, err := database.New(ctx, s.server.DB)
+		if err != nil {
+			return nil, err
+		}
+		s.store = st
 	}
-	return nil
+	return s.store, nil
 }
 
-func (s *NotificationstoreImpl) getClient(ctx context.Context) *model.Client {
-	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
-		if reqId, ok := val.(string); ok && reqId != "" {
-			if s.server != nil && s.server.Clientstore != nil {
-				if c, err := s.server.Clientstore.GetClientById(ctx, reqId); err == nil && c != nil {
-					return c
-				}
-			}
-		}
-	}
-	return nil
+type requestIdentity struct {
+	username     string
+	identifiers  []string
+	createdAfter time.Time
 }
 
-func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error) {
-	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
-		if username, ok := val.(string); ok && username != "" {
-			return username, nil
-		}
+func (s *NotificationstoreImpl) getUser(ctx context.Context, reqId string) *model.User {
+	if reqId == "" || model.IsClient(reqId) || s.server == nil || s.server.Userstore == nil {
+		return nil
 	}
-	if u := s.getUser(ctx); u != nil && u.Email != "" {
-		return u.Email, nil
-	}
-	if c := s.getClient(ctx); c != nil && c.Id != "" {
-		return c.Id, nil
-	}
-	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
-		if reqId, ok := val.(string); ok && reqId != "" && model.IsClient(reqId) {
-			return reqId, nil
-		}
-	}
-	return "", errors.New("unauthorized: missing user in context")
-}
-
-func (s *NotificationstoreImpl) getCreatedAfter(ctx context.Context) time.Time {
-	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
-		return u.CreateTime
-	}
-	if c := s.getClient(ctx); c != nil && !c.CreateTime.IsZero() {
-		return c.CreateTime
-	}
-	return time.Time{}
-}
-
-func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string, []string, bool, error) {
-	readAll := false
-	if s.server != nil {
-		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
-			return "", nil, false, err
-		}
-		if err := s.server.CheckAuthorized(ctx, "read_all", "notifications"); err == nil {
-			readAll = true
-		}
-	}
-
-	username, err := s.getUsername(ctx)
+	u, err := s.server.Userstore.GetUserById(ctx, reqId)
 	if err != nil {
-		return "", nil, false, err
+		return nil
 	}
+	return u
+}
 
-	identifiers := make([]string, 0, 2)
+func (s *NotificationstoreImpl) getClient(ctx context.Context, reqId string) *model.Client {
+	if reqId == "" || !model.IsClient(reqId) || s.server == nil || s.server.Clientstore == nil {
+		return nil
+	}
+	c, err := s.server.Clientstore.GetClientById(ctx, reqId)
+	if err != nil {
+		return nil
+	}
+	return c
+}
 
-	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
-		if reqId, ok := val.(string); ok && reqId != "" {
-			identifiers = append(identifiers, reqId)
+func (s *NotificationstoreImpl) getRequestIdentity(ctx context.Context) (*requestIdentity, error) {
+	reqId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+
+	var username string
+	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
+		if runAs, ok := val.(string); ok && runAs != "" {
+			username = runAs
 		}
 	}
 
-	if u := s.getUser(ctx); u != nil && u.Id != "" {
-		found := false
-		for _, id := range identifiers {
-			if id == u.Id {
-				found = true
-				break
+	var identifiers []string
+	if reqId != "" {
+		identifiers = append(identifiers, reqId)
+	}
+
+	var createdAfter time.Time
+	if model.IsClient(reqId) {
+		c := s.getClient(ctx, reqId)
+		if c != nil {
+			if username == "" && c.Id != "" {
+				username = c.Id
+			}
+			if c.Id != "" && c.Id != reqId {
+				identifiers = append(identifiers, c.Id)
+			}
+		} else if username == "" {
+			username = reqId
+		}
+	} else {
+		u := s.getUser(ctx, reqId)
+		if u != nil {
+			if !u.CreateTime.IsZero() {
+				createdAfter = u.CreateTime
+			}
+			if username == "" && u.Email != "" {
+				username = u.Email
+			}
+			if u.Id != "" && u.Id != reqId {
+				identifiers = append(identifiers, u.Id)
 			}
 		}
-		if !found {
-			identifiers = append(identifiers, u.Id)
-		}
 	}
 
-	if c := s.getClient(ctx); c != nil && c.Id != "" {
-		found := false
-		for _, id := range identifiers {
-			if id == c.Id {
-				found = true
-				break
-			}
-		}
-		if !found {
-			identifiers = append(identifiers, c.Id)
-		}
+	if username == "" {
+		return nil, errors.New("unauthorized: missing user in context")
 	}
 
 	if len(identifiers) == 0 {
 		identifiers = append(identifiers, username)
 	}
 
-	return username, identifiers, readAll, nil
+	return &requestIdentity{
+		username:     username,
+		identifiers:  identifiers,
+		createdAfter: createdAfter,
+	}, nil
+}
+
+func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error) {
+	identity, err := s.getRequestIdentity(ctx)
+	if err != nil {
+		return "", err
+	}
+	return identity.username, nil
+}
+
+func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string, []string, bool, time.Time, error) {
+	readAll := false
+	if s.server != nil {
+		if err := s.server.CheckAuthorized(ctx, "read", "notifications"); err != nil {
+			return "", nil, false, time.Time{}, err
+		}
+		if err := s.server.CheckAuthorized(ctx, "read_all", "notifications"); err == nil {
+			readAll = true
+		}
+	}
+
+	identity, err := s.getRequestIdentity(ctx)
+	if err != nil {
+		return "", nil, false, time.Time{}, err
+	}
+
+	return identity.username, identity.identifiers, readAll, identity.createdAfter, nil
 }
 
 func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter string, limit ...int) (*model.NotificationListResponse, error) {
-	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	username, identifiers, readAll, createdAfter, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	createdAfter := s.getCreatedAfter(ctx)
 
 	maxLimit := s.GetDefaultLimit()
 	if len(limit) > 0 && limit[0] > 0 && limit[0] < maxLimit {
 		maxLimit = limit[0]
 	}
 
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return nil, errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return nil, err
-		}
-		s.store = st
-	}
-
-	return s.store.GetNotifications(ctx, username, identifiers, readAll, filter, createdAfter, maxLimit)
-}
-
-func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Time, error) {
-	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	st, err := s.getStore(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	createdAfter := s.getCreatedAfter(ctx)
+	return st.GetNotifications(ctx, username, identifiers, readAll, filter, createdAfter, maxLimit)
+}
 
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return nil, errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return nil, err
-		}
-		s.store = st
+func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Time, error) {
+	username, identifiers, readAll, createdAfter, err := s.getUserIdentifiers(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	return s.store.GetLastUnreadTime(ctx, username, identifiers, readAll, createdAfter)
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return st.GetLastUnreadTime(ctx, username, identifiers, readAll, createdAfter)
 }
 
 func (s *NotificationstoreImpl) SetRead(ctx context.Context, id string, isRead bool) error {
@@ -231,18 +229,12 @@ func (s *NotificationstoreImpl) SetRead(ctx context.Context, id string, isRead b
 		return errors.New("missing notification id")
 	}
 
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return err
-		}
-		s.store = st
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return err
 	}
 
-	return s.store.SetRead(ctx, id, username, isRead)
+	return st.SetRead(ctx, id, username, isRead)
 }
 
 func (s *NotificationstoreImpl) SetAllRead(ctx context.Context, isRead bool) error {
@@ -252,25 +244,17 @@ func (s *NotificationstoreImpl) SetAllRead(ctx context.Context, isRead bool) err
 		}
 	}
 
-	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	username, identifiers, readAll, createdAfter, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return err
 	}
 
-	createdAfter := s.getCreatedAfter(ctx)
-
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return err
-		}
-		s.store = st
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return err
 	}
 
-	return s.store.SetAllRead(ctx, username, identifiers, readAll, createdAfter, isRead)
+	return st.SetAllRead(ctx, username, identifiers, readAll, createdAfter, isRead)
 }
 
 func (s *NotificationstoreImpl) SetDismissed(ctx context.Context, id string, isDismissed bool) error {
@@ -289,18 +273,12 @@ func (s *NotificationstoreImpl) SetDismissed(ctx context.Context, id string, isD
 		return errors.New("missing notification id")
 	}
 
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return err
-		}
-		s.store = st
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return err
 	}
 
-	return s.store.SetDismissed(ctx, id, username, isDismissed)
+	return st.SetDismissed(ctx, id, username, isDismissed)
 }
 
 func (s *NotificationstoreImpl) SetAllDismissed(ctx context.Context, isDismissed bool) error {
@@ -310,25 +288,17 @@ func (s *NotificationstoreImpl) SetAllDismissed(ctx context.Context, isDismissed
 		}
 	}
 
-	username, identifiers, readAll, err := s.getUserIdentifiers(ctx)
+	username, identifiers, readAll, createdAfter, err := s.getUserIdentifiers(ctx)
 	if err != nil {
 		return err
 	}
 
-	createdAfter := s.getCreatedAfter(ctx)
-
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return err
-		}
-		s.store = st
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return err
 	}
 
-	return s.store.SetAllDismissed(ctx, username, identifiers, readAll, createdAfter, isDismissed)
+	return st.SetAllDismissed(ctx, username, identifiers, readAll, createdAfter, isDismissed)
 }
 
 func (s *NotificationstoreImpl) GetAuditLogs(ctx context.Context, id string) ([]*model.NotificationAuditEntry, error) {
@@ -342,16 +312,10 @@ func (s *NotificationstoreImpl) GetAuditLogs(ctx context.Context, id string) ([]
 		return nil, errors.New("missing notification id")
 	}
 
-	if s.store == nil {
-		if s.server == nil || s.server.DB == nil {
-			return nil, errors.New("database not configured")
-		}
-		st, err := database.New(ctx, s.server.DB)
-		if err != nil {
-			return nil, err
-		}
-		s.store = st
+	st, err := s.getStore(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	return s.store.GetAuditLogs(ctx, id)
+	return st.GetAuditLogs(ctx, id)
 }

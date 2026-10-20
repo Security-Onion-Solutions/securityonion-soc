@@ -551,7 +551,7 @@ test('route watch reloads alarmsManager when activeTab is alarms and grid change
 	}
 });
 
-test('route watch reloads alarmsManager on grid change even when on nodes tab', async () => {
+test('route watch does not reload alarmsManager on grid change when on nodes tab', async () => {
 	const origLoadUrlParameters = comp.loadUrlParameters;
 	const origLoadData = comp.loadData;
 	const loadDataMock = jest.fn();
@@ -570,7 +570,7 @@ test('route watch reloads alarmsManager on grid change even when on nodes tab', 
 
 	try {
 		await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'nodes', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'nodes', gridId: 'grid1' } });
-		expect(loadDataMock).toHaveBeenCalled();
+		expect(loadDataMock).not.toHaveBeenCalled();
 	} finally {
 		comp.loadUrlParameters = origLoadUrlParameters;
 		comp.loadData = origLoadData;
@@ -612,10 +612,11 @@ test('addAlarm delegates to alarmsManager.showAddAlarm', () => {
 	expect(showAddAlarm).toHaveBeenCalled();
 });
 
-test('onAlarmDeleted calls $root.onAlarmDelete', () => {
+test('onAlarmDeleted calls $root.onAlarmDelete with gridId', () => {
+	comp.$root.selectedGridId = 'subgrid-1';
 	comp.$root.onAlarmDelete = jest.fn();
 	comp.onAlarmDeleted({ id: 'alarm-1' });
-	expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1' });
+	expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1', gridId: 'subgrid-1' });
 
 	comp.onAlarmDeleted(null);
 	comp.onAlarmDeleted({});

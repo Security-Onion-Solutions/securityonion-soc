@@ -151,8 +151,12 @@ func TestStoreGetNotifications_WithApiClient(t *testing.T) {
 	mockClientstore.EXPECT().GetClientById(gomock.Any(), "socl_subgrid_client").Return(&model.Client{
 		Id:         "socl_subgrid_client",
 		CreateTime: clientCreated,
-	}, nil).AnyTimes()
+	}, nil).Times(1)
 	srv.Clientstore = mockClientstore
+
+	mockUserstore := servermock.NewMockUserstore(gomock.NewController(t))
+	// Userstore must NOT be called for an API client
+	srv.Userstore = mockUserstore
 
 	store := NewNotificationstore(srv, nil)
 
@@ -162,7 +166,7 @@ func TestStoreGetNotifications_WithApiClient(t *testing.T) {
 
 	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
 		return len(sql) > 0
-	}), "socl_subgrid_client", "socl_subgrid_client", clientCreated, 501).Return(mockRows, nil).Once()
+	}), "socl_subgrid_client", "socl_subgrid_client", 501).Return(mockRows, nil).Once()
 
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "socl_subgrid_client")
 	res, err := store.GetNotifications(ctx, "all")

@@ -1281,6 +1281,31 @@ test('getSelectedGrid', () => {
   expect(app.getSelectedGrid()).toBe(undefined);
 });
 
+test('onGridSelected updates route and reloads notifications when licensed', () => {
+  app.$route = { path: '/alerts', query: {} };
+  app.$router = { push: jest.fn() };
+  app.isLicensed = jest.fn(() => true);
+  app.FEAT_NTF = 'ntf';
+  app.notificationsStarted = true;
+  app.notifications = [{ id: 'main-1' }];
+  app.notificationsTruncated = true;
+  app.unreadCount = 3;
+  app.selectedGridId = 'subgrid-1';
+  app.loadUnreadCount = jest.fn();
+  app.loadNotifications = jest.fn();
+  app.notificationMenu = true;
+
+  app.onGridSelected();
+
+  expect(app.$router.push).toHaveBeenCalledWith({ path: '/alerts', query: { gridId: 'subgrid-1' } });
+  expect(app.notifications).toEqual([]);
+  expect(app.notificationsTruncated).toBe(false);
+  expect(app.unreadCount).toBe(0);
+  expect(app.lastLoadedNotificationGridId).toBe('subgrid-1');
+  expect(app.loadUnreadCount).toHaveBeenCalled();
+  expect(app.loadNotifications).toHaveBeenCalled();
+});
+
 describe('formatActionContent', () => {
   const app = global.getApp();
   const mockEvent = {
@@ -2027,8 +2052,8 @@ test('loadAlarmStates populates alarmStates and marks alarmStatesLoaded even wit
 
   await app.loadAlarmStates();
 
-  expect(app.papi.get).toHaveBeenCalledWith('alarms/states');
-  expect(app.alarmStates).toEqual(mockStates);
+  expect(app.papi.get).toHaveBeenCalledWith('alarms/states', { params: { gridId: '' } });
+  expect(app.alarmStates).toEqual([{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm', gridId: '' }]);
   expect(app.alarmStatesLoaded).toBe(true);
 });
 
@@ -2137,6 +2162,28 @@ test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
 
   expect(app.alarmStates).toHaveLength(1);
   expect(app.updateStatus).not.toHaveBeenCalled();
+});
+
+test('onAlarmDelete scopes deletion by gridId when specified', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'shared-alarm', nodeId: 'node-1', status: 'alarm', gridId: '' },
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  // Deleting for local grid should only delete local alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: '' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ]);
+
+  // Deleting for subgrid1 should delete subgrid1 alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: 'subgrid1' });
+  expect(app.alarmStates).toEqual([]);
 });
 
 describe('applyDateRangePickerA11y', () => {

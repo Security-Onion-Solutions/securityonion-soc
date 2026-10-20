@@ -255,6 +255,7 @@ $(document).ready(function () {
           notificationsTruncated: false,
           expandedNotifications: {},
           unreadCount: 0,
+          lastLoadedNotificationGridId: LOCAL_GRID_ID,
           notificationAudits: {},
           notificationToast: false,
           notificationToastTitle: '',
@@ -407,6 +408,18 @@ $(document).ready(function () {
           const params = { ...this.$route.query };
           params.gridId = this.selectedGridId;
           this.$router.push({ path: this.$route.path, query: params });
+          if (typeof this.isLicensed === 'function' && this.isLicensed(this.FEAT_NTF) && this.notificationsStarted) {
+            this.notifications = [];
+            this.notificationsTruncated = false;
+            this.unreadCount = 0;
+            this.lastLoadedNotificationGridId = this.selectedGridId || LOCAL_GRID_ID;
+            if (typeof this.loadUnreadCount === 'function') {
+              this.loadUnreadCount();
+            }
+            if (this.notificationMenu && typeof this.loadNotifications === 'function') {
+              this.loadNotifications();
+            }
+          }
         },
         checkSubgridSelectorEnabled(loc) {
           if (SUBGRID_DISABLED_ROUTES.includes(loc.name)) {
@@ -1885,12 +1898,12 @@ $(document).ready(function () {
         onAlarmDelete(payload) {
           const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
           if (!alarmId) return;
-          const gridId = typeof payload === 'object' && payload.gridId ? payload.gridId : null;
+          const gridId = typeof payload === 'object' && payload.gridId !== undefined && payload.gridId !== null ? payload.gridId : null;
           if (this.alarmStates && this.alarmStates.length > 0) {
             const initialLen = this.alarmStates.length;
             this.alarmStates = this.alarmStates.filter(s => {
               if (s.alarmId !== alarmId) return true;
-              if (gridId && (s.gridId || LOCAL_GRID_ID) !== gridId) return true;
+              if (gridId !== null && (s.gridId || LOCAL_GRID_ID) !== (gridId || LOCAL_GRID_ID)) return true;
               return false;
             });
             if (this.alarmStates.length !== initialLen) {
@@ -1902,9 +1915,9 @@ $(document).ready(function () {
         },
         loadAlarmStates() {
           if (!this.username) return Promise.resolve();
-          return this.papi.get('alarms/states')
+          return this.papi.get('alarms/states', { params: { gridId: LOCAL_GRID_ID } })
             .then(response => {
-              const localStates = response?.data || [];
+              const localStates = (response?.data || []).map(s => ({ ...s, gridId: LOCAL_GRID_ID }));
               const subgridStates = (this.alarmStates || []).filter(s => s.gridId && s.gridId !== LOCAL_GRID_ID);
               this.alarmStates = [...localStates, ...subgridStates];
               this.alarmStatesLoaded = true;
