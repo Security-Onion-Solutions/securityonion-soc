@@ -3428,7 +3428,7 @@ const huntComponent = {
       return item.count ? (item.newestTriaged || item.newest) : item;
     },
     openAssessment(domEvent, item) {
-      if (!this.investigateEnabled) return;
+      if (!this.investigateEnabled || !this.$root.canReadInvestigations()) return;
       domEvent.stopPropagation();
       this.activeTabs[item._row_idx_] = 'investigation';
       if (!this.expandedEvents.includes(item._row_idx_)) {

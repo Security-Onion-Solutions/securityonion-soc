@@ -3050,6 +3050,12 @@ test('openAssessment leaves the click to quick actions without the AI Investigat
   expect(domEvent.stopPropagation).not.toHaveBeenCalled();
   expect(comp.expandedEvents).toEqual([]);
   expect(comp.activeTabs).toEqual({});
+
+  comp.investigateEnabled = true;
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  comp.openAssessment(domEvent, { _row_idx_: 3, count: 5 });
+  expect(domEvent.stopPropagation).not.toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([]);
 });
 
 test('startAIInvestigation - an existing investigation is offered, not opened', async () => {
