@@ -236,8 +236,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       params = params || {};
       this.assistantEnabled = params.enabled && this.$root.isLicensed('oai');
       this.agentic = params.agentic || false;
+      this.memoryEnabled = !!params.memoryEnabled;
       this.paramsLoaded = true;
-      if (this.assistantEnabled && (this.agentic || params.memoryEnabled)) {
+      if (this.assistantEnabled && (this.agentic || this.memoryEnabled) && this.$root.canReadOnionAi()) {
         this.applyParams(params);
         this.loadLocalSettings();
         if (!this.agentic) this.tab = 'memories';

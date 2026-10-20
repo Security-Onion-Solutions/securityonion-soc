@@ -55,6 +55,7 @@ beforeEach(() => {
   resetPapi();
 
   comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.user = { id: 'admin-1', roles: ['superuser'] };
   comp.$root.showError = jest.fn();
   comp.$root.startLoading = jest.fn();
   comp.$root.stopLoading = jest.fn();
@@ -156,6 +157,33 @@ test('initAssistant loads no data when the assistant is not in agentic mode', ()
   expect(comp.agents).toEqual([]);
   expect(comp.skills).toEqual([]);
   expect(comp.models).toEqual([]);
+});
+
+test('anyone with Onion AI access sees the page; anyone else loads nothing', () => {
+  for (const roles of [['analyst'], ['auditor'], ['superuser']]) {
+    comp.$root.user = { id: 'u', roles };
+    comp.agents = [];
+    comp.initAssistant(agenticParams());
+    expect(comp.agents.length).toBeGreaterThan(0);
+  }
+
+  for (const roles of [['limited-analyst'], ['limited-auditor']]) {
+    comp.$root.user = { id: 'u', roles };
+    comp.agents = [];
+    comp.initAssistant(agenticParams());
+    expect(comp.paramsLoaded).toBe(true);
+    expect(comp.agents).toEqual([]);
+  }
+
+  const memoryOnly = agenticParams();
+  memoryOnly.agentic = false;
+  memoryOnly.memoryEnabled = true;
+  const tab = comp.tab;
+  comp.agents = [];
+  comp.initAssistant(memoryOnly);
+  expect(comp.memoryEnabled).toBe(true);
+  expect(comp.tab).toBe(tab);
+  expect(comp.agents).toEqual([]);
 });
 
 test('initAssistant tolerates null/empty parameters', () => {

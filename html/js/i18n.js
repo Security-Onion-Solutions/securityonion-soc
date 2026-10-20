@@ -374,6 +374,7 @@ const i18n = {
       agentMonitorNotStarted: 'No session has started for this item yet.',
       agentMonitorBackToFlight: 'Back to in-flight work',
       agentMonitorNoAccess: 'You do not have permission to view automation activity. Contact your Security Onion administrator.',
+      agentStudioNoAccess: 'You do not have permission to view Agent Studio. Contact your Security Onion administrator.',
       agentStudioAgents: 'Agents',
       agentStudioSkills: 'Skills',
       agentStudioSkill: 'Skill',

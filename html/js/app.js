@@ -1812,20 +1812,24 @@ $(document).ready(function () {
         isUserAdmin(user = null) {
           return this.userHasRole("superuser", user);
         },
-        // Mirrors the built-in rbac/roles grants of automations/read; the server still enforces it.
-        canReadAutomations(user = null) {
+        // Mirrors the built-in rbac/roles grants for Onion AI; the server still enforces them.
+        canReadOnionAi(user = null) {
           return ["analyst", "auditor", "superuser"].some(role => this.userHasRole(role, user));
         },
-        // Mirrors the built-in rbac/roles grants for investigations; the server still enforces them.
+        canWriteOnionAi(user = null) {
+          return ["analyst", "superuser"].some(role => this.userHasRole(role, user));
+        },
+        canReadAutomations(user = null) {
+          return this.canReadOnionAi(user);
+        },
         canStartInvestigations(user = null) {
-          return this.userHasRole("analyst", user) || this.userHasRole("superuser", user);
+          return this.canWriteOnionAi(user);
         },
         canReadInvestigations(user = null) {
-          return this.canStartInvestigations(user) || this.userHasRole("auditor", user);
+          return this.canReadOnionAi(user);
         },
-        // Mirrors the built-in rbac/roles grants for memories; the server still enforces them.
         canWriteOwnMemories(user = null) {
-          return this.userHasRole("analyst", user) || this.userHasRole("superuser", user);
+          return this.canWriteOnionAi(user);
         },
         canWriteAllMemories(user = null) {
           return this.isUserAdmin(user);

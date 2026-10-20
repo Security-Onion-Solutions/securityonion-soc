@@ -3050,6 +3050,12 @@ test('openAssessment leaves the click to quick actions without the AI Investigat
   expect(domEvent.stopPropagation).not.toHaveBeenCalled();
   expect(comp.expandedEvents).toEqual([]);
   expect(comp.activeTabs).toEqual({});
+
+  comp.investigateEnabled = true;
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  comp.openAssessment(domEvent, { _row_idx_: 3, count: 5 });
+  expect(domEvent.stopPropagation).not.toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([]);
 });
 
 test('startAIInvestigation - an existing investigation is offered, not opened', async () => {
@@ -3296,6 +3302,20 @@ test('fetchNewestTriagedEvent looks past an untriaged newest alert', async () =>
   await comp.fetchNewestTriagedEvent(triaged, []);
   expect(get).toHaveBeenCalledTimes(1);
   expect(triaged.newestTriaged).toBeUndefined();
+});
+
+test('fetchNewestEvent only looks up the newest triaged alert for users who can read investigations', async () => {
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.investigateEnabled = true;
+  comp.fetchNewestTriagedEvent = jest.fn();
+
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
+
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
 });
 
 test('the microchip reflects automated investigations', () => {

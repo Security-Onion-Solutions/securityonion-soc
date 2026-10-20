@@ -403,7 +403,7 @@
 													<div v-else class="count-drilldown d-inline-block" v-text="item.count.toLocaleString()"></div>
 												</td>
 												<td v-for="field in group.headers.slice(getGroupByFieldStartIndex())" :key="field.value" tabindex="0" @keydown.enter="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])">
-													<div :id="'quickaction_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])" :data-aid="'groups_quickaction_' + category"><v-chip v-if="isAssessmentAvailable(field.value, item)" :color="assessmentChip(item).color" size="small" variant="flat" @click="openAssessment($event, item)" @keydown.enter="openAssessment($event, item)" :title="investigateEnabled ? i18n.aiInvestigateViewAutomated : undefined" :aria-label="investigateEnabled ? i18n.aiInvestigateViewAutomated : undefined" data-aid="groups_assessment">{{ assessmentChip(item).label }}</v-chip><template v-else>{{ item[field.value] }}<span class="resolved-host" v-if="$root.tryResolveAlias(field.value, item[field.value])"> - {{ $root.tryResolveAlias(field.value, item[field.value]) }}</span></template></div>
+													<div :id="'quickaction_' + category + '_' + field.value" class="quick-action-trigger d-inline-block" @click="toggleQuickAction($event, item, groupIdx, field.value, item[field.value])" :data-aid="'groups_quickaction_' + category"><v-chip v-if="isAssessmentAvailable(field.value, item)" :color="assessmentChip(item).color" size="small" variant="flat" @click="openAssessment($event, item)" @keydown.enter="openAssessment($event, item)" :title="investigateEnabled && $root.canReadInvestigations() ? i18n.aiInvestigateViewAutomated : undefined" :aria-label="investigateEnabled && $root.canReadInvestigations() ? i18n.aiInvestigateViewAutomated : undefined" data-aid="groups_assessment">{{ assessmentChip(item).label }}</v-chip><template v-else>{{ item[field.value] }}<span class="resolved-host" v-if="$root.tryResolveAlias(field.value, item[field.value])"> - {{ $root.tryResolveAlias(field.value, item[field.value]) }}</span></template></div>
 												</td>
 											</tr>
 										</template>
@@ -421,7 +421,7 @@
 																	<v-icon class="tab-icon">fa-book</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 																</v-tab>
-																<v-tab v-if="investigateEnabled" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_agg_investigationTab">
+																<v-tab v-if="investigateEnabled && $root.canReadInvestigations()" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_agg_investigationTab">
 																	<v-icon class="tab-icon">fa-microchip</v-icon>
 																	<div class="d-none d-lg-block">{{i18n.aiInvestigation}}</div>
 																</v-tab>
@@ -565,7 +565,7 @@
 																	<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px'}" data-aid="playbook_grouped_loading_circle"></v-progress-circular>
 																</template>
 															</v-tabs-window-item>
-															<v-tabs-window-item v-if="investigateEnabled" value="investigation">
+															<v-tabs-window-item v-if="investigateEnabled && $root.canReadInvestigations()" value="investigation">
 																<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item.newest" :triaged-alert="item.newestTriaged" grouped :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
 															</v-tabs-window-item>
 														</v-tabs-window>
@@ -722,7 +722,7 @@
 															<v-icon class="tab-icon">fa-book</v-icon>
 															<div class="d-none d-lg-block">{{i18n.guidedAnalysis}}</div>
 														</v-tab>
-														<v-tab v-if="investigateEnabled" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_investigationTab">
+														<v-tab v-if="investigateEnabled && $root.canReadInvestigations()" value="investigation" :class="{ 'theme-primary': activeTabs[item._row_idx_] === 'investigation' }" data-aid="alerts_investigationTab">
 															<v-icon class="tab-icon">fa-microchip</v-icon>
 															<div class="d-none d-lg-block">{{i18n.aiInvestigation}}</div>
 														</v-tab>
@@ -866,7 +866,7 @@
 															<v-progress-circular indeterminate :size="50" color="primary" class="my-6" :style="{ 'margin-left': (this.eventColumnWidth / 2 - 25) + 'px' }" data-aid="playbook_loading_circle"></v-progress-circular>
 														</template>
 													</v-tabs-window-item>
-													<v-tabs-window-item v-if="investigateEnabled" value="investigation">
+													<v-tabs-window-item v-if="investigateEnabled && $root.canReadInvestigations()" value="investigation">
 														<alert-investigation v-if="activeTabs[item._row_idx_] === 'investigation'" :alert="item" :route-for-query="routeForQuery" :new-investigation-link="newInvestigationLink"></alert-investigation>
 													</v-tabs-window-item>
 												</v-tabs-window>
