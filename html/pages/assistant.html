@@ -195,9 +195,9 @@
 					</template>
 					<v-spacer></v-spacer>
 					<div class="text-wrap mr-4 d-flex align-center" style="font-size: 14px;">
-						<v-tooltip v-if="agentic && creditBreakdown.length > 1" location="top">
+						<v-tooltip v-if="agentic && creditBreakdown.length > 1" location="top" :aria-label="i18n.creditBreakdown">
 							<template #activator="{ props }">
-								<v-icon size="x-small" class="mr-1" v-bind="props" data-aid="assistant_total_credits_info" role="button" tabindex="0" :aria-label="i18n.totalCredits">fa-circle-info</v-icon>
+								<v-icon aria-hidden="false" size="x-small" class="mr-1" v-bind="props" data-aid="assistant_total_credits_info" role="button" tabindex="0" :aria-label="i18n.totalCredits">fa-circle-info</v-icon>
 							</template>
 							<div class="assistant-credit-breakdown">
 								<div v-for="row in creditBreakdown" :key="row.label" class="d-flex justify-space-between">
