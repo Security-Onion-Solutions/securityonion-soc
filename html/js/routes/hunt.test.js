@@ -3304,6 +3304,20 @@ test('fetchNewestTriagedEvent looks past an untriaged newest alert', async () =>
   expect(triaged.newestTriaged).toBeUndefined();
 });
 
+test('fetchNewestEvent only looks up the newest triaged alert for users who can read investigations', async () => {
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.investigateEnabled = true;
+  comp.fetchNewestTriagedEvent = jest.fn();
+
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
+
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
+});
+
 test('the microchip reflects automated investigations', () => {
   const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': new Date().toISOString() };
   expect(comp.getAIInvestigationButtonColor(automated)).toBe('icon');

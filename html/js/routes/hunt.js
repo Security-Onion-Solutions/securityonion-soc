@@ -3205,7 +3205,7 @@ const huntComponent = {
       }
       this.$nextTick(() => this.checkAllFieldTruncation());
 
-      if (this.investigateEnabled) await this.fetchNewestTriagedEvent(item, parts);
+      if (this.investigateEnabled && this.$root.canReadInvestigations()) await this.fetchNewestTriagedEvent(item, parts);
     },
     // Triage stamps land late, so a group's newest alert often has none; find its newest triaged one.
     async fetchNewestTriagedEvent(item, parts) {
