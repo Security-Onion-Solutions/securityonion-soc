@@ -218,12 +218,20 @@ rootMethods.push({
 
   handleIncomingNotification(payload) {
     if (!this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return;
+
+    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
+      this.showNotificationToast(payload);
+    }
+
+    const currentGridId = this.selectedGridId || '';
+    const notificationGridId = payload?.gridId || '';
+    if (notificationGridId !== currentGridId) {
+      return;
+    }
+
     this.unreadCount = (this.unreadCount || 0) + 1;
     if (payload && payload.timestamp) {
       this.lastUnreadNotificationTime = payload.timestamp;
-    }
-    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
-      this.showNotificationToast(payload);
     }
     if (this.notificationMenu) {
       this.loadNotifications();

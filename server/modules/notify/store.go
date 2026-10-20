@@ -66,6 +66,19 @@ func (s *NotificationstoreImpl) getUser(ctx context.Context) *model.User {
 	return nil
 }
 
+func (s *NotificationstoreImpl) getClient(ctx context.Context) *model.Client {
+	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
+		if reqId, ok := val.(string); ok && reqId != "" {
+			if s.server != nil && s.server.Clientstore != nil {
+				if c, err := s.server.Clientstore.GetClientById(ctx, reqId); err == nil && c != nil {
+					return c
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error) {
 	if val := ctx.Value(web.ContextKeyRunAsUsername); val != nil {
 		if username, ok := val.(string); ok && username != "" {
@@ -75,7 +88,25 @@ func (s *NotificationstoreImpl) getUsername(ctx context.Context) (string, error)
 	if u := s.getUser(ctx); u != nil && u.Email != "" {
 		return u.Email, nil
 	}
+	if c := s.getClient(ctx); c != nil && c.Id != "" {
+		return c.Id, nil
+	}
+	if val := ctx.Value(web.ContextKeyRequestorId); val != nil {
+		if reqId, ok := val.(string); ok && reqId != "" && model.IsClient(reqId) {
+			return reqId, nil
+		}
+	}
 	return "", errors.New("unauthorized: missing user in context")
+}
+
+func (s *NotificationstoreImpl) getCreatedAfter(ctx context.Context) time.Time {
+	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
+		return u.CreateTime
+	}
+	if c := s.getClient(ctx); c != nil && !c.CreateTime.IsZero() {
+		return c.CreateTime
+	}
+	return time.Time{}
 }
 
 func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string, []string, bool, error) {
@@ -115,6 +146,19 @@ func (s *NotificationstoreImpl) getUserIdentifiers(ctx context.Context) (string,
 		}
 	}
 
+	if c := s.getClient(ctx); c != nil && c.Id != "" {
+		found := false
+		for _, id := range identifiers {
+			if id == c.Id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			identifiers = append(identifiers, c.Id)
+		}
+	}
+
 	if len(identifiers) == 0 {
 		identifiers = append(identifiers, username)
 	}
@@ -128,10 +172,7 @@ func (s *NotificationstoreImpl) GetNotifications(ctx context.Context, filter str
 		return nil, err
 	}
 
-	var createdAfter time.Time
-	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
-		createdAfter = u.CreateTime
-	}
+	createdAfter := s.getCreatedAfter(ctx)
 
 	maxLimit := s.GetDefaultLimit()
 	if len(limit) > 0 && limit[0] > 0 && limit[0] < maxLimit {
@@ -158,10 +199,7 @@ func (s *NotificationstoreImpl) GetLastUnreadTime(ctx context.Context) (*time.Ti
 		return nil, err
 	}
 
-	var createdAfter time.Time
-	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
-		createdAfter = u.CreateTime
-	}
+	createdAfter := s.getCreatedAfter(ctx)
 
 	if s.store == nil {
 		if s.server == nil || s.server.DB == nil {
@@ -219,10 +257,7 @@ func (s *NotificationstoreImpl) SetAllRead(ctx context.Context, isRead bool) err
 		return err
 	}
 
-	var createdAfter time.Time
-	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
-		createdAfter = u.CreateTime
-	}
+	createdAfter := s.getCreatedAfter(ctx)
 
 	if s.store == nil {
 		if s.server == nil || s.server.DB == nil {
@@ -280,10 +315,7 @@ func (s *NotificationstoreImpl) SetAllDismissed(ctx context.Context, isDismissed
 		return err
 	}
 
-	var createdAfter time.Time
-	if u := s.getUser(ctx); u != nil && !u.CreateTime.IsZero() {
-		createdAfter = u.CreateTime
-	}
+	createdAfter := s.getCreatedAfter(ctx)
 
 	if s.store == nil {
 		if s.server == nil || s.server.DB == nil {

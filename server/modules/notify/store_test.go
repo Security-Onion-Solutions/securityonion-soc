@@ -142,6 +142,58 @@ func TestStoreGetNotifications_WithUserstoreCreationDate(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+func TestStoreGetNotifications_WithApiClient(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	srv := newTestServer(true, mDB)
+
+	clientCreated := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	mockClientstore := servermock.NewMockClientstore(gomock.NewController(t))
+	mockClientstore.EXPECT().GetClientById(gomock.Any(), "socl_subgrid_client").Return(&model.Client{
+		Id:         "socl_subgrid_client",
+		CreateTime: clientCreated,
+	}, nil).AnyTimes()
+	srv.Clientstore = mockClientstore
+
+	store := NewNotificationstore(srv, nil)
+
+	mockRows := new(mockdb.MockRows)
+	mockRows.On("Close").Return()
+	mockRows.On("Next").Return(false).Once()
+
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "socl_subgrid_client", "socl_subgrid_client", clientCreated, 501).Return(mockRows, nil).Once()
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "socl_subgrid_client")
+	res, err := store.GetNotifications(ctx, "all")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Empty(t, res.Notifications)
+	mDB.AssertExpectations(t)
+}
+
+func TestStoreGetNotifications_WithApiClientPrefixWithoutClientstore(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	srv := newTestServer(true, mDB)
+
+	store := NewNotificationstore(srv, nil)
+
+	mockRows := new(mockdb.MockRows)
+	mockRows.On("Close").Return()
+	mockRows.On("Next").Return(false).Once()
+
+	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return len(sql) > 0
+	}), "socl_test_client", "socl_test_client", 501).Return(mockRows, nil).Once()
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "socl_test_client")
+	res, err := store.GetNotifications(ctx, "all")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Empty(t, res.Notifications)
+	mDB.AssertExpectations(t)
+}
+
 func TestStoreGetNotifications_ReadAllAuditor(t *testing.T) {
 	mDB := new(mockdb.MockDB)
 	srv := newTestServerWithReadAll(true, true, mDB)

@@ -610,6 +610,35 @@ describe('notifications.js', () => {
       expect(ctx.unreadCount).toBe(0);
       expect(mockLoadNotifications).not.toHaveBeenCalled();
     });
+
+    it('does not append notification to list and does not refresh list when viewing a subgrid', () => {
+      const mockLoadNotifications = jest.fn();
+      const mockShowToast = jest.fn();
+
+      const ctx = {
+        FEAT_NTF: 'ntf',
+        isLicensed: jest.fn(() => true),
+        notificationsStarted: true,
+        selectedGridId: 'subgrid1',
+        unreadCount: 1,
+        lastUnreadNotificationTime: null,
+        notificationMenu: true,
+        notifications: [{ id: 'subgrid-notif-1', title: 'Subgrid Alert' }],
+        loadNotifications: mockLoadNotifications,
+        showNotificationToast: mockShowToast,
+      };
+
+      app.handleIncomingNotification.call(ctx, {
+        id: 'notif-mom-1',
+        title: 'MoM Alert',
+        timestamp: '2026-08-20T17:15:00Z',
+      });
+
+      expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({ id: 'notif-mom-1' }));
+      expect(ctx.notifications).toEqual([{ id: 'subgrid-notif-1', title: 'Subgrid Alert' }]);
+      expect(ctx.unreadCount).toBe(1);
+      expect(mockLoadNotifications).not.toHaveBeenCalled();
+    });
   });
 
   describe('toast helpers', () => {
