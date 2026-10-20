@@ -1219,6 +1219,56 @@ test('loadGridInfo', async () => {
   expect(app.gridInfo['g2']).toStrictEqual({foo:2});
 });
 
+test('loadSubgridInfo collects alarm states from subgrids', async () => {
+  const mock = jest.fn((endpoint, options) => {
+    const gridId = options?.params?.gridId;
+    if (endpoint === 'info') {
+      return Promise.resolve({ data: { name: `Info-${gridId}` } });
+    }
+    if (endpoint === 'alarms/states') {
+      if (gridId === 'g1') {
+        return Promise.resolve({ data: [{ alarmId: 'alarm-g1', status: 'alarm' }] });
+      }
+      if (gridId === 'g2') {
+        return Promise.reject(new Error('alarms not supported'));
+      }
+    }
+    return Promise.resolve({ data: {} });
+  });
+  app.papi.get = mock;
+
+  app.gridInfo = {};
+  app.alarmStates = [{ alarmId: 'alarm-local', status: 'ok', gridId: '' }];
+  app.subgrids = [{ id: 'g1' }, { id: 'g2' }];
+
+  await app.loadSubgridInfo();
+
+  expect(app.gridInfo['g1']).toEqual({ name: 'Info-g1' });
+  expect(app.gridInfo['g2']).toEqual({ name: 'Info-g2' });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g1' } });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g2' } });
+
+  expect(app.isAlarmActive('g1')).toBe(true);
+  expect(app.isAlarmActive('g2')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+});
+
+test('setSubgridAlarmStates replaces states for specific grid and keeps other grids intact', () => {
+  app.alarmStates = [
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-1', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  app.setSubgridAlarmStates('subgrid1', [{ alarmId: 'sub-2', status: 'ok' }]);
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-2', status: 'ok', gridId: 'subgrid1' },
+  ]);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(true);
+});
+
 test('getSelectedGrid', () => {
   app.subgrids = [{id: 'g1', name: 'Grid 1'}, {id: 'g2', name: 'Grid 2'}];
   app.selectedGridId = 'g1';

@@ -516,6 +516,67 @@ test('updateMetricsEnabled switches back to nodes tab if activeTab is metrics or
 	expect(comp.activeTab).toBe('alarms');
 });
 
+test('updateMetricsEnabled resets metricsNodeId if node is not in current grid nodes', () => {
+	comp.nodes = [{ id: 'node-2', metricsEnabled: true, historicalMetricsEnabled: true }];
+	comp.metricsNodeId = 'node-1';
+
+	comp.updateMetricsEnabled();
+
+	expect(comp.metricsNodeId).toBe('');
+});
+
+test('route watch reloads alarmsManager when activeTab is alarms and grid changes', async () => {
+	const origLoadUrlParameters = comp.loadUrlParameters;
+	const origLoadData = comp.loadData;
+	const loadDataMock = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData: loadDataMock,
+		},
+	};
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'alarms';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node-1', metricsEnabled: true, historicalMetricsEnabled: true }];
+		comp.updateMetricsEnabled();
+	});
+
+	try {
+		await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'alarms', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'alarms', gridId: 'grid1' } });
+		expect(loadDataMock).toHaveBeenCalled();
+	} finally {
+		comp.loadUrlParameters = origLoadUrlParameters;
+		comp.loadData = origLoadData;
+	}
+});
+
+test('route watch reloads alarmsManager on grid change even when on nodes tab', async () => {
+	const origLoadUrlParameters = comp.loadUrlParameters;
+	const origLoadData = comp.loadData;
+	const loadDataMock = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData: loadDataMock,
+		},
+	};
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'nodes';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node-1', metricsEnabled: true, historicalMetricsEnabled: true }];
+		comp.updateMetricsEnabled();
+	});
+
+	try {
+		await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'nodes', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'nodes', gridId: 'grid1' } });
+		expect(loadDataMock).toHaveBeenCalled();
+	} finally {
+		comp.loadUrlParameters = origLoadUrlParameters;
+		comp.loadData = origLoadData;
+	}
+});
+
 test('updateRoute preserves gridId query parameter if present', () => {
 	comp.updateRoute = global.routes.find(r => r.name === 'grid').component.methods.updateRoute;
 	comp.$router.replace = jest.fn().mockResolvedValue({});

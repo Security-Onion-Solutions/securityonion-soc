@@ -145,7 +145,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (to.path !== from.path || gridIdChanged) {
         await this.loadData();
         if (this.activeTab === 'metrics') {
+          this.initMetricsCharts();
           this.loadHistoricalMetrics(true);
+        }
+        if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+          this.$refs.alarmsManager.loadData();
         }
       }
     },
@@ -166,7 +170,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
           this.metricsNodeId = '';
         }
         if (this.$root.parametersLoaded) {
+          const currentGridId = this.$root?.selectedGridId || '';
+          const lastGridId = this.lastLoadedMetricsParams?.gridId !== undefined ? (this.lastLoadedMetricsParams.gridId || '') : currentGridId;
           const paramsChanged = !this.lastLoadedMetricsParams ||
+            lastGridId !== currentGridId ||
             this.lastLoadedMetricsParams.nodeId !== this.metricsNodeId ||
             this.lastLoadedMetricsParams.container !== this.metricsContainerId ||
             this.lastLoadedMetricsParams.timeRange !== this.metricsTimeRange ||
@@ -182,6 +189,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
         if (this.metricsRefreshInterval) {
           clearInterval(this.metricsRefreshInterval);
           this.metricsRefreshInterval = null;
+        }
+        if (val === 'alarms') {
+          if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+            this.$refs.alarmsManager.loadData();
+          }
         }
       }
     },
@@ -206,7 +218,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
   },
   methods: {
     addAlarm() {
-      if (this.$refs.alarmsManager && typeof this.$refs.alarmsManager.showAddAlarm === 'function') {
+      if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.showAddAlarm === 'function') {
         this.$refs.alarmsManager.showAddAlarm();
       }
     },
@@ -219,7 +231,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.loadData();
       if (this.activeTab === 'metrics') {
         this.loadHistoricalMetrics(true);
-      } else if (this.activeTab === 'alarms' && this.$refs.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+      } else if (this.activeTab === 'alarms' && this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
         this.$refs.alarmsManager.loadData();
       }
     },
@@ -288,6 +300,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
       const alarmsEnabled = typeof this.alarmsEnabled === 'function' ? this.alarmsEnabled() : !!this.alarmsEnabled;
       if ((this.activeTab === 'metrics' && !this.historicalMetricsEnabled) || (this.activeTab === 'alarms' && !alarmsEnabled)) {
         this.activeTab = 'nodes';
+      }
+      if (this.metricsNodeId && !this.nodes.some(n => n.id === this.metricsNodeId)) {
+        this.metricsNodeId = '';
       }
       this.metricsNodeItems = [
         { title: this.i18n.metricsAllHosts, value: '' }

@@ -69,6 +69,26 @@ test('loadData populates alarms, metrics, states, nodes, destinations and users'
   expect(emittedData).toEqual(mockAlarms);
 });
 
+test('loadData immediately clears alarms and states and manages loading flag', async () => {
+  comp.$root.isLicensed = jest.fn(() => false);
+  comp.alarms = [{ id: 'old-alarm' }];
+  comp.states = [{ alarmId: 'old-alarm' }];
+
+  let wasClearedDuringLoad = false;
+  let wasLoadingDuringLoad = false;
+  comp.$root.papi.get = jest.fn(() => {
+    wasClearedDuringLoad = comp.alarms.length === 0 && comp.states.length === 0;
+    wasLoadingDuringLoad = comp.loading === true;
+    return Promise.resolve({ data: [] });
+  });
+
+  await comp.loadData();
+
+  expect(wasClearedDuringLoad).toBe(true);
+  expect(wasLoadingDuringLoad).toBe(true);
+  expect(comp.loading).toBe(false);
+});
+
 test('showAddAlarm initializes form defaults', () => {
   comp.metrics = [
     { metric: 'cpu', titleKey: 'metricsCpuUsage', keys: ['cpu_used'], type: 'numeric' },

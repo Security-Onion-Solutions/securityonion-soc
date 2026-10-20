@@ -767,6 +767,15 @@ $(document).ready(function () {
               if (gridResponse) {
                 this.gridInfo[grid.id] = gridResponse.data;
               }
+              try {
+                const alarmResponse = await this.papi.get('alarms/states', {params: { gridId: grid.id}});
+                if (alarmResponse) {
+                  const states = Array.isArray(alarmResponse.data) ? alarmResponse.data : (Array.isArray(alarmResponse) ? alarmResponse : []);
+                  this.setSubgridAlarmStates(grid.id, states);
+                }
+              } catch (alarmError) {
+                // Alarms may not be enabled or supported on this subgrid
+              }
             } catch (error) {
               deferredError = error
             }
@@ -1850,14 +1859,24 @@ $(document).ready(function () {
           this.updateTitle();
           this.loadServerSettings(true);
         },
+        setSubgridAlarmStates(gridId, states) {
+          if (!this.alarmStates) this.alarmStates = [];
+          const targetGridId = gridId || LOCAL_GRID_ID;
+          const otherStates = this.alarmStates.filter(s => (s.gridId || LOCAL_GRID_ID) !== targetGridId);
+          const newStates = (states || []).map(s => ({ ...s, gridId: targetGridId }));
+          this.alarmStates = [...otherStates, ...newStates];
+          this.updateStatus();
+        },
         onAlarmStateUpdate(state) {
           if (!state || !state.alarmId) return;
           if (!this.alarmStates) this.alarmStates = [];
-          const idx = this.alarmStates.findIndex(s => s.alarmId === state.alarmId && s.nodeId === state.nodeId);
+          const gridId = state.gridId || LOCAL_GRID_ID;
+          const idx = this.alarmStates.findIndex(s => s.alarmId === state.alarmId && s.nodeId === state.nodeId && (s.gridId || LOCAL_GRID_ID) === gridId);
+          const stateWithGrid = { ...state, gridId };
           if (idx !== -1) {
-            this.alarmStates.splice(idx, 1, state);
+            this.alarmStates.splice(idx, 1, stateWithGrid);
           } else {
-            this.alarmStates.push(state);
+            this.alarmStates.push(stateWithGrid);
           }
           this.updateStatus();
           this.setFavicon();
@@ -1866,9 +1885,14 @@ $(document).ready(function () {
         onAlarmDelete(payload) {
           const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
           if (!alarmId) return;
+          const gridId = typeof payload === 'object' && payload.gridId ? payload.gridId : null;
           if (this.alarmStates && this.alarmStates.length > 0) {
             const initialLen = this.alarmStates.length;
-            this.alarmStates = this.alarmStates.filter(s => s.alarmId !== alarmId);
+            this.alarmStates = this.alarmStates.filter(s => {
+              if (s.alarmId !== alarmId) return true;
+              if (gridId && (s.gridId || LOCAL_GRID_ID) !== gridId) return true;
+              return false;
+            });
             if (this.alarmStates.length !== initialLen) {
               this.updateStatus();
               this.setFavicon();
@@ -1880,7 +1904,9 @@ $(document).ready(function () {
           if (!this.username) return Promise.resolve();
           return this.papi.get('alarms/states')
             .then(response => {
-              this.alarmStates = response?.data || [];
+              const localStates = response?.data || [];
+              const subgridStates = (this.alarmStates || []).filter(s => s.gridId && s.gridId !== LOCAL_GRID_ID);
+              this.alarmStates = [...localStates, ...subgridStates];
               this.alarmStatesLoaded = true;
               this.updateStatus();
               this.setFavicon();
@@ -1889,11 +1915,9 @@ $(document).ready(function () {
             .catch(() => {});
         },
         isAlarmActive(gridId) {
-          if (gridId && gridId !== LOCAL_GRID_ID) {
-            return false;
-          }
           if (!this.alarmStates || this.alarmStates.length === 0) return false;
-          return this.alarmStates.some(s => s.status === 'alarm');
+          const targetGridId = gridId !== undefined && gridId !== null ? gridId : LOCAL_GRID_ID;
+          return this.alarmStates.some(s => (s.gridId || LOCAL_GRID_ID) === targetGridId && s.status === 'alarm');
         },
         getDetectionEngines() {
           return ['elastalert', 'strelka', 'suricata'];
