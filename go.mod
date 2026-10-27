@@ -1,40 +1,35 @@
 module github.com/security-onion-solutions/securityonion-soc
 
-go 1.26.1
-
-require (
-	github.com/apex/log v1.9.0
-	github.com/elastic/go-elasticsearch/v8 v8.19.7
-	github.com/go-chi/chi/v5 v5.5.0
-	github.com/google/gopacket v1.1.19
-	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
-	github.com/influxdata/influxdb-client-go/v2 v2.14.0
-	github.com/kennygrant/sanitize v1.2.4
-	github.com/stretchr/testify v1.12.1
-	github.com/tidwall/gjson v1.20.0
-	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.61.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1
-)
+go 1.27.3
 
 require (
 	github.com/GiGurra/sse-parser v0.0.5
+	github.com/apex/log v1.9.0
 	github.com/eapache/go-resiliency v1.7.0
+	github.com/elastic/go-elasticsearch/v8 v8.19.7
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.19.3
+	github.com/google/gopacket v1.1.19
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/influxdata/influxdb-client-go/v2 v2.14.0
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/kennygrant/sanitize v1.2.4
 	github.com/openai/openai-go/v3 v3.86.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.53.0
+	github.com/stretchr/testify v1.12.1
+	github.com/tidwall/gjson v1.20.0
 	go.uber.org/mock v0.6.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/text v0.43.0
 	google.golang.org/genai v1.76.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -68,7 +63,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.4.1 // indirect
 	github.com/oapi-codegen/runtime v1.8.0 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
@@ -85,7 +79,9 @@ require (
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
 	google.golang.org/api v0.308.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
