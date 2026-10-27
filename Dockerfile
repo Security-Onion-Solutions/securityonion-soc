@@ -6,7 +6,7 @@
 
 ARG SO_BASE
 
-FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine AS builder
+FROM ghcr.io/security-onion-solutions/golang:1.27.3-alpine AS builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
