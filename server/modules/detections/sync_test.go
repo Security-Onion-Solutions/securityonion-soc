@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -118,4 +119,14 @@ func TestSyncScheduler(t *testing.T) {
 			test.CheckMock(t, ctx, detStore, eng, syncParams, engineState, engName, isRunning)
 		})
 	}
+}
+
+func TestSyncSchedulerParamsTimeouts(t *testing.T) {
+	params := &SyncSchedulerParams{
+		PartialSyncTimeoutSeconds: 300,
+		BulkSyncTimeoutSeconds:    1800,
+	}
+
+	assert.Equal(t, 5*time.Minute, params.PartialSyncTimeout())
+	assert.Equal(t, 30*time.Minute, params.BulkSyncTimeout())
 }

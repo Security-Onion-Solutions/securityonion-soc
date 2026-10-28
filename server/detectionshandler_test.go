@@ -748,6 +748,8 @@ func TestHandlerCreateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assertDetachedCtx(t, ctx)
 					return nil, nil
@@ -856,6 +858,8 @@ func TestHandlerCreateDetection(t *testing.T) {
 				})
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
@@ -1333,6 +1337,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assert.True(t, dets[0].PersistChange)
 
@@ -1390,6 +1396,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				})
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assert.True(t, dets[0].PersistChange)
@@ -1490,6 +1498,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				})
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assert.False(t, dets[0].IsEnabled)
@@ -1755,6 +1765,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assertDetachedCtx(t, ctx)
 					assert.True(t, dets[0].PersistChange)
@@ -1800,6 +1812,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				})
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Times(3).Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assertDetachedCtx(t, ctx)
@@ -1857,6 +1871,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Times(2).Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 
 				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
@@ -1899,6 +1915,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
@@ -1934,6 +1952,8 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				})
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, nil)
 
@@ -2179,6 +2199,8 @@ func TestHandlerDeleteDetection(t *testing.T) {
 
 				mAuth.Authorized = true
 
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, dets []*model.Detection) (map[string]string, error) {
 					assertDetachedCtx(t, ctx)
 					assert.True(t, dets[0].PendingDelete)
@@ -2266,6 +2288,8 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(&model.Detection{Engine: model.EngineNameElastAlert}, nil)
 
 				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
 
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
@@ -2385,6 +2409,10 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 
 				engStrelka := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameStrelka, engStrelka)
+
+				engElastAlert.EXPECT().BulkSyncTimeout().Return(time.Minute)
+				engSuricata.EXPECT().BulkSyncTimeout().Return(time.Minute)
+				engStrelka.EXPECT().BulkSyncTimeout().Return(time.Minute)
 
 				mAuth.Authorized = true
 
@@ -2549,6 +2577,10 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 
 				engStrelka := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameStrelka, engStrelka)
+
+				engElastAlert.EXPECT().BulkSyncTimeout().Return(time.Minute)
+				engSuricata.EXPECT().BulkSyncTimeout().Return(time.Minute)
+				engStrelka.EXPECT().BulkSyncTimeout().Return(time.Minute)
 
 				mAuth.Authorized = true
 

@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
@@ -22,6 +23,8 @@ type DetectionEngine interface {
 	GenerateUnusedPublicId(ctx context.Context) (string, error)
 	ApplyFilters(detect *model.Detection) (didFilterAct bool, err error)
 	MergeAuxiliaryData(detect *model.Detection) error
+	PartialSyncTimeout() time.Duration
+	BulkSyncTimeout() time.Duration
 }
 
 type SyncStatus struct {

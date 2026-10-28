@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	model "github.com/security-onion-solutions/securityonion-soc/model"
 	gomock "go.uber.org/mock/gomock"
@@ -54,6 +55,20 @@ func (m *MockDetectionEngine) ApplyFilters(detect *model.Detection) (bool, error
 func (mr *MockDetectionEngineMockRecorder) ApplyFilters(detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyFilters", reflect.TypeOf((*MockDetectionEngine)(nil).ApplyFilters), detect)
+}
+
+// BulkSyncTimeout mocks base method.
+func (m *MockDetectionEngine) BulkSyncTimeout() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkSyncTimeout")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// BulkSyncTimeout indicates an expected call of BulkSyncTimeout.
+func (mr *MockDetectionEngineMockRecorder) BulkSyncTimeout() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkSyncTimeout", reflect.TypeOf((*MockDetectionEngine)(nil).BulkSyncTimeout))
 }
 
 // ConvertRule mocks base method.
@@ -153,6 +168,20 @@ func (m *MockDetectionEngine) MergeAuxiliaryData(detect *model.Detection) error 
 func (mr *MockDetectionEngineMockRecorder) MergeAuxiliaryData(detect any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeAuxiliaryData", reflect.TypeOf((*MockDetectionEngine)(nil).MergeAuxiliaryData), detect)
+}
+
+// PartialSyncTimeout mocks base method.
+func (m *MockDetectionEngine) PartialSyncTimeout() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PartialSyncTimeout")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// PartialSyncTimeout indicates an expected call of PartialSyncTimeout.
+func (mr *MockDetectionEngineMockRecorder) PartialSyncTimeout() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PartialSyncTimeout", reflect.TypeOf((*MockDetectionEngine)(nil).PartialSyncTimeout))
 }
 
 // SyncLocalDetections mocks base method.
