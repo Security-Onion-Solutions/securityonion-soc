@@ -52,6 +52,8 @@ const (
 	DEFAULT_FIRST_IMPORT_DELAY_SECONDS               = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS             = 300
+	DEFAULT_BULK_SYNC_TIMEOUT_SECONDS                = 1800
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
@@ -129,6 +131,8 @@ func (e *StrelkaEngine) Init(config module.ModuleConfig) (err error) {
 	e.FirstImportDelaySeconds = module.GetIntDefault(config, "firstImportDelaySeconds", DEFAULT_FIRST_IMPORT_DELAY_SECONDS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.PartialSyncTimeoutSeconds = module.GetIntDefault(config, "partialSyncTimeoutSeconds", DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS)
+	e.BulkSyncTimeoutSeconds = module.GetIntDefault(config, "bulkSyncTimeoutSeconds", DEFAULT_BULK_SYNC_TIMEOUT_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
 	e.rulesRepos, err = model.GetReposDefault(config, "rulesRepos", true, []*model.Repo{

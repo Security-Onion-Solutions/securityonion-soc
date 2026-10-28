@@ -63,6 +63,8 @@ const (
 	DEFAULT_FIRST_IMPORT_DELAY_SECONDS               = 300
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT       = 10
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS        = 600
+	DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS             = 300
+	DEFAULT_BULK_SYNC_TIMEOUT_SECONDS                = 1800
 	DEFAULT_AI_REPO                                  = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                           = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                             = "/opt/sensoroni/ai_summary_repos"
@@ -313,6 +315,8 @@ func (e *ElastAlertEngine) Init(config module.ModuleConfig) (err error) {
 	}
 
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.PartialSyncTimeoutSeconds = module.GetIntDefault(config, "partialSyncTimeoutSeconds", DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS)
+	e.BulkSyncTimeoutSeconds = module.GetIntDefault(config, "bulkSyncTimeoutSeconds", DEFAULT_BULK_SYNC_TIMEOUT_SECONDS)
 
 	pkgs := module.GetStringArrayDefault(config, "sigmaRulePackages", []string{"core", "emerging_threats_addon"})
 	e.parseSigmaPackages(pkgs)
@@ -1189,14 +1193,14 @@ func (e *ElastAlertEngine) parseRepoRules(allRepos []*detections.RepoOnDisk) (de
 // shouldDropCorrelation reports whether rule is a correlation and ES|QL is off.
 func (e *ElastAlertEngine) shouldDropCorrelation(rule *SigmaRule, ruleFile string) bool {
 	// If rule.Correlation is nil it means this is a normal "single" Sigma rule. Therefore we don't want to drop
-	// this "single" rule. Further, if Correlation is *not* nil and esql is enabled then we don't want to drop this 
-	// "correlation" rule. 
+	// this "single" rule. Further, if Correlation is *not* nil and esql is enabled then we don't want to drop this
+	// "correlation" rule.
 	if rule.Correlation == nil || e.useEsql {
 		return false
 	}
 
 	// We got this far, so this means it *is* a correlation rule but esql is not enabled, so we're dropping this one.
-	
+
 	log.WithField("elastAlertRuleFile", ruleFile).Info("skipping Sigma correlation, which requires ES|QL")
 
 	return true

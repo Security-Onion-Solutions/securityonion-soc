@@ -57,6 +57,8 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FIRST_IMPORT_DELAY_SECONDS            = 60
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
+	DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS          = 300
+	DEFAULT_BULK_SYNC_TIMEOUT_SECONDS             = 1800
 	DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS      = 15
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-published"
@@ -226,6 +228,8 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.FirstImportDelaySeconds = module.GetIntDefault(config, "firstImportDelaySeconds", DEFAULT_FIRST_IMPORT_DELAY_SECONDS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.PartialSyncTimeoutSeconds = module.GetIntDefault(config, "partialSyncTimeoutSeconds", DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS)
+	e.BulkSyncTimeoutSeconds = module.GetIntDefault(config, "bulkSyncTimeoutSeconds", DEFAULT_BULK_SYNC_TIMEOUT_SECONDS)
 	e.configChangeSyncDelaySeconds = module.GetIntDefault(config, "configChangeSyncDelaySeconds", DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 

@@ -1803,6 +1803,14 @@ func (m *mockDetectionEngine) GetState() *model.EngineState {
 
 func (m *mockDetectionEngine) InterruptSync(forceFull, notify bool) {}
 
+func (m *mockDetectionEngine) PartialSyncTimeout() time.Duration {
+	return time.Minute
+}
+
+func (m *mockDetectionEngine) BulkSyncTimeout() time.Duration {
+	return time.Minute
+}
+
 func TestParseRangeAllowRelative(t *testing.T) {
 	t.Parallel()
 

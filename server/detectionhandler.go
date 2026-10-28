@@ -29,11 +29,6 @@ import (
 
 var errPublicIdExists = errors.New("publicId already exists for this engine")
 
-// must outlast a scheduler sync holding an engine's sync lock
-const detectionSyncTimeout = 5 * time.Minute
-
-const detectionBulkTimeout = 10 * time.Minute
-
 type BulkOp struct {
 	// The list of detection IDs to bulk update when a specific query is not provided
 	IDs []string `json:"ids" example:"zC73PJABrNRFAsnEYkqy,XgaI6o8B-vS4HfrbYcce"`
@@ -313,15 +308,11 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// the store write is durable; a client disconnect must not abort deploying it
-	syncCtx, cancel := web.DetachContext(ctx, detectionSyncTimeout)
-	defer cancel()
-
 	// Regenerate rule files to include this new detection
 	// Note: If statusModifiedByFilter is true, this regeneration will apply the same
 	// filter again and produce the same result (rule already has correct state in ES).
 	// This is slightly redundant but ensures consistency and is a rare edge case.
-	errMap, err := h.syncLocalDetections(syncCtx, []*model.Detection{detect})
+	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{detect}, DetectionEngine.PartialSyncTimeout)
 	if err != nil {
 		if strings.Contains(err.Error(), "blocked") {
 			web.Respond(w, r, http.StatusLocked, err)
@@ -501,14 +492,11 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 
 	disabledAfterSync := false
 
-	syncCtx, cancel := web.DetachContext(ctx, detectionSyncTimeout)
-	defer cancel()
-
 	// Regenerate rule files to reflect this updated detection
 	// Note: If statusModifiedByFilter is true, this regeneration will apply the same
 	// filter again and produce the same result (rule already has correct state in ES).
 	// This is slightly redundant but ensures consistency and is a rare edge case.
-	errMap, err := h.syncLocalDetections(syncCtx, []*model.Detection{detect})
+	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{detect}, DetectionEngine.PartialSyncTimeout)
 	if err != nil {
 		if detect.IsEnabled && !filterApplied {
 			var uerr error
@@ -517,9 +505,12 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 			detect.IsEnabled = false
 			detect.Kind = ""
 
-			detect, uerr = h.server.Detectionstore.UpdateDetection(syncCtx, detect)
+			rollbackCtx, cancel := web.DetachContext(ctx, eng.PartialSyncTimeout())
+			defer cancel()
+
+			detect, uerr = h.server.Detectionstore.UpdateDetection(rollbackCtx, detect)
 			if uerr == nil {
-				errMap, err = h.syncLocalDetections(syncCtx, []*model.Detection{detect})
+				errMap, err = h.syncLocalDetections(ctx, []*model.Detection{detect}, DetectionEngine.PartialSyncTimeout)
 				disabledAfterSync = true
 			} else {
 				err = uerr
@@ -659,10 +650,7 @@ func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Reques
 	old.IsEnabled = false
 	old.PendingDelete = true
 
-	syncCtx, cancel := web.DetachContext(ctx, detectionSyncTimeout)
-	defer cancel()
-
-	errMap, err := h.syncLocalDetections(syncCtx, []*model.Detection{old})
+	errMap, err := h.syncLocalDetections(ctx, []*model.Detection{old}, DetectionEngine.PartialSyncTimeout)
 	if err != nil {
 		if strings.Contains(err.Error(), "blocked") {
 			web.Respond(w, r, http.StatusLocked, err)
@@ -771,11 +759,7 @@ func (h *DetectionHandler) BulkUpdateDetection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	bulkCtx, cancel := web.DetachContext(ctx, detectionBulkTimeout)
-	go func() {
-		defer cancel()
-		h.bulkUpdateDetectionAsync(bulkCtx, body, detects, logger)
-	}()
+	go h.bulkUpdateDetectionAsync(context.WithoutCancel(ctx), body, detects, logger)
 
 	web.Respond(w, r, http.StatusAccepted, map[string]interface{}{
 		"count": len(detects),
@@ -1012,7 +996,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 
 	start = time.Now()
 
-	errMap, err = h.syncLocalDetections(ctx, dirty)
+	errMap, err = h.syncLocalDetections(ctx, dirty, DetectionEngine.BulkSyncTimeout)
 	if err != nil {
 		logger.WithError(err).WithField("errMap", util.TruncateMap(errMap, 5)).Error("unable to sync detections after bulk update")
 		return
@@ -1029,7 +1013,7 @@ func (h *DetectionHandler) bulkUpdateDetectionAsync(ctx context.Context, body *B
 	syncDur = time.Since(start)
 }
 
-func (h *DetectionHandler) syncLocalDetections(ctx context.Context, detections []*model.Detection) (errMap map[string]string, err error) {
+func (h *DetectionHandler) syncLocalDetections(ctx context.Context, detections []*model.Detection, timeout func(DetectionEngine) time.Duration) (errMap map[string]string, err error) {
 	errMap = map[string]string{} // map[det.PublicID]error
 	defer func() {
 		if len(errMap) == 0 {
@@ -1054,7 +1038,10 @@ func (h *DetectionHandler) syncLocalDetections(ctx context.Context, detections [
 		if len(byEngine[name]) != 0 {
 			var eMap map[string]string
 
-			eMap, err = engine.SyncLocalDetections(ctx, byEngine[name])
+			// detached per engine: store writes are durable, and engines deploy one after another
+			syncCtx, cancel := web.DetachContext(ctx, timeout(engine))
+			eMap, err = engine.SyncLocalDetections(syncCtx, byEngine[name])
+			cancel()
 			for sid, e := range eMap {
 				errMap[sid] = e
 			}
