@@ -3,15 +3,16 @@ package model
 import "time"
 
 type GetSessionsOpts struct {
-	includeDeleted        bool
-	includeMemorySessions bool
-	userId                string
-	sessionId             string
-	usage                 bool
-	descendants           bool
-	skipMessageMeta       bool
-	start                 time.Time
-	end                   time.Time
+	includeDeleted            bool
+	includeMemorySessions     bool
+	includeAutomationSessions bool
+	userId                    string
+	sessionIds                []string
+	usage                     bool
+	descendants               bool
+	skipMessageMeta           bool
+	start                     time.Time
+	end                       time.Time
 }
 
 func (gso *GetSessionsOpts) IncludeDeleted() bool {
@@ -22,8 +23,8 @@ func (gso *GetSessionsOpts) UserId() string {
 	return gso.userId
 }
 
-func (gso *GetSessionsOpts) SessionId() string {
-	return gso.sessionId
+func (gso *GetSessionsOpts) SessionIds() []string {
+	return gso.sessionIds
 }
 
 func (gso *GetSessionsOpts) Range() (time.Time, time.Time) {
@@ -55,6 +56,15 @@ func (gso *GetSessionsOpts) IncludeMemorySessions() bool {
 	return gso.includeMemorySessions
 }
 
+// IncludeAutomationSessions reports whether sessions created by an automation run
+// (SessionTagAutomation) should be returned. Off by default so scheduled runs do not
+// swamp the configured owner's conversation list; every lookup by session id turns it
+// on, because the runner, the live view and clone-and-resume all read by id. A new
+// call site that forgets it sees zero rows rather than an error.
+func (gso *GetSessionsOpts) IncludeAutomationSessions() bool {
+	return gso.includeAutomationSessions
+}
+
 type GetSessionsOpt func(*GetSessionsOpts)
 
 func GetSessionsWithIncludeDeleted(includeDeleted bool) GetSessionsOpt {
@@ -69,6 +79,12 @@ func GetSessionsWithMemorySessions(includeMemorySessions bool) GetSessionsOpt {
 	}
 }
 
+func GetSessionsWithAutomationSessions(includeAutomationSessions bool) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.includeAutomationSessions = includeAutomationSessions
+	}
+}
+
 func GetSessionsWithUserId(userId string) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
 		gso.userId = userId
@@ -77,7 +93,16 @@ func GetSessionsWithUserId(userId string) GetSessionsOpt {
 
 func GetSessionsWithSessionId(sessionId string) GetSessionsOpt {
 	return func(gso *GetSessionsOpts) {
-		gso.sessionId = sessionId
+		if sessionId != "" {
+			gso.sessionIds = []string{sessionId}
+		}
+	}
+}
+
+// GetSessionsWithSessionIds matches any of the given sessions in one query.
+func GetSessionsWithSessionIds(sessionIds []string) GetSessionsOpt {
+	return func(gso *GetSessionsOpts) {
+		gso.sessionIds = sessionIds
 	}
 }
 

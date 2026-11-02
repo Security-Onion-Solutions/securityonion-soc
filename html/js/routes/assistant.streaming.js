@@ -7,7 +7,8 @@
 // callAIAPI streaming loop, tool-execution streaming, and delegation (sub-agent)
 // stream handling.
 
-globalThis.AssistantStreaming = (function() {
+const assistantRouteForStreaming = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForStreaming.component.methods, (function() {
   return {
     async sendMessage(tags) {
       if (!this.newMessage.trim()) return;
@@ -54,6 +55,8 @@ globalThis.AssistantStreaming = (function() {
       if (this.messages.length == 1) {
         this.messages = [];
       }
+
+      tags = this.withIncognitoTag(tags);
 
       const floatingState = this.sessionToolState.get(this.currentChatId);
       if (this.messages.length > 1 && floatingState && floatingState.floatingTool) {
@@ -298,6 +301,16 @@ globalThis.AssistantStreaming = (function() {
       return { assistantMessage: null, messageUsage: null };
     },
     
+    restoreUnsentMessage(text) {
+      const last = this.messages[this.messages.length - 1];
+      if (last && last.role === 'user' && last.content === text) {
+        this.messages.pop();
+      }
+      if (!this.newMessage) {
+        this.newMessage = text;
+      }
+    },
+
     async callAIAPI(userMessage, tags = null) {
       const streamingSessionId = this.currentChatId;
       this.activeStreamingSessionId = streamingSessionId;
@@ -462,23 +475,28 @@ globalThis.AssistantStreaming = (function() {
         if (this.activeStreamingSessionId === streamingSessionId && this.currentChatId === streamingSessionId) {
           this.isTyping = false;
           this.isStreaming = false;
-          
-          const errorMessage = {
-            role: 'assistant',
-            content: this.i18n.assistantErrorMessage,
-            timestamp: new Date().toISOString()
-          };
-          this.messages.push(errorMessage);
-          this.scrollIfPinned();
+
+          // 409: the agent is at its limit or the session is mid-turn, so nothing was sent.
+          const busy = error && error.response && error.response.status === 409;
 
           if (error && error.response && error.response.data) {
-            const stream = error.response.data;
-            const errorReader = stream.pipeThrough(new TextDecoderStream()).getReader();
-            const { done, value } = await errorReader.read();
-            error = value;
+            error = await this.readErrorBody(error);
           }
 
-          this.$root.showError(error);
+          if (busy) {
+            this.restoreUnsentMessage(userMessage);
+            this.$root.showWarning(error);
+          } else {
+            const errorMessage = {
+              role: 'assistant',
+              content: this.i18n.assistantErrorMessage,
+              timestamp: new Date().toISOString()
+            };
+            this.messages.push(errorMessage);
+            this.scrollIfPinned();
+
+            this.$root.showError(error);
+          }
         }
         
         if (this.activeStreamingSessionId === streamingSessionId) {
@@ -579,7 +597,7 @@ globalThis.AssistantStreaming = (function() {
     delegateOwnCredits(delegateToolUse) {
       const cs = delegateToolUse && delegateToolUse.childSession;
       if (!cs || !Array.isArray(cs.messages)) return 0;
-      return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.credits) || 0), 0);
+      return cs.messages.reduce((sum, m) => sum + (m.cloned ? 0 : ((m.usage && m.usage.credits) || 0)), 0);
     },
 
     // Output tokens this delegate's own turns generated — the number its per-sub-session
@@ -587,7 +605,7 @@ globalThis.AssistantStreaming = (function() {
     delegateOwnOutputTokens(delegateToolUse) {
       const cs = delegateToolUse && delegateToolUse.childSession;
       if (!cs || !Array.isArray(cs.messages)) return 0;
-      return cs.messages.reduce((sum, m) => sum + ((m.usage && m.usage.output_tokens) || 0), 0);
+      return cs.messages.reduce((sum, m) => sum + (m.cloned ? 0 : ((m.usage && m.usage.output_tokens) || 0)), 0);
     },
 
     // Whether the collapsed sub-agent region has anything worth showing — avoids an empty
@@ -653,4 +671,4 @@ globalThis.AssistantStreaming = (function() {
       }
     },
   };
-})();
+})());

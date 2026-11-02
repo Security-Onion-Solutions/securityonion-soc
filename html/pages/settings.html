@@ -38,8 +38,8 @@
 						<v-card-text>
 							<v-form v-model="profileForm.valid" method="post" :action="authSettingsUrl">
 								<v-text-field name="traits.email" v-model="profileForm.email" :label="i18n.email" :rules="[$root.validators.required, $root.validators.minLength(6)]" required class="d-none" aria-hidden="true" data-aid="user_settings_email"></v-text-field>
-								<v-text-field name="traits.firstName" v-model="profileForm.firstName" :label="i18n.firstName" type="text" :rules="[$root.validators.maxLength(101)]" data-aid="user_settings_firstname"></v-text-field>
-								<v-text-field name="traits.lastName" v-model="profileForm.lastName" :label="i18n.lastName" type="text" :rules="[$root.validators.maxLength(101)]" data-aid="user_settings_lastname"></v-text-field>
+								<v-text-field name="traits.firstName" autocomplete="given-name" v-model="profileForm.firstName" :label="i18n.firstName" type="text" :rules="[$root.validators.maxLength(101)]" data-aid="user_settings_firstname"></v-text-field>
+								<v-text-field name="traits.lastName" autocomplete="family-name" v-model="profileForm.lastName" :label="i18n.lastName" type="text" :rules="[$root.validators.maxLength(101)]" data-aid="user_settings_lastname"></v-text-field>
 								<v-text-field name="traits.note" v-model="profileForm.note" :label="i18n.note" type="text" :rules="[$root.validators.maxLength(101)]" data-aid="user_settings_note"></v-text-field>
 								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none" aria-hidden="true"></v-text-field>
 								<v-text-field name="method" value="profile" class="d-none" aria-hidden="true"></v-text-field>
@@ -71,8 +71,8 @@
 						<v-card-subtitle class="mb-3" v-text="i18n.passwordInstructions"></v-card-subtitle>
 						<v-card-text>
 							<v-form v-model="passwordForm.valid" method="post" :action="authSettingsUrl">
-								<v-text-field name="password" v-model="passwordForm.password" :label="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[$root.validators.required, $root.validators.minPassLen, $root.validators.maxPassLen, $root.validators.badPassChars]" required data-aid="user_settings_password_input"></v-text-field>
-								<v-text-field :label="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.matches(passwordForm.password), $root.validators.badPassChars]" required data-aid="user_settings_password_confirm_input"></v-text-field>
+								<v-text-field name="password" autocomplete="new-password" v-model="passwordForm.password" :label="i18n.passwordChange" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[$root.validators.required, $root.validators.minPassLen, $root.validators.maxPassLen, $root.validators.badPassChars]" required data-aid="user_settings_password_input"></v-text-field>
+								<v-text-field autocomplete="new-password" :label="i18n.passwordConfirm" :type="showPassword ? 'text' : 'password'" @click:append="showPassword = !showPassword" :append-icon="showPassword ? 'fa-eye-slash' : 'fa-eye'" :rules="[$root.validators.required, $root.validators.maxPassLen, $root.validators.matches(passwordForm.password), $root.validators.badPassChars]" required data-aid="user_settings_password_confirm_input"></v-text-field>
 								<v-text-field name="csrf_token" v-model="csrfToken" class="d-none" aria-hidden="true"></v-text-field>
 								<v-text-field name="method" value="password" class="d-none" aria-hidden="true"></v-text-field>
 								<v-btn id="settingsPasswordChangeSubmit" type="submit" color="primary" :disabled="!passwordForm.valid" v-text="i18n.save"></v-btn>

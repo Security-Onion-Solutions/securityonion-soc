@@ -59,6 +59,10 @@ func (hydra *HydraClientstore) fetchHydraClient(id string) (*HydraClient, error)
 }
 
 func (hydra *HydraClientstore) fetchClient(ctx context.Context, id string) (*model.Client, error) {
+	if hydra.client == nil {
+		return nil, errors.New("client not initialized")
+	}
+
 	log.WithFields(log.Fields{
 		"apiClientId": id,
 		"requestId":   ctx.Value(web.ContextKeyRequestId),
@@ -69,7 +73,7 @@ func (hydra *HydraClientstore) fetchClient(ctx context.Context, id string) (*mod
 		return nil, err
 	}
 
-	client := model.NewClient()
+	client := &model.Client{}
 
 	hydraClient.copyToClient(client)
 	if hydra.server.Rolestore != nil {
@@ -115,8 +119,10 @@ func (hydra *HydraClientstore) GetClientByToken(ctx context.Context, token strin
 }
 
 func (hydra *HydraClientstore) GetClientById(ctx context.Context, id string) (*model.Client, error) {
-	if err := hydra.server.CheckAuthorized(ctx, "read", "clients"); err != nil {
-		return nil, err
+	if id != ctx.Value(web.ContextKeyRequestorId) {
+		if err := hydra.server.CheckAuthorized(ctx, "read", "clients"); err != nil {
+			return nil, err
+		}
 	}
 
 	return hydra.fetchClient(ctx, id)

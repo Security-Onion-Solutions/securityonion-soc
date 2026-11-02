@@ -21,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	modmock "github.com/security-onion-solutions/securityonion-soc/server/modules/mock"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/memory"
@@ -138,6 +139,37 @@ func TestDisableCrossClusterIndexing(tester *testing.T) {
 	assert.Equal(tester, len(indexes), len(newIndexes))
 	assert.Equal(tester, "so-*", newIndexes[0])
 	assert.Equal(tester, "my-*", newIndexes[1])
+}
+
+func TestUpdateDocumentsIgnoreUnavailable(t *testing.T) {
+	for _, ignoreUnavailable := range []bool{true, false} {
+		client, transport := modmock.NewMockClient(t)
+
+		transport.AddResponse(&http.Response{
+			StatusCode: 200,
+			Header: http.Header{
+				"X-Elastic-Product": []string{"Elasticsearch"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"took":1,"timed_out":false,"total":1,"updated":1,"failures":[]}`)),
+		}, nil)
+
+		store := &ElasticEventstore{
+			maxLogLength: math.MaxInt,
+		}
+
+		_, err := store.updateDocuments(context.Background(), client, `{"query":{}}`, []string{"so-*", "logs-*"}, true, ignoreUnavailable)
+		assert.Nil(t, err)
+
+		reqs := transport.GetRequests()
+		assert.Equal(t, 1, len(reqs))
+		assert.Equal(t, "POST", reqs[0].Method)
+		assert.Equal(t, "/so-*,logs-*/_update_by_query", reqs[0].URL.Path)
+		if ignoreUnavailable {
+			assert.Contains(t, reqs[0].URL.RawQuery, "ignore_unavailable=true")
+		} else {
+			assert.NotContains(t, reqs[0].URL.RawQuery, "ignore_unavailable")
+		}
+	}
 }
 
 func TestScrollSunnyDay(t *testing.T) {
@@ -1068,49 +1100,68 @@ func TestAddUpdateScript(t *testing.T) {
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false)
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
+	investigateHeader := `
 			boolean track_timing = params.trackTiming;
 			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
 			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
-	assert.Equal(t, expected, criteria.UpdateScripts[0])
+
+			ctx._source.event.investigated = true;`
+	assert.Equal(t, investigateHeader, criteria.UpdateScripts[0])
 	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Nil(t, criteria.Params["sessionId"])
 
 	// Test investigation case with session ID
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", false, "test-session-123")
 	assert.Len(t, criteria.UpdateScripts, 1)
-	expected = `
-			boolean track_timing = params.trackTiming;
-			Instant now_instant = Instant.ofEpochMilli(params.nowMillis);
-			ZonedDateTime now_date = ZonedDateTime.ofInstant(now_instant, ZoneId.of('Z'));
-			
-			ctx._source.event.investigated = true;
-			ctx._source.event.investigated_by = params.userId;
-			ctx._source.event.investigation_session_id = params.sessionId;
-			if (track_timing) {
-				ctx._source.event.investigated_timestamp = now_date;
-			}
-			`
+	expected = investigateHeader + investigationEntriesScript + `
+			boolean inv_found = false;
+			for (def inv_entry : inv_list) { if (inv_entry.session_id == params.sessionId) { inv_found = true; } }
+			if (!inv_found) {
+				Map inv_new = new HashMap();
+				inv_new.put('session_id', params.sessionId);
+				inv_new.put('user_id', params.userId);
+				if (track_timing) { inv_new.put('timestamp', now_date); }
+				inv_list.add(inv_new);
+			}` + investigationStoreScript
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
 	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
+	assert.Equal(t, "admin", criteria.Params["userId"])
+	assert.Equal(t, "investigations", criteria.Params["investigationObject"])
 
 	// Test investigation delete case
 	criteria = model.NewEventUpdateCriteria()
 	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true)
 	assert.Len(t, criteria.UpdateScripts, 1)
 	expected = `
-		if (ctx._source.event.containsKey('investigation_session_id')) {
+			ctx._source.event.remove(params.investigationObject);
 			ctx._source.event.remove('investigation_session_id');
-		}
-	`
+			ctx._source.event.remove('investigated_by');
+			ctx._source.event.remove('investigated_timestamp');`
 	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Nil(t, criteria.Params["sessionId"])
+
+	// Test investigation delete case scoped to one session
+	criteria = model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, timeNow, "admin", true, "test-session-123")
+	assert.Len(t, criteria.UpdateScripts, 1)
+	expected = investigationEntriesScript + `
+			inv_list.removeIf(inv_entry -> inv_entry.session_id == params.sessionId);` + investigationStoreScript
+	assert.Equal(t, expected, criteria.UpdateScripts[0])
+	assert.Equal(t, "test-session-123", criteria.Params["sessionId"])
+}
+
+func TestInvestigationObjectFollowsTheAssistantPrefix(t *testing.T) {
+	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+
+	criteria := model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, time.Now(), "admin", false, "s-1")
+	assert.Equal(t, "so_investigations", criteria.Params["investigationObject"])
+
+	store.assistantSchemaPrefix = "custom_"
+	criteria = model.NewEventUpdateCriteria()
+	store.AddInvestigationUpdateScripts(criteria, time.Now(), "admin", true, "s-1")
+	assert.Equal(t, "custom_investigations", criteria.Params["investigationObject"])
 }
 
 func TestSearchPermissionsAuthorized(t *testing.T) {
@@ -1397,8 +1448,9 @@ func TestAddInvestigateScript_InjectionAttack(t *testing.T) {
 	store.addInvestigateScript(updateCriteria, time.Now(), attackUser, attackSession)
 
 	script := updateCriteria.UpdateScripts[0]
-	assert.Contains(t, script, `ctx._source.event.investigated_by = params.userId;`)
-	assert.Contains(t, script, `ctx._source.event.investigation_session_id = params.sessionId;`)
+	assert.Contains(t, script, `inv_new.put('user_id', params.userId);`)
+	assert.Contains(t, script, `inv_new.put('session_id', params.sessionId);`)
+	assert.NotContains(t, script, "leaked")
 	assert.Equal(t, attackUser, updateCriteria.Params["userId"])
 	assert.Equal(t, attackSession, updateCriteria.Params["sessionId"])
 }
@@ -1746,20 +1798,69 @@ func TestAggregateAsyncUpdateCapsErrors(t *testing.T) {
 }
 
 func TestWatchAsyncUpdate(t *testing.T) {
-	store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
+	tests := []struct {
+		kind       string
+		permission string
+	}{
+		{ACK_BROADCAST_KIND, ACK_BROADCAST_PERMISSION},
+		{UNACK_BROADCAST_KIND, ACK_BROADCAST_PERMISSION},
+		{"", ACK_BROADCAST_PERMISSION},
+		{ACK_BROADCAST_KIND, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind+"/"+tt.permission, func(t *testing.T) {
+			store := NewElasticEventstore(server.NewFakeAuthorizedServer(nil))
 
-	client, transport := modmock.NewMockClient(t)
-	transport.AddResponse(&http.Response{
-		StatusCode: 200,
-		Header:     http.Header{"X-Elastic-Product": []string{"Elasticsearch"}},
-		Body:       io.NopCloser(strings.NewReader(`{"completed":true,"response":{"updated":4,"version_conflicts":0,"timed_out":false,"failures":[]}}`)),
-	}, nil)
+			client, transport := modmock.NewMockClient(t)
+			transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":4,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
 
-	// With no active websocket connections the broadcast is a no-op; this verifies the full
-	// watch-and-broadcast path runs to completion without panicking.
-	assert.NotPanics(t, func() {
-		store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"})
-	})
+			// With no active websocket connections the broadcast is a no-op; this verifies the full
+			// watch-and-broadcast path runs to completion without panicking.
+			assert.NotPanics(t, func() {
+				store.watchAsyncUpdate(context.Background(), []asyncTaskRef{{client: client, taskId: "node-1:1"}}, []string{"node-1:1"}, tt.kind, tt.permission)
+			})
+			assert.Len(t, transport.GetRequests(), 1)
+		})
+	}
+}
+
+func TestAcknowledgeSetsBroadcastKind(t *testing.T) {
+	tests := []struct {
+		name        string
+		acknowledge bool
+		escalate    bool
+		kind        string
+	}{
+		{"ack", true, false, ACK_BROADCAST_KIND},
+		{"escalate", true, true, ACK_BROADCAST_KIND},
+		{"unack", false, false, UNACK_BROADCAST_KIND},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+			transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
+			transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":11,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
+
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "myRequestorId")
+			ackCriteria := model.NewEventAckCriteria()
+			ackCriteria.Acknowledge = tt.acknowledge
+			ackCriteria.Escalate = tt.escalate
+			ackCriteria.SearchFilter = "tags:alert"
+			ackCriteria.EventFilter = map[string]any{"rule.name": "Foo", "count": float64(store.asyncThreshold + 1)}
+			ackCriteria.DateRange = "2026/09/01 12:00:00 AM - 2026/09/22 12:00:00 PM"
+			ackCriteria.DateRangeFormat = "2006/01/02 3:04:05 PM"
+			ackCriteria.Timezone = "UTC"
+
+			results, err := store.Acknowledge(ctx, ackCriteria)
+			assert.NoError(t, err)
+			assert.True(t, results.Criteria.Asynchronous)
+			assert.Equal(t, tt.kind, results.Criteria.BroadcastKind)
+			assert.Equal(t, ACK_BROADCAST_PERMISSION, results.Criteria.RequiredPermissionGroup)
+			assert.Equal(t, []string{"node-1:1"}, results.TaskIds)
+			assert.True(t, results.Criteria.IgnoreUnavailable)
+			assert.Contains(t, transport.GetRequests()[0].URL.RawQuery, "ignore_unavailable=true")
+		})
+	}
 }
 
 func healthResponse(statusCode int, body string) *http.Response {
@@ -1864,4 +1965,50 @@ func TestExplainAllocation(t *testing.T) {
 	assert.Equal(t, "/_cluster/allocation/explain", requests[0].URL.Path)
 	body, _ := io.ReadAll(requests[0].Body)
 	assert.JSONEq(t, `{"index":"so-logs","shard":2,"primary":true}`, string(body))
+}
+
+func TestUpdateSync(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	transport.AddResponse(esResponse(`{"took":5,"timed_out":false,"total":5,"updated":3,"noops":2,"failures":[]}`), nil)
+
+	criteria := model.NewEventUpdateCriteria()
+	criteria.AddUpdateScript("ctx._source.event.acknowledged = true;")
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+
+	results, err := store.Update(context.Background(), criteria)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, results.UpdatedCount)
+	assert.Equal(t, 2, results.UnchangedCount)
+	assert.Empty(t, results.TaskIds)
+	assert.Len(t, transport.GetRequests(), 1)
+}
+
+func TestUpdateUnauthorized(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeUnauthorizedServer())
+
+	criteria := model.NewEventUpdateCriteria()
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+
+	_, err := store.Update(context.Background(), criteria)
+	assert.Error(t, err)
+	assert.Empty(t, transport.GetRequests())
+}
+
+func TestUpdateAsyncWithoutRequestorId(t *testing.T) {
+	store, transport := newTriageTestStore(t, server.NewFakeAuthorizedServer(nil))
+	transport.AddResponse(esResponse(`{"task":"node-1:1"}`), nil)
+	transport.AddResponse(esResponse(`{"completed":true,"response":{"updated":1,"version_conflicts":0,"timed_out":false,"failures":[]}}`), nil)
+
+	criteria := model.NewEventUpdateCriteria()
+	assert.NoError(t, criteria.ParsedQuery.Parse("tags:alert"))
+	criteria.Asynchronous = true
+
+	var results *model.EventUpdateResults
+	var err error
+	// A headless caller has no requestor id; the detached watcher context must tolerate that.
+	assert.NotPanics(t, func() {
+		results, err = store.Update(context.Background(), criteria)
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"node-1:1"}, results.TaskIds)
 }

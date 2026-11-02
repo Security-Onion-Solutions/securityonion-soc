@@ -6,7 +6,8 @@
 // Assistant page methods: tool request posting, execution, approval/rejection,
 // tool status display, and the per-session tool-queue state (see sessionTools).
 
-globalThis.AssistantTools = (function() {
+const assistantRouteForTools = routes.find(r => r.name === 'assistant');
+Object.assign(assistantRouteForTools.component.methods, (function() {
   return {
     // POSTs a tool result and streams the continuation. A 409 (another tool turn is already
     // running for this session) is retried a bounded number of times, then re-thrown.
@@ -32,16 +33,7 @@ globalThis.AssistantTools = (function() {
     async isToolAlreadyResolvedError(error) {
       if (!error || !error.response || error.response.status !== 400) return false;
 
-      let body = error.response.data;
-      if (body && typeof body.pipeThrough === 'function') {
-        try {
-          const reader = body.pipeThrough(new TextDecoderStream()).getReader();
-          const { value } = await reader.read();
-          body = value;
-        } catch {
-          return false;
-        }
-      }
+      const body = await this.readErrorBody(error);
 
       return typeof body === 'string' && body.includes('ERROR_TOOL_ALREADY_RESOLVED');
     },
@@ -296,6 +288,11 @@ globalThis.AssistantTools = (function() {
           return;
         }
 
+        // Still busy after the retries: the agent is at its limit or the session is mid-turn.
+        if (error.response && error.response.status === 409) {
+          this.$root.showWarning(await this.readErrorBody(error));
+        }
+
         toolUse.status = 'error';
         toolUse.error = error.message;
         this.isStreaming = false;
@@ -542,4 +539,4 @@ globalThis.AssistantTools = (function() {
       if (oldMsg) this.newMessage = oldMsg;
     },
   };
-})();
+})());

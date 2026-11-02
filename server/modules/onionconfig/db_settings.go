@@ -16,6 +16,7 @@ import (
 // dbSettingsLoader abstracts DB access for settings loading so it can be mocked in tests.
 type dbSettingsLoader interface {
 	GetAllSettings(ctx context.Context) ([]database.SettingRow, error)
+	GetSetting(ctx context.Context, settingID, nodeID string) (*database.SettingRow, error)
 }
 
 // loadDBSettings fetches all settings from the DB and returns them as model.Setting slice.

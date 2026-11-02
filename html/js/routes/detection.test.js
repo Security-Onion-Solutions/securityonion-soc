@@ -462,6 +462,49 @@ test('onNewDetectionLanguageChange', async () => {
 	expect(comp.detect.content).toBe('c X ' + moment().format('YYYY-MM-DD'));
 });
 
+test('onNewDetectionLanguageChange - sigma kind', async () => {
+	comp.ruleTemplates = {
+		"strelka": 'b [publicId]',
+		"elastalert": 'c [publicId]',
+		"elastalert_correlation": 'corr [publicId]',
+	};
+	comp.detect = { language: 'Sigma', content: 'x' };
+	comp.newDetectionSigmaKind = 'correlation';
+
+	const mock = resetPapi().mockPapi("get", { data: { publicId: 'X' } }, null);
+	await comp.onNewDetectionLanguageChange();
+
+	expect(mock).toHaveBeenCalledWith('detection/elastalert/genpublicid');
+	expect(comp.detect.content).toBe('corr X');
+
+	resetPapi().mockPapi("get", { data: { publicId: 'Y' } }, null);
+	comp.newDetectionSigmaKind = 'single';
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('c Y');
+
+	// only Sigma has a rule type
+	comp.newDetectionSigmaKind = 'correlation';
+	comp.detect = { language: 'YARA', content: 'x' };
+	await comp.onNewDetectionLanguageChange();
+	expect(comp.detect.content).toBe('b');
+});
+
+test('hasSigmaKindChoice', () => {
+	comp.ruleTemplates = { "elastalert": 'c', "elastalert_correlation": 'corr' };
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(true);
+
+	comp.detect = { language: 'YARA' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
+	comp.detect = {};
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+
+	comp.ruleTemplates = { "elastalert": 'c' };
+	comp.detect = { language: 'Sigma' };
+	expect(comp.hasSigmaKindChoice()).toBe(false);
+});
+
 test('getDefaultPreset', () => {
 	comp.presets = {
 		"language": {
@@ -1008,6 +1051,116 @@ test('validateStrelka', () => {
 	comp.detect.content = 'rule X { condition: }';
 	msg = comp.validateStrelka();
 	expect(msg).toBe(null);
+
+	// One of each preamble shipped by securityonion-yara. Bodies are trimmed; the
+	// preamble and rule name are from the cited file. Community rules are read-only,
+	// so save runs on a duplicate, and that path must accept these forms.
+	const forms = [
+		{
+			name: 'import and block comment (yara/apt_apt29_nobelium_may21.yar)',
+			content: `import "math"
+import "pe"
+
+/*
+    YARA Rules by Volexity
+    Reference: https://www.volexity.com/blog/2021/05/27/suspected-apt29-operation-launches-election-fraud-themed-phishing-campaigns/
+*/
+
+rule APT_APT29_Win_FlipFlop_LDR : APT29 {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'block comment (yara/apt_buckeye.yar)',
+			content: `/*
+	Yara Rule Set
+	Author: Florian Roth
+	Date: 2016-09-05
+	Identifier: Buckeye
+*/
+
+rule Buckeye_Osinfo {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'import (yara/apt_nk_tradingtech_apr23.yar)',
+			content: `import "pe"
+rule APT_MAL_VEILEDSIGNAL_Backdoor_Apr23 {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'line comment (yara/apt_lnx_kobalos.yar)',
+			content: `// For feedback or questions contact us at: github@eset.com
+// https://github.com/eset/malware-ioc/
+
+rule APT_MAL_LNX_Kobalos {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'condition space before colon (yara/apt_blackenergy_installer.yar)',
+			content: `
+rule blackenergy3_installer
+{
+	condition :
+		true
+}`,
+		},
+		{
+			name: 'rule tag (yara/expl_adselfservice_cve_2021_40539.yar)',
+			content: `rule LOG_EXPL_ADSelfService_CVE_2021_40539_ADSLOG_Sep21 : LOG {
+	condition:
+		true
+}`,
+		},
+		{
+			name: 'private rule',
+			content: `import "pe"
+
+private rule MetadataExample {
+	condition:
+		true
+}`,
+		},
+	];
+
+	forms.push({
+		name: 'CRLF import',
+		content: 'import "pe"\r\nrule CRLFExample {\r\n\tcondition:\r\n\t\ttrue\r\n}',
+	});
+	forms.push({
+		name: 'private rule keyword is case-insensitive',
+		content: 'private RULE Example {\n\tcondition:\n\t\ttrue\n}',
+	});
+
+	forms.forEach((form) => {
+		comp.detect = { language: 'yara', content: form.content };
+		expect([form.name, comp.validateStrelka()]).toEqual([form.name, null]);
+	});
+
+	comp.detect = {
+		language: 'yara',
+		content: 'import "pe"\nrule 5 {\n\tcondition:\n\t\ttrue\n}',
+	};
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
+	comp.detect.content = 'import "pe"\nrule {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaMissingRuleName);
+
+	comp.detect.content = 'import "pe"\nrule X {}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaMissingCondition);
+
+	comp.detect.content = 'global rule Foo {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
+
+	comp.detect.content = 'include "other.yar"\nrule Foo {\n\tcondition:\n\t\ttrue\n}';
+	expect(comp.validateStrelka()).toBe(comp.i18n.invalidDetectionStrelkaInvalidRuleName);
 });
 
 
@@ -1208,18 +1361,17 @@ test('loadPlaybooks', async () => {
 
 		comp.runQueryInDiscover();
 
-		expect(window.open).toHaveBeenCalledWith(
-			'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
-			'_blank'
-		);
+		const esqlUrl = window.open.mock.calls[0][0];
+		expect(window.open).toHaveBeenCalledWith(esqlUrl, '_blank');
+		expect(esqlUrl.startsWith('/kibana/app/discover#/?_a=')).toBe(true);
+		expect(LZString.compressToEncodedURIComponent).not.toHaveBeenCalled();
 
-		const expectedQuery = `POST /_query
-{
-	"query": """
-	FROM logs-*
-	"""
-}`;
-		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedQuery);
+		const esqlAppState = decodeURIComponent(esqlUrl.split('_a=')[1].split('&_g=')[0]);
+		expect(esqlAppState).toContain('dataSource:(type:esql)');
+		expect(esqlAppState).toContain("query:(esql:'FROM logs-*')");
+
+		const esqlGlobalState = decodeURIComponent(esqlUrl.split('&_g=')[1]);
+		expect(esqlGlobalState).toContain('time:(from:now-24h,to:now)');
 
 		comp.isEsql = false;
 		comp.convertedRule = 'some eql query';
@@ -1232,10 +1384,45 @@ test('loadPlaybooks', async () => {
 	"""
 }`;
 		expect(LZString.compressToEncodedURIComponent).toHaveBeenCalledWith(expectedEqlQuery);
+		expect(window.open).toHaveBeenCalledWith(
+			'/kibana/app/dev_tools#/console?load_from=data:text/plain,compressed_query',
+			'_blank'
+		);
 
 		window.open = originalOpen;
 		LZString.compressToEncodedURIComponent = originalCompress;
 		resetPapi();
+	});
+
+	test('formatEsql puts each command on its own line', () => {
+		expect(comp.formatEsql(' from * | where a == 1\n| stats c=count() by d ')).toBe(
+			'from *\n' +
+			'| where a == 1\n' +
+			'| stats c=count() by d');
+
+		// pipes inside strings are not command breaks
+		expect(comp.formatEsql('from * | where m == "a | (b" and n == "q\\"|(" | where o == """x|"(""" | limit 1')).toBe(
+			'from *\n' +
+			'| where m == "a | (b" and n == "q\\"|("\n' +
+			'| where o == """x|"("""\n' +
+			'| limit 1');
+
+		// an unterminated string runs to the end
+		expect(comp.formatEsql('from * | where a == "x | y')).toBe('from *\n| where a == "x | y');
+	});
+
+	test('buildEsqlDiscoverUrl escapes rison special characters', () => {
+		const url = comp.buildEsqlDiscoverUrl(`from * | where process.command_line like "* /priv*" and message == "it's a !bang"`);
+
+		const appState = decodeURIComponent(url.split('_a=')[1].split('&_g=')[0]);
+		expect(appState).toContain(`query:(esql:'from * | where process.command_line like "* /priv*" and message == "it!'s a !!bang"')`);
+	});
+
+	test('buildEsqlDiscoverUrl trims and preserves backslashes', () => {
+		const url = comp.buildEsqlDiscoverUrl('  from * | where ends_with(process.executable.caseless, "\\whoami.exe")  ');
+
+		const appState = decodeURIComponent(url.split('_a=')[1].split('&_g=')[0]);
+		expect(appState).toContain(`query:(esql:'from * | where ends_with(process.executable.caseless, "\\whoami.exe")')`);
 	});
 
 	test('extract elastalert with multi-doc YAML', () => {
@@ -1513,50 +1700,60 @@ name: failed_login
 		expect(comp.extractedLogic).toContain('service: kratos');
 	});
 
-	test('extractElastAlertLogic with correlation in first doc', () => {
+	test('extractLogic lists the rules a correlation refers to', () => {
 		comp.detect = {
 			engine: 'elastalert',
-			content: `title: Multiple Failed SOC Logins From One Source IP In A Short Window
-id: 1a4f6b22-9c07-4d3e-8b51-0e9a7d2c4f88
-status: experimental
-description: |
-  Detects two or more failed SOC logins from
-  the same client IP within 30 seconds.
+			content: `title: Corr
+id: abc123
 correlation:
-    type: event_count
-    rules:
-        - failed_login
-    group-by:
-        - http.request.headers.x-real-ip
-    timespan: 30s
-    condition:
-        gte: 2
-falsepositives:
-    - TBD
-level: medium
+    type: temporal
 ---
-title: Failed SOC Console Login
-id: 0b8e3f51-7a26-4c9d-9f10-3d5b8e6a1c72
-name: failed_login
+title: A
+name: rule_a
 logsource:
-    product: securityonion
-    service: kratos
+    category: test
 detection:
     selection:
-        service_name: 'Ory Kratos'
-        event.action: 'Encountered self-service login error.'
+        a: b
+    condition: selection
+---
+title: B
+id: 22222222-2222-2222-2222-222222222222
+logsource:
+    category: test
+detection:
+    selection:
+        c: d
     condition: selection
 `,
 		};
 
-		comp.extractedLogic = '';
-		comp.extractElastAlertLogic();
+		comp.extractLogic();
 
-		expect(comp.extractedLogic).not.toContain('correlation:');
-		expect(comp.extractedLogic).toContain('type: event_count');
-		expect(comp.extractedLogic).toContain('rules:');
-		expect(comp.extractedLogic).toContain('failed_login');
-		expect(comp.extractedLogic).not.toContain('logsource:');
+		expect(comp.extractedLogic).toBe('');
+		// a rule referenced by id is labelled with its id
+		expect(comp.correlationRules).toEqual([
+			{ title: 'A', name: 'rule_a', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    a: b\n  condition: selection" },
+			{ title: 'B', name: '22222222-2222-2222-2222-222222222222', logic: "logsource:\n  category: test\ndetection:\n  selection:\n    c: d\n  condition: selection" },
+		]);
+
+		comp.detect = {
+			engine: 'elastalert',
+			content: `title: Plain
+id: abc123
+logsource:
+    category: test
+detection:
+    selection:
+        a: b
+    condition: selection
+`,
+		};
+
+		comp.extractLogic();
+
+		expect(comp.correlationRules).toEqual([]);
+		expect(comp.extractedLogic).toContain('a: b');
 	});
 
 	test('extractElastAlertDetection with correlation in first doc', () => {
@@ -1619,3 +1816,15 @@ detection:
 		expect(det).toBeUndefined();
 	});
 
+	test('extractElastAlertSeverity', () => {
+		comp.presets = {
+			severity: { labels: ['unknown', 'informational', 'low', 'medium', 'high', 'critical'] },
+		};
+
+		// correlations often omit level
+		comp.detect = { engine: 'elastalert', content: 'title: x\nid: a' };
+		expect(comp.extractElastAlertSeverity()).toBeUndefined();
+
+		comp.detect = { engine: 'elastalert', content: 'title: x\nlevel: High' };
+		expect(comp.extractElastAlertSeverity()).toBe('high');
+	});

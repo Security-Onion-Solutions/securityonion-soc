@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -290,7 +291,8 @@ func parseAgentsSetting(setting *model.Setting) (map[string]model.Agent, map[str
 			Description:     sa.Description,
 			PersonaAddendum: sa.Persona,
 			// Absent means unchanged, which for a new entry means enabled.
-			Enabled: sa.Enabled == nil || *sa.Enabled,
+			Enabled:                sa.Enabled == nil || *sa.Enabled,
+			MaxConcurrentInstances: max(sa.MaxConcurrentInstances, 0),
 		}
 		if strings.TrimSpace(sa.Model) != "" {
 			mapping[sa.Name] = sa.Model
@@ -344,6 +346,15 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 				"Also acknowledges alerts, escalates to cases, and looks up cases. " +
 				"Objectives must include all identifiers verbatim.",
 		},
+		"AlertTriage": {
+			Name:          "AlertTriage",
+			AllowedSkills: []string{"Hunt", "Playbooks", "Assess", "Notify"},
+			CanDelegateTo: []string{"DetectionEngineer"},
+			Prompt:        prompts["prompt_agent_alert_triage"],
+			Description: "Triages an alert autonomously, without a person in the loop, records its assessment and ends with a report. " +
+				"Sends its own notification; never acknowledges or escalates. " +
+				"Objectives must include all identifiers verbatim.",
+		},
 		"DetectionEngineer": {
 			Name:          "DetectionEngineer",
 			AllowedSkills: []string{"Detections", "Tuning", "Hunt"},
@@ -387,6 +398,16 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 			Name:             "Reports",
 			Tools:            []string{"query_reports", "update_custom_report"},
 			AdditionalPrompt: prompts["prompt_skill_reports"],
+		},
+		"Notify": {
+			Name:             "Notify",
+			Tools:            []string{"send_notification"},
+			AdditionalPrompt: prompts["prompt_skill_notify"],
+		},
+		// The alert triage prompt says when to call it.
+		"Assess": {
+			Name:  "Assess",
+			Tools: []string{recordAssessmentToolName},
 		},
 	}
 
@@ -518,6 +539,7 @@ func (ac *AssistantCoordinator) exposeAgents() {
 	ac.srv.Config.ClientParams.AssistantParams.AgentMapping = mapping
 	ac.srv.Config.ClientParams.AssistantParams.AvailableSkills = ac.exposeSkills()
 	ac.srv.Config.ClientParams.AssistantParams.AvailableTools = ac.exposeToolCatalog()
+	ac.srv.Config.ClientParams.AssistantParams.AvailableAutomationKinds = ac.exposeAutomationKinds()
 	ac.srv.Config.ClientParams.AssistantParams.MaxDelegationDepth = ac.getMaxDelegationDepth()
 	ac.srv.Config.ClientParams.AssistantParams.MaxSubSessionTokens = ac.getMaxSubSessionTokens()
 
@@ -562,6 +584,30 @@ func (ac *AssistantCoordinator) exposeToolCatalog() []string {
 	sort.Strings(tools)
 
 	return tools
+}
+
+// exposeAutomationKinds returns the catalog the "new automation" form is built from.
+// Sorted by name because broadcastAgenticUpdate pushes the whole parameter block to
+// every connected browser, so map order would reshuffle the form on each reload.
+func (ac *AssistantCoordinator) exposeAutomationKinds() []model.AutomationKindDefinition {
+	names := make([]string, 0, len(ac.AutomationKindLibrary))
+	for name := range ac.AutomationKindLibrary {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	kinds := make([]model.AutomationKindDefinition, 0, len(names))
+	for _, name := range names {
+		kind := ac.AutomationKindLibrary[name]
+		kinds = append(kinds, model.AutomationKindDefinition{
+			Name:        kind.GetName(),
+			DisplayName: kind.GetDisplayName(),
+			Description: kind.GetDescription(),
+			ParamSchema: kind.GetParamSchema(),
+		})
+	}
+
+	return kinds
 }
 
 // ErrSystemAgentImmutable is returned when a request tries to delete an agent or
@@ -648,8 +694,17 @@ func (ac *AssistantCoordinator) DeleteAgent(ctx context.Context, name string) er
 		if !removed {
 			return nil, ErrAgentNotFound
 		}
-		return remaining, nil
+		// Otherwise a later agent reusing the name would inherit the delegation.
+		return removeDelegateReferences(remaining, name), nil
 	})
+}
+
+func removeDelegateReferences(agents []model.StoredAgent, name string) []model.StoredAgent {
+	for i := range agents {
+		agents[i].CanDelegateTo = slices.DeleteFunc(agents[i].CanDelegateTo, func(target string) bool { return target == name })
+	}
+
+	return agents
 }
 
 // SaveSkill writes a single skill into the assistant.skills setting.
@@ -718,13 +773,29 @@ func (ac *AssistantCoordinator) DeleteSkill(ctx context.Context, name string) er
 		return ErrSystemAgentImmutable
 	}
 
-	return ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
+	err := ac.updateStoredSkills(ctx, func(skills []model.StoredSkill) ([]model.StoredSkill, error) {
 		remaining, removed := removeByName(skills, name, func(s model.StoredSkill) string { return s.Name })
 		if !removed {
 			return nil, ErrAgentNotFound
 		}
 		return remaining, nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Otherwise a later skill reusing the name would be granted to these agents.
+	return ac.updateStoredAgents(ctx, func(agents []model.StoredAgent) ([]model.StoredAgent, error) {
+		return removeSkillReferences(agents, name), nil
+	})
+}
+
+func removeSkillReferences(agents []model.StoredAgent, name string) []model.StoredAgent {
+	for i := range agents {
+		agents[i].AllowedSkills = slices.DeleteFunc(agents[i].AllowedSkills, func(granted string) bool { return granted == name })
+	}
+
+	return agents
 }
 
 // updateStoredAgents applies mutate to the stored agent list and writes it back.
@@ -769,7 +840,7 @@ func (ac *AssistantCoordinator) updateStoredSkills(ctx context.Context, mutate f
 // absent or empty setting leaves out empty.
 func (ac *AssistantCoordinator) readStoredSetting(ctx context.Context, settingID string, out any) error {
 	if ac.srv.Configstore == nil {
-		return errors.New("ERROR_CONFIGSTORE_UNAVAILABLE")
+		return ErrConfigstoreUnavailable
 	}
 
 	settings, err := ac.srv.Configstore.GetSettings(ctx, true)

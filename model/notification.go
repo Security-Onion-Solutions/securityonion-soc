@@ -7,8 +7,30 @@
 package model
 
 import (
+	"errors"
+	"regexp"
 	"time"
 )
+
+const (
+	MAX_DESTINATION_ID_LEN   = 40
+	MAX_DESTINATION_NAME_LEN = 50
+)
+
+var destinationIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
+// IsValidDestinationID validates that a destination ID contains only safe alphanumeric, underscore, hyphen, or dot characters and does not exceed the maximum allowed length.
+func IsValidDestinationID(id string) bool {
+	return id != "" && len(id) <= MAX_DESTINATION_ID_LEN && destinationIDRegex.MatchString(id)
+}
+
+// ValidateDestinationName verifies that the given destination name does not exceed the maximum allowed length.
+func ValidateDestinationName(name string) error {
+	if len(name) > MAX_DESTINATION_NAME_LEN {
+		return errors.New("destination name exceeds maximum allowed length")
+	}
+	return nil
+}
 
 const (
 	NotificationSeverityInfo     = "info"
@@ -21,14 +43,36 @@ const (
 	SourceMetric    = "metric"
 	SourceAgentAI   = "agent_ai"
 	SourceReport    = "report"
+	SourcePcap      = "pcap"
+	SourceClient    = "client"
 
 	AttachmentModeLink   = "link"
 	AttachmentModeAttach = "attach"
 	AttachmentModeBoth   = "both"
 
 	DefaultDestinationSOCBell = "soc-bell"
-	ChannelTypeSOC            = "soc"
 )
+
+// DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
+// The Name field is left empty so the client side can determine the localized display name.
+func DefaultDestinationSOCBellConfig() DestinationConfig {
+	enableRecipients := true
+	return DestinationConfig{
+		ID:                  DefaultDestinationSOCBell,
+		Name:                "",
+		Type:                "soc",
+		Enabled:             true,
+		RecipientsSupported: true,
+		EnableRecipients:    &enableRecipients,
+	}
+}
+
+// DefaultDestinationsMap returns a map containing the default SOC Bell destination.
+func DefaultDestinationsMap() map[string]DestinationConfig {
+	return map[string]DestinationConfig{
+		DefaultDestinationSOCBell: DefaultDestinationSOCBellConfig(),
+	}
+}
 
 // @Description Attachment represents a file or graph payload to be sent with a notification.
 type Attachment struct {
@@ -47,7 +91,7 @@ type NotificationPayload struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap,client"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
@@ -64,6 +108,18 @@ type NotificationPayload struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	// Unique key used for duration silencing and debouncing.
 	SilenceKey string `json:"silenceKey,omitempty" example:"detection:sigma:12345:192.168.1.100"`
+	// Optional recipient user IDs targeted to receive this notification. When empty, broadcasts to all authorized users.
+	Recipients []string `json:"recipients,omitempty" example:"user-1,user-2"`
+	// Optional flag indicating whether destination activation schedules should be bypassed.
+	BypassSchedules bool `json:"bypassSchedules,omitempty" example:"true"`
+}
+
+// GetRecipients returns the targeted recipient list for this notification payload.
+func (p *NotificationPayload) GetRecipients() []string {
+	if p == nil {
+		return nil
+	}
+	return p.Recipients
 }
 
 // @Description SilenceParams specifies duration silencing parameters for debouncing alerts.
@@ -78,13 +134,56 @@ type SilenceParams struct {
 
 // @Description DestinationConfig defines the configuration for an individual notification destination channel.
 type DestinationConfig struct {
-	// Human-readable display name for this destination.
+	// The unique identifier for this destination (optional in config map, populated in API responses; max 40 characters).
+	ID string `json:"id,omitempty" example:"soc-bell"`
+	// Human-readable display name for this destination (max 50 characters).
 	Name string `json:"name" example:"SOC Notification Bell"`
-	// The channel driver type (e.g. soc, smtp, slack, matrix, msteams, pagerduty, webhook).
-	Type string `json:"type" example:"soc" enums:"soc,smtp,slack,matrix,msteams,pagerduty,webhook"`
+	// The channel driver type (e.g. soc, smtp, slack_webhook, matrix_hookshot_webhook, generic_webhook).
+	Type string `json:"type" example:"soc" enums:"soc,smtp,slack_webhook,matrix_hookshot_webhook,generic_webhook"`
 	// Indicates whether this destination is currently active and receiving alerts.
 	Enabled bool `json:"enabled" example:"true"`
-	// Channel-specific driver parameters (e.g. webhook URLs, hostnames, credentials).
+	// The IDs of the reusable activation schedules linked to this destination.
+	ScheduleIDs []string `json:"scheduleIds,omitempty" example:"after-hours,weekends"`
+	// Optional list of severities to limit notifications to (e.g. ["high", "critical"]). If empty, all severities are allowed.
+	Severities []string `json:"severities,omitempty" example:"high,critical"`
+	// Indicates whether the underlying channel driver supports recipient targeting (populated in API responses).
+	RecipientsSupported bool `json:"recipientsSupported,omitempty" example:"true"`
+	// Indicates whether the underlying channel driver supports attachments (populated in API responses).
+	AttachmentsSupported bool `json:"attachmentsSupported,omitempty" example:"true"`
+	// Indicates whether the underlying channel driver supports deep links (populated in API responses).
+	LinksSupported bool `json:"linksSupported,omitempty" example:"true"`
+	// For drivers that support recipient targeting, whether targeting is enabled (defaults to true for SOC).
+	EnableRecipients *bool `json:"enableRecipients,omitempty" example:"true"`
+	// When recipient targeting is not supported or disabled, whether to skip sending targeted notifications.
+	SkipIfRecipients bool `json:"skipIfRecipients,omitempty" example:"false"`
+	// Channel-specific driver parameters:
+	//   - "soc":
+	//       * "storeInPostgres" (bool): Persist notifications in PostgreSQL.
+	//       * "attachmentMode" (string): "link", "attach", or "both".
+	//   - "smtp":
+	//       * "host" (string, required): SMTP server hostname or IP address.
+	//       * "port" (int): SMTP server port (default 25, 587, or 465).
+	//       * "from" (string, required): Sender email address (e.g., "alerts@example.com").
+	//       * "to" ([]string): Default recipient email addresses.
+	//       * "username" (string): SMTP authentication username.
+	//       * "password" (string): SMTP authentication password.
+	//       * "useTls" (bool): Use TLS / STARTTLS.
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//       * "authType" (string): Auth mechanism ("plain", "login", "cram-md5").
+	//       * "attachmentMode" (string): "both", "attach", or "link" (default "both").
+	//   - "slack_webhook":
+	//       * "webhookUrl" (string, required): Slack Incoming Webhook URL (e.g., "https://hooks.slack.com/services/...").
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//   - "matrix_hookshot_webhook":
+	//       * "webhookUrl" (string, required): Matrix Hookshot webhook URL (e.g., "https://matrix.example.com/_matrix/hookshot/...").
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
+	//   - "generic_webhook":
+	//       * "webhookUrl" (string, required): HTTP or HTTPS webhook destination URL.
+	//       * "format" (string): Payload format ("generic", "slack", or "matrix_hookshot", default "generic").
+	//       * "method" (string): HTTP method (default "POST").
+	//       * "headers" (map[string]string): Custom HTTP headers.
+	//       * "timeoutSeconds" (int): Request timeout in seconds (default 15).
+	//       * "insecureSkipVerify" (bool): Skip TLS certificate verification.
 	Params map[string]interface{} `json:"params,omitempty"`
 }
 
@@ -92,10 +191,14 @@ type DestinationConfig struct {
 type NotificationConfig struct {
 	// Indicates whether the notification subsystem is globally enabled.
 	Enabled bool `json:"enabled" example:"true"`
-	// The list of default destination names used when no specific destination is requested.
-	DefaultDestinations []string `json:"defaultDestinations" example:"soc-bell"`
 	// Global silence window in seconds applied to debounced notifications.
 	GlobalSilenceWindowSeconds int `json:"globalSilenceWindowSeconds" example:"300"`
+	// Number of days to retain dismissed notifications before daily background pruning.
+	DismissedPruneDays int `json:"dismissedPruneDays" example:"30"`
+	// Maximum number of notifications returned to clients in list queries.
+	MaxListLimit int `json:"maxListLimit,omitempty" example:"500"`
+	// Connection timeout in seconds for outbound notification dispatches.
+	ConnectionTimeoutSeconds int `json:"connectionTimeoutSeconds,omitempty" example:"15"`
 	// Map of configured notification destinations keyed by destination identifier.
 	Destinations map[string]DestinationConfig `json:"destinations,omitempty"`
 }
@@ -105,7 +208,7 @@ type NotificationRecord struct {
 	// The unique identifier for this notification.
 	ID string `json:"id" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
 	// The source subsystem that originated this notification.
-	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report"`
+	Source string `json:"source" example:"detection" enums:"detection,metric,agent_ai,report,pcap,client"`
 	// The brief title or headline of the notification.
 	Title string `json:"title" example:"ET SCAN Potential SSH Scan"`
 	// A human-readable summary describing the notification details.
@@ -130,6 +233,8 @@ type NotificationRecord struct {
 	IsDismissed bool `json:"isDismissed" example:"false"`
 	// The timestamp when the notification was dismissed.
 	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+	// Optional recipient user IDs targeted to receive this notification.
+	Recipients []string `json:"recipients,omitempty" example:"user-1,user-2"`
 }
 
 // @Description NotificationAuditEntry represents a user view or dismissal audit state record.
@@ -144,4 +249,14 @@ type NotificationAuditEntry struct {
 	IsDismissed bool `json:"isDismissed" example:"false"`
 	// The timestamp when this user dismissed the notification.
 	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
+}
+
+// @Description NotificationListResponse contains the list of notifications and truncation metadata.
+type NotificationListResponse struct {
+	// List of notifications matching the query.
+	Notifications []*NotificationRecord `json:"notifications"`
+	// Indicates whether the notification list was truncated because additional notifications were available beyond the limit.
+	Truncated bool `json:"truncated" example:"false"`
+	// The total count of notifications returned in this response.
+	Count int `json:"count" example:"500"`
 }

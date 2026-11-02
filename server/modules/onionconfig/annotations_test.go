@@ -8,6 +8,7 @@ package onionconfig
 import (
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -67,5 +68,35 @@ func TestHydrateAnnotations_OtherTypesFormattedToString(t *testing.T) {
 
 	assert.Equal(t, "true", annotations["myapp.bool_def"]["default"])
 	assert.Equal(t, "123", annotations["myapp.int_def"]["default"])
+}
+
+func TestHydrateAnnotations_FileDisablesDuplicates(t *testing.T) {
+	annotations := map[string]map[string]interface{}{
+		"myapp.file_dup": {
+			"description": "Test file with duplicates",
+			"file":        true,
+			"duplicates":  true,
+		},
+	}
+	defaults := map[string]interface{}{}
+
+	HydrateAnnotations(annotations, defaults, nil)
+
+	assert.False(t, annotations["myapp.file_dup"]["duplicates"].(bool))
+}
+
+func TestApplyAnnotations_FileDisablesDuplicates(t *testing.T) {
+	ann := map[string]interface{}{
+		"file":       true,
+		"duplicates": true,
+	}
+	setting := &model.Setting{
+		Id: "myapp.test_file",
+	}
+
+	ApplyAnnotations(setting, ann, nil)
+
+	assert.True(t, setting.File)
+	assert.False(t, setting.Duplicates)
 }
 

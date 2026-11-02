@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	RULESET_CUSTOM           = "__custom__"
-	MAX_OVERRIDE_NOTE_LENGTH = 150
+	RULESET_CUSTOM              = "__custom__"
+	MAX_OVERRIDE_NOTE_LENGTH    = 150
+	DEFAULT_SIGMA_PIPELINES_DIR = "/opt/sensoroni/sigma_pipelines"
 )
 
 type Detectionstore interface {

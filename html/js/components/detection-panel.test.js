@@ -8,6 +8,20 @@ require('./detection-panel.js');
 
 let comp;
 
+const correlationContent = `---
+id: test-123
+description: Correlation Description
+correlation:
+  type: event_count
+  rules:
+    - base_rule
+---
+name: base_rule
+description: Base Description
+detection:
+  condition: selection
+`;
+
 beforeEach(() => {
   resetPapi();
   comp = getComponent("DetectionPanel");
@@ -50,6 +64,14 @@ test('extractSummary for ElastAlert with YAML description', () => {
   comp.detection.content = 'description: Test Description\ndetection:\n  condition: selection';
   comp.prepareDetection();
   expect(comp.extractedSummary).toBe('Test Description');
+});
+
+test('extractSummary for ElastAlert correlation reads the correlation document', () => {
+  comp.detection.engine = 'elastalert';
+  comp.detection.language = 'sigma';
+  comp.detection.content = correlationContent;
+  comp.prepareDetection();
+  expect(comp.extractedSummary).toBe('Correlation Description');
 });
 
 test('extractSummary for ElastAlert with description field', () => {
@@ -241,6 +263,14 @@ test('validateElastAlert success', () => {
   comp.detection.engine = 'elastalert';
   comp.detection.publicId = 'test-123';
   comp.detection.content = 'id: test-123\ndetection:\n  condition: selection';
+  expect(comp.validateElastAlert()).toBeNull();
+});
+
+test('validateElastAlert correlation', () => {
+  comp.detection.language = 'sigma';
+  comp.detection.engine = 'elastalert';
+  comp.detection.publicId = 'test-123';
+  comp.detection.content = correlationContent;
   expect(comp.validateElastAlert()).toBeNull();
 });
 

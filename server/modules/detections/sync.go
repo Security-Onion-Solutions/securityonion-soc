@@ -43,6 +43,16 @@ type SyncSchedulerParams struct {
 	CommunityRulesImportFrequencySeconds int
 	CommunityRulesImportErrorSeconds     int
 	FirstImportDelaySeconds              int
+	PartialSyncTimeoutSeconds            int
+	BulkSyncTimeoutSeconds               int
+}
+
+func (p *SyncSchedulerParams) PartialSyncTimeout() time.Duration {
+	return time.Duration(p.PartialSyncTimeoutSeconds) * time.Second
+}
+
+func (p *SyncSchedulerParams) BulkSyncTimeout() time.Duration {
+	return time.Duration(p.BulkSyncTimeoutSeconds) * time.Second
 }
 
 func SyncScheduler(ctx context.Context, detStore TemplateChecker, e DetailedDetectionEngine, syncParams *SyncSchedulerParams, engineState *model.EngineState, engName model.EngineName, isRunning *bool) {

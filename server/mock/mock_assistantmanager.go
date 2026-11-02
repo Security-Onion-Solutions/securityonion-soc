@@ -42,6 +42,35 @@ func (m *MockAssistantManager) EXPECT() *MockAssistantManagerMockRecorder {
 	return m.recorder
 }
 
+// AcquireTurnSlot mocks base method.
+func (m *MockAssistantManager) AcquireTurnSlot(ctx context.Context, sessionId, selector string) (func(), error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AcquireTurnSlot", ctx, sessionId, selector)
+	ret0, _ := ret[0].(func())
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AcquireTurnSlot indicates an expected call of AcquireTurnSlot.
+func (mr *MockAssistantManagerMockRecorder) AcquireTurnSlot(ctx, sessionId, selector any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireTurnSlot", reflect.TypeOf((*MockAssistantManager)(nil).AcquireTurnSlot), ctx, sessionId, selector)
+}
+
+// AttachInvestigation mocks base method.
+func (m *MockAssistantManager) AttachInvestigation(ctx context.Context, socId, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttachInvestigation", ctx, socId, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AttachInvestigation indicates an expected call of AttachInvestigation.
+func (mr *MockAssistantManagerMockRecorder) AttachInvestigation(ctx, socId, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).AttachInvestigation), ctx, socId, sessionId)
+}
+
 // Balance mocks base method.
 func (m *MockAssistantManager) Balance(ctx context.Context, aiModel string) (*model.BalanceResponse, error) {
 	m.ctrl.T.Helper()
@@ -89,6 +118,21 @@ func (mr *MockAssistantManagerMockRecorder) ChatStreamInSession(ctx, incMsg, ent
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChatStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ChatStreamInSession), ctx, incMsg, entityType, entityId)
 }
 
+// CloneSessionOntoAlert mocks base method.
+func (m *MockAssistantManager) CloneSessionOntoAlert(ctx context.Context, sessionId, socId string) (*model.AssistantSession, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CloneSessionOntoAlert", ctx, sessionId, socId)
+	ret0, _ := ret[0].(*model.AssistantSession)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CloneSessionOntoAlert indicates an expected call of CloneSessionOntoAlert.
+func (mr *MockAssistantManagerMockRecorder) CloneSessionOntoAlert(ctx, sessionId, socId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CloneSessionOntoAlert", reflect.TypeOf((*MockAssistantManager)(nil).CloneSessionOntoAlert), ctx, sessionId, socId)
+}
+
 // DeleteAgent mocks base method.
 func (m *MockAssistantManager) DeleteAgent(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
@@ -103,6 +147,20 @@ func (mr *MockAssistantManagerMockRecorder) DeleteAgent(ctx, name any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAgent", reflect.TypeOf((*MockAssistantManager)(nil).DeleteAgent), ctx, name)
 }
 
+// DeleteAutomation mocks base method.
+func (m *MockAssistantManager) DeleteAutomation(ctx context.Context, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAutomation", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAutomation indicates an expected call of DeleteAutomation.
+func (mr *MockAssistantManagerMockRecorder) DeleteAutomation(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAutomation", reflect.TypeOf((*MockAssistantManager)(nil).DeleteAutomation), ctx, id)
+}
+
 // DeleteSkill mocks base method.
 func (m *MockAssistantManager) DeleteSkill(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
@@ -115,6 +173,34 @@ func (m *MockAssistantManager) DeleteSkill(ctx context.Context, name string) err
 func (mr *MockAssistantManagerMockRecorder) DeleteSkill(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSkill", reflect.TypeOf((*MockAssistantManager)(nil).DeleteSkill), ctx, name)
+}
+
+// DetachInvestigation mocks base method.
+func (m *MockAssistantManager) DetachInvestigation(ctx context.Context, socId, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachInvestigation", ctx, socId, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachInvestigation indicates an expected call of DetachInvestigation.
+func (mr *MockAssistantManagerMockRecorder) DetachInvestigation(ctx, socId, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).DetachInvestigation), ctx, socId, sessionId)
+}
+
+// DetachSessionInvestigation mocks base method.
+func (m *MockAssistantManager) DetachSessionInvestigation(ctx context.Context, sessionId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachSessionInvestigation", ctx, sessionId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachSessionInvestigation indicates an expected call of DetachSessionInvestigation.
+func (mr *MockAssistantManagerMockRecorder) DetachSessionInvestigation(ctx, sessionId any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachSessionInvestigation", reflect.TypeOf((*MockAssistantManager)(nil).DetachSessionInvestigation), ctx, sessionId)
 }
 
 // Embed mocks base method.
@@ -147,6 +233,85 @@ func (mr *MockAssistantManagerMockRecorder) ExecuteTool(ctx, toolName, toolReq a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecuteTool", reflect.TypeOf((*MockAssistantManager)(nil).ExecuteTool), ctx, toolName, toolReq)
 }
 
+// FilterEvents mocks base method.
+func (m *MockAssistantManager) FilterEvents(events []*model.EventRecord, extraFields ...string) []map[string]any {
+	m.ctrl.T.Helper()
+	varargs := []any{events}
+	for _, a := range extraFields {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FilterEvents", varargs...)
+	ret0, _ := ret[0].([]map[string]any)
+	return ret0
+}
+
+// FilterEvents indicates an expected call of FilterEvents.
+func (mr *MockAssistantManagerMockRecorder) FilterEvents(events any, extraFields ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{events}, extraFields...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterEvents", reflect.TypeOf((*MockAssistantManager)(nil).FilterEvents), varargs...)
+}
+
+// GetAutomation mocks base method.
+func (m *MockAssistantManager) GetAutomation(ctx context.Context, id string) (*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomation", ctx, id)
+	ret0, _ := ret[0].(*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomation indicates an expected call of GetAutomation.
+func (mr *MockAssistantManagerMockRecorder) GetAutomation(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomation", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomation), ctx, id)
+}
+
+// GetAutomationActivity mocks base method.
+func (m *MockAssistantManager) GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationActivity", ctx)
+	ret0, _ := ret[0].(*model.AutomationActivity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationActivity indicates an expected call of GetAutomationActivity.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationActivity(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationActivity", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationActivity), ctx)
+}
+
+// GetAutomationRunDetails mocks base method.
+func (m *MockAssistantManager) GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationRunDetails", ctx, automationId, runId, alertLimit)
+	ret0, _ := ret[0].(*model.AutomationRunDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationRunDetails indicates an expected call of GetAutomationRunDetails.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationRunDetails(ctx, automationId, runId, alertLimit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationRunDetails", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationRunDetails), ctx, automationId, runId, alertLimit)
+}
+
+// GetAutomationRunHistory mocks base method.
+func (m *MockAssistantManager) GetAutomationRunHistory(ctx context.Context, automationId string, limit, offset int) (*model.AutomationRunHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAutomationRunHistory", ctx, automationId, limit, offset)
+	ret0, _ := ret[0].(*model.AutomationRunHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAutomationRunHistory indicates an expected call of GetAutomationRunHistory.
+func (mr *MockAssistantManagerMockRecorder) GetAutomationRunHistory(ctx, automationId, limit, offset any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAutomationRunHistory", reflect.TypeOf((*MockAssistantManager)(nil).GetAutomationRunHistory), ctx, automationId, limit, offset)
+}
+
 // Health mocks base method.
 func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*model.HealthResponse, error) {
 	m.ctrl.T.Helper()
@@ -160,6 +325,36 @@ func (m *MockAssistantManager) Health(ctx context.Context, aiModel string) (*mod
 func (mr *MockAssistantManagerMockRecorder) Health(ctx, aiModel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockAssistantManager)(nil).Health), ctx, aiModel)
+}
+
+// ListAutomationRuns mocks base method.
+func (m *MockAssistantManager) ListAutomationRuns(ctx context.Context, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAutomationRuns", ctx, filter)
+	ret0, _ := ret[0].(*model.AutomationRunPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAutomationRuns indicates an expected call of ListAutomationRuns.
+func (mr *MockAssistantManagerMockRecorder) ListAutomationRuns(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAutomationRuns", reflect.TypeOf((*MockAssistantManager)(nil).ListAutomationRuns), ctx, filter)
+}
+
+// ListAutomations mocks base method.
+func (m *MockAssistantManager) ListAutomations(ctx context.Context) ([]*model.Automation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAutomations", ctx)
+	ret0, _ := ret[0].([]*model.Automation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAutomations indicates an expected call of ListAutomations.
+func (mr *MockAssistantManagerMockRecorder) ListAutomations(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAutomations", reflect.TypeOf((*MockAssistantManager)(nil).ListAutomations), ctx)
 }
 
 // ListMemories mocks base method.
@@ -206,6 +401,21 @@ func (mr *MockAssistantManagerMockRecorder) ResolveDelegationStream(ctx, childSe
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveDelegationStream", reflect.TypeOf((*MockAssistantManager)(nil).ResolveDelegationStream), ctx, childSession, childFinalText)
 }
 
+// RunAgentSession mocks base method.
+func (m *MockAssistantManager) RunAgentSession(ctx context.Context, req *model.AgentSessionRequest) (*model.AgentSessionResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunAgentSession", ctx, req)
+	ret0, _ := ret[0].(*model.AgentSessionResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunAgentSession indicates an expected call of RunAgentSession.
+func (mr *MockAssistantManagerMockRecorder) RunAgentSession(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAgentSession", reflect.TypeOf((*MockAssistantManager)(nil).RunAgentSession), ctx, req)
+}
+
 // SaveAgent mocks base method.
 func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error {
 	m.ctrl.T.Helper()
@@ -218,6 +428,20 @@ func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName strin
 func (mr *MockAssistantManagerMockRecorder) SaveAgent(ctx, originalName, agent any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveAgent", reflect.TypeOf((*MockAssistantManager)(nil).SaveAgent), ctx, originalName, agent)
+}
+
+// SaveAutomation mocks base method.
+func (m *MockAssistantManager) SaveAutomation(ctx context.Context, automation *model.Automation) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveAutomation", ctx, automation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveAutomation indicates an expected call of SaveAutomation.
+func (mr *MockAssistantManagerMockRecorder) SaveAutomation(ctx, automation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveAutomation", reflect.TypeOf((*MockAssistantManager)(nil).SaveAutomation), ctx, automation)
 }
 
 // SaveMemory mocks base method.
@@ -317,4 +541,18 @@ func (m *MockAssistantManager) ToolStreamInSession(ctx context.Context, toolReq 
 func (mr *MockAssistantManagerMockRecorder) ToolStreamInSession(ctx, toolReq, toolName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ToolStreamInSession), ctx, toolReq, toolName)
+}
+
+// ValidateAgentSessionRequest mocks base method.
+func (m *MockAssistantManager) ValidateAgentSessionRequest(req *model.AgentSessionRequest) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateAgentSessionRequest", req)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ValidateAgentSessionRequest indicates an expected call of ValidateAgentSessionRequest.
+func (mr *MockAssistantManagerMockRecorder) ValidateAgentSessionRequest(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAgentSessionRequest", reflect.TypeOf((*MockAssistantManager)(nil).ValidateAgentSessionRequest), req)
 }

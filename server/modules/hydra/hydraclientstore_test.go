@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,4 +31,19 @@ func TestUnauthorized(tester *testing.T) {
 	client, err := clientStore.GetClient(context.Background(), "some-id")
 	assert.Nil(tester, err)
 	assert.Nil(tester, client)
+
+	// Another client lookup fails with unauthorized
+	_, err = clientStore.GetClientById(context.Background(), "other-client")
+	assert.NotNil(tester, err)
+}
+
+func TestGetClientById_SelfLookup(tester *testing.T) {
+	clientStore := NewHydraClientstore(server.NewFakeUnauthorizedServer())
+
+	// Self lookup does not fail CheckAuthorized (fails on uninitialized hydra client instead of auth)
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "my-client")
+	_, err := clientStore.GetClientById(ctx, "my-client")
+	if err != nil {
+		assert.NotEqual(tester, "unauthorized", err.Error())
+	}
 }

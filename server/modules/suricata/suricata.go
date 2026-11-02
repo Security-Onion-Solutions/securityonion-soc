@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -32,7 +31,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 	"github.com/security-onion-solutions/securityonion-soc/util"
-	"golang.org/x/mod/semver"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
@@ -59,13 +57,14 @@ const (
 	DEFAULT_COMMUNITY_RULES_IMPORT_ERROR_SECS     = 300
 	DEFAULT_FIRST_IMPORT_DELAY_SECONDS            = 60
 	DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS     = 600
+	DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS          = 300
+	DEFAULT_BULK_SYNC_TIMEOUT_SECONDS             = 1800
 	DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS      = 15
 	DEFAULT_AI_REPO                               = "https://github.com/Security-Onion-Solutions/securityonion-resources"
 	DEFAULT_AI_REPO_BRANCH                        = "generated-summaries-published"
 	DEFAULT_AI_REPO_PATH                          = "/opt/sensoroni/ai_summary_repos"
 	DEFAULT_SHOW_AI_SUMMARIES                     = true
 	DEFAULT_AUTO_UPDATE_ENABLED                   = false
-	DEFAULT_MIGRATIONS_DIR                        = "/opt/so/conf/soc/migrations/"
 	DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT    = 10
 )
 
@@ -158,6 +157,7 @@ type SuricataEngine struct {
 	configChangeSyncDelaySeconds   int
 	isRunning                      bool
 	interm                         sync.Mutex
+	syncMu                         sync.Mutex
 	notify                         bool
 	migrations                     map[string]func(string) error
 	rulesetSources                 []*RulesetSource
@@ -228,6 +228,8 @@ func (e *SuricataEngine) Init(config module.ModuleConfig) (err error) {
 	e.FirstImportDelaySeconds = module.GetIntDefault(config, "firstImportDelaySeconds", DEFAULT_FIRST_IMPORT_DELAY_SECONDS)
 	e.failAfterConsecutiveErrorCount = module.GetIntDefault(config, "failAfterConsecutiveErrorCount", DEFAULT_FAIL_AFTER_CONSECUTIVE_ERROR_COUNT)
 	e.IntegrityCheckerData.FrequencySeconds = module.GetIntDefault(config, "integrityCheckFrequencySeconds", DEFAULT_INTEGRITY_CHECK_FREQUENCY_SECONDS)
+	e.PartialSyncTimeoutSeconds = module.GetIntDefault(config, "partialSyncTimeoutSeconds", DEFAULT_PARTIAL_SYNC_TIMEOUT_SECONDS)
+	e.BulkSyncTimeoutSeconds = module.GetIntDefault(config, "bulkSyncTimeoutSeconds", DEFAULT_BULK_SYNC_TIMEOUT_SECONDS)
 	e.configChangeSyncDelaySeconds = module.GetIntDefault(config, "configChangeSyncDelaySeconds", DEFAULT_CONFIG_CHANGE_SYNC_DELAY_SECONDS)
 	e.autoUpdateEnabled = module.GetBoolDefault(config, "autoUpdateEnabled", DEFAULT_AUTO_UPDATE_ENABLED)
 
@@ -425,6 +427,9 @@ func (e *SuricataEngine) SyncLocalDetections(ctx context.Context, detections []*
 
 // RegenerateRuleFiles regenerates all rule files from current Elasticsearch state.
 func (e *SuricataEngine) RegenerateRuleFiles(ctx context.Context, changedDetections []*model.Detection) (errMap map[string]string, err error) {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
 	logger := e.logger().WithFields(log.Fields{
 		"changedCount": len(changedDetections),
 		"operation":    "regenerateRuleFiles",
@@ -539,6 +544,48 @@ func (e *SuricataEngine) RegenerateRuleFiles(ctx context.Context, changedDetecti
 		"operation":  "regenerateRuleFiles",
 	}).Info("successfully regenerated rule files")
 	return nil, nil
+}
+
+// serialized with RegenerateRuleFiles, which writes the same files
+func (e *SuricataEngine) writeRuleFiles(allDetections []*model.Detection, logger *log.Entry) error {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	// Apply user state from Elasticsearch (enable/disable, overrides)
+	if err := e.applyUserState(e.srv.Context, allDetections); err != nil {
+		return e.handleSyncError(err, "failed to apply user state", logger)
+	}
+
+	// Resolve flowbit dependencies
+	// This identifies disabled rules that need to be active for flowbits
+	// IMPORTANT: Does NOT modify det.IsEnabled - that preserves user intent
+	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
+
+	if len(e.flowbitRequired) > 0 {
+		sampleSIDs := make([]string, 0, min(10, len(e.flowbitRequired)))
+		for sid := range e.flowbitRequired {
+			if len(sampleSIDs) >= 10 {
+				break
+			}
+			sampleSIDs = append(sampleSIDs, sid)
+		}
+		logger.WithFields(log.Fields{
+			"requiredCount": len(e.flowbitRequired),
+			"sampleSIDs":    sampleSIDs,
+		}).Info("identified disabled rules needed for flowbit dependencies")
+	}
+
+	// Write rules directly to Suricata format
+	if err := e.writeAllRulesFile(allDetections); err != nil {
+		return e.handleSyncError(err, "failed to write all-rulesets.rules file", logger)
+	}
+
+	// Write threshold configuration
+	if err := e.writeThresholdFile(allDetections); err != nil {
+		return e.handleSyncError(err, "failed to write threshold file", logger)
+	}
+
+	return nil
 }
 
 // Rule processing
@@ -709,38 +756,8 @@ func (e *SuricataEngine) Sync(logger *log.Entry, forceSync bool) error {
 
 	allDetections := mergeResult.Detections
 
-	// Apply user state from Elasticsearch (enable/disable, overrides)
-	if err := e.applyUserState(e.srv.Context, allDetections); err != nil {
-		return e.handleSyncError(err, "failed to apply user state", logger)
-	}
-
-	// Resolve flowbit dependencies
-	// This identifies disabled rules that need to be active for flowbits
-	// IMPORTANT: Does NOT modify det.IsEnabled - that preserves user intent
-	e.flowbitRequired = e.flowbitResolver.ResolveFlowbitDependencies(allDetections)
-
-	if len(e.flowbitRequired) > 0 {
-		sampleSIDs := make([]string, 0, min(10, len(e.flowbitRequired)))
-		for sid := range e.flowbitRequired {
-			if len(sampleSIDs) >= 10 {
-				break
-			}
-			sampleSIDs = append(sampleSIDs, sid)
-		}
-		logger.WithFields(log.Fields{
-			"requiredCount": len(e.flowbitRequired),
-			"sampleSIDs":    sampleSIDs,
-		}).Info("identified disabled rules needed for flowbit dependencies")
-	}
-
-	// Write rules directly to Suricata format
-	if err := e.writeAllRulesFile(allDetections); err != nil {
-		return e.handleSyncError(err, "failed to write all-rulesets.rules file", logger)
-	}
-
-	// Write threshold configuration
-	if err := e.writeThresholdFile(allDetections); err != nil {
-		return e.handleSyncError(err, "failed to write threshold file", logger)
+	if err := e.writeRuleFiles(allDetections, logger); err != nil {
+		return err
 	}
 
 	// Update detection store with bulk indexer
@@ -1530,72 +1547,7 @@ func (e *SuricataEngine) executeRuleDeletion(
 }
 
 func (e *SuricataEngine) checkForMigrations() {
-	e.logger().Info("checking for suricata migrations")
-
-	migrationFinder := regexp.MustCompile(`^suricata-migration-(.*)$`)
-
-	migDir := DEFAULT_MIGRATIONS_DIR
-
-	items, err := e.ReadDir(migDir)
-	if err != nil {
-		e.logger().WithError(err).Error("unable to read directory")
-		return
-	}
-
-	migStates := map[string]string{} // map[semver]stateFilePath
-	versions := []string{}
-
-	// discover and read the state files
-	for _, item := range items {
-		if item.IsDir() {
-			continue
-		}
-
-		matches := migrationFinder.FindStringSubmatch(item.Name())
-		if matches == nil {
-			continue
-		}
-
-		ver := matches[1]
-
-		path := filepath.Join(migDir, item.Name())
-		migStates[ver] = path
-		versions = append(versions, ver)
-	}
-
-	// attempt to apply migrations in order
-	semver.Sort(versions)
-
-	if len(versions) == 0 {
-		e.logger().Info("no suricata migrations found")
-	} else {
-		e.logger().WithField("migrationCount", len(versions)).Info("found suricata migrations")
-	}
-
-	for _, key := range versions {
-		e.EngineState.Migrating = true
-
-		state := migStates[key]
-
-		migFunc, ok := e.migrations[key]
-		if !ok {
-			e.logger().WithField("migrationVersion", key).Error("migration function not found")
-			continue
-		}
-
-		e.logger().WithField("migrationVersion", key).Info("attempting migration")
-
-		err := migFunc(state)
-		if err != nil {
-			e.logger().WithError(err).WithField("migrationVersion", key).Error("unable to apply migration, halting migrations")
-			e.EngineState.MigrationFailure = true
-			break
-		}
-	}
-
-	e.EngineState.Migrating = false
-
-	e.logger().Info("done checking for suricata migrations")
+	detections.RunMigrations(e.IOManager, model.EngineNameSuricata, e.migrations, &e.EngineState)
 }
 
 func (e *SuricataEngine) readFingerprint(path string) (fingerprint *string, ok bool, err error) {

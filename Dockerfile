@@ -6,7 +6,7 @@
 
 ARG SO_BASE
 
-FROM ghcr.io/security-onion-solutions/golang:1.26.4-alpine AS builder
+FROM ghcr.io/security-onion-solutions/golang:1.27.3-alpine AS builder
 ARG VERSION=0.0.0
 ARG ALT_BRANCH=3/dev
 ARG REVKEYS=
@@ -53,7 +53,9 @@ RUN dnf install -y --nodocs wget tcpdump unzip git gcc python3.14 python3.14-dev
     dnf clean all
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python3 && ln -s /usr/bin/pip3.14 /usr/local/bin/pip3
 RUN ln -s /usr/bin/python3.14 /usr/local/bin/python && ln -s /usr/bin/pip3.14 /usr/local/bin/pip
-RUN pip3 install pysigma==1.4.0 sigma-cli==3.0.2 pysigma-backend-elasticsearch pysigma-pipeline-windows
+ARG PYSIGMA_ES_REF=esql-refactor
+RUN pip3 install pysigma==1.5.1 sigma-cli==3.0.2 pysigma-pipeline-windows==2.0.0 \
+    "pysigma-backend-elasticsearch @ git+https://github.com/Security-Onion-Solutions/pySigma-backend-elasticsearch.git@${PYSIGMA_ES_REF}"
 ADD dep/pysigma_backend_securityonion-1.0.0-py3-none-any.whl /tmp
 RUN pip3 install /tmp/pysigma_backend_securityonion-1.0.0-py3-none-any.whl
 RUN pip3 install yara-python==4.5.4
@@ -83,7 +85,7 @@ RUN bash -c "[[ $VERSION == '0.0.0' ]]" || \
     wget https://github.com/Security-Onion-Solutions/docs/raw/$(echo $VERSION | cut -d'.' -f 1)/dev/docs/images/cheat-sheet/Security-Onion-Cheat-Sheet.pdf -O html/docs/cheatsheet.pdf
 
 RUN mkdir -p html/images/videos && \
-    curl https://preview.securityonionsolutions.com/videos/onionai_3.mp4 -o html/images/videos/onionai_3.mp4
+    curl https://preview.securityonionsolutions.com/videos/onionai_agentic.mp4 -o html/images/videos/onionai_agentic.mp4
 
 ENV ELASTIC_VERSION=$ELASTIC_VERSION
 ENV WAZUH_VERSION=$WAZUH_VERSION

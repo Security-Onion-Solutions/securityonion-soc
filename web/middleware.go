@@ -341,6 +341,12 @@ func proxySubgridRequest(subgrids []*model.Subgrid, gridId string, ctx context.C
 			} else if subgridResponsesById != nil {
 				bytes, err := io.ReadAll(resp.Body)
 				if err != nil {
+					log.WithFields(log.Fields{
+						"requestId":   ctx.Value(ContextKeyRequestId),
+						"requestorId": ctx.Value(ContextKeyRequestorId),
+						"gridId":      grid.Id,
+					}).WithError(err).Error("failed to read subgrid response")
+				} else {
 					// Store this grid's response in case it needs to be merged with the local grid response
 					subgridResponsesById[grid.Id] = bytes
 				}

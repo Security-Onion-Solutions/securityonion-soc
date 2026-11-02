@@ -111,6 +111,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
     metricPanels: [],
     chartResizeTracker: {},
   }},
+  computed: {
+    isUserAdmin() {
+      return this.$root?.isUserAdmin ? this.$root.isUserAdmin() : false;
+    },
+    alarmsEnabled() {
+      return !!this.historicalMetricsEnabled;
+    },
+    isAnyAlarmActive() {
+      return this.$root?.isAlarmActive ? this.$root.isAlarmActive(this.$root.selectedGridId) : false;
+    },
+  },
   created() {
     this.$root.initializeCharts();
   },
@@ -128,13 +139,17 @@ routes.push({ path: '/grid', name: 'grid', component: {
     this.$root.loadParameters("grid", this.initGrid);
   },
   watch: {
-    '$route'(to, from) {
+    async '$route'(to, from) {
       this.loadUrlParameters();
       const gridIdChanged = (to.query && to.query.gridId) !== (from.query && from.query.gridId);
       if (to.path !== from.path || gridIdChanged) {
-        this.loadData();
+        await this.loadData();
         if (this.activeTab === 'metrics') {
+          this.initMetricsCharts();
           this.loadHistoricalMetrics(true);
+        }
+        if (this.activeTab === 'alarms' && this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+          this.$refs.alarmsManager.loadData();
         }
       }
     },
@@ -155,7 +170,10 @@ routes.push({ path: '/grid', name: 'grid', component: {
           this.metricsNodeId = '';
         }
         if (this.$root.parametersLoaded) {
+          const currentGridId = this.$root?.selectedGridId || '';
+          const lastGridId = this.lastLoadedMetricsParams?.gridId !== undefined ? (this.lastLoadedMetricsParams.gridId || '') : currentGridId;
           const paramsChanged = !this.lastLoadedMetricsParams ||
+            lastGridId !== currentGridId ||
             this.lastLoadedMetricsParams.nodeId !== this.metricsNodeId ||
             this.lastLoadedMetricsParams.container !== this.metricsContainerId ||
             this.lastLoadedMetricsParams.timeRange !== this.metricsTimeRange ||
@@ -171,6 +189,11 @@ routes.push({ path: '/grid', name: 'grid', component: {
         if (this.metricsRefreshInterval) {
           clearInterval(this.metricsRefreshInterval);
           this.metricsRefreshInterval = null;
+        }
+        if (val === 'alarms') {
+          if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+            this.$refs.alarmsManager.loadData();
+          }
         }
       }
     },
@@ -194,10 +217,22 @@ routes.push({ path: '/grid', name: 'grid', component: {
     }
   },
   methods: {
+    addAlarm() {
+      if (this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.showAddAlarm === 'function') {
+        this.$refs.alarmsManager.showAddAlarm();
+      }
+    },
+    onAlarmDeleted(alarm) {
+      if (alarm?.id && this.$root?.onAlarmDelete) {
+        this.$root.onAlarmDelete({ alarmId: alarm.id, gridId: this.$root.selectedGridId });
+      }
+    },
     refresh() {
       this.loadData();
       if (this.activeTab === 'metrics') {
         this.loadHistoricalMetrics(true);
+      } else if (this.activeTab === 'alarms' && this.$refs?.alarmsManager && typeof this.$refs.alarmsManager.loadData === 'function') {
+        this.$refs.alarmsManager.loadData();
       }
     },
     initGrid(params) {
@@ -262,8 +297,15 @@ routes.push({ path: '/grid', name: 'grid', component: {
       this.$root.adjustSubgridColVisibility(this.headers);
       this.metricsEnabled = !this.nodes.every(function(node) { return !node.metricsEnabled; });
       this.historicalMetricsEnabled = !this.nodes.every(function(node) { return !node.historicalMetricsEnabled; });
+      const alarmsEnabled = typeof this.alarmsEnabled === 'function' ? this.alarmsEnabled() : !!this.alarmsEnabled;
+      if ((this.activeTab === 'metrics' && !this.historicalMetricsEnabled) || (this.activeTab === 'alarms' && !alarmsEnabled)) {
+        this.activeTab = 'nodes';
+      }
+      if (this.metricsNodeId && !this.nodes.some(n => n.id === this.metricsNodeId)) {
+        this.metricsNodeId = '';
+      }
       this.metricsNodeItems = [
-        { title: this.i18n.metricsAllHosts || 'All Hosts', value: '' }
+        { title: this.i18n.metricsAllHosts, value: '' }
       ].concat(this.nodes.map(n => ({ title: n.id, value: n.id })));
 
       this.$root.updateColumnClass(this.headers, this.i18n.eps, this.metricsEnabled, 'd-lg-table-cell');
@@ -607,7 +649,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
         }
       });
       return [
-        { title: this.i18n.metricsAllContainers || 'All Containers', value: 'all' }
+        { title: this.i18n.metricsAllContainers, value: 'all' }
       ].concat(Array.from(containerNames).sort().map(name => ({ title: name, value: name })));
     },
     loadUrlParameters() {
@@ -617,6 +659,8 @@ routes.push({ path: '/grid', name: 'grid', component: {
       if (this.activeTab === 'metrics') {
         if (this.$route.query.host !== undefined) {
           this.metricsNodeId = this.$route.query.host;
+        } else if (this.$route.query.nodeId !== undefined) {
+          this.metricsNodeId = this.$route.query.nodeId;
         }
         if (this.$route.query.container !== undefined) {
           this.metricsContainerId = this.$route.query.container;
@@ -631,6 +675,9 @@ routes.push({ path: '/grid', name: 'grid', component: {
     },
     updateRoute() {
       const query = {};
+      if (this.$route?.query?.gridId) {
+        query.gridId = this.$route.query.gridId;
+      }
       if (this.activeTab) {
         query.tab = this.activeTab;
       }

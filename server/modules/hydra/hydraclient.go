@@ -37,6 +37,8 @@ func (hydraClient *HydraClient) copyToClient(client *model.Client) {
 	client.Id = hydraClient.Id
 	client.Name = hydraClient.Name
 	client.Secret = hydraClient.Secret
+	client.CreateTime = hydraClient.CreateDate
+	client.UpdateTime = hydraClient.UpdateDate
 	if hydraClient.Metadata != nil {
 		client.Note = hydraClient.Metadata.Note
 		client.SearchUsername = hydraClient.Metadata.SearchUsername

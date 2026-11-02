@@ -73,18 +73,37 @@ func (mr *MockNotificationstoreMockRecorder) GetLastUnreadTime(ctx any) *gomock.
 }
 
 // GetNotifications mocks base method.
-func (m *MockNotificationstore) GetNotifications(ctx context.Context, filter string) ([]*model.NotificationRecord, error) {
+func (m *MockNotificationstore) GetNotifications(ctx context.Context, filter string, limit ...int) (*model.NotificationListResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNotifications", ctx, filter)
-	ret0, _ := ret[0].([]*model.NotificationRecord)
+	varargs := []any{ctx, filter}
+	for _, a := range limit {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetNotifications", varargs...)
+	ret0, _ := ret[0].(*model.NotificationListResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetNotifications indicates an expected call of GetNotifications.
-func (mr *MockNotificationstoreMockRecorder) GetNotifications(ctx, filter any) *gomock.Call {
+func (mr *MockNotificationstoreMockRecorder) GetNotifications(ctx, filter any, limit ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotifications", reflect.TypeOf((*MockNotificationstore)(nil).GetNotifications), ctx, filter)
+	varargs := append([]any{ctx, filter}, limit...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotifications", reflect.TypeOf((*MockNotificationstore)(nil).GetNotifications), varargs...)
+}
+
+// SetAllDismissed mocks base method.
+func (m *MockNotificationstore) SetAllDismissed(ctx context.Context, isDismissed bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetAllDismissed", ctx, isDismissed)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetAllDismissed indicates an expected call of SetAllDismissed.
+func (mr *MockNotificationstoreMockRecorder) SetAllDismissed(ctx, isDismissed any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAllDismissed", reflect.TypeOf((*MockNotificationstore)(nil).SetAllDismissed), ctx, isDismissed)
 }
 
 // SetDismissed mocks base method.
@@ -99,6 +118,20 @@ func (m *MockNotificationstore) SetDismissed(ctx context.Context, id string, isD
 func (mr *MockNotificationstoreMockRecorder) SetDismissed(ctx, id, isDismissed any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDismissed", reflect.TypeOf((*MockNotificationstore)(nil).SetDismissed), ctx, id, isDismissed)
+}
+
+// SetAllRead mocks base method.
+func (m *MockNotificationstore) SetAllRead(ctx context.Context, isRead bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetAllRead", ctx, isRead)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetAllRead indicates an expected call of SetAllRead.
+func (mr *MockNotificationstoreMockRecorder) SetAllRead(ctx, isRead any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAllRead", reflect.TypeOf((*MockNotificationstore)(nil).SetAllRead), ctx, isRead)
 }
 
 // SetRead mocks base method.

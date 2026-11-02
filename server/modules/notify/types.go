@@ -11,6 +11,10 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
+// Branding constants for notifications
+const NOTIFICATION_ATTRIBUTION = "Security Onion • SOC"
+const NOTIFICATION_DEFAULT_TITLE = "SOC Notification"
+
 type Attachment = model.Attachment
 type NotificationPayload = model.NotificationPayload
 type SilenceParams = model.SilenceParams

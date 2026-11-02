@@ -9,10 +9,12 @@ package model
 import (
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/json"
 )
 
 const NodeRoleDesktop = "so-desktop"
+const NodeRoleIdh = "so-idh"
 const NodeStatusUnknown = "unknown"
 const NodeStatusOk = "ok"
 const NodeStatusFault = "fault"
@@ -204,7 +206,7 @@ func (node *Node) updateStatusComponent(currentState string, newState string) st
 }
 
 func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
-	node.NonCriticalNode = node.Role == NodeRoleDesktop
+	node.NonCriticalNode = node.Role == NodeRoleDesktop || node.Role == NodeRoleIdh
 	newStatus := NodeStatusUnknown
 	newStatus = node.updateStatusComponent(newStatus, node.ConnectionStatus)
 	if enhancedStatusEnabled {
@@ -230,9 +232,16 @@ func (node *Node) UpdateOverallStatus(enhancedStatusEnabled bool) bool {
 }
 
 func (node *Node) IsProcessRunning(match string) bool {
+	if node.ProcessJson == "" {
+		return false
+	}
 	nodeStatus := NodeStatus{}
 	err := json.LoadJson([]byte(node.ProcessJson), &nodeStatus)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"node":        node.Id,
+			"processJson": node.ProcessJson,
+		}).WithError(err).Errorf("error loading node status")
 		return false
 	}
 	for _, process := range nodeStatus.Containers {

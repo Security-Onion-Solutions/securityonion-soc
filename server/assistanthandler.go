@@ -49,11 +49,23 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/sessions/{sessionId}", h.GetSessionDetails)
 		r.Put("/sessions/{sessionId}", h.UpdateSession)
 		r.Delete("/sessions/{sessionId}", h.DeleteSession)
+		r.Post("/sessions/{sessionId}/clone", h.CloneSession)
+		r.Post("/sessions/access", h.PostSessionsAccess)
 
 		r.Put("/agents/{name}", h.SaveAgent)
 		r.Delete("/agents/{name}", h.DeleteAgent)
 		r.Put("/skills/{name}", h.SaveSkill)
 		r.Delete("/skills/{name}", h.DeleteSkill)
+
+		r.Get("/automations", h.GetAutomations)
+		r.Post("/automations", h.CreateAutomation)
+		r.Get("/automations/activity", h.GetAutomationActivity)
+		r.Get("/automations/runs", h.GetAllAutomationRuns)
+		r.Get("/automations/{id}", h.GetAutomation)
+		r.Put("/automations/{id}", h.UpdateAutomation)
+		r.Delete("/automations/{id}", h.DeleteAutomation)
+		r.Get("/automations/{id}/runs", h.GetAutomationRuns)
+		r.Get("/automations/{id}/runs/{runId}", h.GetAutomationRun)
 
 		r.Get("/memories", h.GetMemories)
 		r.Post("/memories", h.CreateMemory)
@@ -65,19 +77,6 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/admin/{userId}/sessions", h.GetSessionsAdmin)
 		r.Get("/admin/{userId}/sessions/{sessionId}/history", h.ManageSessionHistory)
 	})
-}
-
-func (h *AssistantHandler) checkAssistantAvailable(ctx context.Context, w http.ResponseWriter, r *http.Request) bool {
-	if h.server != nil && h.server.Config != nil && h.server.Config.AirgapEnabled {
-		log.FromContext(ctx).Error("unable to use assistant on airgap installation")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_SERVICE_NOT_AVAILABLE")
-		return false
-	}
-	return true
-}
-
-type EventstoreUpdater interface {
-	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
 }
 
 // decodeIncomingMessage decodes a chat message body, generating a session id
@@ -133,10 +132,6 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	incMsg, err := decodeIncomingMessage(r)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
@@ -146,7 +141,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
+	ownedByUser, sessionExists, isAutomation, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, incMsg.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -163,12 +158,27 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// prevent users from adding to automated sessions
+	if isAutomation {
+		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to continue an automation session")
+		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be continued")
+
+		return
+	}
+
+	release, err := h.server.AssistantManager.AcquireTurnSlot(ctx, incMsg.SessionId, incMsg.Model)
+	if err != nil {
+		h.respondChatError(w, r, logger, err, "unable to start chat turn")
+		return
+	}
+	defer release()
+
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
 
-	if entityType != "" && entityId != "" {
-		// Don't fail the request on association errors (already logged in helper)
-		_ = h.handleEntityAssociation(ctx, entityType, entityId, incMsg.SessionId)
+	if entityType == "alert_investigation" && entityId != "" {
+		// Don't fail the request on association errors (already logged)
+		_ = h.server.AssistantManager.AttachInvestigation(ctx, entityId, incMsg.SessionId)
 	}
 
 	streaming, accept := streamingAccepted(r)
@@ -252,10 +262,6 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	accept := strings.TrimSpace(r.Header.Get("Accept"))
 	streaming := strings.EqualFold(accept, "text/event-stream")
 
@@ -273,7 +279,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// check if caller owns session
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
-	ownedByUser, sessionExists, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
+	ownedByUser, sessionExists, isAutomation, sessionModel, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, toolReq.SessionId)
 	if err != nil {
 		logger.WithError(err).Error("unable to check session ownership")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -293,6 +299,27 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent users from interactings with tools in automated sessions
+	if isAutomation {
+		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to an automation session")
+		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be modified")
+
+		return
+	}
+
+	// A tool turn runs on the session's stored model; legacy sessions have none.
+	selector := toolReq.Model
+	if sessionModel != "" {
+		selector = sessionModel
+	}
+
+	release, err := h.server.AssistantManager.AcquireTurnSlot(ctx, toolReq.SessionId, selector)
+	if err != nil {
+		h.respondToolTurnError(w, r, logger, err, "unable to start tool turn")
+		return
+	}
+	defer release()
+
 	if _, ok := w.(http.Flusher); streaming && !ok {
 		logger.WithField("acceptHeader", accept).Warn("incoming request accepts streaming but is not flushable, issuing non-streaming response")
 		streaming = false
@@ -311,7 +338,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Detachment is owned by the assistant module (ToolStreamInSession and the
-	// resolution it drives run on a no-timeout context; each finalize persists on it),
+	// resolution it drives run on a detached, turn-bounded context; each finalize persists on it),
 	// so the handler keeps the request context — it must not re-detach here (it can't,
 	// without an import cycle). streamBody keeps draining the upstream to persist the
 	// turn after the client disconnects.
@@ -487,10 +514,6 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
 	model := decodePathValue(chi.URLParam(r, "*"))
 
 	health, err := h.server.AssistantManager.Health(ctx, model)
@@ -593,7 +616,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 
 	// Fetch the session plus every delegated sub-session descending from it, so the
 	// UI can reconstruct nested sub-agent activity when the conversation is reopened.
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true), model.GetSessionsWithDescendants(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithUsage(true), model.GetSessionsWithDescendants(true), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -611,13 +634,28 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// GetSessions drops unreadable sessions; distinguish that (403) from not found.
 	if root == nil {
-		web.Respond(w, r, http.StatusOK, &model.AssistantSessionDetails{})
+		userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+
+		_, exists, _, _, err := h.server.Assistantstore.DoesUserOwnSession(ctx, userId, sessionId)
+		if err != nil {
+			logger.WithError(err).Error("unable to check whether session exists")
+			web.Respond(w, r, http.StatusInternalServerError, err)
+
+			return
+		}
+
+		if exists {
+			web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+		} else {
+			web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound.Error())
+		}
 
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, root)
 	if err != nil {
 		logger.WithError(err).Error("unable to get chat history for session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -645,7 +683,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	}
 
 	for _, sub := range subSessions {
-		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub.SessionId)
+		subHistory, err := h.server.Assistantstore.GetChatHistory(ctx, sub)
 		if err != nil {
 			logger.WithError(err).WithField("subSessionId", sub.SessionId).Error("unable to get chat history for sub-session")
 			continue
@@ -681,6 +719,11 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 	var pending *model.PendingToolApproval
 	for _, sm := range history {
 		if sm.Message == nil || sm.Message.Role != "assistant" {
+			continue
+		}
+		// A turn that never finished streaming never reached the model, so its
+		// tool_use cannot be resumed: approving it would orphan the tool_result.
+		if sm.IsPartial() {
 			continue
 		}
 		for _, cb := range sm.Message.ContentBlocks {
@@ -748,7 +791,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	// don't allow any actions involving reserved tags
-	for _, reservedTag := range model.MemorySessionTags {
+	for _, reservedTag := range model.ReservedSessionTags {
 		if strings.EqualFold(reservedTag, updateReq.Tag) {
 			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
 
@@ -756,7 +799,14 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
+	if !strings.EqualFold(updateReq.Action, "add") && !strings.EqualFold(updateReq.Action, "remove") {
+		web.Respond(w, r, http.StatusBadRequest, "invalid action")
+
+		return
+	}
+
+	// Descendants come back after the root so sharing can cascade to them below.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithDescendants(updateReq.Tag == model.SessionTagShared), model.GetSessionsWithMessageMeta(false))
 	if err != nil {
 		logger.WithError(err).Error("unable to get session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -764,7 +814,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if len(sessions) == 0 {
+	if len(sessions) == 0 || sessions[0].SessionId != sessionId {
 		logger.Error("session not found")
 		web.Respond(w, r, http.StatusNotFound, "session not found")
 
@@ -773,17 +823,16 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 
 	session := sessions[0]
 
-	switch updateReq.Action {
-	case "add":
-		if !slices.Contains(session.Tags, updateReq.Tag) {
-			session.Tags = append(session.Tags, updateReq.Tag)
-		} else {
-			logger.Warn("tag already exists on session")
-			web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+	// cannot modify an automation session
+	if slices.Contains(session.Tags, model.SessionTagAutomation) {
+		logger.Warn("cannot modify tags on an automation session")
+		web.Respond(w, r, http.StatusConflict, "automation session tags cannot be modified")
 
-			return
-		}
-	case "remove":
+		return
+	}
+
+	add := strings.EqualFold(updateReq.Action, "add")
+	if !add {
 		err = h.canRemoveTag(ctx, session, updateReq.Tag)
 		if err != nil {
 			logger.WithFields(log.Fields{
@@ -794,10 +843,28 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 
 			return
 		}
-		session.Tags = slices.Delete(session.Tags, slices.Index(session.Tags, updateReq.Tag), slices.Index(session.Tags, updateReq.Tag)+1)
 	}
 
-	err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, session.Tags)
+	// Re-adding shared is allowed so descendants that missed the cascade catch up.
+	tags, changed := toggleTag(session.Tags, updateReq.Tag, add)
+	if !changed && updateReq.Tag != model.SessionTagShared {
+		logger.Warn("tag already exists on session")
+		web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+
+		return
+	}
+
+	// A shared session is readable through its sub-sessions too, so the tag
+	// follows every descendant in one write. Other tags stay on the one session.
+	if updateReq.Tag == model.SessionTagShared {
+		ids := make([]string, len(sessions))
+		for i, s := range sessions {
+			ids[i] = s.SessionId
+		}
+		err = h.server.Assistantstore.ToggleSessionsTag(ctx, ids, updateReq.Tag, add)
+	} else {
+		err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, tags)
+	}
 	if err != nil {
 		logger.WithError(err).Error("unable to update session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -806,6 +873,16 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
+}
+
+func toggleTag(tags []string, tag string, present bool) ([]string, bool) {
+	if slices.Contains(tags, tag) == present {
+		return tags, false
+	}
+	if present {
+		return append(slices.Clone(tags), tag), true
+	}
+	return slices.DeleteFunc(slices.Clone(tags), func(t string) bool { return t == tag }), true
 }
 
 func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.AssistantSession, tag string) error {
@@ -823,6 +900,154 @@ func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.Assi
 	}
 
 	return nil
+}
+
+// @Summary      Clone an Assistant Session
+// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation; that requires events/write.
+// @Tags         Assistant
+// @Security     bearer[assistant/write_authored, assistant/delete_authored]
+// @Param        sessionId   path   string  true   "Session ID to clone"
+// @Param        entityType  query  string  false  "alert_investigation, to record the copy on an alert" example(alert_investigation)
+// @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
+// @Produce      json
+// @Success      201  {object}  model.AssistantSession  "The new session"
+// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session, or the alert does not reference the session"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Session not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/sessions/{sessionId}/clone [post]
+func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "write_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	// A failed clone is rolled back through DeleteSession.
+	err = h.server.CheckAuthorized(ctx, "delete_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	sessionId := chi.URLParam(r, "sessionId")
+	if sessionId == "" {
+		logger.Error("sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+
+		return
+	}
+
+	entityType := r.URL.Query().Get("entityType")
+	entityId := r.URL.Query().Get("entityId")
+	if (entityType != "" || entityId != "") && (entityType != "alert_investigation" || entityId == "") {
+		web.Respond(w, r, http.StatusBadRequest, "entityType must be alert_investigation, with the alert's soc_id as entityId")
+		return
+	}
+
+	var clone *model.AssistantSession
+	if entityId != "" {
+		clone, err = h.server.AssistantManager.CloneSessionOntoAlert(ctx, sessionId, entityId)
+	} else {
+		clone, err = h.server.Assistantstore.CloneSession(ctx, sessionId, "", "")
+	}
+
+	if errors.Is(err, ErrSessionNotOnAlert) {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if errors.Is(err, ErrSessionNotFound) {
+		web.Respond(w, r, http.StatusNotFound, err)
+		return
+	}
+	if errors.Is(err, ErrSessionNotRoot) {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+	if err != nil {
+		logger.WithError(err).WithFields(log.Fields{"sessionId": sessionId, "entityId": entityId}).Error("unable to clone session")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusCreated, clone)
+}
+
+// MaxSessionAccessIds caps the ids per access check.
+const MaxSessionAccessIds = 50
+
+// @Summary      Check Access to Assistant Sessions
+// @Description  Report, for each session id, whether the caller could open that session. Nothing else about a session is returned, and one that does not exist reads the same as one the caller may not open.
+// @Tags         Assistant
+// @Security     bearer[assistant/read_authored]
+// @Param        request  body  model.SessionAccessRequest  true  "The sessions to check"
+// @Produce      json
+// @Success      200  {object}  map[string]bool  "Whether each session can be opened, keyed by session id"
+// @Failure      400           "No session ids, or more than 50"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/sessions/access [post]
+func (h *AssistantHandler) PostSessionsAccess(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+
+	err := h.server.CheckAuthorized(ctx, "read_authored", "assistant")
+	if err != nil {
+		web.Respond(w, r, http.StatusUnauthorized, err)
+		return
+	}
+
+	req := &model.SessionAccessRequest{}
+
+	err = json.NewDecoder(r.Body).Decode(req)
+	if err != nil {
+		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	ids := []string{}
+	for _, id := range req.SessionIds {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 || len(ids) > MaxSessionAccessIds {
+		web.Respond(w, r, http.StatusBadRequest, fmt.Sprintf("between 1 and %d session ids are required", MaxSessionAccessIds))
+		return
+	}
+
+	// Mirror the lookup used to open a session, so true means it would open.
+	sessions, err := h.server.Assistantstore.GetSessions(ctx,
+		model.GetSessionsWithSessionIds(ids),
+		model.GetSessionsWithIncludeDeleted(true),
+		model.GetSessionsWithAutomationSessions(true),
+		model.GetSessionsWithMessageMeta(false))
+	if err != nil {
+		logger.WithError(err).Error("unable to check session access")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
+
+	access := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		access[id] = false
+	}
+
+	for _, s := range sessions {
+		if _, requested := access[s.SessionId]; requested {
+			access[s.SessionId] = true
+		}
+	}
+
+	web.Respond(w, r, http.StatusOK, access)
 }
 
 // @Summary      Delete Your Assistant Session
@@ -854,8 +1079,24 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Clear investigation session from alert if applicable
-	h.handleInvestigationSessionCleanup(ctx, sessionId)
+	err = h.server.AssistantManager.DetachSessionInvestigation(ctx, sessionId)
+	if errors.Is(err, ErrSessionNotFound) {
+		web.Respond(w, r, http.StatusNoContent, nil)
+
+		return
+	}
+	if errors.Is(err, ErrSessionAccessDenied) {
+		logger.WithField("assistantSessionId", sessionId).Warn("user attempted to delete a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+
+		return
+	}
+	if err != nil {
+		logger.WithError(err).Error("unable to check session ownership")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+
+		return
+	}
 
 	err = h.server.Assistantstore.DeleteSession(ctx, sessionId)
 
@@ -978,6 +1219,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 		model.GetSessionsWithIncludeDeleted(true),
 		model.GetSessionsWithUsage(true),
 		model.GetSessionsWithMemorySessions(true),
+		model.GetSessionsWithAutomationSessions(true),
 	}
 
 	if userId != "" {
@@ -1020,7 +1262,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 	userId := chi.URLParam(r, "userId")
 	sessionId := chi.URLParam(r, "sessionId")
 
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true))
+	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithUserId(userId), model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithIncludeDeleted(true), model.GetSessionsWithMemorySessions(true), model.GetSessionsWithAutomationSessions(true))
 	if err != nil {
 		logger.WithError(err).Error("unable to manage sessions")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -1038,7 +1280,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessionId)
+	history, err := h.server.Assistantstore.GetChatHistory(ctx, sessions[0])
 	if err != nil {
 		logger.WithError(err).Error("unable to manage session history")
 		web.Respond(w, r, http.StatusInternalServerError, err)
@@ -1250,6 +1492,13 @@ func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.R
 // path for the error log. Shared by PostChat's non-streaming and streaming
 // branches.
 func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
+	if errors.Is(err, ErrAgentBusy) || errors.Is(err, ErrToolTurnBusy) {
+		logger.WithError(err).Warn(logMsg)
+		web.Respond(w, r, http.StatusConflict, err.Error())
+
+		return
+	}
+
 	logger.WithError(err).Error(logMsg)
 
 	if isClientError(err) {
@@ -1483,155 +1732,6 @@ func removeAuxData(messages []*model.StoredMessage) {
 	}
 }
 
-func (h *AssistantHandler) handleEntityAssociation(ctx context.Context, entityType, entityId, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	// Handle entity-specific logic based on type
-	if entityType == "alert_investigation" && entityId != "" {
-		// Mark the alert as investigated with the session ID
-		err := h.markAlertAsInvestigated(ctx, entityId, sessionId)
-		if err != nil {
-			logger.WithError(err).WithFields(log.Fields{
-				"entityType": entityType,
-				"entityId":   entityId,
-			}).Warn("unable to mark alert as investigated")
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (h *AssistantHandler) markAlertAsInvestigated(ctx context.Context, socId string, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	err := h.server.CheckAuthorized(ctx, "write", "events")
-	if err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":     socId,
-		"sessionId": sessionId,
-	}).Info("Marking alert as investigated")
-
-	// Create update criteria to mark the alert as investigated
-	updateCriteria := model.NewEventUpdateCriteria()
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
-
-	if h.server.Eventstore != nil {
-		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
-			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, false, sessionId)
-		} else {
-			return fmt.Errorf("eventstore does not support investigation updates")
-		}
-	} else {
-		return fmt.Errorf("eventstore is not available")
-	}
-
-	// Create a simple query to match the soc_id
-	updateCriteria.ParsedQuery = model.NewQuery()
-	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, false, true, false)
-	updateCriteria.ParsedQuery.AddSegment(searchSegment)
-	updateCriteria.Asynchronous = false
-
-	// Execute the update
-	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
-	if err != nil {
-		logger.WithError(err).Error("unable to mark alert as investigated")
-		return err
-	}
-
-	if results.UpdatedCount == 0 && results.UnchangedCount == 0 {
-		logger.WithField("socId", socId).Error("update made no changes")
-		return fmt.Errorf("no alert found with soc_id: %s", socId)
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":          socId,
-		"updatedCount":   results.UpdatedCount,
-		"unchangedCount": results.UnchangedCount,
-	}).Info("Successfully marked alert as investigated")
-
-	return nil
-}
-
-func (h *AssistantHandler) handleInvestigationSessionCleanup(ctx context.Context, sessionId string) {
-	logger := log.FromContext(ctx)
-
-	// Retrieve session details before deletion to check if it's an investigation session
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId))
-	if err != nil {
-		logger.WithError(err).Error("unable to retrieve session before deletion")
-		return
-	}
-
-	// If this is an investigation session, clear the investigation_session_id from the alert
-	if len(sessions) > 0 {
-		session := sessions[0]
-		if session.Type == "alert_investigation" && session.EntityId != "" {
-			err = h.clearInvestigationSessionFromAlert(ctx, session.EntityId, sessionId)
-			if err != nil {
-				logger.WithError(err).WithFields(log.Fields{
-					"sessionId": sessionId,
-					"entityId":  session.EntityId,
-				}).Warn("unable to clear investigation_session_id from alert")
-				// Continue with deletion even if clearing fails
-			}
-		}
-	}
-}
-
-func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Context, socId string, sessionId string) error {
-	logger := log.FromContext(ctx)
-
-	// Check write permission on events
-	if err := h.server.CheckAuthorized(ctx, "write", "events"); err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":     socId,
-		"sessionId": sessionId,
-	}).Info("Clearing investigation_session_id from alert")
-
-	// Create update criteria to remove the investigation_session_id field
-	updateCriteria := model.NewEventUpdateCriteria()
-	userId := ctx.Value(web.ContextKeyRequestorId).(string)
-
-	if h.server.Eventstore != nil {
-		if updater, ok := h.server.Eventstore.(EventstoreUpdater); ok {
-			updater.AddInvestigationUpdateScripts(updateCriteria, time.Now(), userId, true, sessionId)
-		} else {
-			return fmt.Errorf("eventstore does not support investigation updates")
-		}
-	} else {
-		return fmt.Errorf("eventstore is not available")
-	}
-
-	// Create a query to match the soc_id
-	updateCriteria.ParsedQuery = model.NewQuery()
-	searchSegment := model.NewSearchSegmentEmpty()
-	searchSegment.AddFilter("soc_id", socId, false, true, false)
-	updateCriteria.ParsedQuery.AddSegment(searchSegment)
-	updateCriteria.Asynchronous = false
-
-	// Execute the update
-	results, err := h.server.Eventstore.Update(ctx, updateCriteria)
-	if err != nil {
-		return err
-	}
-
-	logger.WithFields(log.Fields{
-		"socId":          socId,
-		"updatedCount":   results.UpdatedCount,
-		"unchangedCount": results.UnchangedCount,
-	}).Info("Successfully cleared investigation_session_id from alert")
-
-	return nil
-}
-
 // @Summary      Save an Assistant Agent
 // @Description  Create or update a single agent definition. The server merges it into the stored set, so a stale client cannot revert other agents.
 // @Tags         Assistant
@@ -1646,6 +1746,13 @@ func (h *AssistantHandler) clearInvestigationSessionFromAlert(ctx context.Contex
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/agents/{name} [put]
 func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
 	agent := &model.StoredAgent{}
 	if !h.decodeConfigRequest(w, r, agent) {
 		return
@@ -1671,11 +1778,14 @@ func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/agents/{name} [delete]
 func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
-	if !h.checkConfigWriteAuthorized(w, r) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
 		return
 	}
 
-	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(r.Context(), urlParamName(r)))
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteAgent(ctx, urlParamName(r)))
 }
 
 // @Summary      Save an Assistant Skill
@@ -1692,6 +1802,13 @@ func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/skills/{name} [put]
 func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
 	skill := &model.StoredSkill{}
 	if !h.decodeConfigRequest(w, r, skill) {
 		return
@@ -1717,11 +1834,272 @@ func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/skills/{name} [delete]
 func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
-	if !h.checkConfigWriteAuthorized(w, r) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
 		return
 	}
 
-	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(r.Context(), urlParamName(r)))
+	h.respondConfigWrite(w, r, h.server.AssistantManager.DeleteSkill(ctx, urlParamName(r)))
+}
+
+// @Summary      List Automations
+// @Description  Retrieve every scheduled automation defined on the grid.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Produce      json
+// @Success      200 {array} model.Automation "The list of automations"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations [get]
+func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	automations, err := h.server.AssistantManager.ListAutomations(ctx)
+	h.respondAutomation(w, r, automations, err)
+}
+
+// @Summary      Get an Automation
+// @Description  Retrieve a single automation by its immutable UUID.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200 {object} model.Automation "The automation"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [get]
+func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	automation, err := h.server.AssistantManager.GetAutomation(ctx, urlParamId(r))
+	h.respondAutomation(w, r, automation, err)
+}
+
+// @Summary      Create an Automation
+// @Description  Define a new scheduled automation. The server assigns its id and creator; changing an automation's params drops the work its previous definition had queued.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        request  body  model.Automation  true  "Automation definition"
+// @Produce      json
+// @Success      200 {object} model.Automation "The created automation"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations [post]
+func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Request) {
+	h.saveAutomation(w, r, "")
+}
+
+// @Summary      Update an Automation
+// @Description  Replace an automation's definition. Changing its params drops the work its previous definition had queued.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        id       path  string            true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        request  body  model.Automation  true  "Automation definition"
+// @Produce      json
+// @Success      200 {object} model.Automation "The updated automation"
+// @Failure      400           "The request body is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [put]
+func (h *AssistantHandler) UpdateAutomation(w http.ResponseWriter, r *http.Request) {
+	h.saveAutomation(w, r, urlParamId(r))
+}
+
+func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request, id string) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	automation := &model.Automation{}
+	if err := json.NewDecoder(r.Body).Decode(automation); err != nil {
+		log.FromContext(ctx).WithError(err).Error("unable to decode automation request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	// The path owns identity; a body id must not redirect the write.
+	automation.Id = id
+	automation.Kind = ""
+	automation.Operation = ""
+
+	err := h.server.AssistantManager.SaveAutomation(ctx, automation)
+	h.respondAutomation(w, r, automation, err)
+}
+
+// @Summary      Delete an Automation
+// @Description  Remove an automation. An in-flight run is allowed to finish, since that run is often the reason the automation is being removed. An automation that ships with the product can be disabled but not removed.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200           "Automation deleted"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request, or the automation ships with the product"
+// @Failure      404           "Automation not found"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id} [delete]
+func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	err := h.server.AssistantManager.DeleteAutomation(ctx, urlParamId(r))
+
+	h.respondAutomation(w, r, nil, err)
+}
+
+// @Summary      List Finished Automation Runs
+// @Description  Retrieve a page of finished runs across every automation, newest first, with each run's work items counted by state and its automation's name. A deleted automation's runs are reported with an empty display name.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Param        automationId  query  string  false  "Only this automation's runs" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        hideEmpty     query  bool    false  "Drop succeeded runs that worked no item" example(true)
+// @Param        q             query  string  false  "Case-insensitive text matched against the automation's name, the run's error, and its items' group keys and errors, or a run ID; at most 256 characters" example(10.0.0.1)
+// @Param        limit         query  int     false  "Page size, at most 500" example(50)
+// @Param        offset        query  int     false  "Page offset" example(0)
+// @Param        count         query  bool    false  "Also count every matching run" example(true)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunPage "The page of runs"
+// @Failure      400           "The search is too long"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "automationId is not a valid automation ID"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/runs [get]
+func (h *AssistantHandler) GetAllAutomationRuns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+	hideEmpty, _ := strconv.ParseBool(query.Get("hideEmpty"))
+	count, _ := strconv.ParseBool(query.Get("count"))
+
+	page, err := h.server.AssistantManager.ListAutomationRuns(ctx, &model.AutomationRunFilter{
+		AutomationId: query.Get("automationId"),
+		HideEmpty:    hideEmpty,
+		Search:       query.Get("q"),
+		Limit:        limit,
+		Offset:       offset,
+		Count:        count,
+	})
+	h.respondAutomation(w, r, page, err)
+}
+
+// @Summary      List an Automation's Runs
+// @Description  Retrieve a page of one automation's runs, newest first, with each run's work items counted by state and the work the automation still has queued. A deleted automation keeps its history and is reported with an empty display name.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Param        id      path   string  true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        limit   query  int     false  "Page size, at most 500" example(50)
+// @Param        offset  query  int     false  "Page offset" example(0)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunHistory "The page of runs"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found and no runs remain for it"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id}/runs [get]
+func (h *AssistantHandler) GetAutomationRuns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+
+	history, err := h.server.AssistantManager.GetAutomationRunHistory(ctx, urlParamId(r), limit, offset)
+	h.respondAutomation(w, r, history, err)
+}
+
+// @Summary      Get an Automation Run
+// @Description  Retrieve everything one run left behind: its work items, every session those items drove with the tools it used and a preview of its thinking, and the alerts the run recorded on. Open a session with GET /connect/assistant/sessions/{sessionId}; while a session is still running its turns also stream on the assistant:stream broadcast as model.AgentStreamEvent.
+// @Tags         Assistant
+// @Security     bearer[automations/read, events/read]
+// @Param        id          path   string  true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        runId       path   string  true   "Run ID" example(3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934)
+// @Param        alertLimit  query  int     false  "Alerts to return, at most 10000" example(500)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunDetails "The run"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Run not found under this automation"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/{id}/runs/{runId} [get]
+func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	if err := h.server.CheckAuthorized(ctx, "read", "events"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	alertLimit, _ := strconv.Atoi(r.URL.Query().Get("alertLimit"))
+
+	details, err := h.server.AssistantManager.GetAutomationRunDetails(ctx, urlParamId(r), decodePathValue(chi.URLParam(r, "runId")), alertLimit)
+	h.respondAutomation(w, r, details, err)
+}
+
+// @Summary      Get Automation Activity
+// @Description  Report what agents are doing right now: every automation run queued or running with its automation's open work items, whether each item is waiting for a pool slot, what each item's live session and the children it delegated to are doing, and the load on the pool that runs agent work, interactive turns included. Open a session with GET /connect/assistant/sessions/{sessionId}; its turns stream on the assistant:stream broadcast as model.AgentStreamEvent.
+// @Tags         Assistant
+// @Security     bearer[automations/read]
+// @Produce      json
+// @Success      200 {object} model.AutomationActivity "The activity"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Router       /connect/assistant/automations/activity [get]
+func (h *AssistantHandler) GetAutomationActivity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "read", "automations"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	activity, err := h.server.AssistantManager.GetAutomationActivity(ctx)
+	h.respondAutomation(w, r, activity, err)
 }
 
 // @Summary      List Assistant Memories
@@ -1743,10 +2121,6 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/assistant/memories [get]
 func (h *AssistantHandler) GetMemories(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
 
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
@@ -1801,15 +2175,11 @@ func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) 
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/memories/{id} [put]
 func (h *AssistantHandler) UpdateMemory(w http.ResponseWriter, r *http.Request) {
-	h.saveMemory(w, r, decodePathValue(chi.URLParam(r, "id")))
+	h.saveMemory(w, r, urlParamId(r))
 }
 
 func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
-
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
 
 	req := &model.MemoryRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
@@ -1861,11 +2231,7 @@ func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id
 func (h *AssistantHandler) DeleteMemory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if !h.checkAssistantAvailable(ctx, w, r) {
-		return
-	}
-
-	if err := h.server.AssistantManager.RemoveMemory(ctx, decodePathValue(chi.URLParam(r, "id"))); err != nil {
+	if err := h.server.AssistantManager.RemoveMemory(ctx, urlParamId(r)); err != nil {
 		h.respondMemoryError(w, r, err, "unable to delete memory")
 		return
 	}
@@ -1903,22 +2269,35 @@ func urlParamName(r *http.Request) string {
 	return decodePathValue(chi.URLParam(r, "name"))
 }
 
-// checkConfigWriteAuthorized gates the agent/skill endpoints on the same
-// permission a direct config write needs.
-func (h *AssistantHandler) checkConfigWriteAuthorized(w http.ResponseWriter, r *http.Request) bool {
-	if err := h.server.CheckAuthorized(r.Context(), "write", "config"); err != nil {
-		web.Respond(w, r, http.StatusUnauthorized, err)
-		return false
+func urlParamId(r *http.Request) string {
+	return decodePathValue(chi.URLParam(r, "id"))
+}
+
+// respondAutomation maps the manager's errors onto status codes, or answers with payload.
+func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Request, payload any, err error) {
+	if err == nil {
+		web.Respond(w, r, http.StatusOK, payload)
+
+		return
 	}
 
-	return h.checkAssistantAvailable(r.Context(), w, r)
+	switch {
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_NOT_FOUND"),
+		strings.Contains(err.Error(), "ERROR_AUTOMATION_RUN_NOT_FOUND"):
+		web.Respond(w, r, http.StatusNotFound, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_KIND_NOT_FOUND"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_PARAMS_INVALID"):
+		web.Respond(w, r, http.StatusBadRequest, err)
+	case strings.Contains(err.Error(), "ERROR_SYSTEM_AUTOMATION_UNDELETABLE"):
+		web.Respond(w, r, http.StatusForbidden, err)
+	default:
+		log.FromContext(r.Context()).WithError(err).Error("unable to service automation request")
+		web.Respond(w, r, http.StatusInternalServerError, err)
+	}
 }
 
 func (h *AssistantHandler) decodeConfigRequest(w http.ResponseWriter, r *http.Request, out any) bool {
-	if !h.checkConfigWriteAuthorized(w, r) {
-		return false
-	}
-
 	if err := json.NewDecoder(r.Body).Decode(out); err != nil {
 		log.FromContext(r.Context()).WithError(err).Error("unable to decode agent configuration request")
 		web.Respond(w, r, http.StatusBadRequest, err)

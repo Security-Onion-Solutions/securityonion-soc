@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -883,15 +885,15 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 	const sessionId = "session-1"
 
 	tests := []struct {
-		name         string
-		history      []*model.StoredMessage
-		historyErr   error
-		msg          string
-		chatType     string
-		entityId     string
-		wantTitle    string
-		wantType     string
-		wantEntityId string
+		name           string
+		history        []*model.StoredMessage
+		sessionMissing bool
+		msg            string
+		chatType       string
+		entityId       string
+		wantTitle      string
+		wantType       string
+		wantEntityId   string
 	}{
 		{
 			name:      "empty history creates a new session",
@@ -910,10 +912,10 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 			wantEntityId: "alert-42",
 		},
 		{
-			name:       "history not-found is tolerated",
-			historyErr: errors.New("session not found"),
-			msg:        "hi",
-			wantTitle:  "hi",
+			name:           "missing session is tolerated",
+			sessionMissing: true,
+			msg:            "hi",
+			wantTitle:      "hi",
 		},
 	}
 
@@ -925,7 +927,11 @@ func TestAssistantCoordinator_ChatInSession(t *testing.T) {
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(tc.history, tc.historyErr)
+			if tc.sessionMissing {
+				mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return(nil, nil)
+			} else {
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(tc.history, nil)
+			}
 			mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, session *model.AssistantSession) error {
 					assert.Equal(t, sessionId, session.SessionId)
@@ -964,7 +970,7 @@ func TestAssistantCoordinator_ChatInSession_ExistingHistoryPersistsMessages(t *t
 		{Message: &model.Message{Role: "user", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier"}}}},
 		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{{Type: "text", Text: "earlier reply"}}}},
 	}
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return(history, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(history, nil)
 
 	mockIO.EXPECT().MakeRequest(gomock.Any(), false).DoAndReturn(func(req *http.Request, _ bool) (*http.Response, error) {
 		body, err := io.ReadAll(req.Body)
@@ -1004,7 +1010,7 @@ func TestAssistantCoordinator_ChatInSession_UpstreamErrorPropagates(t *testing.T
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(nil, errors.New("network error"))
 
 	ac := newChatInSessionCoordinator(t, mockAssistantstore, mockIO, "https://api.example.com")
@@ -1027,7 +1033,7 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testi
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), sessionId).Return([]*model.StoredMessage{}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{}, nil)
 	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 	// User message is saved before the stream begins.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1056,11 +1062,14 @@ func TestAssistantCoordinator_ChatStreamInSession_FinalizeSavesResponse(t *testi
 	stream.Body.Close()
 
 	// Now exercise the finalize callback with a synthetic raw SSE blob; the
-	// coordinator should parse the assistant message and persist it.
+	// coordinator should parse the assistant message and persist it under a
+	// server-minted id, not whatever the provider put in message_start.
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, sessionId, stored.SessionId)
 			assert.Equal(t, "assistant", stored.Message.Role)
+			assert.NotEmpty(t, stored.Message.Id)
+			assert.NotEqual(t, "assistant", stored.Message.Id)
 			return nil
 		})
 
@@ -1178,7 +1187,7 @@ func TestAssistantCoordinator_ToolInSession(t *testing.T) {
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 			// Loaded once by validateToolRequest; the continuation reuses the validated history.
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 				storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
 			}, nil)
 
@@ -1226,7 +1235,7 @@ func TestAssistantCoordinator_ToolStreamInSession_FinalizeSavesResponse(t *testi
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1"),
 	}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1306,7 +1315,7 @@ func TestAssistantCoordinator_ToolStreamInSession_RejectedTool(t *testing.T) {
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tool-use-1")}, nil)
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tool-use-1")}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, stored *model.StoredMessage) error {
 			assert.Equal(t, []string{"tool_result"}, stored.Tags)
@@ -1361,7 +1370,7 @@ func TestAssistantCoordinator_ToolStreamInSession_RejectedTool_CoalescesWithSibl
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedToolUseTurn("tool-a", "tool-b"),
 	}, nil)
 	mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -1431,7 +1440,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoff(t *testing.T
 	ac.DelegationLibrary = map[string]Tool{delegate.GetName(): delegate}
 
 	// validateToolRequest loads the parent history once; the kickoff itself never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn(delegate.GetName(), json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
 	}, nil)
 
@@ -1474,7 +1483,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DelegationKickoffAgentName(t *
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// validateToolRequest loads the parent history once; the kickoff itself never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Test_Hunter", json.RawMessage(`{"objective":"find DNS beacons","context":"c","expected_output":"o"}`), "delegate-tooluse"),
 	}, nil)
 
@@ -1617,7 +1626,7 @@ func TestAssistantCoordinator_ToolStreamInSession_UsesSessionModel(t *testing.T)
 			mockAssistantstore.EXPECT().GetSessions(gomock.Any(), gomock.Any()).Return([]*model.AssistantSession{
 				{SessionId: tc.sessionId, Model: tc.storedModel},
 			}, nil)
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
 			mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 			mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 				StatusCode: 200,
@@ -1649,7 +1658,7 @@ func TestAssistantCoordinator_ResolveDelegationStream(t *testing.T) {
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// Parent history still has the unanswered delegate tool_use.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		{Message: &model.Message{Role: "assistant", ContentBlocks: []model.ContentBlock{
 			{Type: "tool_use", Id: "delegate-tooluse", Name: "delegate_to_Hunter"},
 		}}},
@@ -1712,7 +1721,7 @@ func TestAssistantCoordinator_ResolveDelegationStream_DetachesFromRequestCtx(t *
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
 			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
 			return []*model.StoredMessage{storedToolUseTurn("delegate-tooluse")}, nil
@@ -1762,7 +1771,7 @@ func TestAssistantCoordinator_ToolStreamInSession_DetachesFromRequestCtx(t *test
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ *model.AssistantSession) ([]*model.StoredMessage, error) {
 			assert.NoError(t, ctx.Err(), "history load must run on a detached, non-cancelled context")
 			return []*model.StoredMessage{storedNamedToolUseTurn("query_events", json.RawMessage(`{"q":"x"}`), "tool-use-1")}, nil
@@ -2062,7 +2071,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
 		},
@@ -2071,7 +2080,7 @@ func TestAssistantCoordinator_ToolInSession_EdgeCases(t *testing.T) {
 			// and returned even when the tool_result save fails.
 			name: "save tool_result failure does not discard the billed response",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), false).Return(assistantOkTextResponse("done"), nil)
 				// First persistence is the tool_result message; fail it. The
 				// assistant response is still saved.
@@ -2119,7 +2128,7 @@ func TestAssistantCoordinator_ToolInSession_AsyncToolNilResult(t *testing.T) {
 
 	// An async tool's turn ends at execution, so history is only loaded once, by
 	// validateToolRequest.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("async_tool", nil, "tu"),
 	}, nil)
 
@@ -2151,7 +2160,7 @@ func TestAssistantCoordinator_ToolInSession_DelegationKickoffParksForApproval(t 
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 	// validateToolRequest loads the parent history once; the parked kickoff never does.
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Hunter", nil, "tu"),
 	}, nil)
 	// The child session is created and its objective seeded; then the sub-agent's
@@ -2233,7 +2242,11 @@ func delegationTestSessions(_ context.Context, opts ...model.GetSessionsOpt) ([]
 	for _, opt := range opts {
 		opt(o)
 	}
-	switch o.SessionId() {
+	var requested string
+	if ids := o.SessionIds(); len(ids) == 1 {
+		requested = ids[0]
+	}
+	switch requested {
 	case "child-1":
 		return []*model.AssistantSession{{
 			SessionId:       "child-1",
@@ -2301,7 +2314,7 @@ func TestAssistantCoordinator_ToolInSession_Delegation(t *testing.T) {
 			mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
 			// Loaded twice: once by validateToolRequest, once by the delegation fold-back
 			// continuation, which runs after the lock was released and so reloads.
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 				storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
 			}, nil).Times(2)
 			mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -2403,7 +2416,7 @@ func TestAssistantCoordinator_StartDelegation_KickoffStreamErrorResolvesParent(t
 	mockIO := detectionsmock.NewMockIOManager(ctrl)
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 	mockAssistantstore.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil)
-	mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
+	mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{
 		storedNamedToolUseTurn("delegate_to_Hunter", nil, "delegate-tooluse"),
 	}, nil).AnyTimes()
 	// Two saves: the child's objective, then the parent's error tool_result.
@@ -2503,14 +2516,14 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 		{
 			name: "history load error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
 		},
 		{
 			name: "upstream stream error propagates",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(nil, errors.New("network error"))
 			},
 			wantErr: true,
@@ -2520,7 +2533,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_ErrorPaths(t *testing.T) {
 			// returned so finalize can save it and its usage.
 			name: "save tool_result failure does not abandon the billed stream",
 			setup: func(mockAssistantstore *servermock.MockAssistantstore, mockIO *detectionsmock.MockIOManager) {
-				mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
+				mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return([]*model.StoredMessage{storedToolUseTurn("tu1")}, nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader("data: stream")),
@@ -2912,13 +2925,13 @@ func TestAssistantCoordinator_Init(t *testing.T) {
 	// Disable embedded prompt so getPrompt() is a no-op.
 	embeddedSystemPrompt = []byte{}
 
-	protocols = map[string]ProtocolConstructor{
-		fakeProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+	protocols = map[string]ProtocolRegistration{
+		fakeProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return &mockAdapter{protocol: fakeProtocol}, nil
-		},
-		failProtocol: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
+		}},
+		failProtocol: {New: func(_ context.Context, _ *server.Server, cfg map[string]any) (server.AssistantAdapter, error) {
 			return nil, errors.New("constructor failed")
-		},
+		}},
 	}
 
 	validAdapter := func(name, proto string) map[string]any {
@@ -3154,6 +3167,84 @@ func TestAssistantCoordinator_Init_ToolUseTurnPollingConfig(t *testing.T) {
 			assert.NoError(t, ac.Init(tc.moduleConfig))
 			assert.Equal(t, tc.wantAttempts, ac.toolUseTurnAttempts)
 			assert.Equal(t, tc.wantDelay, ac.toolUseTurnDelay)
+		})
+	}
+}
+
+func TestProtocolsRequiringInternet(t *testing.T) {
+	assert.True(t, protocols[(&SOAiCloudAdapter{}).Protocol()].RequiresInternet)
+	assert.True(t, protocols[(&GeminiAdapter{}).Protocol()].RequiresInternet)
+	assert.False(t, protocols[(&OpenAIChatAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIResponsesAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+	assert.False(t, protocols[(&OpenAIEmbeddingsAdapter{}).Protocol()].RequiresInternet, "points at a configurable, possibly local, URL")
+}
+
+func TestLoadAdapters_AirgapSkipsCloudProtocols(t *testing.T) {
+	const cloudProtocol = "cloud_protocol"
+	const localProtocol = "local_protocol"
+
+	origProtocols := protocols
+	t.Cleanup(func() {
+		protocols = origProtocols
+	})
+
+	cloudBuilt := false
+	protocols = map[string]ProtocolRegistration{
+		cloudProtocol: {
+			New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+				cloudBuilt = true
+				return &mockAdapter{protocol: cloudProtocol}, nil
+			},
+			RequiresInternet: true,
+		},
+		localProtocol: {New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+			return &mockAdapter{protocol: localProtocol}, nil
+		}},
+	}
+
+	adapterConfig := module.ModuleConfig{
+		"adapters": []any{
+			map[string]any{"name": "cloud", "protocol": cloudProtocol},
+			map[string]any{"name": "local", "protocol": localProtocol},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		airgap       bool
+		wantAdapters []string
+		wantEnabled  map[string]bool
+	}{
+		{"online loads every adapter", false, []string{"cloud", "local"}, map[string]bool{"a@cloud": true, "b@local": true}},
+		{"airgap skips cloud adapters and their models", true, []string{"local"}, map[string]bool{"a@cloud": false, "b@local": true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cloudBuilt = false
+			srv := &server.Server{
+				Context: context.Background(),
+				Config: &config.ServerConfig{
+					AirgapEnabled: tt.airgap,
+					ClientParams: model.ClientParameters{
+						AssistantParams: model.AssistantParameters{
+							AvailableModels: []model.ModelParameters{
+								{ID: "a", Adapter: "cloud", Enabled: true},
+								{ID: "b", Adapter: "local", Enabled: true},
+							},
+						},
+					},
+				},
+			}
+			ac := &AssistantCoordinator{srv: srv}
+
+			ac.loadAdapters(adapterConfig)
+
+			assert.ElementsMatch(t, tt.wantAdapters, slices.Collect(maps.Keys(ac.adapters)))
+			assert.Equal(t, !tt.airgap, cloudBuilt, "a skipped adapter is never constructed")
+			for _, m := range srv.Config.ClientParams.AssistantParams.AvailableModels {
+				assert.Equal(t, tt.wantEnabled[m.Selector()], m.Enabled, m.Selector())
+			}
 		})
 	}
 }
@@ -4072,7 +4163,7 @@ func TestAssistantCoordinator_loadTurnSession(t *testing.T) {
 					for _, opt := range opts {
 						opt(o)
 					}
-					assert.Equal(t, "sess-1", o.SessionId())
+					assert.Equal(t, []string{"sess-1"}, o.SessionIds())
 					assert.True(t, o.IncludeDeleted())
 					assert.False(t, o.MessageMeta())
 					assert.Equal(t, tc.wantUsage, o.Usage())
@@ -4202,7 +4293,7 @@ func TestAssistantCoordinator_newDelegationSession_Depth(t *testing.T) {
 
 	mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 	mockAssistantstore.EXPECT().
-		GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+		GetSessions(gomock.Any(), gomock.Any()).
 		Return([]*model.AssistantSession{{SessionId: "parent", Depth: 2, Model: "m@A"}}, nil)
 
 	ac := &AssistantCoordinator{srv: &server.Server{Assistantstore: mockAssistantstore}}
@@ -4241,7 +4332,7 @@ func TestAssistantCoordinator_delegationDepthRefusal(t *testing.T) {
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 			if tc.expectLookup {
 				mockAssistantstore.EXPECT().
-					GetSessions(gomock.Any(), gomock.Any(), gomock.Any()).
+					GetSessions(gomock.Any(), gomock.Any()).
 					Return([]*model.AssistantSession{{SessionId: "s", Depth: tc.parentDepth}}, nil)
 			}
 
@@ -4365,7 +4456,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_CoalescesParallelTools(t *t
 			mockIO := detectionsmock.NewMockIOManager(ctrl)
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).Return(tc.history, nil)
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).Return(tc.history, nil)
 			if tc.wantContinue {
 				mockAssistantstore.EXPECT().SaveChat(gomock.Any(), gomock.Any()).Return(nil)
 				mockIO.EXPECT().MakeRequest(gomock.Any(), true).Return(&http.Response{
@@ -4510,7 +4601,7 @@ func TestAssistantCoordinator_ContinueWithToolResult_AwaitsToolUseTurn(t *testin
 			mockAssistantstore := servermock.NewMockAssistantstore(ctrl)
 
 			calls := 0
-			mockAssistantstore.EXPECT().GetChatMessages(gomock.Any(), gomock.Any()).DoAndReturn(
+			mockAssistantstore.EXPECT().GetChatHistory(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(context.Context, *model.AssistantSession) ([]*model.StoredMessage, error) {
 					calls++
 					return tc.historyProvider(calls)
@@ -4598,4 +4689,377 @@ func TestEmbedUnknownAdapter(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "assistant adapter not found")
+}
+
+func TestFilterEvents(t *testing.T) {
+	testCases := []struct {
+		name         string
+		events       []*model.EventRecord
+		extraFields  []string
+		expectedLen  int
+		validateFunc func(t *testing.T, result []map[string]any)
+	}{
+		{
+			name: "basic event with default fields",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-1",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp":     "2024-01-01T00:00:00Z",
+						"source.ip":      "192.168.1.1",
+						"destination.ip": "10.0.0.1",
+						"tags":           []string{"alert", "malware"},
+						"rule.name":      "ET MALWARE Suspicious",
+						"ignored_field":  "this should not appear",
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				assert.Equal(t, "test-id-1", result[0]["payload"].(map[string]any)["_id"])
+				assert.Equal(t, "2024-01-01T00:00:00Z", result[0]["payload"].(map[string]any)["@timestamp"])
+				assert.Equal(t, "192.168.1.1", result[0]["payload"].(map[string]any)["source.ip"])
+				assert.Equal(t, "10.0.0.1", result[0]["payload"].(map[string]any)["destination.ip"])
+				assert.Equal(t, []string{"alert", "malware"}, result[0]["payload"].(map[string]any)["tags"])
+				assert.Equal(t, "ET MALWARE Suspicious", result[0]["payload"].(map[string]any)["rule.name"])
+				assert.NotContains(t, result[0]["payload"].(map[string]any), "ignored_field")
+			},
+		},
+		{
+			name: "nested fields",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-2",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"destination": map[string]any{
+							"ip":   "10.0.0.1",
+							"port": 443,
+							"geo": map[string]any{
+								"country_name": "United States",
+							},
+						},
+						"source": map[string]any{
+							"ip": "192.168.1.1",
+							"geo": map[string]any{
+								"country_name": "Canada",
+							},
+						},
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				assert.Equal(t, "test-id-2", payload["_id"])
+
+				// Check nested destination fields
+				dest := payload["destination"].(map[string]any)
+				assert.Equal(t, "10.0.0.1", dest["ip"])
+				assert.Equal(t, 443, dest["port"])
+				destGeo := dest["geo"].(map[string]any)
+				assert.Equal(t, "United States", destGeo["country_name"])
+
+				// Check nested source fields
+				src := payload["source"].(map[string]any)
+				assert.Equal(t, "192.168.1.1", src["ip"])
+				srcGeo := src["geo"].(map[string]any)
+				assert.Equal(t, "Canada", srcGeo["country_name"])
+			},
+		},
+		{
+			name: "event with extra fields",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-3",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"custom": map[string]any{
+							"field1": "value1",
+							"field2": "value2",
+						},
+						"ignored_field": "ignored",
+					},
+				},
+			},
+			extraFields: []string{"custom.field1", "custom.field2"},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				assert.Equal(t, "test-id-3", payload["_id"])
+				assert.Equal(t, "2024-01-01T00:00:00Z", payload["@timestamp"])
+
+				// Check extra fields are included
+				custom := payload["custom"].(map[string]any)
+				assert.Equal(t, "value1", custom["field1"])
+				assert.Equal(t, "value2", custom["field2"])
+
+				// Check ignored field is not included
+				assert.NotContains(t, payload, "ignored_field")
+			},
+		},
+		{
+			name: "multiple events",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-4",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"source.ip":  "192.168.1.1",
+						"tags":       []string{"conn"},
+					},
+				},
+				{
+					Id:     "test-id-5",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:01:00Z",
+						"source.ip":  "192.168.1.2",
+						"tags":       []string{"dns"},
+					},
+				},
+			},
+			expectedLen: 2,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				assert.Equal(t, "test-id-4", result[0]["payload"].(map[string]any)["_id"])
+				assert.Equal(t, "test-id-5", result[1]["payload"].(map[string]any)["_id"])
+				assert.Equal(t, "192.168.1.1", result[0]["payload"].(map[string]any)["source.ip"])
+				assert.Equal(t, "192.168.1.2", result[1]["payload"].(map[string]any)["source.ip"])
+			},
+		},
+		{
+			name: "missing fields",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-6",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"source.ip":  "192.168.1.1",
+						// Missing many default fields
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				assert.Equal(t, "test-id-6", payload["_id"])
+				assert.Equal(t, "2024-01-01T00:00:00Z", payload["@timestamp"])
+				assert.Equal(t, "192.168.1.1", payload["source.ip"])
+				// Missing fields should not be present
+				assert.NotContains(t, payload, "destination.ip")
+				assert.NotContains(t, payload, "rule.name")
+			},
+		},
+		{
+			name: "nil field values are excluded",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-7",
+					Source: "test-index",
+					Payload: map[string]any{
+						"@timestamp":     "2024-01-01T00:00:00Z",
+						"source.ip":      "192.168.1.1",
+						"destination.ip": nil,
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				assert.Equal(t, "test-id-7", payload["_id"])
+				assert.Equal(t, "192.168.1.1", payload["source.ip"])
+				// Nil field should not be included
+				assert.NotContains(t, payload, "destination.ip")
+			},
+		},
+		{
+			name: "dns event with multiple field formats",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-8",
+					Source: "dns-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"tags":       []string{"dns"},
+						"dns": map[string]any{
+							"query": map[string]any{
+								"name": "example.com",
+							},
+							"query_name": "alternative.com",
+						},
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				// Both dns field formats should be present
+				dns := payload["dns"].(map[string]any)
+				assert.Equal(t, "alternative.com", dns["query_name"])
+				query := dns["query"].(map[string]any)
+				assert.Equal(t, "example.com", query["name"])
+			},
+		},
+		{
+			name: "comprehensive security event",
+			events: []*model.EventRecord{
+				{
+					Id:     "test-id-9",
+					Source: "alert-index",
+					Payload: map[string]any{
+						"@timestamp": "2024-01-01T00:00:00Z",
+						"tags":       []string{"alert", "ids"},
+						"source": map[string]any{
+							"ip":   "192.168.1.100",
+							"port": 45678,
+						},
+						"destination": map[string]any{
+							"ip":   "10.0.0.1",
+							"port": 443,
+						},
+						"network": map[string]any{
+							"protocol":     "TLS",
+							"transport":    "tcp",
+							"community_id": "1:abc123",
+						},
+						"rule": map[string]any{
+							"name":     "ET MALWARE Suspicious Connection",
+							"category": "Malware",
+							"uuid":     "abc-123-def",
+						},
+						"event": map[string]any{
+							"severity":       2,
+							"severity_label": "high",
+						},
+						"log": map[string]any{
+							"id": map[string]any{
+								"uid": "uid123",
+							},
+						},
+						"observer": map[string]any{
+							"name": "sensor1",
+						},
+						"some": map[string]any{
+							"random": map[string]any{
+								"field": "not included",
+							},
+						},
+					},
+				},
+			},
+			expectedLen: 1,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				payload := result[0]["payload"].(map[string]any)
+				assert.Equal(t, "test-id-9", payload["_id"])
+				assert.Equal(t, []string{"alert", "ids"}, payload["tags"])
+
+				// Check nested source fields
+				source := payload["source"].(map[string]any)
+				assert.Equal(t, "192.168.1.100", source["ip"])
+				assert.Equal(t, 45678, source["port"])
+
+				// Check nested destination fields
+				destination := payload["destination"].(map[string]any)
+				assert.Equal(t, "10.0.0.1", destination["ip"])
+				assert.Equal(t, 443, destination["port"])
+
+				// Check nested network fields
+				network := payload["network"].(map[string]any)
+				assert.Equal(t, "TLS", network["protocol"])
+				assert.Equal(t, "tcp", network["transport"])
+				assert.Equal(t, "1:abc123", network["community_id"])
+
+				// Check nested rule fields
+				rule := payload["rule"].(map[string]any)
+				assert.Equal(t, "ET MALWARE Suspicious Connection", rule["name"])
+				assert.Equal(t, "Malware", rule["category"])
+				assert.Equal(t, "abc-123-def", rule["uuid"])
+
+				// Check event fields
+				event := payload["event"].(map[string]any)
+				assert.Equal(t, 2, event["severity"])
+				assert.Equal(t, "high", event["severity_label"])
+
+				// Check log ID and observer
+				log := payload["log"].(map[string]any)
+				logID := log["id"].(map[string]any)
+				assert.Equal(t, "uid123", logID["uid"])
+
+				observer := payload["observer"].(map[string]any)
+				assert.Equal(t, "sensor1", observer["name"])
+
+				// Verify random field is not included
+				assert.NotContains(t, payload, "some")
+			},
+		},
+		{
+			name:        "empty events list",
+			events:      []*model.EventRecord{},
+			expectedLen: 0,
+			validateFunc: func(t *testing.T, result []map[string]any) {
+				assert.Empty(t, result)
+			},
+		},
+	}
+
+	ac := &AssistantCoordinator{
+		filterEventFields: []string{
+			"@timestamp",
+			"client.name",
+			"destination.ip", "destination.port", "destination.geo.country_name",
+			"dns.query.name", "dns.query_name",
+			"event.action", "event.category", "event.module", "event.dataset", "event.outcome", "event.severity", "event.severity_label", "event.type",
+			"event_data.agent.name", "event_data.host.os.name",
+			"file.mime_type", "file.name",
+			"hash.md5", "hash.sha1",
+			"host.mac", "host.name", "host.os.name",
+			"http.method", "http.useragent", "http.virtual_host",
+			"log.id.uid",
+			"network.community_id", "network.protocol", "network.transport",
+			"notice.message",
+			"observer.name",
+			"process.name", "process.executable", "process.entity_id", "process.command_line", "process.Ext.ancestry",
+			"process.parent.entity_id", "process.parent.command_line",
+			"rule.category", "rule.name", "rule.uuid",
+			"software.name", "software.type", "software.version.unparsed",
+			"source.ip", "source.port", "source.geo.country_name",
+			"ssh.cypher_algorithm", "ssh.client", "ssh.server",
+			"ssl.cipher", "ssl.server_name", "ssl.version", "system.auth.sudo.command",
+			"user.name", "user.domain", "user.effective.name",
+			"weird.name",
+			"tags",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ac.FilterEvents(tc.events, tc.extraFields...)
+
+			assert.Len(t, result, tc.expectedLen)
+
+			if tc.validateFunc != nil {
+				tc.validateFunc(t, result)
+			}
+		})
+	}
+}
+
+// A child delegated from a shared parent is born shared; nothing else carries over.
+func TestNewDelegationSessionFor_InheritsShared(t *testing.T) {
+	toolReq := &model.ToolRequest{SessionId: "parent", ToolUseId: "tu", Model: "m@A"}
+	kickoff := model.DelegationKickoff{ChildSessionId: "child", ChildModel: "c@A", AgentName: "Hunter", Objective: "obj"}
+
+	shared := newDelegationSessionFor(&model.AssistantSession{SessionId: "parent", Tags: []string{"incognito", model.SessionTagShared}}, toolReq, kickoff)
+	assert.Equal(t, []string{model.SessionTagShared}, shared.Tags)
+
+	private := newDelegationSessionFor(&model.AssistantSession{SessionId: "parent", Tags: []string{"incognito"}}, toolReq, kickoff)
+	assert.Nil(t, private.Tags)
+
+	orphan := newDelegationSessionFor(nil, toolReq, kickoff)
+	assert.Nil(t, orphan.Tags)
 }

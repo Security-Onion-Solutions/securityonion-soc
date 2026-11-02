@@ -1176,6 +1176,8 @@ func TestOpenAIChatAdapter_SendMessageStream(t *testing.T) {
 		chunks           []openai.ChatCompletionChunk
 		finalUsage       openai.CompletionUsage
 		initialStreamErr error
+		failAfter        int
+		midStreamErr     error
 		expectedStatus   int
 		expectError      bool
 		expectedEvents   []expectedSSEEvent
@@ -1383,13 +1385,46 @@ func TestOpenAIChatAdapter_SendMessageStream(t *testing.T) {
 				{eventType: "[DONE]"},
 			},
 		},
+		{
+			name: "stream fails after partial output",
+			chunks: []openai.ChatCompletionChunk{
+				newChatTextDelta("Hello"),
+				newChatTextDelta(", world!"),
+			},
+			finalUsage:     createChatCompletionUsage(10, 5),
+			failAfter:      1,
+			midStreamErr:   context.Canceled,
+			expectedStatus: 200,
+			expectedEvents: []expectedSSEEvent{
+				{eventType: "message_start"},
+				{
+					eventType: "content_block_delta",
+					validate: func(t *testing.T, e map[string]interface{}) {
+						delta := e["delta"].(map[string]interface{})
+						assert.Equal(t, "Hello", delta["text"])
+					},
+				},
+				{
+					eventType: "error",
+					validate: func(t *testing.T, e map[string]interface{}) {
+						assert.Equal(t, "context canceled", e["error"].(map[string]interface{})["message"])
+					},
+				},
+				{eventType: "[DONE]"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &mockOpenAIClient{
 				chatCompletionsNewStreamingFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) ChatCompletionStream {
-					return newMockChatCompletionStream(tt.chunks, tt.finalUsage, tt.initialStreamErr)
+					stream := newMockChatCompletionStream(tt.chunks, tt.finalUsage, tt.initialStreamErr)
+					if tt.midStreamErr != nil {
+						ms := stream.(*mockChatCompletionStream)
+						ms.failAfter, ms.failErr = tt.failAfter, tt.midStreamErr
+					}
+					return stream
 				},
 			}
 

@@ -4,17 +4,36 @@
 // https://securityonion.net/license; you may not use this file except in compliance with the
 // Elastic License 2.0.
 
-globalThis.socNotifications = {
+rootMethods.push({
   loadNotifications() {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
+    const currentGridId = this.selectedGridId || '';
+    const lastGridId = this.lastLoadedNotificationGridId !== undefined ? (this.lastLoadedNotificationGridId || '') : '';
+    if (lastGridId !== currentGridId) {
+      this.notifications = [];
+      this.notificationsTruncated = false;
+      this.unreadCount = 0;
+    }
     const filter = this.notificationShowDismissed ? 'all' : 'active';
     return this.papi.get('notifications?filter=' + filter)
       .then(response => {
-        this.notifications = response.data || [];
+        this.lastLoadedNotificationGridId = currentGridId;
+        const data = response?.data || {};
+        if (Array.isArray(data)) {
+          this.notifications = data;
+          this.notificationsTruncated = false;
+        } else {
+          this.notifications = data.notifications || [];
+          this.notificationsTruncated = !!data.truncated;
+        }
         this.unreadCount = this.notifications.filter(n => !n.isRead && !n.isDismissed).length;
         return this.notifications;
       })
       .catch(err => {
+        this.lastLoadedNotificationGridId = currentGridId;
+        this.notifications = [];
+        this.notificationsTruncated = false;
+        this.unreadCount = 0;
         console.error('Failed to load notifications', err);
       });
   },
@@ -23,10 +42,20 @@ globalThis.socNotifications = {
     if (!this.username || !this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return Promise.resolve();
     return this.papi.get('notifications?filter=unread')
       .then(response => {
-        this.unreadCount = (response.data || []).length;
+        const data = response?.data || {};
+        if (Array.isArray(data)) {
+          this.unreadCount = data.length;
+        } else if (typeof data.count === 'number') {
+          this.unreadCount = data.count;
+        } else if (Array.isArray(data.notifications)) {
+          this.unreadCount = data.notifications.length;
+        } else {
+          this.unreadCount = 0;
+        }
         return this.unreadCount;
       })
       .catch(err => {
+        this.unreadCount = 0;
         console.error('Failed to load unread count', err);
       });
   },
@@ -41,13 +70,39 @@ globalThis.socNotifications = {
       });
   },
 
+  markAllAsRead(isRead = true) {
+    this.notificationMenu = true;
+    return this.papi.put('notifications/read/all', { isRead })
+      .then(() => {
+        this.notificationMenu = true;
+        return Promise.all([this.loadNotifications(), this.loadUnreadCount()]);
+      })
+      .catch(err => {
+        console.error('Failed to mark all notifications as read', err);
+      });
+  },
+
   dismissNotification(id, isDismissed) {
+    this.notificationMenu = true;
     return this.papi.put('notifications/' + id + '/dismiss', { isDismissed })
       .then(() => {
+        this.notificationMenu = true;
         return this.loadNotifications();
       })
       .catch(err => {
         console.error('Failed to update dismiss state', err);
+      });
+  },
+
+  dismissAll(isDismissed = true) {
+    this.notificationMenu = true;
+    return this.papi.put('notifications/dismiss/all', { isDismissed })
+      .then(() => {
+        this.notificationMenu = true;
+        return Promise.all([this.loadNotifications(), this.loadUnreadCount()]);
+      })
+      .catch(err => {
+        console.error('Failed to dismiss all notifications', err);
       });
   },
 
@@ -102,6 +157,16 @@ globalThis.socNotifications = {
     return '#';
   },
 
+  deepLinkTitle(name) {
+    switch (name) {
+      case '🔔': return this.i18n.aiInvestigation;
+      case '💬': return this.i18n.openInOnionAi;
+      case '🌐': return this.i18n.view;
+      case '⬇': return this.i18n.download;
+    }
+    return name;
+  },
+
   toggleNotificationExpand(notif) {
     if (!notif || !notif.id) return;
     if (!this.expandedNotifications) {
@@ -114,7 +179,14 @@ globalThis.socNotifications = {
     }
   },
 
+  toggleNotificationShowDismissed() {
+    this.notificationShowDismissed = !this.notificationShowDismissed;
+    this.notificationMenu = true;
+    return this.loadNotifications();
+  },
+
   refreshNotifications() {
+    this.notificationMenu = true;
     return this.loadNotifications();
   },
 
@@ -133,8 +205,43 @@ globalThis.socNotifications = {
     }
   },
 
+  showNotificationToast(payload) {
+    if (!payload || !payload.title) return;
+    this.notificationToastTitle = payload.title;
+    this.notificationToastSeverity = payload.severity || 'info';
+    this.notificationToast = true;
+  },
+
+  getNotificationToastColor(severity) {
+    const s = severity?.toLowerCase();
+    switch (s) {
+      case 'critical': return 'red-darken-4';
+      case 'high': return 'deep-orange-darken-3';
+      case 'medium': return 'amber-darken-4';
+      case 'low': return 'blue-darken-3';
+      default: return 'grey-darken-3';
+    }
+  },
+
+  openNotificationFromToast() {
+    this.notificationToast = false;
+    this.notificationMenu = true;
+    this.loadNotifications();
+  },
+
   handleIncomingNotification(payload) {
     if (!this.isLicensed(this.FEAT_NTF) || !this.notificationsStarted) return;
+
+    if (payload && payload.title && typeof this.showNotificationToast === 'function') {
+      this.showNotificationToast(payload);
+    }
+
+    const currentGridId = this.selectedGridId || '';
+    const notificationGridId = payload?.gridId || '';
+    if (notificationGridId !== currentGridId) {
+      return;
+    }
+
     this.unreadCount = (this.unreadCount || 0) + 1;
     if (payload && payload.timestamp) {
       this.lastUnreadNotificationTime = payload.timestamp;
@@ -143,16 +250,4 @@ globalThis.socNotifications = {
       this.loadNotifications();
     }
   }
-};
-
-var socNotifications = globalThis.socNotifications;
-
-if (typeof window !== 'undefined') {
-  window.socNotifications = socNotifications;
-}
-if (typeof global !== 'undefined') {
-  global.socNotifications = socNotifications;
-}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = socNotifications;
-}
+});

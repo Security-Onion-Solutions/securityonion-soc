@@ -8,6 +8,7 @@ package hydra
 
 import (
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
@@ -26,14 +27,19 @@ func TestCopyFromClient(tester *testing.T) {
 }
 
 func TestCopyToClient(tester *testing.T) {
+	now := time.Now()
 	hydraClient := NewHydraClient("test")
+	hydraClient.CreateDate = now
+	hydraClient.UpdateDate = now
 	hydraClient.Metadata = &ClientMetadata{
 		Note:           "notes",
 		SearchUsername: "sn",
 	}
-	client := model.NewClient()
+	client := &model.Client{}
 	hydraClient.copyToClient(client)
 	assert.Equal(tester, hydraClient.Name, client.Name)
 	assert.Equal(tester, hydraClient.Metadata.SearchUsername, client.SearchUsername)
 	assert.Equal(tester, hydraClient.Metadata.Note, client.Note)
+	assert.Equal(tester, now, client.CreateTime)
+	assert.Equal(tester, now, client.UpdateTime)
 }

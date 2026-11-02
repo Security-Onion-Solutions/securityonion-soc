@@ -184,7 +184,7 @@ func (t *UpdateDetectionContentTool) Execute(ctx context.Context, srv *server.Se
 			"detectionPublicId": detect.PublicID,
 			"errMap":            errMap,
 		}).Error("unable to sync detection")
-		
+
 		return nil, errors.New("ERROR_DETECTION_SYNC_FAILED")
 	}
 

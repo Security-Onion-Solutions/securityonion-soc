@@ -119,7 +119,7 @@ func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) {
+	if !model.IsValidSettingId(setting.Id) || (setting.NodeId != "" && !model.IsValidMinionId(setting.NodeId)) || (setting.DuplicatedFromID != "" && !model.IsValidSettingId(setting.DuplicatedFromID)) {
 		web.Respond(w, r, http.StatusBadRequest, errors.New("Invalid setting"))
 		return
 	}

@@ -236,13 +236,13 @@ var MetricConfigs = map[string]MetricConfig{
 		Units:     "percent",
 	},
 	"eps": {
-		Tables:    []string{"consumptioneps", "fbstats"},
-		Fields:    []string{"eps", "eps"},
-		Keys:      []string{"consumption_eps", "production_eps"},
+		Tables:    []string{"consumptioneps"},
+		Fields:    []string{"eps"},
+		Keys:      []string{"consumption_eps"},
 		Factor:    1.0,
 		Aggregate: "SUM",
 		TitleKey:  "eps",
-		LabelKeys: []string{"metricsConsumptionEps", "metricsProductionEps"},
+		LabelKeys: []string{"metricsConsumptionEps"},
 	},
 	"loss": {
 		Tables:    []string{"suridrop", "zeekdrop"},

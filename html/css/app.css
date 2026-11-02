@@ -728,7 +728,7 @@ td {
   padding: 8px;
 }
 
-.extracted-content > pre {
+.extracted-content pre {
   text-wrap: wrap;
   word-break: break-word;
   background: unset !important;
@@ -764,6 +764,11 @@ td {
 
 .case-title {
   text-transform: capitalize;
+}
+
+.converted-rule code {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 #convert-button-container {
@@ -817,7 +822,7 @@ td {
   font-size: 14px;
   line-height: 1.5;
   padding: 5px;
-  border: 1px solid gray;
+  border: 1px solid rgba(var(--v-theme-text), 0.38);
   border-radius: 3px;
 }
 
@@ -825,9 +830,12 @@ td {
   min-height: 10em;
 }
 
-/* optional class for removing the outline */
 .prism-editor__textarea:focus {
   outline: none;
+}
+
+.prism:focus-within {
+  border-color: rgb(var(--v-theme-text));
 }
 
 code {
@@ -1169,11 +1177,6 @@ ul ul ul {
 
 .chat-history-sidebar .v-list-item:hover {
   background-color: rgba(var(--v-theme-primary), 0.08);
-}
-
-.chat-history-sidebar .v-list-item.bg-primary {
-  background-color: rgba(var(--v-theme-primary), 0.12) !important;
-  color: rgb(var(--v-theme-altprimary));
 }
 
 .chat-history-sidebar .v-list-item-title {

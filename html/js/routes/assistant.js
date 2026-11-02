@@ -6,8 +6,47 @@
 
 loadPageTemplate('page-assistant', 'pages/assistant.html');
 
-// Methods are split by concern across sibling files that load first (see index.html)
-// and publish method objects on globalThis, merged into `methods` below.
+// The assistant.*.js files add this route's methods.
+
+const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+const MSGTAG_PARTIAL = "partial";
+// A message copied from another session: its usage is shown but never billed again.
+const MSGTAG_CLONE = "clone";
+
+const CHOICE_MARKER_REGEX = /\[\[CHOICE\]\]([\s\S]*?)\[\[\/CHOICE\]\]/g;
+
+if (typeof global !== 'undefined') {
+  global.MSGTAG_CONTEXTCOMPRESSION = MSGTAG_CONTEXTCOMPRESSION;
+  global.MSGTAG_PARTIAL = MSGTAG_PARTIAL;
+  global.MSGTAG_CLONE = MSGTAG_CLONE;
+  global.CHOICE_MARKER_REGEX = CHOICE_MARKER_REGEX;
+}
+
+rootMethods.push({
+  stripChoiceMarkers(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text.replace(CHOICE_MARKER_REGEX, (_fullMatch, label) => label.trim());
+  },
+  // Canonical id@adapter model selector: used as the model key and sent to
+  // the backend to identify the model.
+  buildModelIdentifier(model) {
+    if (!model) return '';
+    return `${model?.id||''}@${model?.adapter||''}`;
+  },
+  // resolveMappedModel resolves a model selector (id@adapter or bare id,
+  // mirroring the backend's resolveModel: prefer an enabled model, else
+  // first match) against a model list; null when nothing matches.
+  resolveMappedModel(models, selector) {
+    if (!selector) return null;
+    let fallback = null;
+    for (const m of models || []) {
+      if (this.buildModelIdentifier(m) !== selector && m.id !== selector) continue;
+      if (m.enabled) return m;
+      if (!fallback) fallback = m;
+    }
+    return fallback;
+  },
+});
 
 routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
   template: '#page-assistant',
@@ -22,6 +61,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     chatHistory: [],
     chatHistoryById: {},
     currentChatId: null,
+    incognito: false,
     creditsRemaining: 0,
     creditsLoaded: false,
     // Per-session tool-execution state (one record per session id); replaces five
@@ -53,6 +93,10 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     thresholdColorRatioMax: 1,
     lowBalanceColorAlert: 0,
     agentic: false,
+    automatedAgents: null,
+    automatedAgentsLoading: false,
+    // generatedAt of the counts shown, in ms; anything older is dropped.
+    automatedAgentsGeneratedAt: 0,
     availableAgents: [],
     agentMapping: {},
     availableModels: [],
@@ -61,6 +105,7 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     adaptersMap: new Map(),
     groupedModels: [],
     currentModel: '',
+    savedModel: '',
     activeStreamingSessionId: null,
     autoScrollOnNextRender: false, // gate for programmatic scrolls
     isPinnedToBottom: true, // user is at (or near) bottom?
@@ -80,14 +125,21 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
     // Backend automatically saves chats, just save current chat ID
     this.saveCurrentChatId();
     this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
+    this.$root.unsubscribe('assistant:automation', this.onAutomationActivity);
   },
   mounted() {
     this.$root.loadParameters('assistant', this.initAssistant);
     this.$root.subscribe('assistant:agentic', this.onAgenticUpdate);
+    this.$root.subscribe('assistant:automation', this.onAutomationActivity);
   },
   watch: {
+    // Activity pushed while disconnected was missed.
+    '$root.connected'(connected) {
+      if (connected) this.loadAutomatedAgents();
+    },
+    // A new chat's first send puts its id in the URL before the server has the session.
     '$route'(to, from) {
-      if (to.params.sessionId !== from.params.sessionId) {
+      if (to.params.sessionId !== from.params.sessionId && to.params.sessionId !== this.currentChatId) {
         this.handleRouteSessionId();
       }
     },
@@ -144,10 +196,5 @@ routes.push({ path: '/assistant/:sessionId?', name: 'assistant', component: {
         .sort((a, b) => b.credits - a.credits);
     },
   },
-  methods: Object.assign({},
-    AssistantSessions,
-    AssistantStreaming,
-    AssistantTools,
-    AssistantUtils,
-  ),
+  methods: {},
 }});

@@ -17,10 +17,19 @@ import (
 
 const (
 	MessageTagContextCompression = "context_compression"
+	// MessageTagPartial marks a message still being streamed. A stored message
+	// that kept the tag is one whose turn never finished.
+	MessageTagPartial = "partial"
+	// MessageTagClone marks a message copied from another session. Its usage is
+	// kept for display but excluded from every credit and token sum.
+	MessageTagClone = "clone"
 
-	SessionTagMemory    = "memory"
-	SessionTagEmbed     = "embed"
-	SessionTagReconcile = "reconcile"
+	SessionTagMemory     = "memory"
+	SessionTagEmbed      = "embed"
+	SessionTagReconcile  = "reconcile"
+	SessionTagIncognito  = "incognito"
+	SessionTagShared     = "shared"
+	SessionTagAutomation = "automation"
 )
 
 // MemorySessionTags marks sessions created by the background memory pipeline
@@ -29,7 +38,19 @@ const (
 // is passed, and are never scanned for memories themselves.
 var MemorySessionTags = []string{SessionTagMemory, SessionTagEmbed, SessionTagReconcile}
 
-var ClientMessageTags = []string{MessageTagContextCompression}
+// ReservedSessionTags cannot be added or removed through the session tag endpoint.
+// SessionTagShared is deliberately absent: sharing and un-sharing is the action that
+// endpoint exists for.
+var ReservedSessionTags = slices.Concat(MemorySessionTags, []string{SessionTagIncognito, SessionTagAutomation})
+
+// AutomationSessionTags are stamped on every session an automation run creates.
+// Callers assigning this to a session must slices.Clone it.
+var AutomationSessionTags = []string{SessionTagAutomation, SessionTagShared}
+
+// ClientMessageTags are the tags a client may assert on an incoming message.
+// SessionTagIncognito is accepted here so the first message can mark its new
+// session incognito.
+var ClientMessageTags = []string{MessageTagContextCompression, SessionTagIncognito}
 
 // FilterClientTags drops any tag the client isn't allowed to assert.
 func FilterClientTags(tags []string) []string {
@@ -129,6 +150,10 @@ type saveableMessage struct {
 	StopReason    *string        `json:"stopReason,omitempty"`
 	StopSequence  *string        `json:"stopSequence,omitempty"`
 	Usage         *Usage         `json:"usage,omitempty"`
+}
+
+func (sm *StoredMessage) IsPartial() bool {
+	return slices.Contains(sm.Tags, MessageTagPartial)
 }
 
 func (sm *StoredMessage) MarshalJSON() ([]byte, error) {
@@ -577,6 +602,82 @@ type UpdateSessionRequest struct {
 	Tag    string `json:"tag" example:"shared"`
 }
 
+// @Description The sessions whose access to check.
+type SessionAccessRequest struct {
+	// Up to 50 session ids.
+	SessionIds []string `json:"sessionIds" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
+}
+
+// AgentSessionRequest drives one agent session to its final turn with no browser
+// attached: the session is created, the objective seeded, and turns and tool
+// results looped until the agent stops or the turn cap trips.
+type AgentSessionRequest struct {
+	// Seeds the session's first user message, the way a delegation seeds a child
+	// session. Not a system prompt: the agent brings its own.
+	Objective string
+	// Agent name, whose configured mapping resolves the model.
+	Agent string
+	// Optional. Runs the session as this identity instead of the requestor in ctx.
+	OwnerId string
+	// Optional. The id to create the session with, so a caller can record it first;
+	// minted when empty.
+	SessionId string
+	// Tags stamped on the created session in addition to AutomationSessionTags.
+	Tags []string
+	// Optional. The session type and entity it concerns, stamped on the root session.
+	Type     string
+	EntityId string
+	// Ceiling on model turns across the session and every sub-agent it delegates
+	// to, so an agent that loops cannot bill indefinitely. 0 means the configured
+	// default, not unlimited.
+	MaxTurns int
+}
+
+// AgentSessionResult is produced at the end of one headless agent session.
+type AgentSessionResult struct {
+	// The session the run drove, linking the result back to its transcript.
+	SessionId string
+	// The agent's final assistant text, where a caller looks for the structured
+	// conclusion it asked for.
+	FinalText string
+	// The tool calls the session's own turns ran, oldest first, where a caller reads a
+	// conclusion it asked the agent to report through a tool. Delegated sessions' calls are
+	// not included.
+	ToolUses []ContentBlock
+	// Model turns actually executed.
+	Turns int
+	// True when the run stopped on MaxTurns rather than the agent ending its turn,
+	// so a caller can decline to act on a half-finished analysis.
+	Truncated bool
+}
+
+// AgentStreamEvent is broadcast on every flush of a headless session's streaming
+// turn. Message is the partial as stored so far, so a viewer replaces rather than
+// appends; Done marks the turn's final flush.
+type AgentStreamEvent struct {
+	SessionId string   `json:"sessionId"`
+	MessageId string   `json:"messageId"`
+	Seq       int      `json:"seq"`
+	Message   *Message `json:"message"`
+	Done      bool     `json:"done,omitempty"`
+}
+
+const (
+	AgentPhaseWaitingLLM         = "waiting_llm"
+	AgentPhaseInvokingToolPrefix = "invoking_tool:"
+)
+
+// AgentSessionPhase is what a running headless session is doing right now.
+// RootSessionId is the session a work item records, so a delegated child's phase
+// can be joined back to its item.
+type AgentSessionPhase struct {
+	SessionId     string    `json:"sessionId"`
+	RootSessionId string    `json:"rootSessionId"`
+	Agent         string    `json:"agent"`
+	Phase         string    `json:"phase"`
+	Since         time.Time `json:"since"`
+}
+
 // StoredAgent is one agent as persisted in the "assistant.agents" setting (one
 // JSON object per line, the []{} uiElements convention) and as sent to the
 // per-agent save endpoint. An entry naming a system agent is an override, not a
@@ -593,6 +694,8 @@ type StoredAgent struct {
 	Description   string   `json:"description" example:"Analyzes suspicious binaries and scripts"`
 	// Addendum to the built-in prompt for a system agent; the whole prompt otherwise.
 	Persona string `json:"persona" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // StoredSkill is one skill in the "assistant.skills" setting, following the same
@@ -624,6 +727,8 @@ type Agent struct {
 	Enabled bool `json:"enabled" example:"true"`
 	// Admin-authored persona; exposed because an admin wrote it.
 	PersonaAddendum string `json:"personaAddendum" example:"Prefer static analysis before detonating a sample."`
+	// 0 is unlimited. Caps how many sessions may run this agent at once.
+	MaxConcurrentInstances int `json:"maxConcurrentInstances" example:"2"`
 }
 
 // EffectivePrompt is the built-in prompt with the admin persona appended; either

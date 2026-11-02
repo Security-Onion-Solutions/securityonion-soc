@@ -29,7 +29,7 @@ var ErrEmbeddingsUnsupported = errors.New("adapter does not support embeddings")
 var ErrChatUnsupported = errors.New("embeddings adapter does not support chat")
 
 func init() {
-	protocols[(&OpenAIEmbeddingsAdapter{}).Protocol()] = NewOpenAIEmbeddingsAdapter
+	protocols[(&OpenAIEmbeddingsAdapter{}).Protocol()] = ProtocolRegistration{New: NewOpenAIEmbeddingsAdapter}
 }
 
 type OpenAIEmbeddingsAdapter struct {

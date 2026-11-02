@@ -400,6 +400,22 @@ test('$route watcher behavior', () => {
 	expect(comp.loadData).toHaveBeenCalled();
 });
 
+test('route watch switches to nodes tab and does not load metrics if selected grid does not support metrics', async () => {
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'metrics';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node1', metricsEnabled: false, historicalMetricsEnabled: false }];
+		comp.updateMetricsEnabled();
+	});
+
+	await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'metrics', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'metrics', gridId: 'grid1' } });
+
+	expect(comp.activeTab).toBe('nodes');
+	expect(comp.loadHistoricalMetrics).not.toHaveBeenCalled();
+});
+
 test('initGrid initializes metrics when activeTab is metrics', () => {
 	comp.activeTab = 'metrics';
 	comp.initMetricsCharts = jest.fn();
@@ -476,6 +492,41 @@ test('activeTab watcher reloads metrics if already initialized but params have c
 	expect(comp.initMetricsCharts).toHaveBeenCalled();
 	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
 	expect(comp.setupMetricsAutoRefresh).toHaveBeenCalled();
+});
+
+test('activeTab watcher reloads metrics when gridId changes even if other params are identical', () => {
+	comp.$root.parametersLoaded = true;
+	comp.$root.selectedGridId = 'subgrid-1';
+	comp.initMetricsCharts = jest.fn();
+	comp.loadHistoricalMetrics = jest.fn();
+	comp.setupMetricsAutoRefresh = jest.fn();
+	comp.updateRoute = jest.fn();
+
+	comp.metricPanels = [{ id: 'cpu' }];
+	comp.metricsNodeId = 'host123';
+	comp.metricsContainerId = 'all';
+	comp.metricsTimeRange = '1h';
+	comp.zone = 'UTC';
+	comp.lastLoadedMetricsParams = { gridId: '', nodeId: 'host123', container: 'all', timeRange: '1h', zone: 'UTC' };
+
+	comp.watch.activeTab.call(comp, 'metrics');
+
+	expect(comp.initMetricsCharts).toHaveBeenCalled();
+	expect(comp.loadHistoricalMetrics).toHaveBeenCalled();
+});
+
+test('activeTab watcher delegates loadData to alarmsManager when switching to alarms tab', () => {
+	const loadDataMock = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData: loadDataMock,
+		},
+	};
+	comp.updateRoute = jest.fn();
+
+	comp.watch.activeTab.call(comp, 'alarms');
+
+	expect(loadDataMock).toHaveBeenCalled();
 });
 
 test('logstash_eps panel resolves title to Logstash Events Received and labelKeys to metricsEventsReceived', () => {

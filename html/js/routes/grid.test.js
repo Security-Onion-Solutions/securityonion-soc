@@ -476,4 +476,184 @@ test('metricsNodeId watcher resets metricsContainerId if container not on select
 	expect(comp.updateRoute).toHaveBeenCalled();
 });
 
+test('alarmsEnabled requires historicalMetricsEnabled', () => {
+	comp.historicalMetricsEnabled = true;
+	expect(comp.alarmsEnabled()).toBe(true);
+
+	comp.historicalMetricsEnabled = false;
+	expect(comp.alarmsEnabled()).toBe(false);
+});
+
+test('isAnyAlarmActive delegates to $root.isAlarmActive', () => {
+	comp.$root.selectedGridId = 'subgrid-1';
+	comp.$root.isAlarmActive = jest.fn(() => true);
+	expect(comp.isAnyAlarmActive()).toBe(true);
+	expect(comp.$root.isAlarmActive).toHaveBeenCalledWith('subgrid-1');
+
+	comp.$root.isAlarmActive = jest.fn(() => false);
+	expect(comp.isAnyAlarmActive()).toBe(false);
+	expect(comp.$root.isAlarmActive).toHaveBeenCalledWith('subgrid-1');
+});
+
+test('updateMetricsEnabled switches back to nodes tab if activeTab is metrics or alarms and tabs disabled', () => {
+	comp.nodes = [{ id: 'node-1', metricsEnabled: false, historicalMetricsEnabled: false }];
+
+	comp.activeTab = 'metrics';
+	comp.updateMetricsEnabled();
+	expect(comp.activeTab).toBe('nodes');
+
+	comp.activeTab = 'alarms';
+	comp.updateMetricsEnabled();
+	expect(comp.activeTab).toBe('nodes');
+
+	comp.nodes = [{ id: 'node-1', metricsEnabled: true, historicalMetricsEnabled: true }];
+	comp.activeTab = 'metrics';
+	comp.updateMetricsEnabled();
+	expect(comp.activeTab).toBe('metrics');
+
+	comp.activeTab = 'alarms';
+	comp.updateMetricsEnabled();
+	expect(comp.activeTab).toBe('alarms');
+});
+
+test('updateMetricsEnabled resets metricsNodeId if node is not in current grid nodes', () => {
+	comp.nodes = [{ id: 'node-2', metricsEnabled: true, historicalMetricsEnabled: true }];
+	comp.metricsNodeId = 'node-1';
+
+	comp.updateMetricsEnabled();
+
+	expect(comp.metricsNodeId).toBe('');
+});
+
+test('route watch reloads alarmsManager when activeTab is alarms and grid changes', async () => {
+	const origLoadUrlParameters = comp.loadUrlParameters;
+	const origLoadData = comp.loadData;
+	const loadDataMock = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData: loadDataMock,
+		},
+	};
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'alarms';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node-1', metricsEnabled: true, historicalMetricsEnabled: true }];
+		comp.updateMetricsEnabled();
+	});
+
+	try {
+		await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'alarms', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'alarms', gridId: 'grid1' } });
+		expect(loadDataMock).toHaveBeenCalled();
+	} finally {
+		comp.loadUrlParameters = origLoadUrlParameters;
+		comp.loadData = origLoadData;
+	}
+});
+
+test('route watch does not reload alarmsManager on grid change when on nodes tab', async () => {
+	const origLoadUrlParameters = comp.loadUrlParameters;
+	const origLoadData = comp.loadData;
+	const loadDataMock = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData: loadDataMock,
+		},
+	};
+	comp.loadUrlParameters = jest.fn(() => {
+		comp.activeTab = 'nodes';
+	});
+	comp.loadData = jest.fn(async () => {
+		comp.nodes = [{ id: 'node-1', metricsEnabled: true, historicalMetricsEnabled: true }];
+		comp.updateMetricsEnabled();
+	});
+
+	try {
+		await comp.watch['$route'].call(comp, { path: '/grid', query: { tab: 'nodes', gridId: 'grid2' } }, { path: '/grid', query: { tab: 'nodes', gridId: 'grid1' } });
+		expect(loadDataMock).not.toHaveBeenCalled();
+	} finally {
+		comp.loadUrlParameters = origLoadUrlParameters;
+		comp.loadData = origLoadData;
+	}
+});
+
+test('updateRoute preserves gridId query parameter if present', () => {
+	comp.updateRoute = global.routes.find(r => r.name === 'grid').component.methods.updateRoute;
+	comp.$router.replace = jest.fn().mockResolvedValue({});
+	comp.$route.query = { tab: 'nodes', gridId: 'subgrid-1' };
+	comp.activeTab = 'metrics';
+	comp.metricsNodeId = '';
+	comp.metricsContainerId = 'all';
+	comp.metricsTimeRange = '1h';
+	comp.metricsAutoRefresh = 0;
+
+	comp.updateRoute();
+	expect(comp.$router.replace).toHaveBeenCalledWith({
+		name: 'grid',
+		query: {
+			gridId: 'subgrid-1',
+			tab: 'metrics',
+			host: '',
+			container: 'all',
+			timeRange: '1h',
+			autoRefresh: 0,
+		},
+	});
+});
+
+test('addAlarm delegates to alarmsManager.showAddAlarm', () => {
+	const showAddAlarm = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			showAddAlarm,
+		},
+	};
+	comp.addAlarm();
+	expect(showAddAlarm).toHaveBeenCalled();
+});
+
+test('onAlarmDeleted calls $root.onAlarmDelete with gridId', () => {
+	comp.$root.selectedGridId = 'subgrid-1';
+	comp.$root.onAlarmDelete = jest.fn();
+	comp.onAlarmDeleted({ id: 'alarm-1' });
+	expect(comp.$root.onAlarmDelete).toHaveBeenCalledWith({ alarmId: 'alarm-1', gridId: 'subgrid-1' });
+
+	comp.onAlarmDeleted(null);
+	comp.onAlarmDeleted({});
+	expect(comp.$root.onAlarmDelete).toHaveBeenCalledTimes(1);
+});
+
+test('refresh reloads alarmsManager when activeTab is alarms', () => {
+	const loadData = jest.fn();
+	comp.$refs = {
+		alarmsManager: {
+			loadData,
+		},
+	};
+	comp.activeTab = 'alarms';
+	comp.refresh();
+	expect(loadData).toHaveBeenCalled();
+});
+
+test('loadUrlParameters parses tab=alarms and tab=metrics with nodeId', () => {
+	comp.$route = {
+		query: {
+			tab: 'alarms',
+		},
+	};
+	comp.loadUrlParameters();
+	expect(comp.activeTab).toBe('alarms');
+
+	comp.$route = {
+		query: {
+			tab: 'metrics',
+			nodeId: 'sensor-1',
+		},
+	};
+	comp.loadUrlParameters();
+	expect(comp.activeTab).toBe('metrics');
+	expect(comp.metricsNodeId).toBe('sensor-1');
+});
+
+
 

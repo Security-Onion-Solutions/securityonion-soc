@@ -21,6 +21,37 @@ func TestApplyChatOptsWithMemories(t *testing.T) {
 	assert.False(t, ApplyChatOpts().IncludeMemories)
 }
 
+func TestFilterClientTags(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, FilterClientTags(nil))
+	assert.Empty(t, FilterClientTags([]string{}))
+	assert.Equal(t,
+		[]string{MessageTagContextCompression, SessionTagIncognito},
+		FilterClientTags([]string{MessageTagContextCompression, "tool_result", SessionTagIncognito, "anything"}))
+	assert.Empty(t, FilterClientTags([]string{"tool_result", SessionTagMemory}))
+	assert.Empty(t, FilterClientTags([]string{SessionTagAutomation, SessionTagShared}))
+}
+
+func TestReservedSessionTags(t *testing.T) {
+	t.Parallel()
+
+	assert.Contains(t, ReservedSessionTags, SessionTagAutomation)
+	assert.Contains(t, ReservedSessionTags, SessionTagIncognito)
+	for _, tag := range MemorySessionTags {
+		assert.Contains(t, ReservedSessionTags, tag)
+	}
+
+	// Reserving the shared tag would break the share button on every session.
+	assert.NotContains(t, ReservedSessionTags, SessionTagShared)
+}
+
+func TestAutomationSessionTags(t *testing.T) {
+	t.Parallel()
+
+	assert.ElementsMatch(t, []string{SessionTagAutomation, SessionTagShared}, AutomationSessionTags)
+}
+
 func TestMemoryOperationsRemoveInvalid(t *testing.T) {
 	t.Parallel()
 

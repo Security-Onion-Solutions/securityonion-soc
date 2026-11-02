@@ -125,7 +125,6 @@ type AuditHistory struct {
 	DuplicatedFromID string `json:"duplicatedFromId,omitempty"`
 }
 
-
 func NewSetting(id string) *Setting {
 	setting := &Setting{}
 	setting.SetId(id)

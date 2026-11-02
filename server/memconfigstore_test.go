@@ -116,3 +116,11 @@ func TestMemConfigStoreSync(t *testing.T) {
 	err := mCfgStore.SyncSettings(context.Background())
 	assert.NoError(t, err)
 }
+
+func TestMemConfigStoreLookupSetting(t *testing.T) {
+	mCfgStore := NewMemConfigStore([]*model.Setting{{Id: "a.one", Value: "1"}})
+
+	setting, err := mCfgStore.LookupSetting(context.Background(), "a.one")
+	assert.NoError(t, err)
+	assert.Equal(t, "1", setting.Value)
+}

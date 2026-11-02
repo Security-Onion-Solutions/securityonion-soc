@@ -8,16 +8,17 @@ const { TextEncoder, TextDecoder } = require('util');
 Object.assign(global, { TextDecoder, TextEncoder });
 
 require('../test_common.js');
-// Method packs must load before assistant.js, which merges them into the component.
+// Same order as index.html.
+require('./assistant.js');
 require('./assistant.sessions.js');
 require('./assistant.streaming.js');
 require('./assistant.tools.js');
 require('./assistant.utils.js');
-require('./assistant.js');
 require('../components/tool-use-card.js');
 require('../components/delegation-child.js');
 
 const MSGTAG_CONTEXTCOMPRESSION = "context_compression";
+const MSGTAG_PARTIAL = "partial";
 
 // Mock data
 const fakeSessionId = 'chat_1234567890_abcdef123';
@@ -550,6 +551,37 @@ test('initAssistant defaults an unknown currentModel to the first model', async 
   expect(comp.currentModel).toBe('model-1@SOAI');
 });
 
+test('without agentic, the saved model is restored and a stale one falls back to the first', async () => {
+  const mockParams = {
+    enabled: true,
+    availableModels: [
+      { id: 'model-1', displayName: 'Model 1', enabled: true, adapter: 'SOAI' },
+      { id: 'gemini-2.5-pro', displayName: 'Gemini', enabled: true, adapter: 'Gemini' },
+    ],
+    availableAdapters: [{ name: 'SOAI', protocol: 'securityonion_ai_cloud' }],
+  };
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.showDisclaimer = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  comp.handleRouteSessionId = jest.fn().mockResolvedValue();
+  comp.loadCredits = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+  comp.$root.disclaimer = false;
+
+  mockLocalStorage['settings.assistant.currentModel'] = 'gemini-2.5-pro@Gemini';
+  comp.currentModel = '';
+  comp.loadLocalSettings();
+  expect(comp.currentModel).toBe('');
+  await comp.initAssistant(mockParams);
+  expect(comp.currentModel).toBe('gemini-2.5-pro@Gemini');
+
+  comp.currentModel = '';
+  comp.savedModel = 'gone-model@Nowhere';
+  await comp.initAssistant(mockParams);
+  expect(comp.currentModel).toBe('model-1@SOAI');
+  delete mockLocalStorage['settings.assistant.currentModel'];
+});
+
 test('initAssistant handles empty availableModels and availableAdapters array', async () => {
   const mockParams = {
     enabled: true,
@@ -625,13 +657,92 @@ test('initAssistant defaults a stale stored selector to the orchestrator agent',
   expect(comp.currentModel).toBe('Orchestrator');
 });
 
-test('initAssistant keeps a valid stored agent selector', async () => {
+test('initAssistant keeps an agent the user picked during the visit', async () => {
   stubInitDeps();
   comp.currentModel = 'Hunter';
 
   await comp.initAssistant(agenticParams());
 
   expect(comp.currentModel).toBe('Hunter');
+});
+
+test('in agentic mode the saved selection is ignored, so every visit starts on the orchestrator', async () => {
+  const storageData = { 'settings.assistant.currentModel': 'Hunter' };
+  const original = global.localStorage;
+  global.localStorage = new Proxy({}, { get: (_, key) => storageData[key] });
+  try {
+    comp.currentModel = '';
+    comp.loadLocalSettings();
+    expect(comp.currentModel).toBe('');
+
+    stubInitDeps();
+    await comp.initAssistant(agenticParams());
+    expect(comp.currentModel).toBe('Orchestrator');
+  } finally {
+    global.localStorage = original;
+  }
+});
+
+test('the default prefers the built-in orchestrator over a custom one', () => {
+  comp.availableModels = [
+    { key: 'Alpha', isOrchestrator: true },
+    { key: 'Orchestrator', isOrchestrator: true, isSystem: true },
+    { key: 'Hunter' },
+  ];
+  expect(comp.defaultAgentKey()).toBe('Orchestrator');
+
+  comp.availableModels = [{ key: 'Hunter' }, { key: 'Alpha', isOrchestrator: true }];
+  expect(comp.defaultAgentKey()).toBe('Alpha');
+  comp.availableModels = [{ key: 'Hunter' }];
+  expect(comp.defaultAgentKey()).toBe('Hunter');
+  comp.availableModels = [];
+  expect(comp.defaultAgentKey()).toBe('');
+});
+
+test('a link can ask for a specific enabled agent', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+
+  comp.$route.query = { agent: 'Hunter' };
+  expect(comp.requestedAgentKey()).toBe('Hunter');
+
+  comp.$route.query = { agent: 'No Such Agent' };
+  expect(comp.requestedAgentKey()).toBe('');
+  comp.$route.query = {};
+  expect(comp.requestedAgentKey()).toBe('');
+
+  comp.agentic = false;
+  comp.$route.query = { agent: 'Hunter' };
+  expect(comp.requestedAgentKey()).toBe('');
+});
+
+test('a link to an agent starts a new chat with it, even when the last chat is restored', async () => {
+  stubInitDeps();
+  await comp.initAssistant(agenticParams());
+  // Undo stubInitDeps; getComponent again would reset this component's data.
+  comp.handleRouteSessionId = global.routes.find(r => r.name === 'assistant').component.methods.handleRouteSessionId;
+  // The harness $nextTick needs a callback; this path awaits it bare.
+  comp.$nextTick = jest.fn().mockResolvedValue();
+  comp.assistantEnabled = true;
+  comp.restoreLastActive = true;
+  comp.startNewChat = jest.fn().mockResolvedValue();
+  comp.restoreLastActiveChat = jest.fn().mockResolvedValue();
+  comp.updateModelParams = jest.fn();
+
+  comp.$route.params = {};
+  comp.$route.query = { agent: 'Hunter' };
+  await comp.handleRouteSessionId();
+
+  expect(comp.currentModel).toBe('Hunter');
+  expect(comp.updateModelParams).toHaveBeenCalled();
+  expect(comp.startNewChat).toHaveBeenCalled();
+  expect(comp.restoreLastActiveChat).not.toHaveBeenCalled();
+
+  comp.startNewChat.mockClear();
+  comp.$route.query = {};
+  await comp.handleRouteSessionId();
+  expect(comp.restoreLastActiveChat).toHaveBeenCalled();
+  expect(comp.startNewChat).not.toHaveBeenCalled();
 });
 
 test('initAssistant enriches agents with their mapped model context limits', async () => {
@@ -761,6 +872,120 @@ test('canSwitchModel is false while loading or a turn is active', () => {
   comp.$root.loading = false;
   comp.isStreaming = true;
   expect(comp.canSwitchModel()).toBe(false);
+});
+
+test('the automated agents pill is shown to automations/read holders on an agentic grid, once counted', () => {
+  comp.$root.user = { id: 'u', roles: ['auditor'] };
+  comp.agentic = true;
+  comp.automatedAgents = null;
+  expect(comp.showAutomatedAgentsPill()).toBe(false, 'nothing to show before the first count');
+
+  comp.automatedAgents = { running: 0, queued: 0 };
+  expect(comp.showAutomatedAgentsPill()).toBe(true);
+
+  comp.$root.user = { id: 'u', roles: ['limited-analyst'] };
+  expect(comp.showAutomatedAgentsPill()).toBe(false);
+
+  comp.$root.user = { id: 'u', roles: ['auditor'] };
+  comp.agentic = false;
+  expect(comp.showAutomatedAgentsPill()).toBe(false);
+});
+
+test('the automated agents pill summarizes running and queued work', () => {
+  comp.automatedAgents = { running: 4, queued: 1 };
+  expect(comp.automatedAgentsSummary()).toBe('4 running · 1 queued');
+
+  comp.automatedAgents = {};
+  expect(comp.automatedAgentsSummary()).toBe('0 running · 0 queued');
+});
+
+test('the pill counts automation work items, not the whole pool', () => {
+  const activity = {
+    pool: { running: 9, queued: 9 },
+    runs: [
+      { items: [{ state: 'running' }, { state: 'running', queued: true }, { state: 'pending' }] },
+      { items: [{ state: 'running' }, { state: 'applying' }] },
+      { items: null },
+    ],
+  };
+
+  expect(comp.countAutomatedAgents(activity)).toEqual({ running: 2, queued: 2 });
+  expect(comp.countAutomatedAgents({})).toEqual({ running: 0, queued: 0 });
+});
+
+test('the pill loads for anyone with automations/read on an agentic grid, keeping the last on failure', async () => {
+  comp.agentic = true;
+  const get = mockPapi('get', { data: { runs: [{ items: [{ state: 'running' }] }] } });
+
+  comp.$root.user = { id: 'u', roles: ['limited-analyst'] };
+  await comp.loadAutomatedAgents();
+  expect(get).not.toHaveBeenCalled();
+
+  for (const role of ['analyst', 'auditor', 'superuser']) {
+    comp.$root.user = { id: 'u', roles: [role] };
+    expect(comp.canSeeAutomatedAgents()).toBe(true, role);
+  }
+  await comp.loadAutomatedAgents();
+  expect(get).toHaveBeenCalledWith('assistant/automations/activity');
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+
+  resetPapi();
+  mockPapi('get', null, new Error('down'));
+  await comp.loadAutomatedAgents();
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 });
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+});
+
+test('the pill counts pushed activity as it arrives, and fetches after a reconnect', () => {
+  const subscribe = comp.$root.subscribe;
+  try {
+    comp.$root.subscribe = jest.fn();
+    comp.$root.loadParameters = jest.fn();
+    comp.mounted();
+    expect(comp.$root.subscribe).toHaveBeenCalledWith('assistant:automation', comp.onAutomationActivity);
+
+    comp.agentic = true;
+    comp.$root.user = { id: 'u', roles: ['analyst'] };
+    const get = mockPapi('get', {});
+    comp.onAutomationActivity({ generatedAt: '2026-10-02T12:00:00Z', runs: [{ items: [{ state: 'running' }, { state: 'pending' }] }] });
+    expect(comp.automatedAgents).toEqual({ running: 1, queued: 1 });
+    expect(get).not.toHaveBeenCalled();
+
+    const onConnected = routes.find(r => r.name === 'assistant').component.watch['$root.connected'];
+    comp.loadAutomatedAgents = jest.fn();
+    onConnected.call(comp, false);
+    expect(comp.loadAutomatedAgents).not.toHaveBeenCalled();
+    onConnected.call(comp, true);
+    expect(comp.loadAutomatedAgents).toHaveBeenCalled();
+  } finally {
+    comp.$root.subscribe = subscribe;
+  }
+});
+
+test('a route change to the open chat does not reload it', () => {
+  const onRoute = routes.find(r => r.name === 'assistant').component.watch['$route'];
+  comp.handleRouteSessionId = jest.fn();
+  comp.currentChatId = 'new-chat';
+
+  onRoute.call(comp, { params: { sessionId: 'new-chat' } }, { params: {} });
+  expect(comp.handleRouteSessionId).not.toHaveBeenCalled();
+
+  onRoute.call(comp, { params: { sessionId: 'other-chat' } }, { params: { sessionId: 'new-chat' } });
+  expect(comp.handleRouteSessionId).toHaveBeenCalledTimes(1);
+
+  comp.currentChatId = null;
+  onRoute.call(comp, { params: {} }, { params: { sessionId: 'other-chat' } });
+  expect(comp.handleRouteSessionId).toHaveBeenCalledTimes(2);
+});
+
+test('the pill ignores counts older than what it shows', () => {
+  comp.agentic = true;
+  comp.$root.user = { id: 'u', roles: ['analyst'] };
+
+  comp.onAutomationActivity({ generatedAt: '2026-10-02T12:00:02Z', runs: [{ items: [{ state: 'running' }] }] });
+  comp.applyAutomatedAgents({ generatedAt: '2026-10-02T12:00:01Z', runs: [] });
+
+  expect(comp.automatedAgents).toEqual({ running: 1, queued: 0 }, 'a slow fetch does not undo a newer push');
 });
 
 test('selectModel is blocked while a turn is active', async () => {
@@ -1617,6 +1842,24 @@ test('executeTool still surfaces a 400 that is not already-resolved', async () =
   expect(comp.messages).toHaveLength(1);
 });
 
+test('executeTool warns when the tool turn stays busy past the retries', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+  comp.toolBusyRetryDelayMs = 0;
+  comp.toolBusyMaxRetries = 1;
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('ERROR_AGENT_BUSY');
+  expect(toolUse.status).toBe('error');
+});
+
 test('executeTool processes streaming response with message_start', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
@@ -2098,6 +2341,47 @@ test('callAIAPI handles fetch error', async () => {
   expect(comp.messages[0].role).toBe('assistant');
   expect(comp.messages[0].content).toContain('having trouble connecting to the AI service');
   expect(comp.scrollToBottom).toHaveBeenCalled();
+});
+
+test('callAIAPI warns and restores the message when the agent is busy', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = '';
+  comp.$root.showWarning = jest.fn();
+  comp.$root.showError = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = {
+    status: 409,
+    data: {
+      pipeThrough: () => ({ getReader: () => ({ read: jest.fn().mockResolvedValue({ done: false, value: '"ERROR_AGENT_BUSY"' }) }) }),
+    },
+  };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.$root.showWarning).toHaveBeenCalledWith('"ERROR_AGENT_BUSY"');
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('Test message');
+  expect(comp.isTyping).toBe(false);
+});
+
+test('callAIAPI keeps a newer draft when restoring a busy message', async () => {
+  comp.currentChatId = fakeSessionId;
+  comp.messages = [{ role: 'user', content: 'Test message' }];
+  comp.newMessage = 'typed since';
+  comp.$root.showWarning = jest.fn();
+
+  const error = new Error('Request failed with status code 409');
+  error.response = { status: 409, data: 'ERROR_AGENT_BUSY' };
+  mockPapi('post', null, error);
+
+  await comp.callAIAPI('Test message');
+
+  expect(comp.messages).toHaveLength(0);
+  expect(comp.newMessage).toBe('typed since');
 });
 
 test('callAIAPI processes message_start event', async () => {
@@ -3052,7 +3336,7 @@ test('formatMarkdown delegates to root', () => {
   
   const result = comp.formatMarkdown(text);
   
-  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true);
+  expect(comp.$root.formatMarkdown).toHaveBeenCalledWith(text, true, false);
   expect(result).toBe('<strong>bold text</strong>');
 });
 
@@ -3474,6 +3758,42 @@ test('convertBackendMessagesToFrontend handles tool_use blocks at end of session
   expect(toolUse.timestamp).toBe('2025-01-01T12:00:00.000Z');
   expect(toolUse.approved).toBe(null);
   expect(toolUse.sessionId).toBe('test_session_123'); // Should include sessionId
+});
+
+// A turn still tagged partial never finished streaming, so its tool_use was never
+// sent to the model. Approving it would resume with a tool_result the model has no
+// tool_use for.
+test('convertBackendMessagesToFrontend does not await approval for a tool_use in an unfinished turn', () => {
+  comp.resetContextLength = jest.fn();
+  comp.currentChatId = 'test_session_123';
+  global.Vue = { ref: jest.fn((value) => ({ value })) };
+
+  const backendMessages = [
+    {
+      createTime: '2025-01-01T12:00:00.000Z',
+      tags: [MSGTAG_PARTIAL],
+      message: {
+        role: 'assistant',
+        contentBlocks: [
+          { type: 'tool_use', id: 'tool_abandoned', name: 'query_events', input: {} }
+        ]
+      }
+    }
+  ];
+
+  const result = comp.convertBackendMessagesToFrontend(backendMessages);
+
+  const toolUse = result[0].toolUses[0];
+  expect(toolUse.status).toBe('skipped');
+  expect(toolUse.approved).toBe(false);
+  expect(comp.sessionTools('test_session_123').floatingTool).toBeFalsy();
+});
+
+test('isPartialMessage detects the partial tag', () => {
+  expect(comp.isPartialMessage({ tags: [MSGTAG_PARTIAL] })).toBe(true);
+  expect(comp.isPartialMessage({ tags: ['tool_result'] })).toBe(false);
+  expect(comp.isPartialMessage({})).toBe(false);
+  expect(comp.isPartialMessage(null)).toBe(false);
 });
 
 // A top-level turn can request tools in parallel whose results land as separate
@@ -4050,18 +4370,16 @@ test('loadChatFromBackend success', async () => {
   expect(comp.scrollToBottomSettled).toHaveBeenCalled();
 });
 
-test('loadChatFromBackend handles 404 error', async () => {
+test('loadChatFromBackend leaves a 404 to its caller rather than resetting the chat', async () => {
   const error = new Error('Not found');
   error.response = { status: 404 };
   mockPapi("get", null, error);
   comp.loadNewChatScreen = jest.fn();
-  comp.scrollToBottomSettled = jest.fn().mockResolvedValue();
-  
-  await comp.loadChatFromBackend(fakeSessionId);
-  
-  expect(comp.loadNewChatScreen).toHaveBeenCalled();
-  expect(comp.currentChatId).toBe(fakeSessionId);
-  expect(comp.scrollToBottomSettled).toHaveBeenCalled();
+
+  await expect(comp.loadChatFromBackend(fakeSessionId)).rejects.toBe(error);
+
+  expect(comp.loadNewChatScreen).not.toHaveBeenCalled();
+  expect(comp.sessionLoadFailure(error)).toBe('missing');
 });
 
 test('loadChatFromBackend handles other errors', async () => {
@@ -4163,9 +4481,16 @@ test('saveLocalSettings saves all assistant settings with correct defaults', () 
   expect(comp.saveSetting).toHaveBeenCalledWith('restoreLastActive', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('alwaysApproveReadRequests', true, false);
   expect(comp.saveSetting).toHaveBeenCalledWith('showChatHistory', false, true);
-  expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
   expect(comp.saveSetting).toHaveBeenCalledWith('showModelThinking', true, false);
+  expect(comp.saveSetting).toHaveBeenCalledWith('currentModel', 'test-model', '');
   expect(comp.saveSetting).toHaveBeenCalledTimes(6);
+
+  // Agentic visits start on the orchestrator, so the agent isn't saved.
+  comp.saveSetting.mockClear();
+  comp.agentic = true;
+  comp.saveLocalSettings();
+  expect(comp.saveSetting).not.toHaveBeenCalledWith('currentModel', expect.anything(), expect.anything());
+  expect(comp.saveSetting).toHaveBeenCalledTimes(5);
 });
 
 test('saveLocalSettings saves default values correctly', () => {
@@ -5147,7 +5472,209 @@ test('checkIfDeleted sets canChat to false when session is deleted', () => {
   expect(comp.$root.showWarning).toHaveBeenCalled();
 });
 
+test('an automated session is read-only and shows the continue banner', () => {
+  comp.canChat = true;
+  comp.currentChatId = 'auto-1';
+  comp.chatHistoryById = { 'auto-1': { sessionId: 'auto-1', tags: ['automation', 'shared'] } };
+
+  comp.checkIfDeleted(comp.chatHistoryById['auto-1']);
+
+  expect(comp.canChat).toBe(false);
+  expect(comp.isAutomatedSession()).toBe(true);
+  comp.currentChatId = null;
+  expect(comp.isAutomatedSession()).toBe(false);
+});
+
+test('reloading the chat list keeps an open automated session read-only', async () => {
+  comp.currentChatId = 'auto-1';
+  comp.chatHistoryById = { 'auto-1': { sessionId: 'auto-1', tags: ['automation', 'shared'] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(comp.isAutomatedSession()).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(true);
+  expect(comp.chatHistory.map(s => s.sessionId)).toEqual([fakeSessionId]);
+});
+
+test('reloading the chat list keeps another user\'s open session read-only', async () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'theirs';
+  comp.chatHistoryById = { theirs: { sessionId: 'theirs', userId: 'someone-else', tags: ['shared'] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(comp.isOthersSession()).toBe(true);
+  expect(comp.chatHistory.map(s => s.sessionId)).toEqual([fakeSessionId]);
+});
+
+test('reloading the chat list drops an own session the server no longer returns', async () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'mine';
+  comp.chatHistoryById = { mine: { sessionId: 'mine', userId: 'me', tags: [] } };
+  mockPapi('get', { data: fakeBackendSessions });
+
+  await comp.loadStoredChats(false);
+
+  expect(Object.keys(comp.chatHistoryById)).toEqual([fakeSessionId]);
+});
+
+test('continuing a real session clones it through the server and opens the copy', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$router.push = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  const post = mockPapi('post', { data: { sessionId: 'copy-1' } });
+
+  await comp.continueSession();
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/real-1/clone', null, undefined);
+  expect(comp.loadStoredChats).toHaveBeenCalled();
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant', params: { sessionId: 'copy-1' } });
+});
+
+test('continuing from an alert asks the server to record the copy on that alert', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$route.query = { alert: 'alert-1' };
+  comp.$router.push = jest.fn();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+  const post = mockPapi('post', { data: { sessionId: 'copy-1' } });
+
+  await comp.continueSession();
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/real-1/clone', null,
+    { params: { entityType: 'alert_investigation', entityId: 'alert-1' } });
+  expect(comp.$router.push).toHaveBeenCalledWith({ name: 'assistant', params: { sessionId: 'copy-1' } });
+});
+
+test('a failed clone reports it and stays put', async () => {
+  comp.currentChatId = 'real-1';
+  comp.$root.showError = jest.fn();
+  comp.$router.push = jest.fn();
+  const error = new Error('ERROR_SESSION_NOT_FOUND');
+  mockPapi('post', null, error);
+
+  await comp.continueSession();
+
+  expect(comp.$root.showError).toHaveBeenCalledWith(error);
+  expect(comp.$router.push).not.toHaveBeenCalled();
+});
+
+test('another user\'s session is read-only; your own and a new one are not', () => {
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
+  comp.currentChatId = 'theirs';
+  comp.chatHistoryById = {
+    theirs: { sessionId: 'theirs', userId: 'someone-else', tags: ['shared'] },
+    mine: { sessionId: 'mine', userId: 'me', tags: [] },
+  };
+
+  comp.checkIfDeleted(comp.chatHistoryById.theirs);
+  expect(comp.canChat).toBe(false);
+  expect(comp.isOthersSession()).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(true);
+  expect(comp.isOwnSession()).toBe(false);
+
+  comp.currentChatId = 'mine';
+  comp.checkIfDeleted(comp.chatHistoryById.mine);
+  expect(comp.canChat).toBe(true);
+  expect(comp.isReadOnlySession()).toBe(false);
+  expect(comp.isOwnSession()).toBe(true);
+
+  comp.currentChatId = 'unsaved';
+  expect(comp.isOthersSession()).toBe(false);
+  expect(comp.isOwnSession()).toBe(false);
+});
+
+test('a link that cannot be opened says why, then starts a new chat', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn().mockResolvedValue();
+  comp.loadNewChatScreen = jest.fn();
+  comp.currentChatId = 'something-else';
+  comp.$route.params = { sessionId: 'theirs' };
+  comp.$route.query = {};
+
+  const denied = new Error('403');
+  denied.response = { status: 403 };
+  mockPapi('get', null, denied);
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionAccessDenied);
+  expect(comp.loadNewChatScreen).toHaveBeenCalled();
+  expect(comp.currentChatId).toBeNull();
+  expect(comp.$router.replace).toHaveBeenCalledWith({ name: 'assistant' });
+
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  comp.currentChatId = 'something-else';
+  mockPapi('get', null, missing);
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionNotFound);
+
+  comp.currentChatId = 'something-else';
+  resetPapi();
+  mockPapi('get', { data: {} });
+  await comp.handleRouteSessionId();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionUnavailable);
+});
+
+test('a new chat\'s own session id loading as missing is left alone', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  comp.currentChatId = 'new-1';
+  comp.$route.params = { sessionId: 'new-1' };
+  comp.$route.query = {};
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  mockPapi('get', null, missing);
+
+  await comp.handleRouteSessionId();
+
+  expect(comp.$root.showError).not.toHaveBeenCalled();
+  expect(comp.loadNewChatScreen).not.toHaveBeenCalled();
+  expect(comp.currentChatId).toBe('new-1');
+});
+
+test('a new investigation\'s missing session starts the investigation; a denied one does not', async () => {
+  comp.assistantEnabled = true;
+  comp.$root.showError = jest.fn();
+  comp.$router.replace = jest.fn();
+  comp.loadNewChatScreen = jest.fn();
+  comp.generateInvestigationPrompt = jest.fn(() => 'Investigate Alert ID a1');
+  comp.startInvestigationSession = jest.fn();
+  comp.$nextTick = jest.fn(callback => { if (callback) callback(); return Promise.resolve(); });
+  comp.focusChatInput = jest.fn();
+  comp.currentChatId = null;
+  comp.$route.params = { sessionId: 'inv-1' };
+  comp.$route.query = { investigation: 'true', socId: 'a1' };
+  const missing = new Error('404');
+  missing.response = { status: 404 };
+  mockPapi('get', null, missing);
+
+  await comp.handleRouteSessionId();
+  expect(comp.startInvestigationSession).toHaveBeenCalledWith('Investigate Alert ID a1');
+
+  comp.startInvestigationSession.mockClear();
+  comp.currentChatId = null;
+  const denied = new Error('403');
+  denied.response = { status: 403 };
+  mockPapi('get', null, denied);
+
+  await comp.handleRouteSessionId();
+  expect(comp.startInvestigationSession).not.toHaveBeenCalled();
+  expect(comp.$root.showError).toHaveBeenLastCalledWith(comp.i18n.assistantSessionAccessDenied);
+});
+
 // Auto-approval functionality tests
+test('toolApprovalNotice shows the approvalMessage the model wrote for the call', () => {
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: ' Sends an alert and shares this chat. ' } })).toBe('Sends an alert and shares this chat.');
+  expect(comp.toolApprovalNotice({ name: 'query_events', input: { query: '*' } })).toBe('');
+  expect(comp.toolApprovalNotice({ name: 'send_notification', input: { approvalMessage: 5 } })).toBe('');
+  expect(comp.toolApprovalNotice({ name: 'send_notification' })).toBe('');
+  expect(comp.toolApprovalNotice(null)).toBe('');
+});
+
 test('shouldAutoApproveTool returns true for query_events when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   
@@ -6330,6 +6857,113 @@ test('messageClassesFromTags', () => {
   expect(result).toEqual(['msgTag-important', 'msgTag-error', 'msgTag-context_compression']);
 });
 
+test('isIncognitoLocked', () => {
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  expect(comp.isIncognitoLocked()).toBe(false);
+
+  comp.messages.push({ role: 'user', content: 'hi' });
+  expect(comp.isIncognitoLocked()).toBe(true);
+});
+
+test('isIncognito prefers stored session tag over local toggle', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.incognito = true;
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['shared'] } };
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: null } };
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
+  comp.incognito = false;
+  expect(comp.isIncognito()).toBe(true);
+});
+
+test('isIncognito falls back to local toggle when session is not stored', () => {
+  comp.currentChatId = null;
+  comp.chatHistoryById = {};
+
+  comp.incognito = false;
+  expect(comp.isIncognito()).toBe(false);
+
+  comp.incognito = true;
+  expect(comp.isIncognito()).toBe(true);
+});
+
+test('toggleIncognito flips only while unlocked', () => {
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  comp.incognito = false;
+
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(true);
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(false);
+
+  comp.messages.push({ role: 'user', content: 'hi' });
+  comp.toggleIncognito();
+  expect(comp.incognito).toBe(false);
+});
+
+test('loadNewChatScreen resets incognito', async () => {
+  comp.incognito = true;
+
+  await comp.loadNewChatScreen();
+
+  expect(comp.incognito).toBe(false);
+});
+
+test('withIncognitoTag adds tag until the server has the session', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.chatHistoryById = {};
+
+  comp.incognito = false;
+  expect(comp.withIncognitoTag(null)).toBe(null);
+
+  comp.incognito = true;
+  expect(comp.withIncognitoTag(null)).toEqual(['incognito']);
+  expect(comp.withIncognitoTag(['context_compression'])).toEqual(['context_compression', 'incognito']);
+
+  comp.chatHistoryById = { [fakeSessionId]: { tags: ['incognito'] } };
+  expect(comp.withIncognitoTag(null)).toBe(null);
+});
+
+test('withIncognitoTag keeps tag on retry after a failed first send', () => {
+  comp.currentChatId = fakeSessionId;
+  comp.chatHistoryById = {};
+  comp.incognito = true;
+  comp.messages = [
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'error' },
+  ];
+
+  expect(comp.isIncognitoLocked()).toBe(true);
+  expect(comp.withIncognitoTag(null)).toEqual(['incognito']);
+});
+
+test('sendMessage passes incognito tag on first message', async () => {
+  comp.newMessage = 'hello';
+  comp.canChat = true;
+  comp.assistantEnabled = true;
+  comp.creditsLoaded = true;
+  comp.creditsRemaining = 10;
+  comp.incognito = true;
+  comp.messages = [{ role: 'assistant', content: 'welcome' }];
+  comp.currentChatId = null;
+  comp.isMessageTooLong = false;
+  comp.checkContextLimitReached = jest.fn().mockReturnValue(false);
+  comp.generateChatId = jest.fn().mockReturnValue(fakeSessionId);
+  comp.saveCurrentChatId = jest.fn();
+  comp.updateUrlWithSessionId = jest.fn();
+  comp.scrollToBottom = jest.fn();
+  comp.callAIAPI = jest.fn().mockResolvedValue();
+  comp.loadStoredChats = jest.fn().mockResolvedValue();
+
+  await comp.sendMessage();
+
+  expect(comp.callAIAPI).toHaveBeenCalledWith('hello', ['incognito']);
+});
+
 test('toggleSharedSession', async () => {
   const _updateSessionTag = comp.updateSessionTag;
   const _loadStoredChats = comp.loadStoredChats;
@@ -6341,7 +6975,7 @@ test('toggleSharedSession', async () => {
   comp.chatHistoryById = {
     'session_123': { tags: ["shared"], userId: 'me' },
   };
-  comp.$root.user = { id: 'me' };
+  comp.$root.user = { id: 'me', roles: ['analyst'] };
 
   await comp.toggleSharedSession(comp.currentChatId);
 
@@ -6560,6 +7194,59 @@ test('delegateOwnOutputTokens returns 0 when there is no child session', () => {
   expect(comp.delegateOwnOutputTokens(null)).toBe(0);
   expect(comp.delegateOwnOutputTokens({})).toBe(0);
   expect(comp.delegateOwnOutputTokens({ childSession: {} })).toBe(0);
+});
+
+test('recomputeCreditsFromHistory ignores messages cloned from another session', () => {
+  const data = {
+    session: { sessionId: 'root', model: 'Orchestrator' },
+    history: [
+      { model: 'Orchestrator', tags: ['clone'], message: { role: 'assistant', usage: { credits: 300 } } },
+      { model: 'Orchestrator', message: { role: 'assistant', usage: { credits: 25 } } },
+    ],
+    subSessions: [
+      { session: { sessionId: 'c1', delegateAgent: 'Investigator' }, history: [
+        { model: 'Investigator', tags: ['tool_result', 'clone'], message: { role: 'assistant', usage: { credits: 150 } } },
+        { model: 'Investigator', message: { role: 'assistant', usage: { credits: 5 } } },
+      ] },
+    ],
+  };
+
+  comp.recomputeCreditsFromHistory(data);
+
+  expect(comp.creditsByAgent).toEqual({ Orchestrator: 25, Investigator: 5 });
+  expect(comp.creditsUsed).toBe(30);
+});
+
+test('reconstructChildSession flags cloned turns so delegate cards do not bill them', () => {
+  const delegate = { id: 'tu-1', name: 'delegate_to_helper', childSession: null };
+  const sub = {
+    session: { sessionId: 'c1', delegateAgent: 'Helper' },
+    history: [
+      { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied' }], usage: { credits: 40, output_tokens: 400 } } },
+      { createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'fresh' }], usage: { credits: 2, output_tokens: 20 } } },
+    ],
+  };
+
+  comp.reconstructChildSession(delegate, sub, { byParentToolUseId: new Map() }, 'root');
+
+  const msgs = delegate.childSession.messages;
+  expect(msgs.map(m => !!m.cloned)).toEqual([true, false]);
+  expect(msgs.map(m => m.usage.credits)).toEqual([40, 2]);
+  expect(comp.delegateOwnCredits(delegate)).toBe(2);
+  expect(comp.delegateOwnOutputTokens(delegate)).toBe(20);
+});
+
+test('convertBackendMessagesToFrontend counts cloned messages toward context', () => {
+  comp.resetContextLength = jest.fn();
+
+  const result = comp.convertBackendMessagesToFrontend([
+    { tags: ['clone'], createTime: '2025-01-01T00:00:00Z', message: { role: 'user', contentBlocks: [{ type: 'text', text: 'copied question' }] } },
+    { tags: ['clone'], createTime: '2025-01-01T00:00:01Z', message: { role: 'assistant', contentBlocks: [{ type: 'text', text: 'copied answer' }], usage: { input_tokens: 700, output_tokens: 300, credits: 9 } } },
+  ]);
+
+  expect(result).toHaveLength(2);
+  expect(result[1].tags).toEqual(['clone']);
+  expect(comp.contextLength).toBe(1000);
 });
 
 // Floating tool tests
@@ -7126,9 +7813,16 @@ test('buildModelIdentifier', () => {
   ];
 
   for (let t of tests) {
-    const output = comp.buildModelIdentifier(t.input);
+    const output = comp.$root.buildModelIdentifier(t.input);
     expect(output).toBe(t.expected);
   }
+});
+
+test('stripChoiceMarkers leaves each choice as its label', () => {
+  expect(comp.$root.stripChoiceMarkers('1. [[CHOICE]] Acknowledge the alert [[/CHOICE]]\n2. [[CHOICE]]Escalate[[/CHOICE]]'))
+    .toBe('1. Acknowledge the alert\n2. Escalate');
+  expect(comp.$root.stripChoiceMarkers('No choices here')).toBe('No choices here');
+  expect(comp.$root.stripChoiceMarkers('')).toBe('');
 });
 
 test('buildGroupedModels - groups models by adapter with headers', () => {

@@ -45,7 +45,7 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 				return nil, &pgconn.PgError{
 					Severity: "ERROR",
 					Code:     "42P01",
-					Message:  `relation "telegraf.fbstats" does not exist`,
+					Message:  `relation "telegraf.raid" does not exist`,
 				}
 			},
 		}
@@ -54,8 +54,6 @@ func TestStore_GetTimeSeriesMetrics(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Contains(t, res, "consumption_eps")
 		assert.Len(t, res["consumption_eps"], 0)
-		assert.Contains(t, res, "production_eps")
-		assert.Len(t, res["production_eps"], 0)
 	})
 
 	t.Run("other database error returns the error", func(t *testing.T) {

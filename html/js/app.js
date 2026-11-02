@@ -9,6 +9,7 @@ const components = [];
 const iconSets = [];
 const templatePromises = [];
 const directives = [];
+const rootMethods = [];
 
 const LICENSE_STATUS_ACTIVE = "active";
 const LICENSE_STATUS_EXCEEDED = "exceeded";
@@ -21,7 +22,7 @@ const SECURITYONION_PRO = "Security Onion Pro";
 
 const LICENSE_EXPIRES_SOON_DAYS = 45;
 
-const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics'];
+const SUBGRID_DISABLED_ROUTES = ['home','settings','assistant','aimetrics','agentmonitor','agentstudio'];
 const LOCAL_GRID_ID = ''
 
 const USER_PASSWORD_LENGTH_MIN = 8;
@@ -29,6 +30,13 @@ const USER_PASSWORD_LENGTH_MAX = 72;
 const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
+
+// Markdown can carry untrusted text, so nothing in it may fetch a URL on render.
+const MARKDOWN_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: ['audio', 'video', 'source', 'track', 'picture', 'input'],
+  FORBID_ATTR: ['style', 'srcset', 'background', 'poster', 'ping'],
+};
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const AGENT_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -51,6 +59,7 @@ if (typeof global !== 'undefined') {
   global.iconSets = iconSets;
   global.templatePromises = templatePromises;
   global.directives = directives;
+  global.rootMethods = rootMethods;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
 }
 
@@ -243,15 +252,22 @@ $(document).ready(function () {
           notificationMenu: false,
           notificationShowDismissed: false,
           notifications: [],
+          notificationsTruncated: false,
           expandedNotifications: {},
           unreadCount: 0,
+          lastLoadedNotificationGridId: LOCAL_GRID_ID,
           notificationAudits: {},
+          notificationToast: false,
+          notificationToastTitle: '',
+          notificationToastSeverity: 'info',
+          notificationToastTimeout: 5000,
           wsUrl: (location.protocol == 'https:' ? 'wss://' : 'ws://') + location.host + location.pathname + 'ws',
           apiUrl: location.origin + location.pathname + 'api/',
           authUrl: '/auth/self-service/',
           settingsUrl: null,
           version: '0.0.0',
           elasticVersion: '0.0.0',
+          timezones: [],
           papi: null,
           connectionTimeout: 300000,
           wsConnectionTimeout: 15000,
@@ -268,6 +284,9 @@ $(document).ready(function () {
           casesEnabled: false,
           detectionsEnabled: false,
           notificationsStarted: false,
+          showNotificationOptions: false,
+          alarmStates: [],
+          alarmStatesLoaded: false,
           subtitle: '',
           connected: false,
           reconnecting: false,
@@ -301,6 +320,21 @@ $(document).ready(function () {
           AGENT_USER_ID: AGENT_USER_ID,
           validators: {
             required: value => !!value || _i18n.required,
+            email: value => {
+              if (!value) return true;
+              const v = typeof value === 'string' ? value.trim() : String(value);
+              return /^([^@\s<>]+@[^@\s<>]+\.[^@\s<>]+|[^<]*<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>)$/.test(v) || _i18n.invalidEmail;
+            },
+            url: value => {
+              if (!value) return true;
+              const v = typeof value === 'string' ? value.trim() : String(value);
+              try {
+                const parsed = new URL(v);
+                return ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host)) || _i18n.invalidUrl;
+              } catch (e) {
+                return _i18n.invalidUrl;
+              }
+            },
             number: value => (!isNaN(+value) && Number.isInteger(parseFloat(value))) || _i18n.required,
             hours: value => (!value || /^\d{1,4}(\.\d{1,4})?$/.test(value)) || _i18n.invalidHours,
             shortLengthLimit: value => (value.length < 100) || _i18n.required,
@@ -319,6 +353,8 @@ $(document).ready(function () {
             badPassChars: value => (!value || !value.match(USER_PASSWORD_INVALID_RX)) || _i18n.rulePassBadChars,
             minLength: limit => value => (value && value.length >= limit) || _i18n.ruleMinLen,
             maxLength: limit => value => (!value || value.length < limit) || _i18n.ruleMaxLen,
+            minValue: limit => value => (value !== '' && value != null && +value >= limit) || _i18n.ruleMinValue.replace('{limit}', limit),
+            maxValue: limit => value => (value !== '' && value != null && +value <= limit) || _i18n.ruleMaxValue.replace('{limit}', limit),
             fileSizeLimit: (maxBytes, formatFn) => value =>
               (value == null || value.size < maxBytes) || _i18n.fileTooLarge.replace("{maxUploadSizeBytes}", formatFn(maxBytes)),
             matches: expected => value => (!!value && value == expected) || _i18n.passwordMustMatch,
@@ -332,9 +368,9 @@ $(document).ready(function () {
               { pattern: /sid:\s?(["']?)\d+\1;/, message: _i18n.invalidDetectionSuricataMissingSID, match: false },
             ],
             yara: [
-              { pattern: /^rule\s+{/, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
-              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
-              { pattern: /condition:/m, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
+              { pattern: /^rule\s+{/i, message: _i18n.invalidDetectionStrelkaMissingRuleName, match: true },
+              { pattern: /^rule\s+[a-zA-Z_][a-zA-Z0-9_]*/i, message: _i18n.invalidDetectionStrelkaInvalidRuleName, match: false },
+              { pattern: /condition\s*:/i, message: _i18n.invalidDetectionStrelkaMissingCondition, match: false },
             ],
           },
         }
@@ -349,7 +385,7 @@ $(document).ready(function () {
         'selectedGridId': 'onGridSelected',
       },
       methods: {
-        ...(typeof socNotifications !== 'undefined' ? socNotifications : (globalThis.socNotifications || window.socNotifications || {})),
+        ...Object.assign({}, ...rootMethods),
         hasEnabledTools() {
           return this.tools.some(tool => tool.enabled);
         },
@@ -372,6 +408,18 @@ $(document).ready(function () {
           const params = { ...this.$route.query };
           params.gridId = this.selectedGridId;
           this.$router.push({ path: this.$route.path, query: params });
+          if (typeof this.isLicensed === 'function' && this.isLicensed(this.FEAT_NTF) && this.notificationsStarted) {
+            this.notifications = [];
+            this.notificationsTruncated = false;
+            this.unreadCount = 0;
+            this.lastLoadedNotificationGridId = this.selectedGridId || LOCAL_GRID_ID;
+            if (typeof this.loadUnreadCount === 'function') {
+              this.loadUnreadCount();
+            }
+            if (this.notificationMenu && typeof this.loadNotifications === 'function') {
+              this.loadNotifications();
+            }
+          }
         },
         checkSubgridSelectorEnabled(loc) {
           if (SUBGRID_DISABLED_ROUTES.includes(loc.name)) {
@@ -631,6 +679,9 @@ $(document).ready(function () {
                     this.username = this.user.email;
                   }
                   this.notificationsStarted = !!response.data.notificationsStarted;
+                  if (!this.alarmStatesLoaded) {
+                    this.loadAlarmStates();
+                  }
                   this.handleServerInfoNotifications(response.data);
 
                   if (this.parameterCallback != null) {
@@ -674,6 +725,8 @@ $(document).ready(function () {
 
                   this.subscribe("status", this.updateStatus);
                   this.subscribe('notification', this.handleIncomingNotification);
+                  this.subscribe('alarm:state', this.onAlarmStateUpdate);
+                  this.subscribe('alarm:delete', this.onAlarmDelete);
                   this.subscribe('import', (url) => {
                     if (url === 'no-changes') {
                       this.showInfo(this.i18n.gridMemberImportNoChanges);
@@ -726,6 +779,15 @@ $(document).ready(function () {
               const gridResponse = await this.papi.get('info', {params: { gridId: grid.id}});
               if (gridResponse) {
                 this.gridInfo[grid.id] = gridResponse.data;
+              }
+              try {
+                const alarmResponse = await this.papi.get('alarms/states', {params: { gridId: grid.id}});
+                if (alarmResponse) {
+                  const states = Array.isArray(alarmResponse.data) ? alarmResponse.data : (Array.isArray(alarmResponse) ? alarmResponse : []);
+                  this.setSubgridAlarmStates(grid.id, states);
+                }
+              } catch (alarmError) {
+                // Alarms may not be enabled or supported on this subgrid
               }
             } catch (error) {
               deferredError = error
@@ -984,7 +1046,8 @@ $(document).ready(function () {
           if (!str) return '';
           return String(str).replace(/<[^>]*>/g, '');
         },
-        formatMarkdown(str, handleMermaid=false) {
+        // authored: written by a person, not AI.
+        formatMarkdown(str, handleMermaid=false, authored=false) {
           marked.setOptions({
             renderer: new marked.Renderer(),
             smartLists: true,
@@ -1001,7 +1064,7 @@ $(document).ready(function () {
             var md = str;
             if (str) {
               md = marked.parse(str);
-              md = DOMPurify.sanitize(md);
+              md = this.sanitizeMarkdownHtml(md, authored);
               md = this.wrapScrollableTables(md);
             }
             return md;
@@ -1025,7 +1088,7 @@ $(document).ready(function () {
             if (str) {
               this.initializeMermaid();
               md = marked.parse(str);
-              md = DOMPurify.sanitize(md);
+              md = this.sanitizeMarkdownHtml(md, authored);
               md = this.wrapScrollableTables(md);
             }
             return md;
@@ -1047,6 +1110,38 @@ $(document).ready(function () {
           });
           return template.innerHTML;
         },
+        sanitizeMarkdownHtml(html, authored = false) {
+          if (!html) return '';
+          const allowImages = authored && !!this.parameters.allowExternalMarkdownImages;
+          return this.blockExternalResources(DOMPurify.sanitize(html, MARKDOWN_PURIFY_CONFIG), allowImages);
+        },
+        blockExternalResources(html, allowImages = false) {
+          if (!html || (html.indexOf('<img') == -1 && html.indexOf('<a') == -1)) return html;
+          const template = document.createElement('template');
+          template.innerHTML = html;
+          const isExternal = (value) => {
+            try {
+              const url = new URL(value, location.href);
+              return url.origin !== location.origin && !['data:', 'blob:'].includes(url.protocol);
+            } catch (e) {
+              return true;
+            }
+          };
+          template.content.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (allowImages || !src || !isExternal(src)) return;
+            const link = document.createElement('a');
+            link.setAttribute('href', src);
+            link.textContent = this.i18n.externalImageBlocked.replace('{url}', src);
+            img.replaceWith(link);
+          });
+          template.content.querySelectorAll('a[href]').forEach(a => {
+            if (!isExternal(a.getAttribute('href'))) return;
+            a.setAttribute('rel', 'noopener noreferrer');
+            a.setAttribute('target', '_blank');
+          });
+          return template.innerHTML;
+        },
         initializeMermaid() {
           if (typeof mermaid !== 'undefined' && !this.mermaidInitialized) {
             mermaid.initialize({
@@ -1064,17 +1159,26 @@ $(document).ready(function () {
           }
         },
         performMermaidRegexes(text) {
-          // removes double blank lines from mermaid charts
-          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)\n\s*\n(?=(?:(?!```)[\s\S])*```)/g, '\n');
-          // converts non-separator colons to ratio characters in mermaid charts
-          text = text.replace(/(?<=```mermaid(?:(?!```)[\s\S])*?)(?<!\s):(?=(?:(?!```)[\s\S])*```)/g, '\u2236');
-          return text
+          return text.replace(/```mermaid(?:(?!```)[\s\S])*```/g, (chart) => chart
+            // removes double blank lines from mermaid charts
+            .replace(/\n\s*\n/g, '\n')
+            // converts non-separator colons to ratio characters in mermaid charts
+            .replace(/(?<!\s):/g, '\u2236'));
+        },
+        // The Mermaid cleanup breaks some valid Mermaid, so authored text skips it.
+        formatMarkdownMermaid(text, render = true, authored = false) {
+          if (!text) return '';
+          const md = this.formatMarkdown(authored ? text : this.performMermaidRegexes(text), true, authored);
+          if (render) this.$nextTick(() => this.renderMermaid());
+          return md;
         },
         colorSeverity(value) {
-          if (value == "low_false") return "yellow";
-          if (value == "medium_false") return "orange-darken-1";
-          if (value == "high_false") return "red-lighten-1";
-          if (value == "critical_false") return "red-darken-4";
+          const val = (value || '').toLowerCase();
+          if (val == "low_false" || val == "low") return "yellow";
+          if (val == "medium_false" || val == "medium") return "orange-darken-1";
+          if (val == "high_false" || val == "high") return "red-lighten-1";
+          if (val == "critical_false" || val == "critical") return "red-darken-4";
+          if (val == "info_false" || val == "info") return "grey";
           return "icon";
         },
         colorizeChip(color) {
@@ -1143,16 +1247,89 @@ $(document).ready(function () {
           preselects[this.i18n.datePreselect30dToNow] = [moment().subtract(30, 'days'), moment()];
           return preselects;
         },
-        applyDateRangePickerAriaLabels(picker) {
+        applyDateRangePickerA11y(picker) {
           const $c = picker.container;
-          $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
-          $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
-          $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
-          $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
-          $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
-          $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
-          $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
-          $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
+          const $input = picker.element;
+          const ns = '.soA11y';
+          const tabbables = () => $c.find('.ranges li, select:enabled, button:enabled').filter(':visible');
+
+          const labelSelects = () => {
+            $c.find('.drp-calendar.left .hourselect').attr('aria-label', this.i18n.ariaPickerStartHour);
+            $c.find('.drp-calendar.left .minuteselect').attr('aria-label', this.i18n.ariaPickerStartMinute);
+            $c.find('.drp-calendar.left .secondselect').attr('aria-label', this.i18n.ariaPickerStartSecond);
+            $c.find('.drp-calendar.left .ampmselect').attr('aria-label', this.i18n.ariaPickerStartAmPm);
+            $c.find('.drp-calendar.right .hourselect').attr('aria-label', this.i18n.ariaPickerEndHour);
+            $c.find('.drp-calendar.right .minuteselect').attr('aria-label', this.i18n.ariaPickerEndMinute);
+            $c.find('.drp-calendar.right .secondselect').attr('aria-label', this.i18n.ariaPickerEndSecond);
+            $c.find('.drp-calendar.right .ampmselect').attr('aria-label', this.i18n.ariaPickerEndAmPm);
+          };
+
+          // the library re-opens the picker whenever the input gains focus
+          const focusInput = () => {
+            $input.off('focus.daterangepicker');
+            $input.trigger('focus');
+            $input.on('focus.daterangepicker', $.proxy(picker.show, picker));
+          };
+
+          const focusAfterInput = () => {
+            const all = $('a[href], button, input, select, textarea, [tabindex]')
+              .not('[tabindex="-1"], :disabled').not($c.find('*')).filter(':visible').toArray();
+            const next = all[all.indexOf($input[0]) + 1];
+            if (next) next.focus(); else focusInput();
+          };
+
+          labelSelects();
+          $c.find('.ranges ul').attr('role', 'none');
+          $c.find('.ranges li').attr({ tabindex: '0', role: 'button' });
+
+          // the library hides the picker on Tab; move into it instead
+          $input.off('keydown.daterangepicker').on('keydown.daterangepicker', e => {
+            if (e.key === 'Tab' && !e.shiftKey && picker.isShowing && tabbables().length) {
+              e.preventDefault();
+              tabbables().first().trigger('focus');
+              return;
+            }
+            picker.keydown(e);
+          });
+
+          $c.off('keydown' + ns).on('keydown' + ns, e => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              picker.hide();
+              focusInput();
+            } else if ((e.key === 'Enter' || e.key === ' ') && $(e.target).is('.ranges li')) {
+              e.preventDefault();
+              $(e.target).trigger('click');
+            } else if (e.key === 'Tab') {
+              const $t = tabbables();
+              if (e.shiftKey && e.target === $t[0]) {
+                e.preventDefault();
+                focusInput();
+              } else if (!e.shiftKey && e.target === $t[$t.length - 1]) {
+                e.preventDefault();
+                picker.hide();
+                focusAfterInput();
+              }
+            }
+          });
+
+          $c.off('click' + ns).on('click' + ns, '.ranges li, .drp-buttons button', () => {
+            labelSelects();
+            if (!picker.isShowing) focusInput();
+          });
+
+          // the library re-renders the time selects on change, dropping their focus and labels
+          let lastSelect = null;
+          $c.off('focusin' + ns).on('focusin' + ns, 'select', e => {
+            lastSelect = {
+              side: $(e.target).closest('.drp-calendar').hasClass('left') ? 'left' : 'right',
+              cls: e.target.classList[0],
+            };
+          });
+          $c.off('change' + ns).on('change' + ns, () => {
+            labelSelects();
+            if (lastSelect) $c.find(`.drp-calendar.${lastSelect.side} select.${lastSelect.cls}`).trigger('focus');
+          });
         },
         localizeMessage(origMsg, vars = null) {
           if (!origMsg) return "";
@@ -1350,6 +1527,7 @@ $(document).ready(function () {
               vm.connected = true;
               vm.reconnecting = false;
               vm.loadServerSettingsTime = 0; // Force reload of server settings in case new SOC config changed
+              vm.loadAlarmStates();
               vm.updateStatus();
             };
             this.socket.onclose = function(evt) {
@@ -1656,6 +1834,28 @@ $(document).ready(function () {
         isUserAdmin(user = null) {
           return this.userHasRole("superuser", user);
         },
+        // Mirrors the built-in rbac/roles grants for Onion AI; the server still enforces them.
+        canReadOnionAi(user = null) {
+          return ["analyst", "auditor", "superuser"].some(role => this.userHasRole(role, user));
+        },
+        canWriteOnionAi(user = null) {
+          return ["analyst", "superuser"].some(role => this.userHasRole(role, user));
+        },
+        canReadAutomations(user = null) {
+          return this.canReadOnionAi(user);
+        },
+        canStartInvestigations(user = null) {
+          return this.canWriteOnionAi(user);
+        },
+        canReadInvestigations(user = null) {
+          return this.canReadOnionAi(user);
+        },
+        canWriteOwnMemories(user = null) {
+          return this.canWriteOnionAi(user);
+        },
+        canWriteAllMemories(user = null) {
+          return this.isUserAdmin(user);
+        },
         isMyUser(user) {
           return user != null && this.user != null && user.id == this.user.id;
         },
@@ -1675,6 +1875,66 @@ $(document).ready(function () {
           this.setFavicon();
           this.updateTitle();
           this.loadServerSettings(true);
+        },
+        setSubgridAlarmStates(gridId, states) {
+          if (!this.alarmStates) this.alarmStates = [];
+          const targetGridId = gridId || LOCAL_GRID_ID;
+          const otherStates = this.alarmStates.filter(s => (s.gridId || LOCAL_GRID_ID) !== targetGridId);
+          const newStates = (states || []).map(s => ({ ...s, gridId: targetGridId }));
+          this.alarmStates = [...otherStates, ...newStates];
+          this.updateStatus();
+        },
+        onAlarmStateUpdate(state) {
+          if (!state || !state.alarmId) return;
+          if (!this.alarmStates) this.alarmStates = [];
+          const gridId = state.gridId || LOCAL_GRID_ID;
+          const idx = this.alarmStates.findIndex(s => s.alarmId === state.alarmId && s.nodeId === state.nodeId && (s.gridId || LOCAL_GRID_ID) === gridId);
+          const stateWithGrid = { ...state, gridId };
+          if (idx !== -1) {
+            this.alarmStates.splice(idx, 1, stateWithGrid);
+          } else {
+            this.alarmStates.push(stateWithGrid);
+          }
+          this.updateStatus();
+          this.setFavicon();
+          this.updateTitle();
+        },
+        onAlarmDelete(payload) {
+          const alarmId = typeof payload === 'string' ? payload : payload?.alarmId;
+          if (!alarmId) return;
+          const gridId = typeof payload === 'object' && payload.gridId !== undefined && payload.gridId !== null ? payload.gridId : null;
+          if (this.alarmStates && this.alarmStates.length > 0) {
+            const initialLen = this.alarmStates.length;
+            this.alarmStates = this.alarmStates.filter(s => {
+              if (s.alarmId !== alarmId) return true;
+              if (gridId !== null && (s.gridId || LOCAL_GRID_ID) !== (gridId || LOCAL_GRID_ID)) return true;
+              return false;
+            });
+            if (this.alarmStates.length !== initialLen) {
+              this.updateStatus();
+              this.setFavicon();
+              this.updateTitle();
+            }
+          }
+        },
+        loadAlarmStates() {
+          if (!this.username) return Promise.resolve();
+          return this.papi.get('alarms/states', { params: { gridId: LOCAL_GRID_ID } })
+            .then(response => {
+              const localStates = (response?.data || []).map(s => ({ ...s, gridId: LOCAL_GRID_ID }));
+              const subgridStates = (this.alarmStates || []).filter(s => s.gridId && s.gridId !== LOCAL_GRID_ID);
+              this.alarmStates = [...localStates, ...subgridStates];
+              this.alarmStatesLoaded = true;
+              this.updateStatus();
+              this.setFavicon();
+              this.updateTitle();
+            })
+            .catch(() => {});
+        },
+        isAlarmActive(gridId) {
+          if (!this.alarmStates || this.alarmStates.length === 0) return false;
+          const targetGridId = gridId !== undefined && gridId !== null ? gridId : LOCAL_GRID_ID;
+          return this.alarmStates.some(s => (s.gridId || LOCAL_GRID_ID) === targetGridId && s.status === 'alarm');
         },
         getDetectionEngines() {
           return ['elastalert', 'strelka', 'suricata'];
@@ -1798,6 +2058,9 @@ $(document).ready(function () {
         isGridUnhealthy(gridId) {
           const status = this.statusByGridId[gridId];
           if (status && status.grid && status.grid.unhealthyNodeCount > 0) {
+            return true;
+          }
+          if (this.isAlarmActive(gridId)) {
             return true;
           }
           return false;
@@ -1989,13 +2252,42 @@ $(document).ready(function () {
         },
         verifyRuleSyntax(det) {
           const rules = this.ruleValidators[det.language.toLowerCase()];
+          let content = det.content;
+          if (det.language.toLowerCase() === 'yara') {
+            content = this.yaraContentForSyntaxCheck(content);
+          }
           for (let i = 0; i < rules.length; i++) {
-            if (rules[i].pattern.test(det.content) === rules[i].match) {
+            if (rules[i].pattern.test(content) === rules[i].match) {
               return rules[i].message;
             }
           }
 
           return null;
+        },
+        // Drop the preamble the Strelka parser already accepts so a duplicated
+        // community rule can be saved. securityonion-yara rules often start with
+        // imports, comments, or whitespace rather than "rule". Do not skip
+        // "global" or "include"; ValidateRule rejects those.
+        yaraContentForSyntaxCheck(content) {
+          if (!content) {
+            return '';
+          }
+
+          // Whitespace, // and /* */ comments, and import "x" lines. An import may
+          // be followed by a comment on the same line, as the parser allows. \r is
+          // included because the parser skips CR before it checks the import line.
+          // Single quotes are not skipped: YARA requires double quotes. The parser
+          // would still treat "import 'pe'" as an import, but that form is invalid
+          // YARA and is not used by securityonion-yara.
+          const preamble = /^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|import[ \t]+"[^"\n]*"(?=[ \t]*(?:\/[/*]|\r?\n|$)))*/;
+          // The parser strips only a lowercase "private " prefix, then matches rule case-insensitively.
+          const privatePrefix = /^private \s*(?=[Rr][Uu][Ll][Ee]\b)/;
+
+          return String(content).replace(preamble, '').replace(privatePrefix, '');
+        },
+        parseMultiDocYaml(content) {
+          // FAILSAFE loads an empty document as '' rather than null
+          return jsyaml.loadAll(content, { schema: jsyaml.FAILSAFE_SCHEMA }).filter((doc) => doc !== null && doc !== '');
         },
       },
       created() {

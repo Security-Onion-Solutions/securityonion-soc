@@ -22,7 +22,7 @@ type Playbook struct {
 	// The category of detections this playbook applies to. May be empty.
 	DetectionCategory string `yaml:"detection_category" json:"detection_category" example:"process_creation"`
 	// The type of detection this playbook applies to. This is analogous to which detection engine the playbook is for.
-	DetectionType string `yaml:"detection_type" json:"detection_type" enums:"nids,sigma,yara"`
+	DetectionType string `yaml:"detection_type" json:"detection_type" enums:"nids,sigma,sigma_correlation,yara"`
 	// Authors of the playbook.
 	Contributors []string `yaml:"contributors" json:"contributors" example:"['John Doe', 'Jane Smith']"`
 	// The questions of this playbook that guide the user in response to an alert.

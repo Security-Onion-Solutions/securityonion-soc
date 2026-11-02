@@ -6,7 +6,6 @@
 package suricata
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -25,7 +25,7 @@ const (
 )
 
 func (e *SuricataEngine) Migration2470(statePath string) error {
-	shouldMigrate, err := e.m2470ReadStateFile(statePath)
+	shouldMigrate, err := detections.ReadMigrationState(e.IOManager, statePath)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 		return err
 	}
 
-	err = e.m2470WriteStateFileSuccess(statePath)
+	err = detections.MarkMigrationDone(e.IOManager, statePath)
 	if err != nil {
 		return err
 	}
@@ -134,30 +134,6 @@ func (e *SuricataEngine) Migration2470(statePath string) error {
 	log.WithField("errMap", errMap).Info("suricata has successfully migrated to 2.4.70") // for support
 
 	return nil
-}
-
-func (e *SuricataEngine) m2470ReadStateFile(path string) (shouldMigrate bool, err error) {
-	state, err := e.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-
-	log.WithField("stateFileContent", string(state)).Info("reading state file for migration to 2.4.70")
-
-	s := strings.TrimSpace(string(state))
-	if s == "1" {
-		return false, nil
-	}
-
-	if s == "0" {
-		return true, nil
-	}
-
-	return false, fmt.Errorf("unexpected state file content: %s", s)
-}
-
-func (e *SuricataEngine) m2470WriteStateFileSuccess(path string) (err error) {
-	return e.WriteFile(path, []byte("1"), 0644)
 }
 
 func (e *SuricataEngine) m2470LoadEnabledDisabled() (enabled []string, disabled []string, err error) {

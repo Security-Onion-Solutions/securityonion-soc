@@ -264,6 +264,7 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 			"Orchestrator":      "classic-model@SOAI",
 			"Investigator":      "classic-model",
 			"DetectionEngineer": "classic-model@SOAI",
+			"AlertTriage":       "classic-model@SOAI",
 		},
 	})
 	assert.NoError(t, err)
@@ -274,18 +275,19 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.Equal(t, agenticTestModels(), srv.Config.ClientParams.AssistantParams.AvailableModels)
 
 	// The hardcoded agents are defined and their mapping loaded.
-	assert.Len(t, ac.agents, 3)
+	assert.Len(t, ac.agents, 4)
 	assert.Equal(t, "classic-model@SOAI", ac.agentMapping["Orchestrator"])
 	assert.Equal(t, "classic-model", ac.agentMapping["Investigator"])
 	assert.Equal(t, "classic-model@SOAI", ac.agentMapping["DetectionEngineer"])
 
 	// The agentic flag, agent list, and mapping are exposed to clients.
 	assert.True(t, srv.Config.ClientParams.AssistantParams.Agentic)
-	assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 3)
+	assert.Len(t, srv.Config.ClientParams.AssistantParams.AvailableAgents, 4)
 	assert.Equal(t, map[string]string{
 		"Orchestrator":      "classic-model@SOAI",
 		"Investigator":      "classic-model",
 		"DetectionEngineer": "classic-model@SOAI",
+		"AlertTriage":       "classic-model@SOAI",
 	}, srv.Config.ClientParams.AssistantParams.AgentMapping)
 
 	// Delegation topology: hub-and-spoke plus the Investigator -> Engineer
@@ -293,22 +295,41 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.ElementsMatch(t, []string{"Investigator", "DetectionEngineer"}, ac.agents["Orchestrator"].CanDelegateTo)
 	assert.Equal(t, []string{"DetectionEngineer"}, ac.agents["Investigator"].CanDelegateTo)
 	assert.Empty(t, ac.agents["DetectionEngineer"].CanDelegateTo)
+	assert.Equal(t, []string{"DetectionEngineer"}, ac.agents["AlertTriage"].CanDelegateTo)
 
 	// Skill wiring is a permission boundary: Tuning (the write skill) is
 	// Engineer-only, and the Orchestrator holds no skills.
 	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
+	// Triage runs unattended, so it cannot respond to alerts; it records its assessment through
+	// Assess and sends its own notification through Notify.
+	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Assess", "Notify"}, ac.agents["AlertTriage"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
+
+	// Notify is granted to AlertTriage alone.
+	assert.Equal(t, []string{"send_notification"}, ac.SkillLibrary["Notify"].Tools)
+	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
+	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
+	assert.Contains(t, ac.builtinSkills, "Notify")
+	assert.Equal(t, []string{"record_assessment"}, ac.SkillLibrary["Assess"].Tools)
+	assert.True(t, ac.SkillLibrary["Assess"].IsSystem)
+	for name, agent := range ac.agents {
+		if name != "AlertTriage" {
+			assert.NotContains(t, agent.AllowedSkills, "Notify", name)
+		}
+	}
 
 	// Delegate tools are registered under both the agent name and the
 	// sanitized tool name.
 	for _, key := range []string{
 		"Investigator", "delegate_to_Investigator",
 		"DetectionEngineer", "delegate_to_DetectionEngineer",
+		"AlertTriage", "delegate_to_AlertTriage",
 	} {
 		_, ok := ac.DelegationLibrary[key]
 		assert.True(t, ok, "missing delegate registration for %s", key)
 	}
+	assert.NotContains(t, ac.DelegationLibrary, "delegate_to_Notifier")
 }
 
 func TestAssistantCoordinator_InitAgenticEnabledDropsUnmappedAgents(t *testing.T) {
@@ -480,6 +501,21 @@ func TestParseAgentsSetting(t *testing.T) {
 		assert.True(t, agents["On"].Enabled)
 	})
 
+	t.Run("maxConcurrentInstances defaults to unlimited and clamps a negative", func(t *testing.T) {
+		value := `{"name":"Default","model":"m"}
+{"name":"Capped","model":"m","maxConcurrentInstances":2}
+{"name":"Bogus","model":"m","maxConcurrentInstances":-1}`
+
+		agents, _, err := parseAgentsSetting(&model.Setting{Id: ConfigSettingAgents, Value: value})
+		require.NoError(t, err)
+		require.Len(t, agents, 3)
+
+		assert.Equal(t, 0, agents["Default"].MaxConcurrentInstances, "omitted means unlimited")
+		assert.Equal(t, 2, agents["Capped"].MaxConcurrentInstances)
+		// A negative would otherwise read as a limit no session can satisfy.
+		assert.Equal(t, 0, agents["Bogus"].MaxConcurrentInstances)
+	})
+
 	t.Run("malformed json returns an error", func(t *testing.T) {
 		_, _, err := parseAgentsSetting(&model.Setting{Id: ConfigSettingAgents, Value: `{"name":"X"`})
 		assert.Error(t, err)
@@ -572,6 +608,18 @@ func TestApplyBuiltinDefaults(t *testing.T) {
 		ac.applyBuiltinDefaults(agents)
 
 		assert.Equal(t, []string{}, agents["Orchestrator"].CanDelegateTo)
+	})
+
+	t.Run("a stored concurrency limit survives on a system agent", func(t *testing.T) {
+		ac, _ := builtinMergeCoordinator()
+		agents := map[string]model.Agent{
+			"Hunter": {Name: "Hunter", Enabled: true, MaxConcurrentInstances: 3},
+		}
+
+		ac.applyBuiltinDefaults(agents)
+
+		// Editable, and no builtin declares one, so the stored value always wins.
+		assert.Equal(t, 3, agents["Hunter"].MaxConcurrentInstances)
 	})
 
 	t.Run("an admin-created agent is left untouched", func(t *testing.T) {
@@ -774,6 +822,24 @@ func TestExposeAgentsPublishesLimits(t *testing.T) {
 	assert.Equal(t, 9000, params.MaxSubSessionTokens)
 }
 
+func TestExposeAgentsPublishesConcurrencyLimit(t *testing.T) {
+	ac, _ := builtinMergeCoordinator()
+	ac.agents = map[string]model.Agent{
+		"Hunter": {Name: "Hunter", Enabled: true, MaxConcurrentInstances: 2},
+	}
+	ac.agentMapping = map[string]string{"Hunter": "m2@a"}
+
+	ac.exposeAgents()
+
+	params := ac.srv.Config.ClientParams.AssistantParams
+	require.Len(t, params.AvailableAgents, 1)
+	assert.Equal(t, 2, params.AvailableAgents[0].MaxConcurrentInstances)
+
+	raw, err := json.Marshal(params.AvailableAgents[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"maxConcurrentInstances":2`)
+}
+
 func TestBroadcastAgenticUpdateWithoutHost(t *testing.T) {
 	ac, _ := builtinMergeCoordinator()
 	ac.srv.Host = nil
@@ -798,6 +864,23 @@ func (f *fakeConfigstore) GetSettings(ctx context.Context, includeDefault bool) 
 		return f.settings, nil
 	}
 	return []*model.Setting{{Id: ConfigSettingAgents, Value: f.value}, {Id: ConfigSettingSkills, Value: f.value}}, nil
+}
+
+func (f *fakeConfigstore) LookupSetting(ctx context.Context, id string) (*model.Setting, error) {
+	return f.GetSetting(ctx, id)
+}
+
+func (f *fakeConfigstore) GetSetting(ctx context.Context, id string) (*model.Setting, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.settings != nil {
+		for _, s := range f.settings {
+			if s.Id == id {
+				return s, nil
+			}
+		}
+	}
+	return &model.Setting{Id: id, Value: f.value}, nil
 }
 
 func (f *fakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
@@ -872,6 +955,19 @@ func TestSaveAgentMergesIntoStoredList(t *testing.T) {
 	assert.Contains(t, lines[1], `"persona":"hunt better"`)
 }
 
+func TestSaveAgentPersistsConcurrencyLimit(t *testing.T) {
+	ac, store := configWriteCoordinator(`{"name":"Hunter","enabled":true,"model":"m2@a"}`)
+
+	err := ac.SaveAgent(context.Background(), "Hunter", &model.StoredAgent{
+		Name: "Hunter", Enabled: enabledPtr(true), Model: "m2@a", MaxConcurrentInstances: 3,
+	})
+	require.NoError(t, err)
+
+	lines := store.lastWritten()
+	require.Len(t, lines, 1)
+	assert.Contains(t, lines[0], `"maxConcurrentInstances":3`)
+}
+
 func TestSaveAgentAppendsWhenNew(t *testing.T) {
 	ac, store := configWriteCoordinator(`{"name":"Hunter","enabled":true}`)
 
@@ -913,6 +1009,17 @@ func TestDeleteAgent(t *testing.T) {
 		lines := store.lastWritten()
 		require.Len(t, lines, 1)
 		assert.Contains(t, lines[0], `"name":"Orchestrator"`)
+	})
+
+	t.Run("drops the agent from other agents' delegates", func(t *testing.T) {
+		ac, store := configWriteCoordinator(`{"name":"Orchestrator","canDelegateTo":["Custom","Investigator"]}
+{"name":"Custom"}`)
+
+		require.NoError(t, ac.DeleteAgent(context.Background(), "Custom"))
+
+		lines := store.lastWritten()
+		require.Len(t, lines, 1)
+		assert.Contains(t, lines[0], `"canDelegateTo":["Investigator"]`)
 	})
 
 	t.Run("refuses a system agent", func(t *testing.T) {
@@ -958,7 +1065,7 @@ func TestSaveAndDeleteSkill(t *testing.T) {
 		ac, store := configWriteCoordinator(stored)
 
 		require.NoError(t, ac.DeleteSkill(context.Background(), "Custom"))
-		assert.Len(t, store.lastWritten(), 1)
+		assert.Equal(t, 1, strings.Count(store.written[0], `"name":`))
 	})
 
 	t.Run("refuses a rename onto an existing skill", func(t *testing.T) {
@@ -985,6 +1092,19 @@ func TestSaveSkillRenameUpdatesAgents(t *testing.T) {
 	require.Len(t, store.written, 2)
 	assert.Contains(t, store.written[0], `"name":"Renamed"`)
 	assert.Contains(t, store.written[1], `"allowedSkills":["Renamed","Hunt"]`)
+}
+
+func TestDeleteSkillUpdatesAgents(t *testing.T) {
+	ac, store := configWriteCoordinator("")
+	store.settings = []*model.Setting{
+		{Id: ConfigSettingSkills, Value: `{"name":"Custom","tools":["query_events"]}`},
+		{Id: ConfigSettingAgents, Value: `{"name":"Hunter","allowedSkills":["Custom","Hunt"]}`},
+	}
+
+	require.NoError(t, ac.DeleteSkill(context.Background(), "Custom"))
+
+	require.Len(t, store.written, 2)
+	assert.Contains(t, store.written[1], `"allowedSkills":["Hunt"]`)
 }
 
 func TestConcurrentSavesDoNotClobber(t *testing.T) {

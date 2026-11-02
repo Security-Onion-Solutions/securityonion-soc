@@ -13,7 +13,6 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/detections"
-	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 	"github.com/google/uuid"
@@ -24,7 +23,7 @@ import (
 )
 
 func init() {
-	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = NewOpenAIResponsesAdapter
+	protocols[(&OpenAIResponsesAdapter{}).Protocol()] = ProtocolRegistration{New: NewOpenAIResponsesAdapter}
 }
 
 type OpenAIResponsesAdapter struct {
@@ -178,10 +177,6 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 		prompt += "\n" + req.SystemAppend
 	}
 
-	// don't allow a user closing their request connection to cause us to lose the message stream
-	noTimeoutContext := context.WithValue(context.Background(), web.ContextKeyRequestId, ctx.Value(web.ContextKeyRequestId))
-	noTimeoutContext = context.WithValue(noTimeoutContext, web.ContextKeyRequestorId, ctx.Value(web.ContextKeyRequestorId))
-
 	params := responses.ResponseNewParams{
 		Model:        req.Model,
 		Input:        history,
@@ -197,7 +192,9 @@ func (a *OpenAIResponsesAdapter) SendMessageStream(ctx context.Context, req *mod
 		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
 	}
 
-	stream := a.client.ResponsesNewStreaming(noTimeoutContext, params)
+	// The coordinator detaches a user's turn from their request before this call;
+	// an automation's turn stays attached so it can be cancelled.
+	stream := a.client.ResponsesNewStreaming(ctx, params)
 
 	response, bodyWriter := fabricateResponse(http.StatusOK)
 
@@ -340,7 +337,7 @@ func convertHistoryToOpenAI(logger log.Interface, req *model.ChatRequest) respon
 
 				items = append(items, responses.ResponseInputItemUnionParam{
 					OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-						CallID: block.ToolResult.ToolUseId,
+						CallID: param.NewOpt(block.ToolResult.ToolUseId),
 						Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
 							OfString: openai.String(output),
 						},
@@ -419,8 +416,8 @@ func pairToolOutputs(items []responses.ResponseInputItemUnionParam) []responses.
 	outputs := make(map[string]int, len(items))
 	for i, it := range items {
 		if it.OfFunctionCallOutput != nil {
-			if _, seen := outputs[it.OfFunctionCallOutput.CallID]; !seen {
-				outputs[it.OfFunctionCallOutput.CallID] = i
+			if _, seen := outputs[it.OfFunctionCallOutput.CallID.String()]; !seen {
+				outputs[it.OfFunctionCallOutput.CallID.String()] = i
 			}
 		}
 	}

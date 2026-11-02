@@ -22,7 +22,10 @@ import (
 
 func TestSOCChannelType(t *testing.T) {
 	ch := NewSOCChannel(nil, nil)
-	assert.Equal(t, model.ChannelTypeSOC, ch.Type())
+	assert.Equal(t, "soc", ch.Type())
+	assert.True(t, ch.SupportsRecipients())
+	assert.False(t, ch.SupportsAttachments())
+	assert.True(t, ch.SupportsLinks())
 }
 
 func TestSOCChannelValidateConfig(t *testing.T) {
@@ -30,33 +33,7 @@ func TestSOCChannelValidateConfig(t *testing.T) {
 
 	// nil params
 	assert.NoError(t, ch.ValidateConfig(nil))
-
-	// valid params
-	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{
-		"storeInPostgres": true,
-		"attachmentMode":  model.AttachmentModeLink,
-	}))
-	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{
-		"attachmentMode": model.AttachmentModeAttach,
-	}))
-	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{
-		"attachmentMode": model.AttachmentModeBoth,
-	}))
-
-	// invalid attachmentMode string
-	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
-		"attachmentMode": "invalid",
-	}))
-
-	// non-string attachmentMode
-	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
-		"attachmentMode": 123,
-	}))
-
-	// non-boolean storeInPostgres
-	assert.Error(t, ch.ValidateConfig(map[string]interface{}{
-		"storeInPostgres": "true",
-	}))
+	assert.NoError(t, ch.ValidateConfig(map[string]interface{}{}))
 }
 
 func TestSOCChannelSendNilPayload(t *testing.T) {
@@ -80,25 +57,6 @@ func TestSOCChannelSendNilDB(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, payload.ID)
 	assert.False(t, payload.Timestamp.IsZero())
-}
-
-func TestSOCChannelSendStoreInPostgresFalse(t *testing.T) {
-	mDB := new(mockdb.MockDB)
-	srv := &server.Server{DB: mDB}
-	ch := NewSOCChannel(srv, nil)
-
-	payload := &model.NotificationPayload{
-		ID:       "custom-id",
-		Source:   model.SourceDetection,
-		Title:    "Alert",
-		Summary:  "Summary",
-		Severity: model.NotificationSeverityHigh,
-	}
-
-	// storeInPostgres is false, no DB call should be made
-	err := ch.Send(context.Background(), map[string]interface{}{"storeInPostgres": false}, payload)
-	assert.NoError(t, err)
-	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestSOCChannelSendWithMockDB(t *testing.T) {
@@ -140,6 +98,7 @@ func TestSOCChannelSendWithMockDB(t *testing.T) {
 		mock.MatchedBy(func(s string) bool { return len(s) > 0 }),
 		"rule_12345_192.168.1.100",
 		fixedTime,
+		"[]",
 	).Return(nil).Once()
 
 	err := ch.Send(ctx, map[string]interface{}{"storeInPostgres": true}, payload)
@@ -162,7 +121,7 @@ func TestSOCChannelSendDBError(t *testing.T) {
 		Severity: model.NotificationSeverityMedium,
 	}
 
-	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(errors.New("connection closed")).Once()
 
 	err := ch.Send(ctx, nil, payload)
@@ -192,7 +151,7 @@ func TestSOCChannelSend_BroadcastWebSocket(t *testing.T) {
 		Timestamp: time.Now().UTC(),
 	}
 
-	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	mDB.On("Exec", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).Once()
 
 	err := ch.Send(ctx, nil, payload)

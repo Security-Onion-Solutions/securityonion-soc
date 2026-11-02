@@ -143,7 +143,7 @@ func (h *InfoHandler) getCustomReports(path string) map[string]string {
 				log.WithError(err).WithField("customReportFilePath", filePath).Error("Failed to read custom report file")
 				continue
 			}
-			title := h.parseReportTitle(content, file.Name())
+			title := ParseReportTitle(content, file.Name())
 			reports[file.Name()] = title
 		}
 	}
@@ -151,10 +151,11 @@ func (h *InfoHandler) getCustomReports(path string) map[string]string {
 	return reports
 }
 
-func (h *InfoHandler) parseReportTitle(content []byte, deflt string) string {
+// ParseReportTitle extracts the title from markdown report content by finding the first line with a series of equals signs underneath it.
+func ParseReportTitle(content []byte, deflt string) string {
 	title := deflt
 
-	// Extract the title from the markdown content. We're looking for the first line that has a series of dashes underneath it.
+	// Extract the title from the markdown content. We're looking for the first line that has a series of equals signs underneath it.
 	prevLine := ""
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {

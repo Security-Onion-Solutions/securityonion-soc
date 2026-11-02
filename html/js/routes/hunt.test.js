@@ -5,6 +5,7 @@
 // Elastic License 2.0.
 
 require('../test_common.js');
+require('../components/alert-investigation.js');
 require('./hunt.js');
 
 let comp;
@@ -14,6 +15,7 @@ beforeEach(() => {
   resetPapi();
   comp.$root.initializeCharts = () => { };
   comp.$el = { querySelectorAll: () => [] };
+  comp.$root.user = { id: 'analyst-1', roles: ['analyst'] };
   comp.created();
 });
 
@@ -388,6 +390,48 @@ test('applyQuerySubstitutions', () => {
   expect(newQueries[1].query).toBe('bar:123');
 });
 
+test('initHunt shows a licensed query only on a grid where it is available', async () => {
+  comp.$root.user = { id: '123' };
+  comp.hunt = jest.fn();
+  const params = () => ({
+    queries: [
+      { name: 'Default', query: '* | groupby rule.name' },
+      { name: 'By Assessment', query: '* | groupby event.so_alerttriage.assessment*', license: 'oai' },
+    ],
+  });
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(false);
+  await comp.initHunt(params());
+  expect(comp.queries.map(q => q.name)).toEqual(['Default']);
+  expect(comp.query).toBe('* | groupby rule.name');
+  expect(comp.$root.isLicensed).toHaveBeenCalledWith('oai');
+
+  comp.$root.isLicensed = jest.fn().mockReturnValue(true);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  await comp.initHunt(params());
+  expect(comp.queries.map(q => q.name)).toEqual(['Default', 'By Assessment']);
+  expect(comp.query).toBe('* | groupby rule.name');
+  delete comp.$root.parameters.assistant;
+});
+
+test('isAgenticEnabled', () => {
+  comp.$root.isLicensed = jest.fn(feat => feat !== 'ttr');
+
+  expect(comp.isAgenticEnabled({ query: '*' })).toBe(true);
+  expect(comp.isAgenticEnabled({ query: '*', license: 'ttr' })).toBe(false);
+  expect(comp.isAgenticEnabled({ query: '*', license: 'rpt' })).toBe(true);
+
+  const oai = { query: '*', license: 'oai' };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: false, agentic: true };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: false };
+  expect(comp.isAgenticEnabled(oai)).toBe(false);
+  comp.$root.parameters.assistant = { enabled: true, agentic: true };
+  expect(comp.isAgenticEnabled(oai)).toBe(true);
+  delete comp.$root.parameters.assistant;
+});
+
 test('lookupSocIds', () => {
   comp.$root.users = [{id:'12345678-1234-5678-0123-123456789012', email:'test@test.invalid'}];
   var record = { 'so_case.assigneeId': '123'}; // invalid UUID
@@ -422,6 +466,17 @@ test('getQuery', async () => {
   const params = { params: { query: 'a:1 OR b:2', field: '', value: 'c:3 AND e:4 AND NOT f:5', scalar: true, mode: 'INCLUDE', condense: true } };
   expect(mock).toHaveBeenCalledWith('query/filtered', params);
   expect(newQuery).toBe("(a:1 OR b:2) AND c:3 AND e:4 AND NOT f:5");
+});
+
+test('getQuery deep link skips exclusive toggle exclusions', async () => {
+  comp.query = "a:1";
+  comp.queryBaseFilter = "c:3";
+  comp.filterToggles = [{ enabled: true, filter: "e:4", exclusive: true }, { enabled: false, filter: "f:5", exclusive: true }, { enabled: true, filter: "g:6" }];
+  comp.deepLinked = true;
+  mock = mockPapi("get", {'data':'a:1 AND c:3 AND e:4 AND g:6'});
+
+  await comp.getQuery();
+  expect(mock).toHaveBeenCalledWith('query/filtered', { params: { query: 'a:1', field: '', value: 'c:3 AND e:4 AND g:6', scalar: true, mode: 'INCLUDE', condense: true } });
 });
 
 test('buildGroupByNew', () => {
@@ -486,6 +541,35 @@ test('populateGroupByTables', () => {
   result = comp.populateGroupByTables(metrics);
   expect(comp.groupBys[0].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'foo', value: 'foo'}, {title: 'bar', value: 'bar'}]);
   expect(comp.groupBys[1].headers).toStrictEqual([{title: '', value: ''}, {title: 'Count', value:'count'}, {title: 'car', value: 'car'}]);
+});
+
+test('populateGroupByTables sorts an assessment group by assessment', () => {
+  const metrics = {
+    "groupby_0|event.so_alerttriage.assessment|rule.name": [
+      { value: 40, keys: [10, 'A'] },
+      { value: 2, keys: [90, 'B'] },
+      { value: 9, keys: ['__missing__', 'C'] },
+    ],
+  };
+  comp.queryGroupByOptions = [[]];
+
+  comp.groupBySortBy = '';
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'event.so_alerttriage.assessment', order: 'desc' }]);
+  expect(comp.groupBys[0].headers[1]).toMatchObject({ title: 'AI Assessment', value: 'event.so_alerttriage.assessment', sort: comp.sortByAssessment });
+  expect(comp.groupBys[0].data[0]['event.so_alerttriage.assessment']).toBe(10);
+  expect(comp.groupBys[0].data[2]['event.so_alerttriage.assessment']).toBe(comp.i18n.__missing__);
+
+  // A sort saved from a view without this column does not apply.
+  comp.groupBySortBy = 'source.ip';
+  comp.groupBySortDesc = false;
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'event.so_alerttriage.assessment', order: 'desc' }]);
+
+  comp.groupBySortBy = 'count';
+  comp.groupBySortDesc = true;
+  comp.populateGroupByTables(metrics);
+  expect(comp.groupBys[0].sortBy).toStrictEqual([{ key: 'count', order: 'desc' }]);
 });
 
 test('displayTable', () => {
@@ -971,6 +1055,180 @@ test('relative query string', async () => {
   expect(comp.setupDateRangePicker).toHaveBeenCalled();
 
   comp.setupDateRangePicker = orig;
+});
+
+test('expand query string deep links to the alert', () => {
+  comp.activeTabs = { 3: 'playbook' };
+  comp.expandedEvents = ['stale'];
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"', tab: 'investigation', expand: 'abc|def' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(true);
+  expect(comp.expandedEvents).toStrictEqual(['abc', 'def']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(true);
+  expect(comp.expandedEvents).toStrictEqual(['abc', 'def']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+});
+
+test('expand query string without tab clears stale tabs', () => {
+  comp.activeTabs = { 3: 'playbook' };
+  comp.$route = { path: "alerts", query: { q: '_id:"abc"', expand: 'abc' } };
+  comp.parseUrlParameters();
+
+  expect(comp.expandedEvents).toStrictEqual(['abc']);
+  expect(comp.activeTabs).toStrictEqual({});
+});
+
+test('tab query string without expand', () => {
+  comp.$route = { path: "alerts", query: { tab: 'playbook' } };
+  comp.parseUrlParameters();
+
+  expect(comp.deepLinked).toBe(false);
+  expect(comp.expandedEvents).toStrictEqual([]);
+  expect(comp.activeTabs[0]).toBe('playbook');
+});
+
+test('navigateWithoutReload', () => {
+  jest.useFakeTimers();
+  comp.$router.replace = jest.fn();
+
+  comp.navigateWithoutReload({ path: 'alerts' });
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.$router.length).toBe(1);
+  expect(comp.$router[0]).toStrictEqual({ path: 'alerts' });
+  expect(comp.$router.replace).not.toHaveBeenCalled();
+
+  jest.runAllTimers();
+  expect(comp.disableRouteLoad).toBe(false);
+
+  comp.navigateWithoutReload({ path: 'hunt' }, true);
+  expect(comp.disableRouteLoad).toBe(true);
+  expect(comp.$router.replace).toHaveBeenCalledWith({ path: 'hunt' });
+  expect(comp.$router.length).toBe(1);
+
+  jest.runAllTimers();
+  expect(comp.disableRouteLoad).toBe(false);
+  jest.useRealTimers();
+});
+
+test('loadData on a reused component keeps a deep link expansion', async () => {
+  resetPapi().mockPapi('get', { data: { events: [{ soc_id: 'abc', payload: {} }], metrics: {}, totalEvents: 1 } }, null);
+  comp.populateChart = jest.fn();
+  comp.populateEventTable = jest.fn();
+  comp.syncDeepLinkedToggles = jest.fn();
+  comp.loaded = true;
+  comp.activeTabs = { 2: 'playbook' };
+  comp.expandedEvents = ['stale'];
+  comp.$route = { path: 'alerts', query: { q: '_id:"abc"', tab: 'investigation', expand: 'abc' } };
+
+  await comp.loadData();
+
+  expect(comp.expandedEvents).toStrictEqual(['abc']);
+  expect(comp.activeTabs).toStrictEqual({ 0: 'investigation' });
+  expect(comp.syncDeepLinkedToggles).toHaveBeenCalled();
+
+  comp.$route = { path: 'alerts', query: { q: '_id:"abc"' } };
+
+  await comp.loadData();
+
+  expect(comp.expandedEvents).toStrictEqual([]);
+  expect(comp.activeTabs).toStrictEqual({});
+});
+
+describe('syncDeepLinkedToggles', () => {
+  const toggles = () => [
+    { name: 'acknowledged', filter: 'event.acknowledged:true', enabled: false, exclusive: true },
+    { name: 'escalated', filter: 'event.escalated:true', enabled: false, exclusive: true },
+  ];
+
+  beforeEach(() => {
+    comp.category = 'alerts';
+    comp.filterToggles = toggles();
+    comp.expandedEvents = ['abc'];
+    comp.deepLinked = true;
+    comp.navigateWithoutReload = jest.fn();
+  });
+
+  test.each([
+    { name: 'acknowledged', alert: { 'event.acknowledged': true }, ack: true, esc: false },
+    { name: 'escalated', alert: { 'event.acknowledged': true, 'event.escalated': true }, ack: true, esc: true },
+    { name: 'string values', alert: { 'event.acknowledged': 'true', 'event.escalated': 'false' }, ack: true, esc: false },
+    { name: 'unacknowledged', alert: {}, ack: false, esc: false },
+  ])('$name alert', ({ alert, ack, esc }) => {
+    comp.filterToggles[0].enabled = !ack;
+    comp.eventData = [{ soc_id: 'other', 'event.acknowledged': !ack }, { soc_id: 'abc', ...alert }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.isFilterToggleEnabled('acknowledged')).toBe(ack);
+    expect(comp.isFilterToggleEnabled('escalated')).toBe(esc);
+    expect(comp.navigateWithoutReload).toHaveBeenCalledWith(expect.objectContaining({ path: 'alerts' }), true);
+    expect(comp.navigateWithoutReload.mock.calls[0][0].query.acknowledged).toBe(ack);
+  });
+
+  test('alert not found leaves the toggles alone', () => {
+    comp.filterToggles[0].enabled = true;
+    comp.eventData = [{ soc_id: 'other' }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.filterToggles).toStrictEqual([{ ...toggles()[0], enabled: true }, toggles()[1]]);
+    expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
+  });
+
+  test('not deep linked', () => {
+    comp.deepLinked = false;
+    comp.eventData = [{ soc_id: 'abc', 'event.acknowledged': true }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.isFilterToggleEnabled('acknowledged')).toBe(false);
+    expect(comp.navigateWithoutReload).not.toHaveBeenCalled();
+  });
+
+  test('custom exclusive toggles in any category follow the event', () => {
+    comp.category = 'hunt';
+    comp.filterToggles = [
+      { name: 'custom', filter: 'event.foo:"bar baz"', enabled: false, exclusive: true },
+      { name: 'other', filter: 'event.foo:qux', enabled: true, exclusive: true },
+      { name: 'inclusive', filter: 'event.foo:qux', enabled: false, exclusive: false },
+      { name: 'complex', filter: 'NOT event.foo:"bar baz"', enabled: true, exclusive: true },
+    ];
+    comp.eventData = [{ soc_id: 'abc', 'event.foo': 'bar baz' }];
+
+    comp.syncDeepLinkedToggles();
+
+    expect(comp.deepLinked).toBe(false);
+    expect(comp.isFilterToggleEnabled('custom')).toBe(true);
+    expect(comp.isFilterToggleEnabled('other')).toBe(false);
+    expect(comp.isFilterToggleEnabled('inclusive')).toBe(false);
+    expect(comp.isFilterToggleEnabled('complex')).toBe(true);
+    expect(comp.navigateWithoutReload).toHaveBeenCalledWith(expect.any(Object), true);
+  });
+});
+
+test.each([
+  { filter: 'event.acknowledged:true', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: ' event.acknowledged : true ', expected: { field: 'event.acknowledged', value: 'true' } },
+  { filter: 'rule.name:"A B"', expected: { field: 'rule.name', value: 'A B' } },
+  { filter: '"event.module":"soc"', expected: { field: 'event.module', value: 'soc' } },
+  { filter: 'rule.name:""', expected: { field: 'rule.name', value: '' } },
+  { filter: 'NOT event.module:"soc"', expected: null },
+  { filter: 'a:1 AND b:2', expected: null },
+  { filter: 'a:1 b', expected: null },
+  { filter: 'a:', expected: null },
+  { filter: 'event.acknowledged', expected: null },
+  { filter: '', expected: null },
+  { filter: undefined, expected: null },
+])('parseToggleFilter $filter', ({ filter, expected }) => {
+  expect(comp.parseToggleFilter(filter)).toStrictEqual(expected);
 });
 
 test('autoRefresh query string', () => {
@@ -1524,6 +1782,38 @@ test('ackTaskReport - multi-host clears every tracked id with one banner', () =>
   expect(comp.runningAckTasks).toEqual(['other']);
 });
 
+test('unackTaskReport - success shows revert wording and removes task', () => {
+  comp.runningAckTasks = ['task-a', 'task-b'];
+
+  comp.unackTaskReport({ taskIds: ['task-a'], success: true, updated: 1234, errors: [] });
+
+  expect(comp.$root.tip).toBe(true);
+  expect(comp.$root.tipMessage).toBe('Reverted acknowledgment on 1,234 alerts.');
+  expect(comp.runningAckTasks).toEqual(['task-b']);
+});
+
+test('unackTaskReport - failure shows revert error and removes task', () => {
+  comp.runningAckTasks = ['task-a'];
+
+  comp.unackTaskReport({ taskIds: ['task-a'], success: false, updated: 0, errors: ['boom', 'kaboom'] });
+
+  expect(comp.$root.error).toBe(true);
+  expect(comp.$root.errorMessage).toBe('Error reverting acknowledgment on alerts: boom; kaboom');
+  expect(comp.runningAckTasks).toEqual([]);
+});
+
+test('unackTaskReport - ignores untracked task', () => {
+  comp.runningAckTasks = ['task-a'];
+  comp.$root.tip = false;
+  comp.$root.error = false;
+
+  comp.unackTaskReport({ taskIds: ['task-b'], success: true, updated: 5, errors: [] });
+
+  expect(comp.$root.tip).toBe(false);
+  expect(comp.$root.error).toBe(false);
+  expect(comp.runningAckTasks).toEqual(['task-a']);
+});
+
 test('bulkUpdateReport - error', () => {
   let stats = {
     error: 1,
@@ -1711,6 +2001,30 @@ test('debounceChartResize - no flapping', () => {
   comp.debounceChartResize(chart, { width: 151 });
   expect(comp.chartResizeTracker[chart].length).toBe(4);
   expect(chart.options.responsive).toBe(true);
+});
+
+test('sortByAssessment ranks likely malicious highest and untriaged lowest', () => {
+  const ranked = [10, comp.i18n.__missing__, 90, 0, 75, 50].sort((a, b) => comp.sortByAssessment(a, b));
+  expect(ranked.slice(3)).toEqual([10, 50, 90]);
+  expect(comp.sortByAssessment(50, 50)).toBe(0);
+  expect(comp.sortByAssessment(comp.i18n.__missing__, 10)).toBeLessThan(0);
+  expect(comp.sortByAssessment('90', '50')).toBeGreaterThan(0);
+});
+
+test('assessmentChip', () => {
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 90 })).toEqual({ label: 'Likely Malicious', color: 'error' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 50 })).toEqual({ label: 'Needs Review', color: 'warning' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': 10 })).toEqual({ label: 'Likely Benign', color: 'success' });
+  expect(comp.assessmentChip({ 'event.so_alerttriage.assessment': comp.i18n.__missing__ })).toBeNull();
+  expect(comp.assessmentChip({})).toBeNull();
+});
+
+test('isAssessmentAvailable', () => {
+  const item = { 'event.so_alerttriage.assessment': 90, 'rule.name': 'A' };
+  expect(comp.isAssessmentAvailable('event.so_alerttriage.assessment', item)).toBe(true);
+  expect(comp.isAssessmentAvailable('rule.name', item)).toBe(false);
+  expect(comp.isAssessmentAvailable('event.so_alerttriage.assessment', { 'event.so_alerttriage.assessment': comp.i18n.__missing__ })).toBe(false);
+  expect(comp.isAssessmentAvailable('event.so_alerttriage.assessment', {})).toBe(false);
 });
 
 test('sortBySeverity', () => {
@@ -2027,6 +2341,26 @@ test('fetchNewestEvent', async () => {
   resetPapi();
 });
 
+test('fetchNewestEvent searches the missing bucket by its marker, not its label', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.filterToggles = [];
+  comp.queryBaseFilter = 'tags:alert';
+
+  await comp.fetchNewestEvent({ 'event.so_alerttriage.assessment': comp.i18n.__missing__, 'rule.name': 'A', count: 3 });
+
+  expect(eventSearch.mock.calls[0][1].params.query).toContain('event.so_alerttriage.assessment:"__missing__" AND rule.name:"A"');
+});
+
+test('fetchNewestEvent filters on a zero group value', async () => {
+  const eventSearch = mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.filterToggles = [];
+  comp.queryBaseFilter = 'tags:alert';
+
+  await comp.fetchNewestEvent({ 'source.port': 0, 'rule.name': 'A', count: 3 });
+
+  expect(eventSearch.mock.calls[0][1].params.query).toContain('source.port:"0" AND rule.name:"A"');
+});
+
 test('isComplexQuery', () => {
   expect(comp.isComplexQuery('')).toBe(false);
   expect(comp.isComplexQuery('*')).toBe(false);
@@ -2263,6 +2597,7 @@ test('loadPlaybook answers questions progressively', async () => {
         { id: 'q1', question: 'Agg?', query: 'aggregation: true\nquery: test', range: '-1h' },
         { id: 'q2', question: 'NonAgg?', query: 'aggregation: false\nquery: test', range: '-1h' },
         { id: 'q3', question: 'Self?', query: 'aggregation: false\nquery: test', range: null },
+        { id: 'q4', question: 'Summary?', query: 'aggregation: false\nquery: test', range: null },
       ],
     },
   ];
@@ -2274,6 +2609,7 @@ test('loadPlaybook answers questions progressively', async () => {
         { id: 'q1', oqlQuery: 'agg-oql', fields: ['source.ip'], isAggregate: true },
         { id: 'q2', oqlQuery: 'nonagg-oql', fields: ['field2'], isAggregate: false },
         { id: 'q3', oqlQuery: 'self-oql', fields: [], isAggregate: false },
+        { id: 'q4', oqlQuery: 'summary-oql', fields: ['rule.summary'], isAggregate: false },
       ],
     },
   ];
@@ -2292,10 +2628,11 @@ test('loadPlaybook answers questions progressively', async () => {
   expect(papiMock).toHaveBeenCalledWith('playbook/event/789?stage=convert&ts=2023-10-01T12%3A00%3A00Z', expect.anything());
 
   // questions remain in playbook order
-  expect(event.questions).toHaveLength(3);
+  expect(event.questions).toHaveLength(4);
   expect(event.questions[0].id).toBe('q1');
   expect(event.questions[1].id).toBe('q2');
   expect(event.questions[2].id).toBe('q3');
+  expect(event.questions[3].id).toBe('q4');
 
   // aggregate question: Count column prepended, server-executed results attached
   expect(event.questions[0].isAggregate).toBe(true);
@@ -2310,11 +2647,13 @@ test('loadPlaybook answers questions progressively', async () => {
   expect(event.questions[1].queryResults).toStrictEqual([]);
   expect(event.questions[1].status).toBe('done');
 
-  // rangeless question: answered by the alert itself
+  // rangeless question: answered by the alert itself, no @timestamp prepended
+  expect(event.questions[2].fields).toStrictEqual(['soc_timestamp']);
   expect(event.questions[2].queryResults).toHaveLength(1);
   expect(event.questions[2].queryResults[0].payload).toMatchObject({ 'soc_id': '789' });
   expect(event.questions[2].queryResults[0].payload.questions).toBe(undefined); // no self-reference
   expect(event.questions[2].status).toBe('done');
+  expect(event.questions[3].fields).toStrictEqual(['rule.summary']);
 
   // ranged questions are executed server-side, anchored to the alert timestamp
   expect(papiPostMock).toHaveBeenCalledTimes(2);
@@ -2332,7 +2671,7 @@ test('loadPlaybook answers questions progressively', async () => {
   });
 
   // question 1 always expanded; questions with data expand as results arrive
-  expect(comp.expandedPlaybookQuestions[0]).toEqual([0, 2]);
+  expect(comp.expandedPlaybookQuestions[0]).toEqual([0, 2, 3]);
 
   expect(comp.$root.batchLookup).toHaveBeenCalledWith(['1.2.3.4'], comp);
 
@@ -2644,11 +2983,14 @@ test('startAIInvestigation - individual alert', async () => {
   };
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
-  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
+  comp.$router = { push: jest.fn() };
 
   await comp.startAIInvestigation(item);
-  
-  expect(comp.$router.push).toHaveBeenCalledWith({
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.items).toEqual([]);
+  expect(comp.investigationMenu.newLink).toEqual({
     name: 'assistant',
     params: { sessionId: expect.any(String) },
     query: { investigation: true, socId: 'alert123' }
@@ -2670,58 +3012,75 @@ test('startAIInvestigation - grouped alert', async () => {
   };
 
   comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert456' });
-  comp.$router = { push: jest.fn(), resolve: jest.fn().mockReturnValue({ href: '/assistant/test' }) };
 
   await comp.startAIInvestigation(item);
 
   expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
-  expect(comp.$router.push).toHaveBeenCalledWith({
-    name: 'assistant',
-    params: { sessionId: expect.any(String) },
-    query: { investigation: true, socId: 'alert456' }
-  });
+  expect(comp.investigationMenu.newLink.query).toEqual({ investigation: true, socId: 'alert456' });
 });
 
-test('startAIInvestigation - existing investigation', async () => {
+test('openAssessment expands the row onto its AI Investigation tab', () => {
+  const item = { _row_idx_: 3, count: 5 };
+  const domEvent = { stopPropagation: jest.fn() };
+  comp.investigateEnabled = true;
+  comp.expandedEvents = [];
+  comp.activeTabs = { 3: 'alert' };
+  comp.fetchNewestEvent = jest.fn();
+
+  comp.openAssessment(domEvent, item);
+  expect(domEvent.stopPropagation).toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([3]);
+  expect(comp.activeTabs[3]).toBe('investigation');
+  expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
+
+  comp.activeTabs[3] = 'alert';
+  comp.openAssessment(domEvent, item);
+  expect(comp.expandedEvents).toEqual([3]);
+  expect(comp.activeTabs[3]).toBe('investigation');
+  expect(comp.fetchNewestEvent).toHaveBeenCalledTimes(1);
+});
+
+test('openAssessment leaves the click to quick actions without the AI Investigation tab', () => {
+  const domEvent = { stopPropagation: jest.fn() };
+  comp.investigateEnabled = false;
+  comp.expandedEvents = [];
+  comp.activeTabs = {};
+
+  comp.openAssessment(domEvent, { _row_idx_: 3, count: 5 });
+  expect(domEvent.stopPropagation).not.toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([]);
+  expect(comp.activeTabs).toEqual({});
+
+  comp.investigateEnabled = true;
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  comp.openAssessment(domEvent, { _row_idx_: 3, count: 5 });
+  expect(domEvent.stopPropagation).not.toHaveBeenCalled();
+  expect(comp.expandedEvents).toEqual([]);
+});
+
+test('startAIInvestigation - an existing investigation is offered, not opened', async () => {
   const item = {
     soc_id: 'alert123',
     'rule.uuid': 'rule-uuid-123',
     'event.investigated': true,
-    'event.investigation_session_id': 'existing_session_123'
+    'event.so_investigations': [{ session_id: 'existing_session_123' }],
   };
-
   comp.$router = { push: jest.fn() };
 
-  await comp.startAIInvestigation(item);
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: {} });
 
-  expect(comp.$router.push).toHaveBeenCalledWith({
-    name: 'assistant',
-    params: { sessionId: 'existing_session_123' }
-  });
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'existing_session_123' } }]);
 });
 
-test('startAIInvestigation - middle click opens new tab', async () => {
-  const item = {
-    soc_id: 'alert123',
-    'rule.uuid': 'rule-uuid-123',
-    'event.investigated': true,
-    'event.investigation_session_id': 'existing_session_123'
-  };
+test('startAIInvestigation - middle click opens the menu too', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'rule-uuid-123' };
+  const button = {};
 
-  comp.$router = { resolve: jest.fn().mockReturnValue({ href: '/assistant/existing_session_123' }) };
-  
-  // Mock window.open
-  const mockOpen = jest.fn();
-  Object.defineProperty(window, 'open', {
-    value: mockOpen,
-    writable: true
-  });
+  await comp.startAIInvestigation(item, { button: 1, currentTarget: button });
 
-  const event = { button: 1 }; // Middle click
-
-  await comp.startAIInvestigation(item, event);
-
-  expect(mockOpen).toHaveBeenCalledWith('/assistant/existing_session_123', '_blank');
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.target).toBe(button);
 });
 
 test('startAIInvestigation - right click ignored', async () => {
@@ -2801,7 +3160,7 @@ test('getAIInvestigationTooltip - individual alert not investigated', () => {
 test('getAIInvestigationTooltip - individual alert investigated', () => {
   const item = {
     soc_id: 'alert123',
-    'event.investigation_session_id': 'session_123456'
+    'event.so_investigations': [{ session_id: 'session_123456' }],
   };
 
   const tooltip = comp.getAIInvestigationTooltip(item);
@@ -2813,6 +3172,182 @@ test('getAIInvestigationTooltip - grouped alert', () => {
 
   const tooltip = comp.getAIInvestigationTooltip(item);
   expect(tooltip).toBe(comp.i18n.aiInvestigateMostRecent);
+});
+
+test('startAIInvestigation - an automated investigation carries its alert', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_alerttriage.session_id': 'triage_1' };
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'alert123' } }]);
+});
+
+test('the menu leaves out other users\' private sessions, and never your own', async () => {
+  const item = {
+    soc_id: 'alert123', 'rule.uuid': 'r',
+    'event.so_investigations': [
+      { session_id: 'mine_1', user_id: 'analyst-1' },
+      { session_id: 'shared_1', user_id: 'u2' },
+      { session_id: 'private_1', user_id: 'u3' },
+      { session_id: 'unknown_1', user_id: 'u4' },
+    ],
+  };
+  comp.$root.formatDateTime = t => t;
+  const post = mockPapi('post', { data: { shared_1: true, private_1: false } });
+
+  await comp.startAIInvestigation(item);
+
+  expect(post).toHaveBeenCalledWith('/assistant/sessions/access', { sessionIds: ['unknown_1', 'private_1', 'shared_1'] });
+  expect(comp.investigationMenu.items.map(i => i.sessionId)).toEqual(['unknown_1', 'shared_1', 'mine_1']);
+  expect(comp.investigationMenu.items[2]).toMatchObject({ mine: true, subtitle: comp.i18n.aiInvestigationYou });
+});
+
+test('a failed access check lists every session', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_investigations': [{ session_id: 'private_1', user_id: 'u3' }] };
+  mockPapi('post', null, new Error('down'));
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.items.map(i => i.sessionId)).toEqual(['private_1']);
+});
+
+test('your own sessions open the menu without an access check', async () => {
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r', 'event.so_investigations': [{ session_id: 'mine_1', user_id: 'analyst-1' }] };
+  const post = mockPapi('post', {});
+
+  await comp.startAIInvestigation(item);
+
+  expect(post).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.items).toHaveLength(1);
+});
+
+test('a role that cannot start investigations gets a menu without Start New Investigation', async () => {
+  comp.$root.user = { id: 'auditor-1', roles: ['auditor'] };
+  const item = { soc_id: 'alert123', 'rule.uuid': 'r' };
+
+  await comp.startAIInvestigation(item);
+
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.newLink).toBeNull();
+  expect(comp.$root.canReadInvestigations()).toBe(true);
+
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  expect(comp.$root.canReadInvestigations()).toBe(false);
+  expect(comp.$root.canStartInvestigations()).toBe(false);
+});
+
+test('startAIInvestigation - several investigations offer a choice, automated first', async () => {
+  const item = {
+    soc_id: 'alert123', 'rule.uuid': 'r',
+    'event.investigated': true,
+    'event.so_investigations': [
+      { session_id: 'manual_1', user_id: 'u1', timestamp: 't1' },
+      { session_id: 'manual_2', user_id: 'u2', timestamp: 't2' },
+    ],
+    'event.so_alerttriage.session_id': 'triage_1',
+  };
+  comp.$router = { push: jest.fn() };
+  comp.$root.formatDateTime = t => t;
+  comp.$root.getUserByIdViaCache = id => (id === 'u2' ? { email: 'two@example.com' } : null);
+  const button = {};
+
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: button });
+
+  expect(comp.$router.push).not.toHaveBeenCalled();
+  expect(comp.investigationMenu.visible).toBe(true);
+  expect(comp.investigationMenu.target).toBe(button);
+  expect(comp.investigationMenu.items.map(i => [i.to, i.subtitle])).toEqual([
+    [{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'alert123' } }, ''],
+    [{ name: 'assistant', params: { sessionId: 'manual_2' } }, 'two@example.com · t2'],
+    [{ name: 'assistant', params: { sessionId: 'manual_1' } }, 'u1 · t1'],
+  ]);
+});
+
+test('a new investigation always gets a fresh session, even beside existing ones', () => {
+  const item = { soc_id: 'alert123', 'event.so_investigations': [{ session_id: 'manual_1' }] };
+  comp.generateQueryList = jest.fn().mockReturnValue({ investigation: true, socId: 'alert123' });
+
+  const first = comp.newInvestigationLink(item);
+  const second = comp.newInvestigationLink(item);
+
+  expect(first.query).toEqual({ investigation: true, socId: 'alert123' });
+  expect(first.params.sessionId).not.toBe('manual_1');
+  expect(first.params.sessionId).not.toBe(second.params.sessionId);
+});
+
+test('startAIInvestigation - a group reads its investigations from its newest triaged alert', async () => {
+  const item = { count: 5, 'rule.uuid': 'r' };
+  comp.fetchNewestEvent = jest.fn(async () => {
+    item.newest = { soc_id: 'newest', 'event.investigated': true, 'event.so_investigations': [{ session_id: 'manual_1' }] };
+    item.newestTriaged = { soc_id: 'older', 'event.so_alerttriage.session_id': 'triage_1' };
+  });
+  comp.generateQueryList = jest.fn(alert => ({ investigation: true, socId: alert.soc_id }));
+
+  await comp.startAIInvestigation(item, { button: 0, currentTarget: {} });
+
+  expect(comp.investigationMenu.items.map(i => i.to)).toEqual([{ name: 'assistant', params: { sessionId: 'triage_1' }, query: { alert: 'older' } }]);
+  expect(comp.investigationMenu.newLink.query.socId).toBe('older');
+});
+
+test('fetchNewestTriagedEvent looks past an untriaged newest alert', async () => {
+  const item = { count: 5, newest: { soc_id: 'newest' } };
+  const get = mockPapi('get', { data: { events: [{ id: 'older', payload: { 'event.so_alerttriage.session_id': 'triage_1' } }] } });
+
+  await comp.fetchNewestTriagedEvent(item, ['rule.name:"X"']);
+
+  expect(get.mock.calls[0][1].params.query).toBe('rule.name:"X" AND _exists_:event.so_alerttriage.session_id | sortby @timestamp');
+  expect(item.newestTriaged.soc_id).toBe('older');
+
+  const triaged = { count: 5, newest: { 'event.so_alerttriage.session_id': 'triage_2' } };
+  await comp.fetchNewestTriagedEvent(triaged, []);
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(triaged.newestTriaged).toBeUndefined();
+});
+
+test('fetchNewestEvent only looks up the newest triaged alert for users who can read investigations', async () => {
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  comp.investigateEnabled = true;
+  comp.fetchNewestTriagedEvent = jest.fn();
+
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
+
+  comp.$root.user = { id: 'limited-1', roles: ['limited-analyst'] };
+  mockPapi('get', { data: { events: [{ id: '100', payload: {} }] } });
+  await comp.fetchNewestEvent({ 'rule.name': 'A', count: 3 });
+  expect(comp.fetchNewestTriagedEvent).toHaveBeenCalledTimes(1);
+});
+
+test('the microchip reflects automated investigations', () => {
+  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': new Date().toISOString() };
+  expect(comp.getAIInvestigationButtonColor(automated)).toBe('icon');
+  expect(comp.getAIInvestigationTooltip(automated)).toContain(comp.i18n.aiInvestigateViewAutomated);
+
+  const both = Object.assign({ 'event.investigated': true, 'event.so_investigations': [{ session_id: 'manual_1' }] }, automated);
+  expect(comp.getAIInvestigationTooltip(both)).toBe(comp.i18n.aiInvestigateViewBoth);
+
+  const failed = { soc_id: 'a', 'event.so_alerttriage.failed_count': 2 };
+  expect(comp.getAIInvestigationButtonColor(failed)).toBe('warning');
+  expect(comp.getAIInvestigationTooltip(failed)).toBe('Automated investigation failed after 2 attempts');
+
+  expect(comp.getAIInvestigationButtonColor({ count: 5, newest: automated })).toBe('icon');
+  expect(comp.getAIInvestigationTooltip({ count: 5, newest: { soc_id: 'n' }, newestTriaged: automated })).toContain(comp.i18n.aiInvestigateViewAutomated);
+});
+
+test('the microchip tooltip and menu name the automated assessment', async () => {
+  const automated = { soc_id: 'a', 'event.so_alerttriage.session_id': 'triage_1', 'event.so_alerttriage.timestamp': '2026-10-01T12:00:00Z', 'event.so_alerttriage.assessment': 90 };
+  expect(comp.getAIInvestigationTooltip(automated)).toMatch(/^View Automated Investigation · Likely Malicious · /);
+
+  comp.$root.formatDateTime = t => t;
+  await comp.startAIInvestigation(automated, { button: 0, currentTarget: {} });
+  expect(comp.investigationMenu.items[0].subtitle).toBe('Likely Malicious · 2026-10-01T12:00:00Z');
+});
+
+test('routeForQuery swaps only the query', () => {
+  comp.query = '* | groupby rule.name';
+  const route = comp.routeForQuery('rule.name:"X"');
+  expect(route.query.q).toBe('rule.name:"X"');
+  expect(route.path).toBe(comp.category);
 });
 
 test('generateChatId creates unique ID', () => {

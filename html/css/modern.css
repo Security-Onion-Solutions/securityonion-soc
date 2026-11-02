@@ -190,6 +190,12 @@ html, body, * {
   opacity: var(--v-focus-opacity, 0.12);
 }
 
+/* Linked pills: don't pick up the global link colour. */
+.v-application a.so-stat-pill {
+  color: inherit;
+  text-decoration: none;
+}
+
 .so-stat-text {
   flex: 1;
   min-width: 0;
@@ -623,19 +629,6 @@ html, body, * {
 /* Tabs inside expanded rows */
 .v-data-table .v-tabs {
   border-radius: var(--so-radius-nested) var(--so-radius-nested) 0 0;
-}
-
-@keyframes tab-glow {
-  0%   { background-color: transparent; }
-  15%  { background-color: rgba(var(--v-theme-primary), 0.15); }
-  40%  { background-color: rgba(var(--v-theme-primary), 0.075); }
-  55%  { background-color: rgba(var(--v-theme-primary), 0.15); }
-  100% { background-color: transparent; }
-}
-
-#alerts_playbookTab,
-#alerts_agg_playbookTab {
-  animation: tab-glow 1.5s ease;
 }
 
 .v-data-table .v-tab {
@@ -1173,7 +1166,6 @@ dfn {
   color: rgb(var(--v-theme-text)) !important;
   border: 1px solid rgba(var(--v-theme-text), 0.12) !important;
   border-radius: var(--so-radius-field) !important;
-  outline: none;
 }
 
 .daterangepicker .calendar-table .next span,
@@ -1244,9 +1236,15 @@ dfn {
   background-color: rgba(var(--v-theme-text), 0.12) !important;
 }
 
-.daterangepicker .drp-buttons .btn:focus-visible {
+.daterangepicker .drp-buttons .btn:focus-visible,
+.daterangepicker select:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
+}
+
+.daterangepicker .ranges li:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
 }
 
 /* Internal dividers between calendars / ranges panel */
@@ -1352,12 +1350,25 @@ dfn {
   overflow-x: auto;
 }
 
-/* Agent Studio inline editor card (inside an expanded data-table row). */
+/* Agent Studio inline editor card (inside an expanded data-table row).
+   white-space undoes app.css's td nowrap. */
 .agentstudio-editor {
   border: 1px solid rgba(var(--v-theme-text), 0.08);
   border-radius: var(--so-radius-panel);
   background-color: rgba(var(--v-theme-background-lighten-1));
   overflow: hidden;
+  white-space: normal;
+}
+
+/* Sits in an expanded table row too, so it needs the same nowrap undo. */
+.alert-investigation {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.alert-investigation-report pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 /* The .section-panel tab styling bleeds into these nested editor tabs; reset it
@@ -1380,6 +1391,13 @@ dfn {
   padding-top: 20px;
 }
 
+/* Vuetify's 12px hint line-height and app.css's 36px cap clip long wrapped hints. */
+.agentstudio-editor .v-messages__message,
+.agentstudio-dialog-body .v-messages__message {
+  line-height: 16px;
+  max-height: none;
+}
+
 .agentstudio-notice {
   min-height: 50vh;
 }
@@ -1390,8 +1408,18 @@ dfn {
 }
 
 #agentstudio-agents .expanded-row-wrapper .v-window-item,
-#agentstudio-skills .expanded-row-wrapper .v-window-item {
+#agentstudio-skills .expanded-row-wrapper .v-window-item,
+#agentstudio-automations .expanded-row-wrapper .v-window-item {
   padding-top: 8px;
+}
+
+.agentstudio-query textarea {
+  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+}
+
+.agentstudio-runs {
+  background-color: transparent !important;
 }
 
 /* A disabled agent/skill still lists, but reads as inactive. */
@@ -1399,10 +1427,33 @@ dfn {
   opacity: 0.65;
 }
 
-.agentstudio-row-disabled td:last-child {
+.agentstudio-row-disabled td:last-child,
+.agentstudio-row-disabled td.agentstudio-status-cell {
   opacity: 1;
 }
 
 .agentstudio-dialog-body {
   max-height: 70vh;
+}
+
+/* Tabular figures keep the ticking column from jittering. */
+.agentmonitor-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grows to the viewport bottom, then scrolls; 328px is the surrounding chrome. */
+#agentmonitor-transcript {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 328px);
+}
+
+.agentmonitor-stream {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.agentmonitor-message + .agentmonitor-message {
+  margin-top: 12px;
 }

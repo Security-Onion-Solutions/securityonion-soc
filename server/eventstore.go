@@ -67,3 +67,7 @@ type Eventstore interface {
 	// are best-effort, with failures recorded in Errors.
 	GetEventsHealth(ctx context.Context) (*model.EventsHealth, error)
 }
+
+type EventstoreUpdater interface {
+	AddInvestigationUpdateScripts(updateCriteria *model.EventUpdateCriteria, timeNow time.Time, userId string, isDelete bool, sessionId ...string)
+}
