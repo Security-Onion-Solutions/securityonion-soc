@@ -71,8 +71,6 @@ func (t *RecordAssessmentTool) Execute(ctx context.Context, srv *server.Server, 
 		"toolUseId": req.ToolUseId,
 	})
 
-	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
-
 	userId, _ := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	result = &model.ToolResponse{
@@ -89,7 +87,7 @@ func (t *RecordAssessmentTool) Execute(ctx context.Context, srv *server.Server, 
 
 	args, err := parseRecordAssessmentArgs(req.Params)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", req.Params).Error("invalid record_assessment params")
+		logger.WithError(err).WithField("toolParameters", string(req.Params)).Error("invalid record_assessment params")
 		return nil, err
 	}
 

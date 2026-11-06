@@ -83,8 +83,6 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 		"toolUseId": req.ToolUseId,
 	})
 
-	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
-
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &escalateAlertArgs{}
@@ -102,7 +100,7 @@ func (t *EscalateAlertsTool) Execute(ctx context.Context, server *server.Server,
 
 	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParameters", string(req.Params)).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 

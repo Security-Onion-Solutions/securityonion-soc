@@ -134,8 +134,6 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		"toolUseId": req.ToolUseId,
 	})
 
-	logger.WithField("toolParameters", req.Params).Info("running tool for assistant")
-
 	err = srv.CheckAuthorized(ctx, "write", "notifications")
 	if err != nil {
 		logger.WithError(err).Error("user is not authorized to send notifications")
@@ -172,7 +170,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 
 	err = json.Unmarshal(req.Params, args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParameters", string(req.Params)).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 
