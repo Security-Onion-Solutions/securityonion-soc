@@ -108,8 +108,6 @@ func (t *DelegateTool) Execute(ctx context.Context, srv *server.Server, req *mod
 		"toolUseId": req.ToolUseId,
 	})
 
-	logger.WithField("toolParameters", string(req.Params)).Info("running tool for assistant")
-
 	userId := ctx.Value(web.ContextKeyRequestorId).(string)
 
 	args := &DelegateArgs{}
@@ -127,7 +125,7 @@ func (t *DelegateTool) Execute(ctx context.Context, srv *server.Server, req *mod
 
 	err = json.Unmarshal([]byte(req.Params), args)
 	if err != nil {
-		logger.WithError(err).WithField("toolParams", req.Params).Error("failed to unmarshal tool params")
+		logger.WithError(err).WithField("toolParameters", string(req.Params)).Error("failed to unmarshal tool params")
 		return nil, errors.New("ERROR_ASSISTANT_UNMARSHAL_PARAMS")
 	}
 

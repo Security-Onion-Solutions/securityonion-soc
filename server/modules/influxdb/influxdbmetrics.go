@@ -366,8 +366,8 @@ func (metrics *InfluxDBMetrics) getRaidStatus(host string) string {
 			}
 		} else {
 			log.WithFields(log.Fields{
-				"host":       host,
-				"raidStatus": metrics.raidStatus,
+				"host":                   host,
+				"influxRaidStatusByHost": metrics.raidStatus,
 			}).Warn("Host not found in raid status metrics")
 		}
 	}
@@ -389,8 +389,8 @@ func (metrics *InfluxDBMetrics) getProcessStatus(host string) string {
 		}
 	} else {
 		log.WithFields(log.Fields{
-			"host":          host,
-			"processStatus": metrics.processStatus,
+			"host":                      host,
+			"influxProcessStatusByHost": metrics.processStatus,
 		}).Warn("Host not found in process status metrics")
 	}
 
@@ -458,8 +458,8 @@ func (metrics *InfluxDBMetrics) getEventstoreStatus(host string) string {
 		}
 	} else {
 		log.WithFields(log.Fields{
-			"host":             host,
-			"eventStoreStatus": metrics.eventstoreStatus,
+			"host":                         host,
+			"influxEventstoreStatusByHost": metrics.eventstoreStatus,
 		}).Debug("Host not found in eventstore status metrics")
 	}
 	return status
