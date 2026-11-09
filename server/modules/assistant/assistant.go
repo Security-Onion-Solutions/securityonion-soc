@@ -1475,7 +1475,7 @@ func (ac *AssistantCoordinator) SendStream(ctx context.Context, aiModel string, 
 func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string, toolReq *model.ToolRequest) (*model.ToolResponse, error) {
 	logger := log.FromContext(ctx).WithFields(log.Fields{
 		"toolName":  toolName,
-		"toolUseId": uuid.New().String(),
+		"toolUseId": toolReq.ToolUseId,
 	})
 
 	tool, ok := ac.FunctionLibrary[toolName]
@@ -1494,7 +1494,8 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 
 	userID := ctx.Value(web.ContextKeyRequestorId).(string)
 	logger.WithFields(log.Fields{
-		"userId": userID,
+		"userId":         userID,
+		"toolParameters": string(toolReq.Params),
 	}).Info("executing tool for assistant")
 
 	result, err := tool.Execute(assistantCtx, ac.srv, toolReq)

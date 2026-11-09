@@ -47,7 +47,7 @@ type FileDatastoreImpl struct {
 
 func NewFileDatastoreImpl(srv *server.Server) *FileDatastoreImpl {
 	return &FileDatastoreImpl{
-		server:       srv,
+		server:         srv,
 		jobsByNodeId:   make(map[string][]*model.Job),
 		jobsById:       make(map[int]*model.Job),
 		nodesById:      make(map[string]*model.Node),
@@ -92,7 +92,7 @@ func (datastore *FileDatastoreImpl) AddNode(ctx context.Context, node *model.Nod
 func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
 	datastore.nodesById[node.Id] = node
 	log.WithFields(log.Fields{
-		"id":          node.Id,
+		"nodeId":      node.Id,
 		"description": node.Description,
 	}).Debug("Added node")
 	return node
@@ -189,7 +189,7 @@ func (datastore *FileDatastoreImpl) CreateJob(ctx context.Context) *model.Job {
 	datastore.incrementJobId(job.Id)
 
 	logger.WithFields(log.Fields{
-		"id":        job.Id,
+		"jobId":     job.Id,
 		"nextJobId": datastore.nextJobId,
 	}).Debug("Created job")
 
@@ -367,7 +367,7 @@ func (datastore *FileDatastoreImpl) DeleteJob(ctx context.Context, jobId int) (*
 				os.Remove(filepath.Join(folder, filename))
 
 				logger.WithFields(log.Fields{
-					"id":       job.Id,
+					"jobId":    job.Id,
 					"folder":   folder,
 					"filename": filename,
 				}).Info("Permanently deleted job and job files")
@@ -392,8 +392,8 @@ func (datastore *FileDatastoreImpl) deleteJob(job *model.Job) {
 	datastore.jobsByNodeId[job.GetNodeId()] = newJobs
 	delete(datastore.jobsById, job.Id)
 	log.WithFields(log.Fields{
-		"id":   job.Id,
-		"node": job.GetNodeId(),
+		"jobId": job.Id,
+		"node":  job.GetNodeId(),
 	}).Debug("Deleted job from list")
 }
 
@@ -411,8 +411,8 @@ func (datastore *FileDatastoreImpl) addJob(job *model.Job) error {
 		datastore.jobsById[job.Id] = job
 		datastore.incrementJobId(job.Id)
 		log.WithFields(log.Fields{
-			"id":   job.Id,
-			"node": job.GetNodeId(),
+			"jobId": job.Id,
+			"node":  job.GetNodeId(),
 		}).Debug("Added job")
 	}
 	return err
@@ -428,7 +428,7 @@ func (datastore *FileDatastoreImpl) saveJob(job *model.Job) error {
 	filename := fmt.Sprintf("%d.json", job.Id)
 	folder := filepath.Join(datastore.jobDir, sanitize.Name(job.GetNodeId()))
 	log.WithFields(log.Fields{
-		"id":       job.Id,
+		"jobId":    job.Id,
 		"folder":   folder,
 		"filename": filename,
 	}).Debug("Saving job file")

@@ -88,7 +88,7 @@ func (analyze *Analyze) createAnalyzer(entry fs.DirEntry) *model.Analyzer {
 	if !strings.HasPrefix(entry.Name(), ".") && !strings.HasPrefix(entry.Name(), "__") && entry.IsDir() {
 		name := entry.Name()
 		log.WithFields(log.Fields{
-			"Id": name,
+			"analyzer": name,
 		}).Info("Added analyzer")
 		return model.NewAnalyzer(name, analyze.analyzersPath+"/"+name)
 	}

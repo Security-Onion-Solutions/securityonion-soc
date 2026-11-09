@@ -124,13 +124,13 @@ func (status *SoStatus) refreshGrid(ctx context.Context) {
 
 			updated := status.server.Metrics.UpdateNodeMetrics(ctx, node)
 			logger.WithFields(log.Fields{
-				"Id":               node.Id,
-				"processStatus":    node.ProcessStatus,
-				"raidStatus":       node.RaidStatus,
-				"connectionStatus": node.ConnectionStatus,
-				"nonCriticalNode":  node.NonCriticalNode,
-				"overallStatus":    node.Status,
-				"updated":          updated,
+				"nodeId":             node.Id,
+				"processStatus":      node.ProcessStatus,
+				"raidStatus":         node.RaidStatus,
+				"connectionStatus":   node.ConnectionStatus,
+				"nonCriticalNode":    node.NonCriticalNode,
+				"overallStatus":      node.Status,
+				"nodeMetricsUpdated": updated,
 			}).Debug("Node Status")
 
 			if updated {
