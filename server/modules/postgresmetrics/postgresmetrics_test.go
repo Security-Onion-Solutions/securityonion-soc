@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
-	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/db"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -57,7 +58,7 @@ type MockRows struct {
 	err   error
 }
 
-func (m *MockRows) Close() {}
+func (m *MockRows) Close()     {}
 func (m *MockRows) Err() error { return m.err }
 func (m *MockRows) Next() bool {
 	m.index++
@@ -108,9 +109,9 @@ func (m *MockDB) Query(ctx context.Context, sql string, args ...any) (db.Rows, e
 	}
 	return &MockRows{}, nil
 }
-func (m *MockDB) Begin(ctx context.Context) (db.Tx, error) { return nil, nil }
+func (m *MockDB) Begin(ctx context.Context) (db.Tx, error)                      { return nil, nil }
 func (m *MockDB) Migrate(ctx context.Context, fs embed.FS, module string) error { return nil }
-func (m *MockDB) Close() {}
+func (m *MockDB) Close()                                                        {}
 
 func TestPostgresMetrics_Init(t *testing.T) {
 	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
@@ -292,6 +293,87 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
 }
 
+func TestPostgresMetrics_UpdateNodeMetrics_LicenseFeatures(t *testing.T) {
+	defer licensing.Shutdown()
+
+	tests := []struct {
+		name            string
+		fps             bool
+		lks             bool
+		kafka           bool
+		licensedFeature string
+		expectedStatus  string
+	}{
+		{name: "fips unlicensed", fps: true, licensedFeature: licensing.FEAT_STG, expectedStatus: licensing.LICENSE_STATUS_EXCEEDED},
+		{name: "luks unlicensed", lks: true, licensedFeature: licensing.FEAT_STG, expectedStatus: licensing.LICENSE_STATUS_EXCEEDED},
+		{name: "kafka unlicensed", kafka: true, licensedFeature: licensing.FEAT_STG, expectedStatus: licensing.LICENSE_STATUS_EXCEEDED},
+		{name: "fips licensed", fps: true, licensedFeature: licensing.FEAT_FPS, expectedStatus: licensing.LICENSE_STATUS_ACTIVE},
+		{name: "luks licensed", lks: true, licensedFeature: licensing.FEAT_LKS, expectedStatus: licensing.LICENSE_STATUS_ACTIVE},
+		{name: "kafka licensed", kafka: true, licensedFeature: licensing.FEAT_GMD, expectedStatus: licensing.LICENSE_STATUS_ACTIVE},
+		{name: "nothing detected", licensedFeature: licensing.FEAT_STG, expectedStatus: licensing.LICENSE_STATUS_ACTIVE},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			licensing.Test(tt.licensedFeature, 0, 0, "", "")
+
+			srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+			srv.DB = &MockDB{
+				QueryFunc: func(sql string, args ...interface{}) (db.Rows, error) {
+					if contains(sql, "telegraf.features") {
+						if (contains(sql, "fields->>'fps'") && tt.fps) || (contains(sql, "fields->>'lks'") && tt.lks) {
+							return &MockRows{rows: [][]interface{}{{"host1", 1}}}, nil
+						}
+						return &MockRows{rows: [][]interface{}{}}, nil
+					}
+					if contains(sql, "telegraf.sostatus") {
+						if contains(sql, "fields->>'status'") {
+							return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+						}
+						if tt.kafka {
+							return &MockRows{rows: [][]interface{}{{"host1", `{"status_code":0,"containers":[{"Name":"so-kafka","Status":"running","Details":""}]}`}}}, nil
+						}
+						return &MockRows{rows: [][]interface{}{{"host1", `{"status_code":0,"containers":[{"Name":"so-nginx","Status":"running","Details":""}]}`}}}, nil
+					}
+					if contains(sql, "telegraf.elasticsearch_cluster_health") {
+						return &MockRows{rows: [][]interface{}{{"host1", "green"}}}, nil
+					}
+					if contains(sql, "telegraf.node_config") {
+						return &MockRows{rows: [][]interface{}{{"host1", "eth0", "eth1"}}}, nil
+					}
+					if contains(sql, "telegraf.net") {
+						return &MockRows{rows: [][]interface{}{
+							{"host1", "eth0", 1000000.0, 500000.0, 0.0},
+							{"host1", "eth1", 2000000.0, 0.0, 5.0},
+						}}, nil
+					}
+					if contains(sql, "telegraf.surirules") {
+						if contains(sql, "loaded") || contains(sql, "failed") {
+							return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+						}
+						return &MockRows{rows: [][]interface{}{{"host1", "loaded"}}}, nil
+					}
+					if contains(sql, "::bigint") || contains(sql, "::int") {
+						return &MockRows{rows: [][]interface{}{{"host1", 0}}}, nil
+					}
+					return &MockRows{rows: [][]interface{}{{"host1", 0.0}}}, nil
+				},
+			}
+
+			pm := NewPostgresMetrics(srv)
+			pm.Init(10000, 600)
+
+			node := &model.Node{
+				Id:               "host1",
+				ConnectionStatus: model.NodeStatusOk,
+			}
+			pm.UpdateNodeMetrics(context.Background(), node)
+
+			assert.Equal(t, tt.expectedStatus, licensing.GetStatus())
+		})
+	}
+}
+
 func TestPostgresMetrics_UpdateNodeMetrics_MissingRaidTable(t *testing.T) {
 	raidQueried := false
 	mockDb := &MockDB{
@@ -421,7 +503,6 @@ func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {
 	assert.Len(t, dash.Panels, 26)
 }
 
-
 func TestPostgresMetricsModule_Start_Stop_EvaluationLoop(t *testing.T) {
 	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
 	mod := NewPostgresMetricsModule(srv)
@@ -442,4 +523,3 @@ func TestPostgresMetricsModule_Start_Stop_EvaluationLoop(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, mod.IsRunning())
 }
-
