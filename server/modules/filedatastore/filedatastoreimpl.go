@@ -92,7 +92,7 @@ func (datastore *FileDatastoreImpl) AddNode(ctx context.Context, node *model.Nod
 func (datastore *FileDatastoreImpl) addNode(node *model.Node) *model.Node {
 	datastore.nodesById[node.Id] = node
 	log.WithFields(log.Fields{
-		"id":          node.Id,
+		"nodeId":      node.Id,
 		"description": node.Description,
 	}).Debug("Added node")
 	return node
