@@ -717,7 +717,6 @@ const i18n = {
       chatHistory: 'Chat History',
       chatNewChat: 'New Chat',
       chatNoHistory: 'No recent chats',
-      creditBreakdown: 'Credit breakdown',
       creditPercentage: 'Credit Usage',
       credits: 'Credits',
       creditsLowercase: 'credits',
