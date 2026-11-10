@@ -7490,7 +7490,17 @@ test('updateSessionTag handles API error', async () => {
   
   await comp.updateSessionTag(sessionId, 'add', 'shared');
   
-  expect(showErrorMock).toHaveBeenCalledWith({ message: "Update failed" });
+  expect(showErrorMock).toHaveBeenCalledWith("Update failed");
+});
+
+test('updateSessionTag passes error codes through for localization', async () => {
+  const showErrorMock = mockShowError();
+  mockPapi('put', null, { response: { data: 'ERROR_SESSION_TAG_MISSING' } });
+
+  await comp.updateSessionTag('test-session', 'remove', 'shared');
+
+  expect(showErrorMock).toHaveBeenCalledWith('ERROR_SESSION_TAG_MISSING');
+  expect(comp.$root.localizeMessage('ERROR_SESSION_TAG_MISSING')).toBe(comp.i18n.ERROR_SESSION_TAG_MISSING);
 });
 
 test('updateSessionTag', async () => {
@@ -7511,7 +7521,7 @@ test('updateSessionTag', async () => {
   await comp.updateSessionTag(sessionId, action, tag);
 
   expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
-  expect(showError).toHaveBeenCalledWith({ message: 'Unable to unshare session. The session is attached to 2 case(s).' });
+  expect(showError).toHaveBeenCalledWith('Unable to unshare session. The session is attached to 2 case(s).');
 });
 
 test('attachToCase', async () => {

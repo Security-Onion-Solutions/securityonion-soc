@@ -543,6 +543,20 @@ func (mr *MockAssistantManagerMockRecorder) ToolStreamInSession(ctx, toolReq, to
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolStreamInSession", reflect.TypeOf((*MockAssistantManager)(nil).ToolStreamInSession), ctx, toolReq, toolName)
 }
 
+// UpdateSessionTag mocks base method.
+func (m *MockAssistantManager) UpdateSessionTag(ctx context.Context, sessionId, tag string, present bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSessionTag", ctx, sessionId, tag, present)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSessionTag indicates an expected call of UpdateSessionTag.
+func (mr *MockAssistantManagerMockRecorder) UpdateSessionTag(ctx, sessionId, tag, present any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionTag", reflect.TypeOf((*MockAssistantManager)(nil).UpdateSessionTag), ctx, sessionId, tag, present)
+}
+
 // ValidateAgentSessionRequest mocks base method.
 func (m *MockAssistantManager) ValidateAgentSessionRequest(req *model.AgentSessionRequest) error {
 	m.ctrl.T.Helper()

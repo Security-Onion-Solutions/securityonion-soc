@@ -320,9 +320,6 @@ func (f *fakeAssistantstore) CreateSession(_ context.Context, sess *model.Assist
 	f.sessions[sess.SessionId] = &saved
 	return nil
 }
-func (f *fakeAssistantstore) UpdateSessionTags(_ context.Context, _ string, _ []string) error {
-	return nil
-}
 func (f *fakeAssistantstore) DeleteSession(_ context.Context, _ string) error { return nil }
 func (f *fakeAssistantstore) FindSessionsPendingMemoryScan(_ context.Context, _ *time.Time, _ int) ([]*model.AssistantSessionDetails, error) {
 	return nil, nil
