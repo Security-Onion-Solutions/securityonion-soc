@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/apex/log"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
@@ -268,6 +269,10 @@ func (pm *PostgresMetrics) UpdateNodeMetrics(ctx context.Context, node *model.No
 	if val, exists := pm.ioWaitPct[host]; exists {
 		node.IoWaitPct = val
 	}
+
+	licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
+	licensing.ValidateFeature(licensing.FEAT_GMD, node.IsProcessRunning("so-kafka"))
+	licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 
 	node.HistoricalMetricsEnabled = true
 	enhancedStatusEnabled := (pm.server.DB != nil)
