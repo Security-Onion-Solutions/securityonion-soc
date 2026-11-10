@@ -8,8 +8,10 @@ package postgresmetrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +33,9 @@ var (
 	ErrAlarmNotFound    = server.ErrAlarmNotFound
 	ErrInvalidAlarmID   = server.ErrInvalidAlarmID
 	ErrDuplicateAlarmID = server.ErrDuplicateAlarmID
+
+	ErrUnsupportedAlarmMetric    = errors.New("unsupported alarm metric")
+	ErrUnsupportedAlarmMetricKey = errors.New("unsupported alarm metric key")
 )
 
 type AlarmstoreImpl struct {
@@ -38,13 +43,27 @@ type AlarmstoreImpl struct {
 	dbStore *database.Store
 	evalMu  sync.Mutex
 	mu      sync.Mutex
+	// guarded by evalMu
+	unsupportedWarned map[string]bool
 }
 
 func NewAlarmstore(srv *server.Server, dbStore *database.Store) *AlarmstoreImpl {
 	return &AlarmstoreImpl{
-		server:  srv,
-		dbStore: dbStore,
+		server:            srv,
+		dbStore:           dbStore,
+		unsupportedWarned: make(map[string]bool),
 	}
+}
+
+func validateAlarmMetric(alarm *model.Alarm) error {
+	info, found := GetAlarmMetricInfo(alarm.Metric)
+	if !found {
+		return ErrUnsupportedAlarmMetric
+	}
+	if alarm.MetricKey != "" && !slices.Contains(info.Keys, alarm.MetricKey) {
+		return ErrUnsupportedAlarmMetricKey
+	}
+	return nil
 }
 
 func (s *AlarmstoreImpl) getConfigstore() server.Configstore {
@@ -178,6 +197,10 @@ func (s *AlarmstoreImpl) CreateAlarm(ctx context.Context, alarm *model.Alarm) (*
 		return nil, err
 	}
 
+	if err := validateAlarmMetric(alarm); err != nil {
+		return nil, err
+	}
+
 	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
 		return nil, err
 	}
@@ -221,6 +244,10 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 	alarm.Operator = model.NormalizeOperator(alarm.Operator)
 
 	if err := model.ValidateAlarm(alarm); err != nil {
+		return nil, err
+	}
+
+	if err := validateAlarmMetric(alarm); err != nil {
 		return nil, err
 	}
 
@@ -437,6 +464,14 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 			} else {
 				nodeVal, found := ExtractMetricValue(node, alarm.Metric, alarm.MetricKey)
 				if !found {
+					if !s.unsupportedWarned[alarm.ID] {
+						s.unsupportedWarned[alarm.ID] = true
+						log.FromContext(ctx).WithFields(log.Fields{
+							"alarmId":        alarm.ID,
+							"alarmMetric":    alarm.Metric,
+							"alarmMetricKey": alarm.MetricKey,
+						}).Warn("alarm references an unsupported metric; skipping")
+					}
 					continue
 				}
 				val = nodeVal

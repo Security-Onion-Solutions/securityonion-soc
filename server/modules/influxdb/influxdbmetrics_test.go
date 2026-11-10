@@ -75,19 +75,6 @@ func TestGetProcessStatus(tester *testing.T) {
 	assert.Equal(tester, model.NodeStatusUnknown, metrics.getProcessStatus("missing"))
 }
 
-func TestGetProductionEps(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
-	metrics.lastEpsUpdateTime = time.Now()
-	metrics.productionEps["foo"] = 0
-	metrics.productionEps["bar"] = 1
-	metrics.productionEps["zoo"] = 2
-
-	assert.Equal(tester, 0, metrics.getProductionEps("foo"))
-	assert.Equal(tester, 1, metrics.getProductionEps("bar"))
-	assert.Equal(tester, 2, metrics.getProductionEps("zoo"))
-	assert.Equal(tester, 0, metrics.getProductionEps("missing"))
-}
-
 func TestGetConsumptionEps(tester *testing.T) {
 	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
 	metrics.lastEpsUpdateTime = time.Now()
@@ -100,19 +87,6 @@ func TestGetConsumptionEps(tester *testing.T) {
 	assert.Equal(tester, 2, metrics.getConsumptionEps("zoo"))
 	assert.Equal(tester, 0, metrics.getConsumptionEps("missing"))
 	assert.Equal(tester, 3, metrics.GetGridEps(newContext()))
-}
-
-func TestGetFailedEvents(tester *testing.T) {
-	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
-	metrics.lastEpsUpdateTime = time.Now()
-	metrics.failedEvents["foo"] = 0
-	metrics.failedEvents["bar"] = 1
-	metrics.failedEvents["zoo"] = 2
-
-	assert.Equal(tester, 0, metrics.getFailedEvents("foo"))
-	assert.Equal(tester, 1, metrics.getFailedEvents("bar"))
-	assert.Equal(tester, 2, metrics.getFailedEvents("zoo"))
-	assert.Equal(tester, 0, metrics.getFailedEvents("missing"))
 }
 
 func TestGetEventstoreStatus(tester *testing.T) {

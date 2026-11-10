@@ -89,7 +89,7 @@ func TestExtractMetricValue(t *testing.T) {
 	node.GmdEnabled = 1
 	node.LksEnabled = 1
 	node.FpsEnabled = 1
-	node.FailedEvents = 10
+	node.ConsumptionEps = 150
 	node.DiskUsedInfluxDbGB = 2.5
 
 	val, found = postgresmetrics.ExtractMetricValue(node, "suri_rules_loaded", "")
@@ -124,9 +124,19 @@ func TestExtractMetricValue(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, true, val)
 
-	val, found = postgresmetrics.ExtractMetricValue(node, "failed_events", "")
+	val, found = postgresmetrics.ExtractMetricValue(node, "eps", "")
 	assert.True(t, found)
-	assert.Equal(t, float64(10), val)
+	assert.Equal(t, float64(150), val)
+
+	val, found = postgresmetrics.ExtractMetricValue(node, "eps", "consumption_eps")
+	assert.True(t, found)
+	assert.Equal(t, float64(150), val)
+
+	_, found = postgresmetrics.ExtractMetricValue(node, "eps", "production_eps")
+	assert.False(t, found)
+
+	_, found = postgresmetrics.ExtractMetricValue(node, "failed_events", "")
+	assert.False(t, found)
 
 	val, found = postgresmetrics.ExtractMetricValue(node, "influxdb_size", "")
 	assert.True(t, found)
@@ -164,6 +174,11 @@ func TestDefaultAlarmMetrics(t *testing.T) {
 
 	_, found = postgresmetrics.GetAlarmMetricInfo("non_existent_metric")
 	assert.False(t, found)
+
+	for _, m := range metrics {
+		assert.NotEqual(t, "failed_events", m.Metric)
+		assert.NotContains(t, m.Keys, "production_eps")
+	}
 }
 
 func TestValidateAlarmThreshold(t *testing.T) {

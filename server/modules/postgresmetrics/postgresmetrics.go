@@ -33,8 +33,6 @@ type PostgresMetrics struct {
 	processStatus        map[string]int
 	processJson          map[string]string
 	consumptionEps       map[string]int
-	productionEps        map[string]int
-	failedEvents         map[string]int
 	eventstoreStatus     map[string]string
 	osNeedsRestart       map[string]int
 	osUptime             map[string]int
@@ -83,8 +81,6 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		processStatus:        make(map[string]int),
 		processJson:          make(map[string]string),
 		consumptionEps:       make(map[string]int),
-		productionEps:        make(map[string]int),
-		failedEvents:         make(map[string]int),
 		eventstoreStatus:     make(map[string]string),
 		osNeedsRestart:       make(map[string]int),
 		osUptime:             make(map[string]int),
@@ -224,6 +220,9 @@ func (pm *PostgresMetrics) UpdateNodeMetrics(ctx context.Context, node *model.No
 		node.SuriRulesStatus = val
 	}
 
+	if val, exists := pm.consumptionEps[host]; exists {
+		node.ConsumptionEps = val
+	}
 	if val, exists := pm.redisQueueSize[host]; exists {
 		node.RedisQueueSize = val
 	}

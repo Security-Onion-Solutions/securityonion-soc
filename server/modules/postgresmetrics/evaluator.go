@@ -27,8 +27,7 @@ var defaultAlarmMetrics = []model.AlarmMetricInfo{
 	{Metric: "influxdb_size", TitleKey: "diskUsageInfluxDb", Keys: []string{"influxdb_size"}, LabelKeys: []string{"metricsStorageSize"}, Type: model.AlarmMetricTypeNumeric, Units: "gb", Scope: model.AlarmMetricScopeNode},
 	{Metric: "redis_queue", TitleKey: "metricsRedisQueue", Keys: []string{"redis_queue"}, LabelKeys: []string{"metricsQueueSize"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
 	{Metric: "pcap_retention", TitleKey: "metricsPcapRetention", Keys: []string{"pcap_retention"}, LabelKeys: []string{"metricsRetentionDays"}, Type: model.AlarmMetricTypeNumeric, Units: "days", Scope: model.AlarmMetricScopeNode},
-	{Metric: "eps", TitleKey: "eps", Keys: []string{"consumption_eps", "production_eps"}, LabelKeys: []string{"metricsConsumptionEps", "metricsProductionEps"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
-	{Metric: "failed_events", TitleKey: "failedEvents", Keys: []string{"failed_events"}, LabelKeys: []string{"failedEvents"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
+	{Metric: "eps", TitleKey: "eps", Keys: []string{"consumption_eps"}, LabelKeys: []string{"metricsConsumptionEps"}, Type: model.AlarmMetricTypeNumeric, Scope: model.AlarmMetricScopeNode},
 	{Metric: "loss", TitleKey: "metricsLoss", Keys: []string{"suricata_loss", "zeek_loss"}, LabelKeys: []string{"suricataLoss", "zeekLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
 	{Metric: "capture_loss", TitleKey: "metricsCaptureLoss", Keys: []string{"zeek_capture_loss"}, LabelKeys: []string{"metricsLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
 	{Metric: "net", TitleKey: "metricsNetTraffic", Keys: []string{"traffic_man_in", "traffic_man_out", "traffic_mon_in"}, LabelKeys: []string{"metricsTrafficManIn", "metricsTrafficManOut", "metricsTrafficMonIn"}, Type: model.AlarmMetricTypeNumeric, Units: "mbs", Scope: model.AlarmMetricScopeNode},
@@ -198,12 +197,10 @@ func ExtractMetricValue(node *model.Node, metric, key string) (any, bool) {
 	case "pcap_retention":
 		return node.PcapDays, true
 	case "eps":
-		if key == "production_eps" {
-			return float64(node.ProductionEps), true
+		if key == "" || key == "consumption_eps" {
+			return float64(node.ConsumptionEps), true
 		}
-		return float64(node.ConsumptionEps), true
-	case "failed_events":
-		return float64(node.FailedEvents), true
+		return nil, false
 	case "loss":
 		if key == "zeek_loss" {
 			return node.ZeekLossPct, true

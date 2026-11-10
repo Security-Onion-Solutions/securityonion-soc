@@ -291,6 +291,14 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOk, node.ProcessStatus)
 	assert.Equal(t, `{"foo":"bar"}`, node.ProcessJson)
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
+	assert.Equal(t, 150, node.ConsumptionEps)
+
+	absentNode := &model.Node{
+		Id:               "host2",
+		ConnectionStatus: model.NodeStatusOk,
+	}
+	pm.UpdateNodeMetrics(ctx, absentNode)
+	assert.Equal(t, 0, absentNode.ConsumptionEps)
 }
 
 func TestPostgresMetrics_UpdateNodeMetrics_LicenseFeatures(t *testing.T) {

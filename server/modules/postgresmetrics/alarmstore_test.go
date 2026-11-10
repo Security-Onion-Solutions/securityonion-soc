@@ -244,13 +244,13 @@ func TestAlarmstore_UpdateAlarm(t *testing.T) {
 func TestAlarmstore_DeleteAlarm(t *testing.T) {
 	initialAlarms := []model.Alarm{
 		{
-			ID:              "alarm-1",
-			Name:            "High CPU",
-			Enabled:         true,
-			Metric:          "cpu",
-			Operator:        "gt",
-			Threshold:       "80",
-			Severity:        "high",
+			ID:        "alarm-1",
+			Name:      "High CPU",
+			Enabled:   true,
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		},
 	}
 	alarmsJSON, _ := json.Marshal(initialAlarms)
@@ -375,6 +375,46 @@ func TestAlarmstore_GetAlarmMetrics(t *testing.T) {
 		}
 	}
 	assert.True(t, foundCPU)
+}
+
+func TestAlarmstore_CreateAlarm_UnsupportedMetric(t *testing.T) {
+	srv := &server.Server{
+		Configstore: server.NewMemConfigStore([]*model.Setting{}),
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	alarmStore := postgresmetrics.NewAlarmstore(srv, nil)
+	ctx := context.Background()
+
+	_, err := alarmStore.CreateAlarm(ctx, &model.Alarm{Name: "Failed", Metric: "failed_events", Operator: "gt", Threshold: "1", Severity: "low"})
+	assert.ErrorIs(t, err, postgresmetrics.ErrUnsupportedAlarmMetric)
+
+	_, err = alarmStore.CreateAlarm(ctx, &model.Alarm{Name: "Production", Metric: "eps", MetricKey: "production_eps", Operator: "gt", Threshold: "1", Severity: "low"})
+	assert.ErrorIs(t, err, postgresmetrics.ErrUnsupportedAlarmMetricKey)
+
+	created, err := alarmStore.CreateAlarm(ctx, &model.Alarm{Name: "EPS", Metric: "eps", Operator: "gt", Threshold: "1", Severity: "low"})
+	assert.NoError(t, err)
+	assert.NotEmpty(t, created.ID)
+}
+
+func TestAlarmstore_UpdateAlarm_UnsupportedMetric(t *testing.T) {
+	alarmsJSON, _ := json.Marshal([]model.Alarm{{ID: "alarm-1", Name: "High CPU", Enabled: true, Metric: "cpu", Operator: "gt", Threshold: "80", Severity: "high"}})
+	srv := &server.Server{
+		Configstore: server.NewMemConfigStore([]*model.Setting{{Id: postgresmetrics.ConfigSettingPostgresMetricsAlarms, Value: string(alarmsJSON)}}),
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	alarmStore := postgresmetrics.NewAlarmstore(srv, nil)
+	ctx := context.Background()
+
+	_, err := alarmStore.UpdateAlarm(ctx, "alarm-1", &model.Alarm{Name: "Failed", Enabled: true, Metric: "failed_events", Operator: "gt", Threshold: "1", Severity: "low"})
+	assert.ErrorIs(t, err, postgresmetrics.ErrUnsupportedAlarmMetric)
+
+	_, err = alarmStore.UpdateAlarm(ctx, "alarm-1", &model.Alarm{Name: "Production", Enabled: true, Metric: "eps", MetricKey: "production_eps", Operator: "gt", Threshold: "1", Severity: "low"})
+	assert.ErrorIs(t, err, postgresmetrics.ErrUnsupportedAlarmMetricKey)
+
+	alarms, err := alarmStore.GetAlarms(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, alarms, 1)
+	assert.Equal(t, "cpu", alarms[0].Metric)
 }
 
 func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
@@ -560,4 +600,3 @@ type fakeDatastore struct {
 func (f *fakeDatastore) GetNodes(ctx context.Context) []*model.Node {
 	return f.nodes
 }
-

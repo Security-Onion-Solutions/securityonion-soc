@@ -41,8 +41,6 @@ type InfluxDBMetrics struct {
 	processStatus            map[string]int
 	processJson              map[string]string
 	consumptionEps           map[string]int
-	productionEps            map[string]int
-	failedEvents             map[string]int
 	eventstoreStatus         map[string]string
 	osNeedsRestart           map[string]int
 	osUptime                 map[string]int
@@ -86,8 +84,6 @@ func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
 		processStatus:       make(map[string]int),
 		processJson:         make(map[string]string),
 		consumptionEps:      make(map[string]int),
-		productionEps:       make(map[string]int),
-		failedEvents:        make(map[string]int),
 		eventstoreStatus:    make(map[string]string),
 		osNeedsRestart:      make(map[string]int),
 		osUptime:            make(map[string]int),
@@ -255,12 +251,6 @@ func (metrics *InfluxDBMetrics) updateEps() {
 	if now.Sub(metrics.lastEpsUpdateTime).Milliseconds() > int64(metrics.cacheExpirationMs) {
 		values := metrics.fetchLatestValuesByHost("consumptioneps", "eps", "", "")
 		metrics.consumptionEps = metrics.convertValuesToInt(values)
-
-		values = metrics.fetchLatestValuesByHost("fbstats", "eps", "", "")
-		metrics.productionEps = metrics.convertValuesToInt(values)
-
-		values = metrics.fetchLatestValuesByHost("fbstats", "failed", "", "")
-		metrics.failedEvents = metrics.convertValuesToInt(values)
 		metrics.lastEpsUpdateTime = now
 	}
 }
@@ -413,22 +403,10 @@ func (metrics *InfluxDBMetrics) getProcessJson(host string) string {
 	return details
 }
 
-func (metrics *InfluxDBMetrics) getProductionEps(host string) int {
-	metrics.updateEps()
-
-	return metrics.productionEps[host]
-}
-
 func (metrics *InfluxDBMetrics) getConsumptionEps(host string) int {
 	metrics.updateEps()
 
 	return metrics.consumptionEps[host]
-}
-
-func (metrics *InfluxDBMetrics) getFailedEvents(host string) int {
-	metrics.updateEps()
-
-	return metrics.failedEvents[host]
 }
 
 func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
@@ -476,9 +454,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.RaidStatus = metrics.getRaidStatus(node.Id)
 		node.ProcessStatus = metrics.getProcessStatus(node.Id)
 		node.ProcessJson = metrics.getProcessJson(node.Id)
-		node.ProductionEps = metrics.getProductionEps(node.Id)
 		node.ConsumptionEps = metrics.getConsumptionEps(node.Id)
-		node.FailedEvents = metrics.getFailedEvents(node.Id)
 		node.EventstoreStatus = metrics.getEventstoreStatus(node.Id)
 
 		node.OsNeedsRestart = metrics.getOsNeedsRestart(node.Id)

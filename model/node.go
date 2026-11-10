@@ -58,12 +58,8 @@ type Node struct {
 	ProcessStatus string `json:"processStatus" example:"ok"`
 	// The status of each individual process on the node, in JSON format
 	ProcessJson string `json:"processJson" example:"{\"status_code\":0, \"containers\":[{\"Name\":\"so-dockerregistry\", \"Status\":\"running\",\"Details\":\"Up 2 weeks\"}, ... ]}"`
-	// The events per second (EPS) produced by this node (not currently populated)
-	ProductionEps int `json:"productionEps" example:"0"`
 	// The events per second (EPS) consumed by this node
 	ConsumptionEps int `json:"consumptionEps" example:"110"`
-	// The count of failed events (currently not in use)"
-	FailedEvents int `json:"failedEvents" example:"0"`
 	// The event storage status; this refers to the backend status, such as Elasticsearch: unknown, ok, fault
 	EventstoreStatus string `json:"eventstoreStatus" example:"ok"`
 	// Indicates whether the node needs to be restarted to apply kernel updates: 0 = no restart needed, 1 = needs restarted
