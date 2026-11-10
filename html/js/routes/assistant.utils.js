@@ -503,7 +503,7 @@ Object.assign(assistantRouteForUtils.component.methods, (function() {
           msg = this.$root.replaceActionVar(this.i18n.ERROR_SESSION_ATTACHED_TO_CASES, 'count', count);
         }
 
-        this.$root.showError({ message: msg });
+        this.$root.showError(msg);
       }
     },
     focusChatInput() {

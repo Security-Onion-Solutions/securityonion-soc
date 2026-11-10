@@ -266,17 +266,3 @@ func (mr *MockAssistantstoreMockRecorder) UpdateSessionMemoryScanIndex(ctx, sess
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionMemoryScanIndex", reflect.TypeOf((*MockAssistantstore)(nil).UpdateSessionMemoryScanIndex), ctx, sessionId, scannedIndex)
 }
-
-// UpdateSessionTags mocks base method.
-func (m *MockAssistantstore) UpdateSessionTags(ctx context.Context, sessionId string, tags []string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateSessionTags", ctx, sessionId, tags)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateSessionTags indicates an expected call of UpdateSessionTags.
-func (mr *MockAssistantstoreMockRecorder) UpdateSessionTags(ctx, sessionId, tags any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionTags", reflect.TypeOf((*MockAssistantstore)(nil).UpdateSessionTags), ctx, sessionId, tags)
-}

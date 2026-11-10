@@ -41,6 +41,27 @@ var ErrSessionNotRoot = errors.New("ERROR_SESSION_NOT_ROOT")
 // ErrSessionNotOnAlert means the target alert does not reference the cloned session (400).
 var ErrSessionNotOnAlert = errors.New("ERROR_SESSION_NOT_ON_ALERT")
 
+// ErrSessionTagReserved means the tag is in model.ReservedSessionTags (400).
+var ErrSessionTagReserved = errors.New("ERROR_SESSION_TAG_RESERVED")
+
+// ErrSessionTagActionInvalid means the tag update action is neither add nor remove (400).
+var ErrSessionTagActionInvalid = errors.New("ERROR_SESSION_TAG_ACTION_INVALID")
+
+// ErrSessionTagInvalid means the tag is blank (400).
+var ErrSessionTagInvalid = errors.New("ERROR_SESSION_TAG_INVALID")
+
+// ErrSessionAutomationTags means the session is an automation transcript, whose tags are read-only (409).
+var ErrSessionAutomationTags = errors.New("ERROR_SESSION_AUTOMATION_TAGS")
+
+// ErrSessionTagExists means the session already has the tag being added (409).
+var ErrSessionTagExists = errors.New("ERROR_SESSION_TAG_EXISTS")
+
+// ErrSessionTagMissing means the session does not have the tag being removed (409).
+var ErrSessionTagMissing = errors.New("ERROR_SESSION_TAG_MISSING")
+
+// ErrSessionAttachedToCases is wrapped with the case count, which the UI parses from the message (409).
+var ErrSessionAttachedToCases = errors.New("ERROR_SESSION_ATTACHED_TO_CASES")
+
 // ErrToolAlreadyResolved is returned when the targeted tool_use already has a
 // tool_result in the session's history, so approving or rejecting it again must
 // not re-execute the tool or duplicate the result. The handler maps it to 400.
@@ -86,6 +107,7 @@ type AssistantManager interface {
 	DetachInvestigation(ctx context.Context, socId string, sessionId string) error
 	DetachSessionInvestigation(ctx context.Context, sessionId string) error
 	CloneSessionOntoAlert(ctx context.Context, sessionId string, socId string) (*model.AssistantSession, error)
+	UpdateSessionTag(ctx context.Context, sessionId string, tag string, present bool) error
 }
 
 type AssistantAdapter interface {

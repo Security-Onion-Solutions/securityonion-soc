@@ -749,17 +749,18 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 }
 
 // @Summary      Update metadata for a Session
-// @Description  Allow a user to modify their own session tags.
+// @Description  Add or remove one tag on a session you own. The shared tag is also added to or removed from every delegated sub-session of that session.
 // @Tags         Assistant
 // @Security     bearer[assistant/write_authored]
 // @Param        sessionId  path  string  true  "Session ID to modify"
 // @Param        request  body  model.UpdateSessionRequest   true  "Indicate what field we're doing what operation with."
 // @Produce      json
-// @Success      206           "No content"
-// @Failure      400           "The provided session ID is invalid or missing"
+// @Success      204           "No content"
+// @Failure      400           "The provided session ID is invalid or missing, the action is not add or remove, the tag is blank, or the tag is reserved"
 // @Failure      401           "Request was not properly authenticated"
-// @Failure      403           "Insufficient permissions for this request"
+// @Failure      403           "Insufficient permissions for this request, or the session belongs to another user"
 // @Failure      404           "Session not found"
+// @Failure      409           "The session is an automation session, already has the tag being added, lacks the tag being removed, or is attached to cases"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/sessions/{sessionId} [put]
 func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
@@ -790,116 +791,44 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// don't allow any actions involving reserved tags
-	for _, reservedTag := range model.ReservedSessionTags {
-		if strings.EqualFold(reservedTag, updateReq.Tag) {
-			web.Respond(w, r, http.StatusBadRequest, "reserved tag")
-
-			return
-		}
-	}
-
-	if !strings.EqualFold(updateReq.Action, "add") && !strings.EqualFold(updateReq.Action, "remove") {
-		web.Respond(w, r, http.StatusBadRequest, "invalid action")
-
-		return
-	}
-
-	// Descendants come back after the root so sharing can cascade to them below.
-	sessions, err := h.server.Assistantstore.GetSessions(ctx, model.GetSessionsWithSessionId(sessionId), model.GetSessionsWithAutomationSessions(true), model.GetSessionsWithDescendants(updateReq.Tag == model.SessionTagShared), model.GetSessionsWithMessageMeta(false))
-	if err != nil {
-		logger.WithError(err).Error("unable to get session")
-		web.Respond(w, r, http.StatusInternalServerError, err)
-
-		return
-	}
-
-	if len(sessions) == 0 || sessions[0].SessionId != sessionId {
-		logger.Error("session not found")
-		web.Respond(w, r, http.StatusNotFound, "session not found")
-
-		return
-	}
-
-	session := sessions[0]
-
-	// cannot modify an automation session
-	if slices.Contains(session.Tags, model.SessionTagAutomation) {
-		logger.Warn("cannot modify tags on an automation session")
-		web.Respond(w, r, http.StatusConflict, "automation session tags cannot be modified")
-
-		return
-	}
-
 	add := strings.EqualFold(updateReq.Action, "add")
-	if !add {
-		err = h.canRemoveTag(ctx, session, updateReq.Tag)
-		if err != nil {
-			logger.WithFields(log.Fields{
-				"assistantSessionId": sessionId,
-				"tag":                updateReq.Tag,
-			}).WithError(err).Error("unable to remove tag")
-			web.Respond(w, r, http.StatusConflict, err)
-
-			return
-		}
-	}
-
-	// Re-adding shared is allowed so descendants that missed the cascade catch up.
-	tags, changed := toggleTag(session.Tags, updateReq.Tag, add)
-	if !changed && updateReq.Tag != model.SessionTagShared {
-		logger.Warn("tag already exists on session")
-		web.Respond(w, r, http.StatusConflict, "tag already exists on session")
+	if !add && !strings.EqualFold(updateReq.Action, "remove") {
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionTagActionInvalid)
 
 		return
 	}
 
-	// A shared session is readable through its sub-sessions too, so the tag
-	// follows every descendant in one write. Other tags stay on the one session.
-	if updateReq.Tag == model.SessionTagShared {
-		ids := make([]string, len(sessions))
-		for i, s := range sessions {
-			ids[i] = s.SessionId
-		}
-		err = h.server.Assistantstore.ToggleSessionsTag(ctx, ids, updateReq.Tag, add)
-	} else {
-		err = h.server.Assistantstore.UpdateSessionTags(ctx, sessionId, tags)
+	err = h.server.AssistantManager.UpdateSessionTag(ctx, sessionId, updateReq.Tag, add)
+	if errors.Is(err, ErrSessionTagInvalid) || errors.Is(err, ErrSessionTagReserved) {
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+	if errors.Is(err, ErrSessionNotFound) {
+		web.Respond(w, r, http.StatusNotFound, err)
+
+		return
+	}
+	if errors.Is(err, ErrSessionAccessDenied) {
+		logger.WithField("assistantSessionId", sessionId).Warn("user attempted to tag a session they do not own")
+		web.Respond(w, r, http.StatusForbidden, err)
+
+		return
+	}
+	if errors.Is(err, ErrSessionAutomationTags) || errors.Is(err, ErrSessionTagExists) ||
+		errors.Is(err, ErrSessionTagMissing) || errors.Is(err, ErrSessionAttachedToCases) {
+		web.Respond(w, r, http.StatusConflict, err)
+
+		return
 	}
 	if err != nil {
-		logger.WithError(err).Error("unable to update session")
+		logger.WithError(err).WithField("assistantSessionId", sessionId).Error("unable to update session")
 		web.Respond(w, r, http.StatusInternalServerError, err)
 
 		return
 	}
 
 	web.Respond(w, r, http.StatusNoContent, nil)
-}
-
-func toggleTag(tags []string, tag string, present bool) ([]string, bool) {
-	if slices.Contains(tags, tag) == present {
-		return tags, false
-	}
-	if present {
-		return append(slices.Clone(tags), tag), true
-	}
-	return slices.DeleteFunc(slices.Clone(tags), func(t string) bool { return t == tag }), true
-}
-
-func (h *AssistantHandler) canRemoveTag(ctx context.Context, session *model.AssistantSession, tag string) error {
-	if !slices.Contains(session.Tags, tag) {
-		return fmt.Errorf("session does not have tag")
-	}
-
-	cases, err := h.server.Casestore.GetCaseIdsWithArtifact(ctx, "assistant_chat", session.SessionId)
-	if err != nil {
-		return err
-	}
-
-	if len(cases) != 0 {
-		return fmt.Errorf("ERROR_SESSION_ATTACHED_TO_CASES %d", len(cases))
-	}
-
-	return nil
 }
 
 // @Summary      Clone an Assistant Session
