@@ -19,7 +19,7 @@ func queryContainerMetric(ctx context.Context, s *Store, table, field, nodeId, c
 		agg = aggregate
 	}
 
-	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL AND tag.tags->>'container_name' IS NOT NULL", hostFilter, startPlaceholder, endPlaceholder, field)
+	whereClause := fmt.Sprintf("%s AND m.time >= %s AT TIME ZONE 'UTC' AND m.time <= %s AT TIME ZONE 'UTC' AND m.fields->>'%s' IS NOT NULL AND tag.tags->>'container_name' IS NOT NULL AND tag.tags->>'container_status' = 'running'", hostFilter, startPlaceholder, endPlaceholder, field)
 	if container != "" && container != "all" {
 		placeholderIdx := len(args) + 1
 		whereClause = fmt.Sprintf("%s AND tag.tags->>'container_name' = $%d", whereClause, placeholderIdx)
@@ -89,7 +89,7 @@ func queryContainerUptimeMetric(ctx context.Context, s *Store, nodeId, container
 
 func queryContainerNetInMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
 	timeWindow := "2 minutes"
-	whereClause := fmt.Sprintf("%s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'rx_bytes' IS NOT NULL", hostFilter, startPlaceholder, timeWindow, endPlaceholder)
+	whereClause := fmt.Sprintf("%s AND m.time >= (%s AT TIME ZONE 'UTC') - INTERVAL '%s' AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'rx_bytes' IS NOT NULL AND tag.tags->>'container_status' = 'running'", hostFilter, startPlaceholder, timeWindow, endPlaceholder)
 	if container != "" && container != "all" {
 		placeholderIdx := len(args) + 1
 		whereClause = fmt.Sprintf("%s AND tag.tags->>'container_name' = $%d", whereClause, placeholderIdx)

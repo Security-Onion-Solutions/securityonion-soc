@@ -38,3 +38,51 @@ func TestStore_GetTimeSeriesKafkaMetrics(t *testing.T) {
 		assert.Equal(t, 500.0, res["kafka_eps"][0].Value)
 	})
 }
+
+func TestStore_GetTimeSeriesKafkaUnderReplicatedMetrics(t *testing.T) {
+	ctx := context.Background()
+	startTime := time.Now().Add(-1 * time.Hour)
+	endTime := time.Now()
+	bucket := time.Now().Truncate(time.Minute)
+
+	t.Run("sums partitions per timestamp then takes bucket max", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				assert.Contains(t, sql, "telegraf.kafka_partition")
+				assert.Contains(t, sql, "SUM((m.fields->>'UnderReplicatedPartitions')::double precision)")
+				assert.Contains(t, sql, "GROUP BY host, m.time")
+				assert.Contains(t, sql, "MAX(under_replicated)")
+				assert.Contains(t, sql, "GROUP BY bucket, host")
+				assert.NotContains(t, sql, "AVG(")
+				return &MockRows{
+					rows: [][]interface{}{
+						{bucket, "node1", 3.0},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "node1", "", "kafka_under_replicated", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Len(t, res["kafka_under_replicated"], 1)
+		assert.Equal(t, 3.0, res["kafka_under_replicated"][0].Value)
+	})
+
+	t.Run("all hosts keys series by host", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				return &MockRows{
+					rows: [][]interface{}{
+						{bucket, "node1", 2.0},
+						{bucket, "node2", 0.0},
+					},
+				}, nil
+			},
+		}
+		s := New(mockDb)
+		res, err := s.GetTimeSeriesMetrics(ctx, "", "", "kafka_under_replicated", startTime, endTime)
+		assert.NoError(t, err)
+		assert.Equal(t, 2.0, res["node1"][0].Value)
+		assert.Equal(t, 0.0, res["node2"][0].Value)
+	})
+}

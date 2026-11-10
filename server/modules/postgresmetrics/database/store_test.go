@@ -214,7 +214,7 @@ type MockRows struct {
 	err   error
 }
 
-func (m *MockRows) Close() {}
+func (m *MockRows) Close()     {}
 func (m *MockRows) Err() error { return m.err }
 func (m *MockRows) Next() bool {
 	m.index++
@@ -229,6 +229,13 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 		switch d := dest[i].(type) {
 		case *string:
 			*d = val.(string)
+		case **string:
+			if val == nil {
+				*d = nil
+			} else {
+				str := val.(string)
+				*d = &str
+			}
 		case *int:
 			*d = val.(int)
 		case *float64:
@@ -262,9 +269,9 @@ func (m *MockDB) Query(ctx context.Context, sql string, args ...any) (db.Rows, e
 	}
 	return &MockRows{}, nil
 }
-func (m *MockDB) Begin(ctx context.Context) (db.Tx, error) { return nil, nil }
+func (m *MockDB) Begin(ctx context.Context) (db.Tx, error)                      { return nil, nil }
 func (m *MockDB) Migrate(ctx context.Context, fs embed.FS, module string) error { return nil }
-func (m *MockDB) Close() {}
+func (m *MockDB) Close()                                                        {}
 
 func contains(s, substr string) bool {
 	if len(substr) == 0 {

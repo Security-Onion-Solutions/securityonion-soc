@@ -32,7 +32,7 @@ var defaultAlarmMetrics = []model.AlarmMetricInfo{
 	{Metric: "loss", TitleKey: "metricsLoss", Keys: []string{"suricata_loss", "zeek_loss"}, LabelKeys: []string{"suricataLoss", "zeekLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
 	{Metric: "capture_loss", TitleKey: "metricsCaptureLoss", Keys: []string{"zeek_capture_loss"}, LabelKeys: []string{"metricsLoss"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeNode},
 	{Metric: "net", TitleKey: "metricsNetTraffic", Keys: []string{"traffic_man_in", "traffic_man_out", "traffic_mon_in"}, LabelKeys: []string{"metricsTrafficManIn", "metricsTrafficManOut", "metricsTrafficMonIn"}, Type: model.AlarmMetricTypeNumeric, Units: "mbs", Scope: model.AlarmMetricScopeNode},
-	{Metric: "net_drops", TitleKey: "metricsMonitorDrops", Keys: []string{"traffic_mon_drops"}, LabelKeys: []string{"metricsDrops"}, Type: model.AlarmMetricTypeNumeric, Units: "mbs", Scope: model.AlarmMetricScopeNode},
+	{Metric: "net_drops", TitleKey: "metricsMonitorDrops", Keys: []string{"traffic_mon_drops"}, LabelKeys: []string{"metricsDrops"}, Type: model.AlarmMetricTypeNumeric, Units: "pps", Scope: model.AlarmMetricScopeNode},
 	{Metric: "container_cpu", TitleKey: "metricsContainerCpu", Keys: []string{"container_cpu"}, LabelKeys: []string{"metricsCpuPct"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeContainer},
 	{Metric: "container_mem", TitleKey: "metricsContainerMem", Keys: []string{"container_mem"}, LabelKeys: []string{"metricsMemPct"}, Type: model.AlarmMetricTypeNumeric, Units: "percent", Scope: model.AlarmMetricScopeContainer},
 	{Metric: "container_net_in", TitleKey: "metricsContainerNetIn", Keys: []string{"container_net_in"}, LabelKeys: []string{"metricsTrafficMonIn"}, Type: model.AlarmMetricTypeNumeric, Units: "bits", Scope: model.AlarmMetricScopeContainer},
@@ -221,7 +221,7 @@ func ExtractMetricValue(node *model.Node, metric, key string) (any, bool) {
 			return node.TrafficMonInMbs, true
 		}
 	case "net_drops":
-		return node.TrafficMonInDropsMbs, true
+		return node.TrafficMonInDropsPps, true
 	case "node_status":
 		return node.Status, true
 	case "connection_status":

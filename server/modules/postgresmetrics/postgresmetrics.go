@@ -33,6 +33,7 @@ type PostgresMetrics struct {
 	processStatus        map[string]int
 	processJson          map[string]string
 	consumptionEps       map[string]int
+	searchConsumptionEps map[string]int
 	productionEps        map[string]int
 	failedEvents         map[string]int
 	eventstoreStatus     map[string]string
@@ -56,7 +57,7 @@ type PostgresMetrics struct {
 	zeekLossPct          map[string]float64
 	captureLossPct       map[string]float64
 	trafficMonInMbs      map[string]float64
-	trafficMonInDropsMbs map[string]float64
+	trafficMonInDropsPps map[string]float64
 	trafficManInMbs      map[string]float64
 	trafficManOutMbs     map[string]float64
 	redisQueueSize       map[string]int
@@ -83,6 +84,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		processStatus:        make(map[string]int),
 		processJson:          make(map[string]string),
 		consumptionEps:       make(map[string]int),
+		searchConsumptionEps: make(map[string]int),
 		productionEps:        make(map[string]int),
 		failedEvents:         make(map[string]int),
 		eventstoreStatus:     make(map[string]string),
@@ -106,7 +108,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		zeekLossPct:          make(map[string]float64),
 		captureLossPct:       make(map[string]float64),
 		trafficMonInMbs:      make(map[string]float64),
-		trafficMonInDropsMbs: make(map[string]float64),
+		trafficMonInDropsPps: make(map[string]float64),
 		trafficManInMbs:      make(map[string]float64),
 		trafficManOutMbs:     make(map[string]float64),
 		redisQueueSize:       make(map[string]int),
@@ -144,7 +146,7 @@ func (pm *PostgresMetrics) GetGridEps(ctx context.Context) int {
 	defer pm.cacheLock.Unlock()
 
 	eps := 0
-	for _, hostEps := range pm.consumptionEps {
+	for _, hostEps := range pm.searchConsumptionEps {
 		eps += hostEps
 	}
 	return eps
@@ -162,113 +164,50 @@ func (pm *PostgresMetrics) UpdateNodeMetrics(ctx context.Context, node *model.No
 	node.ProcessJson = pm.getProcessJson(host)
 	node.EventstoreStatus = pm.getEventstoreStatus(host)
 
-	if val, exists := pm.osNeedsRestart[host]; exists {
-		node.OsNeedsRestart = val
-	}
-	if val, exists := pm.osUptime[host]; exists {
-		node.OsUptimeSeconds = val
-	}
+	node.OsNeedsRestart = pm.osNeedsRestart[host]
+	node.OsUptimeSeconds = pm.osUptime[host]
 
-	if val, exists := pm.diskTotalRootGB[host]; exists {
-		node.DiskTotalRootGB = val
-	}
-	if val, exists := pm.diskUsedRootPct[host]; exists {
-		node.DiskUsedRootPct = val
-	}
-	if val, exists := pm.diskTotalNsmGB[host]; exists {
-		node.DiskTotalNsmGB = val
-	}
-	if val, exists := pm.diskUsedNsmPct[host]; exists {
-		node.DiskUsedNsmPct = val
-	}
+	node.DiskTotalRootGB = pm.diskTotalRootGB[host]
+	node.DiskUsedRootPct = pm.diskUsedRootPct[host]
+	node.DiskTotalNsmGB = pm.diskTotalNsmGB[host]
+	node.DiskUsedNsmPct = pm.diskUsedNsmPct[host]
 
+	node.CpuUsedPct = 0
 	if val, exists := pm.cpuIdlePct[host]; exists {
 		node.CpuUsedPct = 100.0 - val
 	}
-	if val, exists := pm.memoryTotalGB[host]; exists {
-		node.MemoryTotalGB = val
-	}
-	if val, exists := pm.memoryUsedPct[host]; exists {
-		node.MemoryUsedPct = val
-	}
-	if val, exists := pm.swapTotalGB[host]; exists {
-		node.SwapTotalGB = val
-	}
-	if val, exists := pm.swapUsedPct[host]; exists {
-		node.SwapUsedPct = val
-	}
+	node.MemoryTotalGB = pm.memoryTotalGB[host]
+	node.MemoryUsedPct = pm.memoryUsedPct[host]
+	node.SwapTotalGB = pm.swapTotalGB[host]
+	node.SwapUsedPct = pm.swapUsedPct[host]
 
-	if val, exists := pm.pcapDays[host]; exists {
-		node.PcapDays = val
-	}
-	if val, exists := pm.suriLossPct[host]; exists {
-		node.SuriLossPct = val
-	}
-	if val, exists := pm.zeekLossPct[host]; exists {
-		node.ZeekLossPct = val
-	}
-	if val, exists := pm.captureLossPct[host]; exists {
-		node.CaptureLossPct = val
-	}
+	node.PcapDays = pm.pcapDays[host]
+	node.SuriLossPct = pm.suriLossPct[host]
+	node.ZeekLossPct = pm.zeekLossPct[host]
+	node.CaptureLossPct = pm.captureLossPct[host]
 
-	if val, exists := pm.suriRulesLoaded[host]; exists {
-		node.SuriRulesLoaded = val
-	}
-	if val, exists := pm.suriRulesFailed[host]; exists {
-		node.SuriRulesFailed = val
-	}
-	if val, exists := pm.suriRulesReloadTime[host]; exists {
-		node.SuriRulesReloadTime = val
-	}
-	if val, exists := pm.suriRulesStatus[host]; exists {
-		node.SuriRulesStatus = val
-	}
+	node.SuriRulesLoaded = pm.suriRulesLoaded[host]
+	node.SuriRulesFailed = pm.suriRulesFailed[host]
+	node.SuriRulesReloadTime = pm.suriRulesReloadTime[host]
+	node.SuriRulesStatus = pm.suriRulesStatus[host]
 
-	if val, exists := pm.redisQueueSize[host]; exists {
-		node.RedisQueueSize = val
-	}
-	if val, exists := pm.diskUsedElasticGB[host]; exists {
-		node.DiskUsedElasticGB = val
-	}
-	if val, exists := pm.diskUsedInfluxDbGB[host]; exists {
-		node.DiskUsedInfluxDbGB = val
-	}
-	if val, exists := pm.highstateAgeSeconds[host]; exists {
-		node.HighstateAgeSeconds = val
-	}
+	node.RedisQueueSize = pm.redisQueueSize[host]
+	node.DiskUsedElasticGB = pm.diskUsedElasticGB[host]
+	node.DiskUsedInfluxDbGB = pm.diskUsedInfluxDbGB[host]
+	node.HighstateAgeSeconds = pm.highstateAgeSeconds[host]
 
-	if val, exists := pm.fpsEnabled[host]; exists {
-		node.FpsEnabled = val
-	}
-	if val, exists := pm.lksEnabled[host]; exists {
-		node.LksEnabled = val
-	}
+	node.FpsEnabled = pm.fpsEnabled[host]
+	node.LksEnabled = pm.lksEnabled[host]
 
-	if val, exists := pm.trafficMonInMbs[host]; exists {
-		node.TrafficMonInMbs = val
-	}
-	if val, exists := pm.trafficMonInDropsMbs[host]; exists {
-		node.TrafficMonInDropsMbs = val
-	}
-	if val, exists := pm.trafficManInMbs[host]; exists {
-		node.TrafficManInMbs = val
-	}
-	if val, exists := pm.trafficManOutMbs[host]; exists {
-		node.TrafficManOutMbs = val
-	}
+	node.TrafficMonInMbs = pm.trafficMonInMbs[host]
+	node.TrafficMonInDropsPps = pm.trafficMonInDropsPps[host]
+	node.TrafficManInMbs = pm.trafficManInMbs[host]
+	node.TrafficManOutMbs = pm.trafficManOutMbs[host]
 
-	if val, exists := pm.load1m[host]; exists {
-		node.Load1m = val
-	}
-	if val, exists := pm.load5m[host]; exists {
-		node.Load5m = val
-	}
-	if val, exists := pm.load15m[host]; exists {
-		node.Load15m = val
-	}
-	if val, exists := pm.ioWaitPct[host]; exists {
-		node.IoWaitPct = val
-	}
+	node.Load1m = pm.load1m[host]
+	node.Load5m = pm.load5m[host]
+	node.Load15m = pm.load15m[host]
+	node.IoWaitPct = pm.ioWaitPct[host]
 
 	licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
 	licensing.ValidateFeature(licensing.FEAT_GMD, node.IsProcessRunning("so-kafka"))
@@ -332,6 +271,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 	pm.processStatus = pm.dbStore.FetchIntValues(ctx, "sostatus", "status", "", "", startTime)
 	pm.processJson = pm.dbStore.FetchStringValues(ctx, "sostatus", "json", "", "", startTime)
 	pm.consumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "", "", startTime)
+	pm.searchConsumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "stage", "search", startTime)
 
 	// Elasticsearch
 	pm.eventstoreStatus = pm.dbStore.FetchStringValues(ctx, "elasticsearch_cluster_health", "status", "", "", startTime)
@@ -358,7 +298,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 
 	if rates, err := pm.dbStore.FetchNetworkRates(ctx, startTime); err == nil {
 		pm.trafficMonInMbs = rates.TrafficMonInMbs
-		pm.trafficMonInDropsMbs = rates.TrafficMonInDropsMbs
+		pm.trafficMonInDropsPps = rates.TrafficMonInDropsPps
 		pm.trafficManInMbs = rates.TrafficManInMbs
 		pm.trafficManOutMbs = rates.TrafficManOutMbs
 	}

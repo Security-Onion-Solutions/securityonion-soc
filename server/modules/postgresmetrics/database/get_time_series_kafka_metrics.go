@@ -107,3 +107,57 @@ func queryKafkaEpsMetric(ctx context.Context, s *Store, nodeId, container string
 
 	return res, nil
 }
+
+func queryKafkaUnderReplicatedMetric(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+	res := make(map[string][]model.MetricSample)
+	if nodeId != "" {
+		res["kafka_under_replicated"] = make([]model.MetricSample, 0)
+	}
+
+	qKafka := fmt.Sprintf(`
+		WITH per_timestamp AS (
+			SELECT 
+				COALESCE(tag.tags->>'host', '') as host,
+				m.time,
+				SUM((m.fields->>'UnderReplicatedPartitions')::double precision) as under_replicated
+			FROM telegraf.kafka_partition m
+			JOIN telegraf.kafka_partition_tag tag ON m.tag_id = tag.tag_id
+			WHERE %s AND m.time >= (%s AT TIME ZONE 'UTC') AND m.time <= (%s AT TIME ZONE 'UTC') AND m.fields->>'UnderReplicatedPartitions' IS NOT NULL
+			GROUP BY host, m.time
+		)
+		SELECT 
+			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			host,
+			MAX(under_replicated) as under_replicated_max
+		FROM per_timestamp
+		GROUP BY bucket, host
+		ORDER BY bucket ASC`, hostFilter, startPlaceholder, endPlaceholder)
+
+	rows, err := s.db.Query(ctx, qKafka, args...)
+	if err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics kafka_under_replicated")
+		if s.isMissingRelationError(err) {
+			return res, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var bucket time.Time
+		var host string
+		var val float64
+		if err := rows.Scan(&bucket, &host, &val); err == nil {
+			key := host
+			if nodeId != "" {
+				key = "kafka_under_replicated"
+			}
+			res[key] = append(res[key], model.MetricSample{
+				Timestamp: bucket,
+				Value:     val,
+			})
+		}
+	}
+
+	return res, nil
+}

@@ -112,8 +112,8 @@ type Node struct {
 	CaptureLossPct float64 `json:"captureLossPct" example:"24.0605"`
 	// The inbound traffic rate, in megabytes per second, to this node's monitor network interface
 	TrafficMonInMbs float64 `json:"trafficMonInMbs" example:"1.6864359999999998"`
-	// The inbound traffic packet drop rate, in megabytes per second, to this node's monitor network interface
-	TrafficMonInDropsMbs float64 `json:"trafficMonInDropsMbs" example:"0"`
+	// The inbound packet drop rate, in packets per second, on this node's monitor network interface
+	TrafficMonInDropsPps float64 `json:"trafficMonInDropsPps" example:"0"`
 	// The inbound traffic rate, in megabytes per second, to this node's management network interface
 	TrafficManInMbs float64 `json:"trafficManInMbs" example:"0.031592"`
 	// The outbound traffic rate, in megabytes per second, from this node's management network interface

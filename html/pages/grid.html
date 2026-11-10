@@ -370,7 +370,7 @@
 
 														<template v-if="item.metricsEnabled && canTest(item)">
 															<dt class="filter label">{{ i18n.trafficMonInDrops }}:</dt>
-															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficMonInDrops">{{ formatDecimal1(item.trafficMonInDropsMbs) }} {{ i18n.mbps }}</dd>
+															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficMonInDrops">{{ formatDecimal1(item.trafficMonInDropsPps) }} {{ i18n.dropsPerSecond }}</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">

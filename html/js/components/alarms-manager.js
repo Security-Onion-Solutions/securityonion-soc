@@ -129,6 +129,8 @@ components.push({
             return this.i18n.unitGigabytes;
           case 'mbs':
             return this.i18n.unitMbps;
+          case 'pps':
+            return this.i18n.unitPps;
           case 'bits':
             return this.i18n.unitBits;
           default:
