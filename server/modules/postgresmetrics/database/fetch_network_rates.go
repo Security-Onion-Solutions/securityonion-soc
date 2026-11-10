@@ -15,7 +15,7 @@ import (
 
 type NetworkRates struct {
 	TrafficMonInMbs      map[string]float64
-	TrafficMonInDropsMbs map[string]float64
+	TrafficMonInDropsPps map[string]float64
 	TrafficManInMbs      map[string]float64
 	TrafficManOutMbs     map[string]float64
 }
@@ -23,7 +23,7 @@ type NetworkRates struct {
 func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*NetworkRates, error) {
 	rates := &NetworkRates{
 		TrafficMonInMbs:      make(map[string]float64),
-		TrafficMonInDropsMbs: make(map[string]float64),
+		TrafficMonInDropsPps: make(map[string]float64),
 		TrafficManInMbs:      make(map[string]float64),
 		TrafficManOutMbs:     make(map[string]float64),
 	}
@@ -35,15 +35,20 @@ func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*Ne
 		SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'manint', m.fields->>'monint' 
 		FROM telegraf.node_config m 
 		JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
-		WHERE m.time >= $1 AND m.fields->>'manint' IS NOT NULL AND m.fields->>'monint' IS NOT NULL 
+		WHERE m.time >= $1 AND (m.fields->>'manint' IS NOT NULL OR m.fields->>'monint' IS NOT NULL) 
 		ORDER BY tag.tags->>'host', m.time DESC`
 
 	if rows, err := s.db.Query(ctx, qConf, startTime); err == nil {
 		for rows.Next() {
-			var host, man, mon string
+			var host string
+			var man, mon *string
 			if err := rows.Scan(&host, &man, &mon); err == nil {
-				manint[host] = man
-				monint[host] = mon
+				if man != nil {
+					manint[host] = *man
+				}
+				if mon != nil {
+					monint[host] = *mon
+				}
 			}
 		}
 		rows.Close()
@@ -130,7 +135,7 @@ func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*Ne
 			}
 			if iface == monIface {
 				rates.TrafficMonInMbs[host] = recv * bytesToMb
-				rates.TrafficMonInDropsMbs[host] = drop * bytesToMb
+				rates.TrafficMonInDropsPps[host] = drop
 			}
 		}
 	}

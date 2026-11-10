@@ -41,6 +41,11 @@ test('updateMetricsEnabled', () => {
 	testUpdateMetricsEnabled(true, true, true, true, true, true, true);
 });
 
+test('monitor drops column reads the packets per second field', () => {
+	const column = comp.headers.find(item => item.title == comp.i18n.trafficMonInDropsAbbr);
+	expect(column.value).toBe('trafficMonInDropsPps');
+});
+
 function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled, node1HistoricalEnabled, node2HistoricalEnabled, expectedHistoricalEnabled) {
 	const node1 = { metricsEnabled: node1MetricsEnabled, historicalMetricsEnabled: node1HistoricalEnabled };
 	const node2 = { metricsEnabled: node2MetricsEnabled, historicalMetricsEnabled: node2HistoricalEnabled };

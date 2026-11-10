@@ -23,6 +23,7 @@ func TestStore_GetTimeSeriesContainerMetrics(t *testing.T) {
 		mockDb := &MockDB{
 			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 				assert.Contains(t, args, "so-redis")
+				assert.Contains(t, sql, "tag.tags->>'container_status' = 'running'")
 				return &MockRows{
 					rows: [][]interface{}{
 						{time.Now(), "host-a", "so-redis", 12.3},
@@ -42,6 +43,7 @@ func TestStore_GetTimeSeriesContainerMetrics(t *testing.T) {
 		mockDb := &MockDB{
 			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 				assert.Contains(t, sql, "docker_container_mem")
+				assert.Contains(t, sql, "tag.tags->>'container_status' = 'running'")
 				return &MockRows{
 					rows: [][]interface{}{
 						{time.Now(), "host-a", "so-redis", 45.6},
@@ -60,6 +62,7 @@ func TestStore_GetTimeSeriesContainerMetrics(t *testing.T) {
 		mockDb := &MockDB{
 			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 				assert.Contains(t, sql, "docker_container_status")
+				assert.Contains(t, sql, "tag.tags->>'container_status' = 'running'")
 				return &MockRows{
 					rows: [][]interface{}{
 						{time.Now(), "host-a", "so-redis", 10000000000.0},
@@ -78,6 +81,7 @@ func TestStore_GetTimeSeriesContainerMetrics(t *testing.T) {
 		mockDb := &MockDB{
 			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
 				assert.Contains(t, sql, "docker_container_net")
+				assert.Contains(t, sql, "tag.tags->>'container_status' = 'running'")
 				return &MockRows{
 					rows: [][]interface{}{
 						{time.Now(), "host-a", "so-redis", 5.5},

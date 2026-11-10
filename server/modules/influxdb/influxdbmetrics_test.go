@@ -94,12 +94,14 @@ func TestGetConsumptionEps(tester *testing.T) {
 	metrics.consumptionEps["foo"] = 0
 	metrics.consumptionEps["bar"] = 1
 	metrics.consumptionEps["zoo"] = 2
+	metrics.searchConsumptionEps["foo"] = 0
+	metrics.searchConsumptionEps["zoo"] = 2
 
 	assert.Equal(tester, 0, metrics.getConsumptionEps("foo"))
 	assert.Equal(tester, 1, metrics.getConsumptionEps("bar"))
 	assert.Equal(tester, 2, metrics.getConsumptionEps("zoo"))
 	assert.Equal(tester, 0, metrics.getConsumptionEps("missing"))
-	assert.Equal(tester, 3, metrics.GetGridEps(newContext()))
+	assert.Equal(tester, 2, metrics.GetGridEps(newContext()))
 }
 
 func TestGetFailedEvents(tester *testing.T) {
