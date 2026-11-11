@@ -627,6 +627,16 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 			}
 
 			adapt, err := reg.New(ac.srv.Context, ac.srv, adapterEntry)
+			if errors.Is(err, ErrNoLicenseKey) {
+				// Every unlicensed grid logs this, so no WithError: so-log-check fails a grid on any line containing "error".
+				logger.WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Warn("no license key; skipping assistant adapter that requires one")
+
+				continue
+			}
+
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
 					"adapter":  name,

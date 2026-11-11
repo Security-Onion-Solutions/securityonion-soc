@@ -285,14 +285,16 @@ func createManager(status string, available []string, signedLicenseKey *SignedLi
 
 	stopMonitor()
 
-	manager = newLicenseManager()
-	manager.status = status
-	manager.available = available
-	manager.licenseKey = signedLicenseKey
+	// Readers take no lock, so the manager is only published once fully built.
+	m := newLicenseManager()
+	m.status = status
+	m.available = available
+	m.licenseKey = signedLicenseKey
+	manager = m
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
-		go startExpirationMonitor()
-		go startEffectiveMonitor()
+		go startExpirationMonitor(m)
+		go startEffectiveMonitor(m)
 	}
 	pillarMonitorCount = 0
 	go startPillarMonitor()
@@ -312,58 +314,59 @@ func createManager(status string, available []string, signedLicenseKey *SignedLi
 	}).Info("Initialized license manager")
 }
 
-func startExpirationMonitor() {
-	if manager.licenseKey.Expiration.After(time.Now()) {
-		duration := time.Until(manager.licenseKey.Expiration)
-		if manager.expirationTimer != nil {
+// Scoped to m: stopMonitor wakes this just before a replacement manager is published.
+func startExpirationMonitor(m *licenseManager) {
+	if m.licenseKey.Expiration.After(time.Now()) {
+		duration := time.Until(m.licenseKey.Expiration)
+		if m.expirationTimer != nil {
 			log.Error("Expiration timer is already running; aborting thread")
 			return
 		}
-		manager.expirationTimer = time.NewTimer(duration)
-		<-manager.expirationTimer.C
-		if manager.licenseKey.Expiration.Before(time.Now()) {
+		m.expirationTimer = time.NewTimer(duration)
+		<-m.expirationTimer.C
+		if m.licenseKey.Expiration.Before(time.Now()) {
 			log.WithFields(log.Fields{
-				"expiration": manager.licenseKey.Expiration,
+				"expiration": m.licenseKey.Expiration,
 				"duration":   duration,
 			}).Warn("License has expired")
-			manager.status = LICENSE_STATUS_EXPIRED
+			m.status = LICENSE_STATUS_EXPIRED
 		}
 	}
-	manager.expirationTimer = nil
+	m.expirationTimer = nil
 }
 
-func startEffectiveMonitor() {
-	if manager.licenseKey.Effective.After(time.Now()) {
-		duration := time.Until(manager.licenseKey.Effective)
-		if manager.effectiveTimer != nil {
+func startEffectiveMonitor(m *licenseManager) {
+	if m.licenseKey.Effective.After(time.Now()) {
+		duration := time.Until(m.licenseKey.Effective)
+		if m.effectiveTimer != nil {
 			log.Error("Effective timer is already running; aborting thread")
 			return
 		}
-		manager.effectiveTimer = time.NewTimer(duration)
-		<-manager.effectiveTimer.C
+		m.effectiveTimer = time.NewTimer(duration)
+		<-m.effectiveTimer.C
 
-		if manager.status == LICENSE_STATUS_PENDING {
-			if len(manager.limits) > 0 {
+		if m.status == LICENSE_STATUS_PENDING {
+			if len(m.limits) > 0 {
 				log.WithFields(log.Fields{
-					"effective": manager.licenseKey.Effective,
+					"effective": m.licenseKey.Effective,
 					"duration":  duration,
 				}).Warn("License has become effective but limits are exceeded")
-				manager.status = LICENSE_STATUS_EXCEEDED
+				m.status = LICENSE_STATUS_EXCEEDED
 			} else {
 				log.WithFields(log.Fields{
-					"effective": manager.licenseKey.Effective,
+					"effective": m.licenseKey.Effective,
 					"duration":  duration,
 				}).Warn("License has become effective")
-				manager.status = LICENSE_STATUS_ACTIVE
+				m.status = LICENSE_STATUS_ACTIVE
 			}
 		} else {
 			log.WithFields(log.Fields{
-				"effective": manager.licenseKey.Effective,
+				"effective": m.licenseKey.Effective,
 				"duration":  duration,
 			}).Warn("License has become effective but current status is no longer pending")
 		}
 	}
-	manager.effectiveTimer = nil
+	m.effectiveTimer = nil
 }
 
 func startPillarMonitor() {

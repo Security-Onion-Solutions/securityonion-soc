@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
@@ -237,6 +238,11 @@ func (ac *AssistantCoordinator) setStaleMemoryCount(stale int) {
 }
 
 func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
+	if !licensing.IsEnabled(licensing.FEAT_OAI) {
+		log.FromContext(ctx).Warn("no active license with OAI enabled; not re-embedding memories")
+		return
+	}
+
 	ac.memoryWorkerMu.Lock()
 	if ac.reembedding || ac.store == nil {
 		ac.memoryWorkerMu.Unlock()
@@ -495,6 +501,7 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 	logger := log.FromContext(ctx)
 
 	interval := ac.memorySnapshot().scanInterval
+	unlicensed := false
 	logger.WithField("interval", interval).Info("starting interval")
 	ticker := time.NewTicker(interval)
 
@@ -519,6 +526,13 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 
 			continue
 		case <-ticker.C:
+		}
+
+		licensed := licensing.IsEnabled(licensing.FEAT_OAI)
+		logScanLicenseChange(logger, unlicensed, licensed)
+		unlicensed = !licensed
+		if !licensed {
+			continue
 		}
 
 		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())
@@ -547,6 +561,16 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 		ac.memoryWorkerMu.Unlock()
 
 		logger.WithField("memoryScanDuration", time.Since(start)).Info("scan completed")
+	}
+}
+
+// logScanLicenseChange logs only when OAI licensing changes from what the scanner last saw.
+func logScanLicenseChange(logger log.Interface, wasUnlicensed, licensed bool) {
+	switch {
+	case !licensed && !wasUnlicensed:
+		logger.Warn("no active license with OAI enabled; memory scans will not start")
+	case licensed && wasUnlicensed:
+		logger.Info("active license with OAI enabled; memory scans will start")
 	}
 }
 

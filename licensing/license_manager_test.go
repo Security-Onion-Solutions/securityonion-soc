@@ -65,8 +65,22 @@ func TestExpirationMonitor(tester *testing.T) {
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 	manager.licenseKey.Expiration = time.Now().Add(time.Second * 1)
-	startExpirationMonitor()
+	startExpirationMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_EXPIRED, GetStatus())
+}
+
+func TestExpirationMonitor_ReplacedManager(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	old := manager
+	old.licenseKey.Expiration = time.Now().Add(time.Second * 1)
+
+	Test(FEAT_OAI, 0, 0, "", "")
+	startExpirationMonitor(old)
+
+	assert.Equal(tester, LICENSE_STATUS_EXPIRED, old.status)
+	assert.Equal(tester, LICENSE_STATUS_ACTIVE, GetStatus())
 }
 
 func TestEffectiveMonitor_Unprovisioned(tester *testing.T) {
@@ -75,7 +89,7 @@ func TestEffectiveMonitor_Unprovisioned(tester *testing.T) {
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
-	startEffectiveMonitor()
+	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 }
 
@@ -85,7 +99,7 @@ func TestEffectiveMonitor_Pending(tester *testing.T) {
 	Init("")
 	manager.status = LICENSE_STATUS_PENDING
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
-	startEffectiveMonitor()
+	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_ACTIVE, GetStatus())
 }
 
@@ -96,8 +110,25 @@ func TestEffectiveMonitor_Exceeded(tester *testing.T) {
 	manager.status = LICENSE_STATUS_PENDING
 	manager.limits["foo"] = true
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
-	startEffectiveMonitor()
+	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_EXCEEDED, GetStatus())
+}
+
+func TestEffectiveMonitor_ReplacedManager(tester *testing.T) {
+	defer setup()()
+
+	Init("")
+	old := manager
+	old.licenseKey.Effective = time.Now().Add(time.Second * 1)
+
+	Test(FEAT_OAI, 0, 0, "", "")
+	// set after Test, whose stopMonitor invalidates old
+	old.status = LICENSE_STATUS_PENDING
+	manager.status = LICENSE_STATUS_PENDING
+	startEffectiveMonitor(old)
+
+	assert.Equal(tester, LICENSE_STATUS_ACTIVE, old.status)
+	assert.Equal(tester, LICENSE_STATUS_PENDING, GetStatus())
 }
 
 func TestIsEnabled(tester *testing.T) {

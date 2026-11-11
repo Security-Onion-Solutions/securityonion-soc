@@ -11,11 +11,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -2133,6 +2136,8 @@ func TestMemoryWorkerShutdown(t *testing.T) {
 }
 
 func TestMemoryWorkerScansOnTick(t *testing.T) {
+	licenseOAI(t)
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3140,7 +3145,115 @@ func TestOnConfigSettingUpdatedReloadsMemoryWithoutAgentic(t *testing.T) {
 	assert.True(t, ac.memorySnapshot().useMemory, "memory settings reload even when agentic is off")
 }
 
+func TestLogScanLicenseChange(t *testing.T) {
+	tests := []struct {
+		name          string
+		wasUnlicensed bool
+		licensed      bool
+		level         log.Level
+		message       string
+	}{
+		{name: "a lapse is logged", level: log.WarnLevel, message: "no active license with OAI enabled; memory scans will not start"},
+		{name: "a continuing lapse is quiet", wasUnlicensed: true},
+		{name: "a return is logged", wasUnlicensed: true, licensed: true, level: log.InfoLevel, message: "active license with OAI enabled; memory scans will start"},
+		{name: "a continuing license is quiet", licensed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, h := capturedLogger()
+
+			logScanLicenseChange(log.FromContext(ctx), tt.wasUnlicensed, tt.licensed)
+
+			if tt.message == "" {
+				assert.Empty(t, h.Entries)
+			} else if assert.Len(t, h.Entries, 1) {
+				assert.Equal(t, tt.level, h.Entries[0].Level)
+				assert.Equal(t, tt.message, h.Entries[0].Message)
+			}
+		})
+	}
+}
+
+func TestMemoryWorkerSkipsScansWithoutAnOAILicense(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	synctest.Test(t, func(t *testing.T) {
+		store, scans := countingScanStore(t)
+		ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+		ac.memory.scanInterval = time.Minute
+
+		ctx, h := capturedLogger()
+		ctx, cancel := context.WithCancelCause(ctx)
+
+		done := make(chan struct{})
+		go func() {
+			ac.memoryWorker(ctx, nil)
+			close(done)
+		}()
+
+		time.Sleep(3 * time.Minute)
+		synctest.Wait()
+
+		cancel(nil)
+		<-done
+
+		assert.Zero(t, scans.Load())
+		assert.Equal(t, []string{"no active license with OAI enabled; memory scans will not start"}, logMessagesAt(h, log.WarnLevel))
+	})
+}
+
+func TestMemoryWorkerStopsScanningWhenTheLicenseLapses(t *testing.T) {
+	licenseOAI(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		store, scans := countingScanStore(t)
+		ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+		ac.memory.scanInterval = time.Minute
+
+		ctx, cancel := context.WithCancelCause(context.Background())
+
+		done := make(chan struct{})
+		go func() {
+			ac.memoryWorker(ctx, nil)
+			close(done)
+		}()
+
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		assert.EqualValues(t, 1, scans.Load())
+
+		licensing.Shutdown()
+
+		time.Sleep(2 * time.Minute)
+		synctest.Wait()
+
+		cancel(nil)
+		<-done
+
+		assert.EqualValues(t, 1, scans.Load())
+	})
+}
+
+// countingScanStore counts scans itself: the pipeline's recover swallows gomock's failure on an unexpected call.
+func countingScanStore(t *testing.T) (*servermock.MockAssistantstore, *atomic.Int32) {
+	var scans atomic.Int32
+
+	store := servermock.NewMockAssistantstore(gomock.NewController(t))
+	store.EXPECT().FindSessionsPendingMemoryScan(gomock.Any(), nil, gomock.Any()).
+		DoAndReturn(func(context.Context, *time.Time, int) ([]*model.AssistantSessionDetails, error) {
+			scans.Add(1)
+
+			return nil, nil
+		}).AnyTimes()
+
+	return store, &scans
+}
+
 func TestMemoryWorkerRearmsOnIntervalChange(t *testing.T) {
+	licenseOAI(t)
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3550,6 +3663,8 @@ func TestReembedRequiresAnEmbedRole(t *testing.T) {
 // The pass must survive the request that triggered it, but still be reachable by
 // Stop; a cancelled request context alone must not end it.
 func TestStartReembedOutlivesItsRequestButStopEndsIt(t *testing.T) {
+	licenseOAI(t)
+
 	mDB := &mockdb.MockDB{}
 	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
 	ac.reembedBatchDelay = time.Hour
@@ -3657,6 +3772,8 @@ func TestReembedTimesOutAStalledEmbedCall(t *testing.T) {
 }
 
 func TestStartReembedRunsOnlyOnePassAtATime(t *testing.T) {
+	licenseOAI(t)
+
 	ac := newReembedTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter())
 
 	ac.memoryWorkerMu.Lock()
@@ -3669,6 +3786,8 @@ func TestStartReembedRunsOnlyOnePassAtATime(t *testing.T) {
 
 // Without a store there is nothing to re-embed, so the pass never starts.
 func TestStartReembedRequiresDatabase(t *testing.T) {
+	licenseOAI(t)
+
 	ac := &AssistantCoordinator{srv: &server.Server{}}
 
 	ac.startReembed(context.Background())
@@ -3676,6 +3795,21 @@ func TestStartReembedRequiresDatabase(t *testing.T) {
 	ac.memoryWorkerMu.Lock()
 	defer ac.memoryWorkerMu.Unlock()
 	assert.False(t, ac.reembedding)
+}
+
+func TestStartReembedRequiresAnOAILicense(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	ac := newReembedTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter())
+	ctx, h := capturedLogger()
+
+	ac.startReembed(ctx)
+
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+	assert.False(t, ac.reembedding)
+	assert.Equal(t, []string{"no active license with OAI enabled; not re-embedding memories"}, logMessagesAt(h, log.WarnLevel))
 }
 
 func TestReembedPacesBetweenBatches(t *testing.T) {
