@@ -75,13 +75,6 @@
 										</v-tooltip>
 									</template>
 									<v-list class="overflow-y-auto" :style="{ 'max-height': '600px', 'max-width': huntQueryWidth() + 'px'}" id="hunt-query-dropdown-list">
-										<template v-if="$root.isUserAdmin()">
-											<v-list-item @click="addQueryToList()" prepend-icon="fa-plus" :data-aid="'query_add_to_list_' + category" id="hunt-query-add-to-list">
-												<v-list-item-title class="theme-text">{{ i18n.queryAddToList }}</v-list-item-title>
-												<v-list-item-subtitle class="theme-text">{{ i18n.queryAddToListHelp }}</v-list-item-subtitle>
-											</v-list-item>
-											<v-divider></v-divider>
-										</template>
 										<template v-if="isAdvanced() && mruQueryLimit > 0">
 											<v-list-item v-for="query in mruQueries" :key="query" :data-aid="'query_mru_item_' + category" @click="huntQuery(query)" style="cursor: 'pointer'">
 												<v-list-item-title>{{query}}</v-list-item-title>
@@ -101,9 +94,12 @@
 									</v-list>
 								</v-menu>
 							</template>
-							<template v-if="isAdvanced()" #append-inner>
-								<v-btn variant="text" id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category" :aria-label="i18n.ariaToggleFullQuery">
+							<template v-if="isAdvanced() || canAddQueryToList()" #append-inner>
+								<v-btn v-if="isAdvanced()" variant="text" size="x-small" icon id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category" :aria-label="i18n.ariaToggleFullQuery">
 									<v-icon>fa-ellipsis</v-icon>
+								</v-btn>
+								<v-btn v-if="canAddQueryToList()" variant="text" size="x-small" icon id="hunt-query-add-to-list" :title="i18n.queryAddToListHelp" @click="addQueryToList()" :data-aid="'query_add_to_list_' + category" :aria-label="i18n.queryAddToList">
+									<v-icon>fa-plus</v-icon>
 								</v-btn>
 							</template>
 							<template v-if="!isCategory('hunt')" #append>

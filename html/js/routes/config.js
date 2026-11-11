@@ -102,6 +102,7 @@ routes.push({
         prefillNotice: false,
         prefillFromDefault: false,
         prefillFocusPending: false,
+        prefillWarning: null,
       }
     },
     mounted() {
@@ -197,7 +198,10 @@ routes.push({
       return true;
     },
     parsePrefill() {
+      // Refusal warnings are held in prefillWarning and shown by loadData once loading
+      // finishes, because $root.startLoading clears any warning shown before it.
       this.prefill = null;
+      this.prefillWarning = null;
       const s = this.$route.query.s;
       if (typeof s !== 'string' || !Object.hasOwn(PREFILL_ALLOWLIST, s)) return;
       const rule = PREFILL_ALLOWLIST[s];
@@ -211,15 +215,15 @@ routes.push({
       const values = Object.values(fields);
       if (values.length == 0) return;
       if (!this.prefillGridAllowed(rule)) {
-        this.$root.showWarning(this.i18n.settingPrefillWrongGrid);
+        this.prefillWarning = this.i18n.settingPrefillWrongGrid;
         return;
       }
       if (values.some(v => PREFILL_DELIMITERS.some(d => v.includes(d)))) {
-        this.$root.showWarning(this.i18n.settingPrefillRefusedDelimiters);
+        this.prefillWarning = this.i18n.settingPrefillRefusedDelimiters;
         return;
       }
       if (values.some(v => PREFILL_HIDDEN_CHARS.test(v))) {
-        this.$root.showWarning(this.i18n.settingPrefillRefusedCharacters);
+        this.prefillWarning = this.i18n.settingPrefillRefusedCharacters;
         return;
       }
       this.prefill = { settingId: s, fields, localGridOnly: rule.localGridOnly };
@@ -649,6 +653,10 @@ routes.push({
         this.skipAdvancedReload = false;
       }
       this.$root.stopLoading();
+      if (this.prefillWarning) {
+        this.$root.showWarning(this.prefillWarning);
+        this.prefillWarning = null;
+      }
     },
     translate(prefix, key, deflt) {
       modkey = key.replaceAll(".", "_");
@@ -853,12 +861,17 @@ routes.push({
     buildInputRules(setting) {
       const rules = [];
       if (setting.required) {
-        rules.push(value => !!value || this.$root.i18n.required);
+        rules.push(value => !this.isBlankValue(value) || this.$root.i18n.required);
       }
       if (setting.regex) {
         rules.push(value => this.validateRegexMatch(setting, value));
       }
       return rules;
+    },
+    isBlankValue(value) {
+      // Shared by the inline required rule and the save check, so the field's error and
+      // the Save button agree. Whitespace-only text and an empty list count as blank.
+      return value === undefined || value === null || (Array.isArray(value) && value.length == 0) || String(value).trim().length == 0;
     },
     isUiElementReadonly(entry, setting) {
       return setting.readonly === true && entry._title != "+";
@@ -871,8 +884,7 @@ routes.push({
             return false;
           }
           // The valid flag is shared by every panel's form, so check the new entry directly.
-          const blank = v => v === undefined || v === null || (Array.isArray(v) && v.length == 0) || String(v).trim().length == 0;
-          if (setting.uiElements.some(e => e.required && !this.isToggle(e) && blank(newEntry[e.field]))) {
+          if (setting.uiElements.some(e => e.required && !this.isToggle(e) && this.isBlankValue(newEntry[e.field]))) {
             return false;
           }
         }

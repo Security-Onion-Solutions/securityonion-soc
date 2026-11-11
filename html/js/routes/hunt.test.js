@@ -3483,24 +3483,27 @@ describe('addQueryToList', () => {
     expect(pushed().query['p.query']).toBe('* | groupby a');
   });
 
+  test('replaces a control character followed by spaces as a run of characters, not a single space', () => {
+    comp.query = 'a\n  b';
+    comp.addQueryToList();
+    // Only the control character is replaced; the spaces after it stay.
+    expect(pushed().query['p.query']).toBe('a   b');
+  });
+
   test('handles a missing query', () => {
     comp.query = undefined;
     comp.addQueryToList();
     expect(pushed().query['p.query']).toBe('');
   });
 
-  test('advanced mode uses the edited query', () => {
+  test('uses the submitted query in the filter-only advanced view', () => {
     comp.isAdvanced = () => true;
-    comp.showFullQuery = true;
-    comp.query = 'edited | groupby x';
-    comp.addQueryToList();
-    expect(pushed().query['p.query']).toBe('edited | groupby x');
-
     comp.showFullQuery = false;
-    comp.querySearch = 'edited';
+    comp.query = 'submitted | groupby x';
+    comp.querySearch = 'submitted';
     comp.queryRemainder = '| groupby x';
     comp.addQueryToList();
-    expect(pushed().query['p.query']).toBe('edited | groupby x');
+    expect(pushed().query['p.query']).toBe('submitted | groupby x');
   });
 
   test('targets each category setting', () => {
@@ -3510,5 +3513,63 @@ describe('addQueryToList', () => {
       comp.addQueryToList();
       expect(pushed().query.s).toBe('soc.config.server.client.' + category + '.queries');
     }
+  });
+});
+
+describe('canAddQueryToList', () => {
+  beforeEach(() => {
+    comp.$root.isUserAdmin = () => true;
+    comp.isAdvanced = () => false;
+    comp.queries = [
+      { name: 'Default', query: '*' },
+      { name: 'By IP', query: '* | groupby source.ip' },
+    ];
+  });
+
+  test('hidden when the query matches a saved query', () => {
+    comp.query = '* | groupby source.ip';
+    expect(comp.canAddQueryToList()).toBe(false);
+  });
+
+  test('shown when the query is not in the list', () => {
+    comp.query = '* | groupby destination.ip';
+    expect(comp.canAddQueryToList()).toBe(true);
+  });
+
+  test('compares the normalized query', () => {
+    comp.query = '* | groupby source.ip\n';
+    expect(comp.canAddQueryToList()).toBe(false);
+    comp.queries.push({ name: 'Padded', query: ' * | groupby x ' });
+    comp.query = '* | groupby x';
+    expect(comp.canAddQueryToList()).toBe(false);
+  });
+
+  test('hidden for an empty or missing query', () => {
+    comp.query = '   ';
+    expect(comp.canAddQueryToList()).toBe(false);
+    comp.query = undefined;
+    expect(comp.canAddQueryToList()).toBe(false);
+  });
+
+  test('hidden for non-admins', () => {
+    comp.$root.isUserAdmin = () => false;
+    comp.query = '* | groupby destination.ip';
+    expect(comp.canAddQueryToList()).toBe(false);
+  });
+
+  test('hidden while the query bar has unsubmitted edits', () => {
+    comp.query = '* | groupby destination.ip';
+    comp.queryAltered = true;
+    expect(comp.canAddQueryToList()).toBe(false);
+    comp.queryAltered = false;
+    expect(comp.canAddQueryToList()).toBe(true);
+  });
+
+  test('shown again after the edited query is submitted', () => {
+    comp.query = '* | groupby destination.ip';
+    comp.queryAltered = true;
+    comp.obtainQueryDetails();
+    expect(comp.queryAltered).toBe(false);
+    expect(comp.canAddQueryToList()).toBe(true);
   });
 });

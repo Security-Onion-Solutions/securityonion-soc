@@ -1966,6 +1966,14 @@ test('buildInputRules', () => {
   expect(rules.length).toBe(1);
   expect(rules[0]('')).toBe('Required.');
 
+  expect(rules[0]('   ')).toBe('Required.');
+  expect(rules[0]([])).toBe('Required.');
+  expect(rules[0](null)).toBe('Required.');
+  expect(rules[0](undefined)).toBe('Required.');
+  expect(rules[0]('x')).toBe(true);
+  expect(rules[0](0)).toBe(true);
+  expect(rules[0](['a'])).toBe(true);
+
   setting = { required: false, regex: '^test$', regexFailureMessage: 'Regex failed' };
   rules = comp.buildInputRules(setting);
   expect(rules.length).toBe(1);
@@ -2408,13 +2416,17 @@ describe('prefill', () => {
     ...extra,
   });
 
+  afterEach(() => {
+    delete document.getElementById;
+  });
+
   beforeEach(() => {
     comp.$route.query = { gridId: '', s: QUERY_ID, 'p.query': '* | groupby x' };
     comp.$root.selectedGridId = '';
     comp.$root.showWarning = jest.fn();
   });
 
-  const warned = (key) => expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n[key]);
+  const warned = (key) => expect(comp.prefillWarning).toBe(comp.i18n[key]);
 
   test('parsePrefill accepts an allowlisted setting', () => {
     comp.parsePrefill();
@@ -2656,5 +2668,75 @@ describe('prefill', () => {
     expect(comp.uiElementsHaveValidInputs(arr)).toBe(false);
     comp.form.entries = [{ name: '', query: '', description: '', showSubtitle: undefined }];
     expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+  });
+
+  test('loadData shows a held prefill warning after loading finishes', async () => {
+    comp.$route.query['p.query'] = '{{7*7}}';
+    comp.parsePrefill();
+    expect(comp.$root.showWarning).not.toHaveBeenCalled();
+    const calls = [];
+    comp.$root.startLoading = jest.fn(() => calls.push('start'));
+    comp.$root.stopLoading = jest.fn(() => calls.push('stop'));
+    comp.$root.showWarning = jest.fn(() => calls.push('warn'));
+    comp.refreshTree = jest.fn();
+    mockPapi('get', { data: [] });
+    mockPapi('get', { data: [] });
+    await comp.loadData();
+    expect(calls).toEqual(['start', 'stop', 'warn']);
+    expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n.settingPrefillRefusedDelimiters);
+    expect(comp.prefillWarning).toBeNull();
+  });
+
+  test('prefillGridAllowed passes an entry without localGridOnly', () => {
+    comp.$route.query.gridId = 'abc';
+    comp.$root.selectedGridId = 'abc';
+    expect(comp.prefillGridAllowed({})).toBe(true);
+    expect(comp.prefillGridAllowed({ localGridOnly: false })).toBe(true);
+    expect(comp.prefillGridAllowed({ localGridOnly: true })).toBe(false);
+  });
+
+  describe('save', () => {
+    const prefilled = () => {
+      const setting = makeSetting();
+      prepare(setting);
+      comp.applyPrefill(setting);
+      comp.uiElementsValid = true;
+      comp.$root.showWarning = jest.fn();
+      comp.$root.showError = jest.fn();
+      return setting;
+    };
+
+    test('clears the notice when the put succeeds', async () => {
+      const setting = prefilled();
+      comp.form.entries[2].name = 'New';
+      const put = mockPapi('put');
+      await comp.save(setting, null);
+      expect(comp.showNoteDialog).toBe(true);
+      expect(comp.prefillNotice).toBe(true);
+      await comp.save();
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(comp.prefillNotice).toBe(false);
+    });
+
+    test('keeps the notice when the put fails', async () => {
+      const setting = prefilled();
+      comp.form.entries[2].name = 'New';
+      comp.$root.papi.put = jest.fn().mockRejectedValue(new Error('boom'));
+      await comp.save(setting, null);
+      await comp.save();
+      expect(comp.$root.papi.put).toHaveBeenCalledTimes(1);
+      expect(comp.$root.showError).toHaveBeenCalled();
+      expect(comp.prefillNotice).toBe(true);
+    });
+
+    test('warns and skips the note dialog when the new entry has no name', async () => {
+      const setting = prefilled();
+      expect(comp.form.entries[2].name).toBeFalsy();
+      const put = mockPapi('put');
+      await comp.save(setting, null);
+      expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n.settingIncomplete);
+      expect(comp.showNoteDialog).toBe(false);
+      expect(put).not.toHaveBeenCalled();
+    });
   });
 });

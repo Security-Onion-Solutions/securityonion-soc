@@ -1674,7 +1674,7 @@ const i18n = {
       queries: 'Active Queries',
       queriesHelp: 'Choose from several pre-defined queries',
       queryAddToList: 'Add to query list',
-      queryAddToListHelp: 'Add the current query to this list for all users',
+      queryAddToListHelp: 'Add the current query to the query list for all users',
       queryBuilding: 'Building query...',
       queryCancelConfirm: 'Cancel Query',
       queryCancelConfirmText: 'Canceling active queries should be avoided in most situations due to the risk of affecting the various components that interact with Elasticsearch. Would you like to continue anyway?',
