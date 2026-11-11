@@ -6,6 +6,20 @@
 
 loadPageTemplate('page-config', 'pages/config.html');
 
+// Limits which settings, and which fields of their new "+" entry, a link may prefill
+// with route parameters p.<field>. Adding a caller means adding an entry here.
+// localGridOnly is per entry: the query lists are always the local grid's, but a later
+// caller may leave it out to prefill a subgrid's setting.
+const PREFILL_ALLOWLIST = {
+  'soc.config.server.client.alerts.queries':     { fields: ['query'], localGridOnly: true },
+  'soc.config.server.client.cases.queries':      { fields: ['query'], localGridOnly: true },
+  'soc.config.server.client.dashboards.queries': { fields: ['query'], localGridOnly: true },
+  'soc.config.server.client.detections.queries': { fields: ['query'], localGridOnly: true },
+  'soc.config.server.client.hunt.queries':       { fields: ['query'], localGridOnly: true },
+};
+const PREFILL_DELIMITERS = ['{{', '}}', '{%', '%}', '{#', '#}'];
+const PREFILL_HIDDEN_CHARS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
+
 routes.push({
   path: '/config', name: 'config', component: {
     template: '#page-config',
@@ -84,12 +98,19 @@ routes.push({
         dragPosition: null,
         recentlyMovedItem: null,
         recentlyMovedTimer: null,
+        prefill: null,
+        prefillNotice: false,
+        prefillFromDefault: false,
+        prefillFocusPending: false,
       }
     },
     mounted() {
       this.skipAdvancedReload = true;
       this.loadLocalSettings();
       this.processRouteParameters();
+      // Mount only, never from onRouteUpdate: a URL change on an open page must not prefill,
+      // and a new page has no unsaved changes to discard.
+      this.parsePrefill();
       this.loadData();
     },
     watch: {
@@ -168,6 +189,81 @@ routes.push({
       this.applySearchFilter();
 
       return forceDataReload;
+    },
+    prefillGridAllowed(rule) {
+      if (rule.localGridOnly) {
+        return this.$route.query.gridId === LOCAL_GRID_ID && !this.$root.selectedGridId;
+      }
+      return true;
+    },
+    parsePrefill() {
+      this.prefill = null;
+      const s = this.$route.query.s;
+      if (typeof s !== 'string' || !Object.hasOwn(PREFILL_ALLOWLIST, s)) return;
+      const rule = PREFILL_ALLOWLIST[s];
+      const fields = {};
+      for (const field of rule.fields) {
+        const value = this.$route.query['p.' + field];
+        if (typeof value === 'string' && value.trim().length > 0) {
+          fields[field] = value;
+        }
+      }
+      const values = Object.values(fields);
+      if (values.length == 0) return;
+      if (!this.prefillGridAllowed(rule)) {
+        this.$root.showWarning(this.i18n.settingPrefillWrongGrid);
+        return;
+      }
+      if (values.some(v => PREFILL_DELIMITERS.some(d => v.includes(d)))) {
+        this.$root.showWarning(this.i18n.settingPrefillRefusedDelimiters);
+        return;
+      }
+      if (values.some(v => PREFILL_HIDDEN_CHARS.test(v))) {
+        this.$root.showWarning(this.i18n.settingPrefillRefusedCharacters);
+        return;
+      }
+      this.prefill = { settingId: s, fields, localGridOnly: rule.localGridOnly };
+    },
+    applyPrefill(setting) {
+      this.prefillNotice = false;
+      this.prefillFocusPending = false;
+      const pending = this.prefill;
+      if (!setting || !pending || pending.settingId != setting.id || !this.hasUiElements(setting)) return;
+      if (!this.prefillGridAllowed(pending)) {
+        // The grid changed since the page mounted
+        this.prefill = null;
+        return;
+      }
+      this.prefill = null; // once per page load
+      const fieldNames = setting.uiElements.map(e => e.field);
+      const fields = Object.keys(pending.fields).filter(f => fieldNames.includes(f));
+      if (fields.length == 0) return;
+      // editNow must run before the entry is filled: form.key is still null here, so editNow
+      // calls cancel(), which re-runs unpack and replaces form.entries. Use editNow, not edit,
+      // because edit defers it and editNow would then clear the dirty mark set below.
+      this.editNow(setting);
+      const entry = this.form.entries[this.form.entries.length - 1];
+      for (const field of fields) {
+        entry[field] = pending.fields[field];
+      }
+      this.markDirtyEntries();
+      this.prefillFromDefault = !!setting.defaultAvailable && setting.value == setting.default;
+      this.form.entriesExpanded = this.form.entries.length - 1;
+      this.prefillNotice = true;
+      this.prefillFocusPending = true; // focused by onSettingShown
+    },
+    onSettingShown() {
+      if (!this.prefillFocusPending) return;
+      const idx = this.form.entries.length - 1;
+      document.getElementById('setting-entry-' + idx + '-input-name')?.focus();
+      this.prefillFocusPending = false;
+    },
+    prefillDescribedBy(entryIdx, element) {
+      const messages = 'setting-entry-' + entryIdx + '-input-' + element.field + '-messages';
+      if (this.prefillNotice && entryIdx == this.form.entries.length - 1 && element.field == 'name') {
+        return 'config-prefill-notice ' + messages;
+      }
+      return messages;
     },
     findActiveSetting() {
       if (this.active.length > 0) {
@@ -662,6 +758,7 @@ routes.push({
       this.showDefault = false;
       this.unpack(setting);
       this.form.entriesExpanded = null;
+      this.applyPrefill(setting);
       window.scrollTo(0,0);
     },
     unpack(setting) {
@@ -769,8 +866,15 @@ routes.push({
     uiElementsHaveValidInputs(setting) {
       if (this.form.entries) {
         const newEntry = this.form.entries[this.form.entries.length - 1];
-        if (setting.uiElements && !this.uiElementsValid && !this.isEntryEmpty(setting, newEntry)) {
-          return false;
+        if (setting.uiElements && !this.isEntryEmpty(setting, newEntry)) {
+          if (!this.uiElementsValid) {
+            return false;
+          }
+          // The valid flag is shared by every panel's form, so check the new entry directly.
+          const blank = v => v === undefined || v === null || (Array.isArray(v) && v.length == 0) || String(v).trim().length == 0;
+          if (setting.uiElements.some(e => e.required && !this.isToggle(e) && blank(newEntry[e.field]))) {
+            return false;
+          }
         }
       }
       return true;
@@ -888,6 +992,7 @@ routes.push({
       }
       this.form.key = null;
       this.cancelDialog = false;
+      this.prefillNotice = false;
 
       if (setting) {
         // Unpack on cancel to restore the original entries into the custom UI Elements
@@ -1020,6 +1125,7 @@ routes.push({
             duplicatedFromId: s.duplicatedFromId || '',
           };
           await this.$root.papi.put('config/', server_setting);
+          this.prefillNotice = false;
 
           // Update UI
           if (!n) {

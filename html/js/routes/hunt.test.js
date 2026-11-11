@@ -3452,3 +3452,63 @@ test('closeFieldValueDialog hides dialog', () => {
 
   expect(comp.fieldValueDialogVisible).toBe(false);
 });
+describe('addQueryToList', () => {
+  const pushed = () => comp.$router[comp.$router.length - 1];
+
+  beforeEach(() => {
+    comp.$router.length = 0;
+    comp.isAdvanced = () => false;
+    comp.category = 'dashboards';
+  });
+
+  test('pushes the config route with the unmodified query', () => {
+    comp.query = '* | groupby a "b&c" | x';
+    comp.addQueryToList();
+    expect(pushed()).toStrictEqual({
+      name: 'config',
+      query: {
+        gridId: '',
+        s: 'soc.config.server.client.dashboards.queries',
+        'p.query': '* | groupby a "b&c" | x',
+      },
+    });
+  });
+
+  test('collapses control and separator characters and trims', () => {
+    comp.query = 'a\nb\tc\vd e\u0085f';
+    comp.addQueryToList();
+    expect(pushed().query['p.query']).toBe('a b c d e f');
+    comp.query = '* | groupby a ';
+    comp.addQueryToList();
+    expect(pushed().query['p.query']).toBe('* | groupby a');
+  });
+
+  test('handles a missing query', () => {
+    comp.query = undefined;
+    comp.addQueryToList();
+    expect(pushed().query['p.query']).toBe('');
+  });
+
+  test('advanced mode uses the edited query', () => {
+    comp.isAdvanced = () => true;
+    comp.showFullQuery = true;
+    comp.query = 'edited | groupby x';
+    comp.addQueryToList();
+    expect(pushed().query['p.query']).toBe('edited | groupby x');
+
+    comp.showFullQuery = false;
+    comp.querySearch = 'edited';
+    comp.queryRemainder = '| groupby x';
+    comp.addQueryToList();
+    expect(pushed().query['p.query']).toBe('edited | groupby x');
+  });
+
+  test('targets each category setting', () => {
+    comp.query = 'q';
+    for (const category of ['hunt', 'dashboards', 'alerts', 'cases', 'detections']) {
+      comp.category = category;
+      comp.addQueryToList();
+      expect(pushed().query.s).toBe('soc.config.server.client.' + category + '.queries');
+    }
+  });
+});

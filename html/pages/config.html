@@ -75,7 +75,7 @@
 		</v-col>
 		<v-divider vertical class="vert-divider"></v-divider>
 		<v-col cols="12" :lg="treeVisible ? 8 : 12" style="min-width: 0; flex: 1 1 0">
-			<v-fade-transition mode="out-in" duration="100">
+			<v-fade-transition mode="out-in" duration="100" @after-enter="onSettingShown">
 				<div v-if="!selected" id="config-quick-links">
 					<v-alert v-text="i18n.settingSelect" type="info"></v-alert>
 					<div class="mt-4">
@@ -305,6 +305,10 @@
 											<v-icon color="info">fa-clock-rotate-left</v-icon>
 										</v-btn>
 									</div>
+									<v-alert v-if="prefillNotice && hasUiElements(selected)" id="config-prefill-notice" type="info" density="compact" role="status" class="mb-2" data-aid="config_item_prefill_notice">
+										{{ i18n.settingPrefillNotice }}
+										<span v-if="prefillFromDefault">{{ i18n.settingPrefillDefaultNotice }}</span>
+									</v-alert>
 									<v-expansion-panels v-if="hasUiElements(selected)" v-model="form.entriesExpanded">
 										<v-expansion-panel v-for="(entry, entryIdx) in form.entries" :key="entryIdx" @group:selected="edit(selected)" data-aid="config_item_entry_title"
 											@dragover="onEntryDragOver($event, entryIdx)"
@@ -329,13 +333,13 @@
 														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop data-aid="config_ui_element_drag_handle">fa-grip-vertical</v-icon>
 													</div>
 												</v-expansion-panel-title>
-												<v-expansion-panel-text>
+												<v-expansion-panel-text :eager="entryIdx == form.entries.length - 1">
 													<v-form v-model="uiElementsValid">
 														<div class="my-1" v-for="(element, elementIdx) in selected.uiElements" :key="elementIdx">
-															<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-textarea>
-															<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-switch>
-															<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-select>
-															<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required"></v-text-field>
+															<v-textarea v-if="isMultiline(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing config-editor" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required" :aria-describedby="prefillDescribedBy(entryIdx, element)"></v-textarea>
+															<v-switch v-else-if="isToggle(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" inset @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" v-model="entry[element.field]" class="no-details" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required" :aria-describedby="prefillDescribedBy(entryIdx, element)"></v-switch>
+															<v-select v-else-if="isSelectList(element)" :id="'setting-entry-' + entryIdx + '-input-' + element.field" :items="element.options" :multiple="hasMultipleValues(element)" inset @update:model-value="markDirtyEntries" :label="getElementLabel(element)" variant="outlined" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="no-details mb-6" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required" :aria-describedby="prefillDescribedBy(entryIdx, element)"></v-select>
+															<v-text-field v-else :id="'setting-entry-' + entryIdx + '-input-' + element.field" @update:model-value="markDirtyEntries" variant="outlined" :label="getElementLabel(element)" :readonly="isUiElementReadonly(entry, element)" :rules="buildInputRules(element)" v-model="entry[element.field]" class="editing" :data-aid="'config_item_entry_' + element.field" :aria-required="element.required" :aria-describedby="prefillDescribedBy(entryIdx, element)"></v-text-field>
 														</div>
 													</v-form>
 													<p>* {{ i18n.requiredField }}</p>

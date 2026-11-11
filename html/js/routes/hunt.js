@@ -543,6 +543,20 @@ const huntComponent = {
       this.query = query;
       this.hunt();
     },
+    addQueryToList() {
+      // Capture the query as the query bar shows it, including edits that haven't been run.
+      this.reconstructQuery();
+      let q = typeof this.query === 'string' ? this.query : '';
+      q = q.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim();
+      this.$router.push({
+        name: 'config',
+        query: {
+          gridId: LOCAL_GRID_ID,
+          s: 'soc.config.server.client.' + this.category + '.queries',
+          'p.query': q,
+        },
+      });
+    },
     async getQuery() {
       var q = "";
       if (this.queryBaseFilter.length > 0) {
