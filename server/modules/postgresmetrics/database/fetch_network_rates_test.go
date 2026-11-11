@@ -48,7 +48,43 @@ func TestStore_FetchNetworkRates(t *testing.T) {
 		assert.Equal(t, 1000000.0*bytesToMb, rates.TrafficManInMbs["host1"])
 		assert.Equal(t, 500000.0*bytesToMb, rates.TrafficManOutMbs["host1"])
 		assert.Equal(t, 2000000.0*bytesToMb, rates.TrafficMonInMbs["host1"])
+		assert.Equal(t, 5.0, rates.TrafficMonInDropsPps["host1"])
 		assert.Equal(t, 5.0*bytesToMb, rates.TrafficMonInDropsMbs["host1"])
+	})
+
+	t.Run("host reporting only manint resolves its management interface", func(t *testing.T) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				if contains(sql, "telegraf.node_config") {
+					assert.Contains(t, sql, "(m.fields->>'manint' IS NOT NULL OR m.fields->>'monint' IS NOT NULL)")
+					return &MockRows{
+						rows: [][]interface{}{
+							{"host1", "ens18", nil},
+						},
+					}, nil
+				}
+				if contains(sql, "telegraf.net") {
+					return &MockRows{
+						rows: [][]interface{}{
+							{"host1", "eth0", 9000000.0, 9000000.0, 0.0},
+							{"host1", "ens18", 1000000.0, 500000.0, 0.0},
+							{"host1", "eth1", 2000000.0, 0.0, 7.0},
+						},
+					}, nil
+				}
+				return &MockRows{}, nil
+			},
+		}
+		s := New(mockDb)
+		rates, err := s.FetchNetworkRates(ctx, startTime)
+		assert.NoError(t, err)
+
+		bytesToMb := 8.0 / (1000.0 * 1000.0)
+		assert.Equal(t, 1000000.0*bytesToMb, rates.TrafficManInMbs["host1"])
+		assert.Equal(t, 500000.0*bytesToMb, rates.TrafficManOutMbs["host1"])
+		assert.Equal(t, 2000000.0*bytesToMb, rates.TrafficMonInMbs["host1"])
+		assert.Equal(t, 7.0, rates.TrafficMonInDropsPps["host1"])
+		assert.Equal(t, 7.0*bytesToMb, rates.TrafficMonInDropsMbs["host1"])
 	})
 
 	t.Run("network rates error", func(t *testing.T) {

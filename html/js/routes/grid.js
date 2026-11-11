@@ -40,7 +40,7 @@ routes.push({ path: '/grid', name: 'grid', component: {
       { title: this.$root.i18n.trafficManInAbbr, value: 'trafficManInMbs', align: ' d-none d-xl-table-cell', metricsEnabled: true },
       { title: this.$root.i18n.trafficManOutAbbr, value: 'trafficManOutMbs', align: ' d-none d-xl-table-cell', metricsEnabled: true },
       { title: this.$root.i18n.trafficMonInAbbr, value: 'trafficMonInMbs', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
-      { title: this.$root.i18n.trafficMonInDropsAbbr, value: 'trafficMonInDropsMbs', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
+      { title: this.$root.i18n.trafficMonInDropsAbbr, value: 'trafficMonInDropsPps', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.captureLossAbbr, value: 'captureLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.zeekLossAbbr, value: 'zeekLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },
       { title: this.$root.i18n.suricataLossAbbr, value: 'suriLossPct', align: ' d-none d-xl-table-cell', moreColumns: true, metricsEnabled: true },

@@ -33,6 +33,7 @@ type PostgresMetrics struct {
 	processStatus        map[string]int
 	processJson          map[string]string
 	consumptionEps       map[string]int
+	searchConsumptionEps map[string]int
 	productionEps        map[string]int
 	failedEvents         map[string]int
 	eventstoreStatus     map[string]string
@@ -56,6 +57,7 @@ type PostgresMetrics struct {
 	zeekLossPct          map[string]float64
 	captureLossPct       map[string]float64
 	trafficMonInMbs      map[string]float64
+	trafficMonInDropsPps map[string]float64
 	trafficMonInDropsMbs map[string]float64
 	trafficManInMbs      map[string]float64
 	trafficManOutMbs     map[string]float64
@@ -83,6 +85,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		processStatus:        make(map[string]int),
 		processJson:          make(map[string]string),
 		consumptionEps:       make(map[string]int),
+		searchConsumptionEps: make(map[string]int),
 		productionEps:        make(map[string]int),
 		failedEvents:         make(map[string]int),
 		eventstoreStatus:     make(map[string]string),
@@ -106,6 +109,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		zeekLossPct:          make(map[string]float64),
 		captureLossPct:       make(map[string]float64),
 		trafficMonInMbs:      make(map[string]float64),
+		trafficMonInDropsPps: make(map[string]float64),
 		trafficMonInDropsMbs: make(map[string]float64),
 		trafficManInMbs:      make(map[string]float64),
 		trafficManOutMbs:     make(map[string]float64),
@@ -144,7 +148,7 @@ func (pm *PostgresMetrics) GetGridEps(ctx context.Context) int {
 	defer pm.cacheLock.Unlock()
 
 	eps := 0
-	for _, hostEps := range pm.consumptionEps {
+	for _, hostEps := range pm.searchConsumptionEps {
 		eps += hostEps
 	}
 	return eps
@@ -247,6 +251,9 @@ func (pm *PostgresMetrics) UpdateNodeMetrics(ctx context.Context, node *model.No
 	if val, exists := pm.trafficMonInMbs[host]; exists {
 		node.TrafficMonInMbs = val
 	}
+	if val, exists := pm.trafficMonInDropsPps[host]; exists {
+		node.TrafficMonInDropsPps = val
+	}
 	if val, exists := pm.trafficMonInDropsMbs[host]; exists {
 		node.TrafficMonInDropsMbs = val
 	}
@@ -332,6 +339,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 	pm.processStatus = pm.dbStore.FetchIntValues(ctx, "sostatus", "status", "", "", startTime)
 	pm.processJson = pm.dbStore.FetchStringValues(ctx, "sostatus", "json", "", "", startTime)
 	pm.consumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "", "", startTime)
+	pm.searchConsumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "stage", "search", startTime)
 
 	// Elasticsearch
 	pm.eventstoreStatus = pm.dbStore.FetchStringValues(ctx, "elasticsearch_cluster_health", "status", "", "", startTime)
@@ -358,6 +366,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 
 	if rates, err := pm.dbStore.FetchNetworkRates(ctx, startTime); err == nil {
 		pm.trafficMonInMbs = rates.TrafficMonInMbs
+		pm.trafficMonInDropsPps = rates.TrafficMonInDropsPps
 		pm.trafficMonInDropsMbs = rates.TrafficMonInDropsMbs
 		pm.trafficManInMbs = rates.TrafficManInMbs
 		pm.trafficManOutMbs = rates.TrafficManOutMbs

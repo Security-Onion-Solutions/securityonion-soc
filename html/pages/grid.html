@@ -111,7 +111,7 @@
 								<span :id="'nodeTrafficMonIn_' + item.id">{{ formatDecimal1(item.trafficMonInMbs) }} {{ i18n.mbps }}</span>
 							</td>
 							<td v-if="metricsEnabled && moreColumns" class="d-none d-xl-table-cell">
-								<span :id="'nodeTrafficMonInDrops_' + item.id">{{ formatDecimal1(item.trafficMonDropsMbs) }} {{ i18n.mbps }}</span>
+								<span :id="'nodeTrafficMonInDrops_' + item.id">{{ formatDecimal1(item.trafficMonInDropsPps) }} {{ i18n.dropsPerSecond }}</span>
 							</td>
 							<td v-if="metricsEnabled && moreColumns" class="d-none d-xl-table-cell">
 								<span :id="'nodeCaptureLoss_' + item.id">{{ formatDecimal1(item.captureLossPct) }}%</span>
@@ -370,7 +370,7 @@
 
 														<template v-if="item.metricsEnabled && canTest(item)">
 															<dt class="filter label">{{ i18n.trafficMonInDrops }}:</dt>
-															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficMonInDrops">{{ formatDecimal1(item.trafficMonInDropsMbs) }} {{ i18n.mbps }}</dd>
+															<dd :class="areMetricsCurrent(item) ? 'filter value' : 'filter value stale'" id="node_trafficMonInDrops">{{ formatDecimal1(item.trafficMonInDropsPps) }} {{ i18n.dropsPerSecond }}</dd>
 														</template>
 
 														<template v-if="item.metricsEnabled">

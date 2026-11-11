@@ -41,6 +41,25 @@ test('updateMetricsEnabled', () => {
 	testUpdateMetricsEnabled(true, true, true, true, true, true, true);
 });
 
+test('monitor drops column reads the packets per second field', () => {
+	const column = comp.headers.find(item => item.title == comp.i18n.trafficMonInDropsAbbr);
+	expect(column.value).toBe('trafficMonInDropsPps');
+});
+
+test('grid template renders monitor drops as drops per second', () => {
+	const fs = require('fs');
+	const path = require('path');
+	const tmpl = fs.readFileSync(path.resolve(__dirname, '../../pages/grid.html'), 'utf8');
+
+	const tableCell = tmpl.split('\n').find(line => line.includes(`:id="'nodeTrafficMonInDrops_' + item.id"`));
+	expect(tableCell).toContain('{{ formatDecimal1(item.' + comp.headers.find(item => item.title == comp.i18n.trafficMonInDropsAbbr).value + ') }}');
+	expect(tableCell).toContain('{{ i18n.dropsPerSecond }}');
+
+	const detailValue = tmpl.split('\n').find(line => line.includes('id="node_trafficMonInDrops"'));
+	expect(detailValue).toContain('{{ formatDecimal1(item.trafficMonInDropsPps) }} {{ i18n.dropsPerSecond }}');
+	expect(tmpl).not.toContain('trafficMonDropsMbs');
+});
+
 function testUpdateMetricsEnabled(node1MetricsEnabled, node2MetricsEnabled, expectedMetricsEnabled, moreColumnsEnabled, node1HistoricalEnabled, node2HistoricalEnabled, expectedHistoricalEnabled) {
 	const node1 = { metricsEnabled: node1MetricsEnabled, historicalMetricsEnabled: node1HistoricalEnabled };
 	const node2 = { metricsEnabled: node2MetricsEnabled, historicalMetricsEnabled: node2HistoricalEnabled };

@@ -73,6 +73,13 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 		switch d := dest[i].(type) {
 		case *string:
 			*d = val.(string)
+		case **string:
+			if val == nil {
+				*d = nil
+			} else {
+				str := val.(string)
+				*d = &str
+			}
 		case *int:
 			*d = val.(int)
 		case *float64:
@@ -226,6 +233,9 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 				return &MockRows{rows: [][]interface{}{{"host1", `{"foo":"bar"}`}}}, nil
 			}
 			if contains(sql, "telegraf.consumptioneps") {
+				if contains(sql, "tag.tags->>'stage' = $2") && len(args) == 2 && args[1] == "search" {
+					return &MockRows{rows: [][]interface{}{{"host1", 100}}}, nil
+				}
 				return &MockRows{rows: [][]interface{}{{"host1", 150}}}, nil
 			}
 			if contains(sql, "telegraf.elasticsearch_cluster_health") {
@@ -267,7 +277,8 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 
 	// Test GetGridEps
 	eps := pm.GetGridEps(ctx)
-	assert.Equal(t, 150, eps)
+	assert.Equal(t, 100, eps)
+	assert.Equal(t, 150, pm.consumptionEps["host1"])
 
 	// Test UpdateNodeMetrics
 	node := &model.Node{
@@ -279,6 +290,8 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 
 	// Verify the updated node attributes
 	assert.Equal(t, 5.0, node.CpuUsedPct) // 100 - 95.0
+	assert.Equal(t, 5.0, node.TrafficMonInDropsPps)
+	assert.InDelta(t, 5.0*8.0/1000000.0, node.TrafficMonInDropsMbs, 1e-12)
 	assert.Equal(t, 50.0, node.MemoryUsedPct)
 	assert.Equal(t, 16.0, node.MemoryTotalGB)
 	assert.Equal(t, 1.0, node.Load1m)
@@ -291,6 +304,57 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOk, node.ProcessStatus)
 	assert.Equal(t, `{"foo":"bar"}`, node.ProcessJson)
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
+}
+
+func TestPostgresMetrics_GetGridEps_SearchStageOnly(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	srv.DB = &MockDB{}
+	pm := NewPostgresMetrics(srv)
+	pm.Init(3600000, 600)
+	pm.lastUpdate = time.Now()
+
+	pm.consumptionEps["search1"] = 100
+	pm.consumptionEps["receiver1"] = 500
+	pm.searchConsumptionEps["search1"] = 100
+	pm.searchConsumptionEps["search2"] = 25
+
+	assert.Equal(t, 125, pm.GetGridEps(context.Background()))
+}
+
+func TestPostgresMetrics_UpdateNodeMetrics_KeepsValuesForMissingHost(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	srv.DB = &MockDB{}
+	pm := NewPostgresMetrics(srv)
+	pm.Init(3600000, 600)
+	pm.lastUpdate = time.Now()
+
+	node := &model.Node{
+		Id:                   "host1",
+		DiskTotalRootGB:      100.0,
+		DiskUsedRootPct:      40.0,
+		DiskTotalNsmGB:       500.0,
+		DiskUsedNsmPct:       60.0,
+		MemoryTotalGB:        16.0,
+		MemoryUsedPct:        50.0,
+		OsUptimeSeconds:      3600,
+		PcapDays:             7.5,
+		CpuUsedPct:           12.0,
+		TrafficMonInDropsPps: 3.0,
+		TrafficMonInDropsMbs: 3.0 * 8.0 / 1000000.0,
+	}
+	pm.UpdateNodeMetrics(context.Background(), node)
+
+	assert.Equal(t, 100.0, node.DiskTotalRootGB)
+	assert.Equal(t, 40.0, node.DiskUsedRootPct)
+	assert.Equal(t, 500.0, node.DiskTotalNsmGB)
+	assert.Equal(t, 60.0, node.DiskUsedNsmPct)
+	assert.Equal(t, 16.0, node.MemoryTotalGB)
+	assert.Equal(t, 50.0, node.MemoryUsedPct)
+	assert.Equal(t, 3600, node.OsUptimeSeconds)
+	assert.Equal(t, 7.5, node.PcapDays)
+	assert.Equal(t, 12.0, node.CpuUsedPct)
+	assert.Equal(t, 3.0, node.TrafficMonInDropsPps)
+	assert.Equal(t, 3.0*8.0/1000000.0, node.TrafficMonInDropsMbs)
 }
 
 func TestPostgresMetrics_UpdateNodeMetrics_LicenseFeatures(t *testing.T) {
