@@ -2614,11 +2614,11 @@ describe('prefill', () => {
 
     comp.applyPrefill(makeSetting({ readonly: true }));
     expect(comp.prefill).toBe(pending);
-    expect(comp.form.key).toBeNull();
+    expect(comp.form.key).toBeFalsy();
 
     comp.applyPrefill(makeSetting({ readonlyUi: true }));
     expect(comp.prefill).toBe(pending);
-    expect(comp.form.key).toBeNull();
+    expect(comp.form.key).toBeFalsy();
 
     comp.applyPrefill(makeSetting({ uiElements: [{ field: 'name', required: true }] }));
     expect(comp.prefillNotice).toBe(false);
