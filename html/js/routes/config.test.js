@@ -2434,8 +2434,14 @@ describe('prefill', () => {
   });
 
   test('parsePrefill covers every query page route', () => {
-    require('./hunt.js');
-    const huntRoutes = global.routes.filter(r => r.path != '/config' && ['/hunt', '/alerts', '/cases', '/dashboards', '/detections'].includes(r.path));
+    const prevRoutes = global.routes;
+    const huntRoutes = [];
+    global.routes = huntRoutes;
+    try {
+      require('./hunt.js');
+    } finally {
+      global.routes = prevRoutes;
+    }
     expect(huntRoutes.length).toBe(5);
     for (const r of huntRoutes) {
       comp.$route.query = { gridId: '', s: 'soc.config.server.client.' + r.path.replace('/', '') + '.queries', 'p.query': 'q' };
@@ -2605,6 +2611,14 @@ describe('prefill', () => {
 
     comp.applyPrefill(makeSetting({ uiElements: undefined }));
     expect(comp.prefill).toBe(pending);
+
+    comp.applyPrefill(makeSetting({ readonly: true }));
+    expect(comp.prefill).toBe(pending);
+    expect(comp.form.key).toBeNull();
+
+    comp.applyPrefill(makeSetting({ readonlyUi: true }));
+    expect(comp.prefill).toBe(pending);
+    expect(comp.form.key).toBeNull();
 
     comp.applyPrefill(makeSetting({ uiElements: [{ field: 'name', required: true }] }));
     expect(comp.prefillNotice).toBe(false);

@@ -232,7 +232,7 @@ routes.push({
       this.prefillNotice = false;
       this.prefillFocusPending = false;
       const pending = this.prefill;
-      if (!setting || !pending || pending.settingId != setting.id || !this.hasUiElements(setting)) return;
+      if (!setting || !pending || pending.settingId != setting.id || !this.hasUiElements(setting) || this.isReadOnly(setting)) return;
       if (!this.prefillGridAllowed(pending)) {
         // The grid changed since the page mounted
         this.prefill = null;
