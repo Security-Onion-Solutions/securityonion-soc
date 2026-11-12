@@ -543,6 +543,33 @@ const huntComponent = {
       this.query = query;
       this.hunt();
     },
+    normalizeQueryForList(query) {
+      // Control characters and line/paragraph separators become spaces so the saved text
+      // matches what the page compares against. Other hidden characters are left for the
+      // Configuration page to refuse (see PREFILL_HIDDEN_CHARS in config.js).
+      const q = typeof query === 'string' ? query : '';
+      return q.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim();
+    },
+    canAddQueryToList() {
+      // Only offered for a submitted query. While the query bar has unsubmitted edits,
+      // clicking the button would blur the input first, which submits the query and
+      // re-renders the bar, so the click would be lost.
+      if (!this.$root.isUserAdmin() || this.queryAltered) return false;
+      const q = this.normalizeQueryForList(this.query);
+      if (!q) return false;
+      return !this.queries.some(entry => this.normalizeQueryForList(entry.query) == q);
+    },
+    addQueryToList() {
+      const q = this.normalizeQueryForList(this.query);
+      this.$router.push({
+        name: 'config',
+        query: {
+          gridId: LOCAL_GRID_ID,
+          s: 'soc.config.server.client.' + this.category + '.queries',
+          'p.query': q,
+        },
+      });
+    },
     async getQuery() {
       var q = "";
       if (this.queryBaseFilter.length > 0) {

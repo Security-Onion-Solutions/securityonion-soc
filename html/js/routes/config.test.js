@@ -1966,6 +1966,14 @@ test('buildInputRules', () => {
   expect(rules.length).toBe(1);
   expect(rules[0]('')).toBe('Required.');
 
+  expect(rules[0]('   ')).toBe('Required.');
+  expect(rules[0]([])).toBe('Required.');
+  expect(rules[0](null)).toBe('Required.');
+  expect(rules[0](undefined)).toBe('Required.');
+  expect(rules[0]('x')).toBe(true);
+  expect(rules[0](0)).toBe(true);
+  expect(rules[0](['a'])).toBe(true);
+
   setting = { required: false, regex: '^test$', regexFailureMessage: 'Regex failed' };
   rules = comp.buildInputRules(setting);
   expect(rules.length).toBe(1);
@@ -2387,4 +2395,362 @@ test('confirmRevert_globalValue_nullOldValue_noDefault', async () => {
     duplicatedFromId: ''
   });
   expect(comp.settings[0].value).toBe(null);
+});
+
+describe('prefill', () => {
+  const QUERY_ID = 'soc.config.server.client.dashboards.queries';
+  const makeSetting = (extra) => ({
+    id: QUERY_ID,
+    value: '{"name":"a","query":"qa"}\n{"name":"b","query":"qb"}',
+    default: 'x',
+    defaultAvailable: true,
+    forcedType: '[]{}',
+    syntax: 'json',
+    nodeValues: new Map(),
+    uiElements: [
+      { field: 'name', label: 'Name', required: true },
+      { field: 'description', label: 'Description' },
+      { field: 'query', label: 'Query', required: true },
+      { field: 'showSubtitle', label: 'Subtitle', forcedType: 'bool', required: true },
+    ],
+    ...extra,
+  });
+
+  afterEach(() => {
+    delete document.getElementById;
+  });
+
+  beforeEach(() => {
+    comp.$route.query = { gridId: '', s: QUERY_ID, 'p.query': '* | groupby x' };
+    comp.$root.selectedGridId = '';
+    comp.$root.showWarning = jest.fn();
+  });
+
+  const warned = (key) => expect(comp.prefillWarning).toBe(comp.i18n[key]);
+
+  test('parsePrefill accepts an allowlisted setting', () => {
+    comp.parsePrefill();
+    expect(comp.prefill).toStrictEqual({ settingId: QUERY_ID, fields: { query: '* | groupby x' }, localGridOnly: true });
+  });
+
+  test('parsePrefill covers every query page route', () => {
+    const prevRoutes = global.routes;
+    const huntRoutes = [];
+    global.routes = huntRoutes;
+    try {
+      require('./hunt.js');
+    } finally {
+      global.routes = prevRoutes;
+    }
+    expect(huntRoutes.length).toBe(5);
+    for (const r of huntRoutes) {
+      comp.$route.query = { gridId: '', s: 'soc.config.server.client.' + r.path.replace('/', '') + '.queries', 'p.query': 'q' };
+      comp.parsePrefill();
+      expect(comp.prefill).not.toBeNull();
+    }
+  });
+
+  test('parsePrefill refuses the wrong grid', () => {
+    for (const setup of [
+      () => { delete comp.$route.query.gridId; },
+      () => { comp.$route.query.gridId = 'abc'; },
+      () => { comp.$root.selectedGridId = 'abc'; },
+    ]) {
+      comp.$root.showWarning.mockClear();
+      comp.$route.query = { gridId: '', s: QUERY_ID, 'p.query': 'q' };
+      comp.$root.selectedGridId = '';
+      setup();
+      comp.parsePrefill();
+      expect(comp.prefill).toBeNull();
+      warned('settingPrefillWrongGrid');
+    }
+  });
+
+  test('parsePrefill ignores unknown or inherited settings and fields', () => {
+    for (const s of ['soc.config.actions', 'constructor', '__proto__', 'toString']) {
+      comp.$route.query = { gridId: '', s, 'p.query': 'x' };
+      comp.parsePrefill();
+      expect(comp.prefill).toBeNull();
+    }
+    comp.$route.query = { gridId: '', s: QUERY_ID, 'p.name': 'x' };
+    comp.parsePrefill();
+    expect(comp.prefill).toBeNull();
+    comp.$route.query = { gridId: '', s: QUERY_ID, 'p.name': 'x', 'p.query': 'y' };
+    comp.parsePrefill();
+    expect(comp.prefill.fields).toStrictEqual({ query: 'y' });
+  });
+
+  test('parsePrefill ignores arrays and blank values', () => {
+    comp.$route.query['p.query'] = ['a', 'b'];
+    comp.parsePrefill();
+    expect(comp.prefill).toBeNull();
+    comp.$route.query['p.query'] = '   ';
+    comp.parsePrefill();
+    expect(comp.prefill).toBeNull();
+  });
+
+  test('parsePrefill refuses template delimiters', () => {
+    for (const v of ['{{7*7}}', 'a {% b', 'a #}']) {
+      comp.$root.showWarning.mockClear();
+      comp.$route.query['p.query'] = v;
+      comp.parsePrefill();
+      expect(comp.prefill).toBeNull();
+      warned('settingPrefillRefusedDelimiters');
+    }
+    comp.$route.query['p.query'] = 'user {myId}';
+    comp.parsePrefill();
+    expect(comp.prefill.fields.query).toBe('user {myId}');
+  });
+
+  test('parsePrefill refuses hidden characters', () => {
+    for (const v of ['a\nb', 'a\tb', 'a‮b', 'a​b', 'a b', 'aㅤb', 'a️b']) {
+      comp.$root.showWarning.mockClear();
+      comp.$route.query['p.query'] = v;
+      comp.parsePrefill();
+      expect(comp.prefill).toBeNull();
+      warned('settingPrefillRefusedCharacters');
+    }
+    comp.$route.query['p.query'] = 'café';
+    comp.parsePrefill();
+    expect(comp.prefill.fields.query).toBe('café');
+  });
+
+  test('parsePrefill clears a previous prefill, and onRouteUpdate never sets one', () => {
+    comp.parsePrefill();
+    expect(comp.prefill).not.toBeNull();
+    comp.$route.query = {};
+    comp.parsePrefill();
+    expect(comp.prefill).toBeNull();
+
+    comp.$route.query = { gridId: '', s: QUERY_ID, 'p.query': 'q' };
+    comp.loadData = jest.fn();
+    comp.onRouteUpdate();
+    expect(comp.prefill).toBeNull();
+  });
+
+  const prepare = (setting) => {
+    comp.parsePrefill();
+    comp.settings = [setting];
+    comp.active = [setting.id];
+    comp.activeBackup = [setting.id];
+    comp.unpack(setting);
+  };
+
+  test('applyPrefill fills the live new entry', () => {
+    const setting = makeSetting();
+    prepare(setting);
+    comp.applyPrefill(setting);
+    expect(comp.form.entries.length).toBe(3);
+    expect(comp.form.entries[2].query).toBe('* | groupby x');
+    expect(comp.form.entries[0].query).toBe('qa');
+    expect(comp.form.entries[1].query).toBe('qb');
+    expect(comp.form.key).toBe(setting.id);
+    expect(comp.form.value).not.toBe(setting.value);
+    expect(comp.form.entriesExpanded).toBe(2);
+    expect(comp.prefillNotice).toBe(true);
+    expect(comp.prefillFocusPending).toBe(true);
+    expect(comp.prefill).toBeNull();
+    comp.applyPrefill(setting);
+    expect(comp.form.entries[2].query).toBe('* | groupby x');
+  });
+
+  test('applyPrefill survives edit() and keeps Save enabled', () => {
+    jest.useFakeTimers();
+    const setting = makeSetting();
+    prepare(setting);
+    comp.applyPrefill(setting);
+    comp.edit(setting);
+    jest.runAllTimers();
+    jest.useRealTimers();
+    expect(comp.form.value).not.toBe(setting.value);
+    expect(comp.isPendingSave(setting)).toBe(true);
+  });
+
+  test('prefillFromDefault', () => {
+    let setting = makeSetting({ default: makeSetting().value });
+    prepare(setting);
+    comp.applyPrefill(setting);
+    expect(comp.prefillFromDefault).toBe(true);
+
+    comp.cancel(true);
+    setting = makeSetting();
+    prepare(setting);
+    comp.applyPrefill(setting);
+    expect(comp.prefillFromDefault).toBe(false);
+
+    comp.cancel(true);
+    setting = makeSetting({ default: makeSetting().value, defaultAvailable: false });
+    prepare(setting);
+    comp.applyPrefill(setting);
+    expect(comp.prefillFromDefault).toBe(false);
+  });
+
+  test('applyPrefill refuses when the grid changed', () => {
+    const setting = makeSetting();
+    prepare(setting);
+    comp.$route.query.gridId = 'abc';
+    comp.applyPrefill(setting);
+    expect(comp.form.entries.length).toBe(3);
+    expect(comp.form.entries[2].query).toBeFalsy();
+    expect(comp.prefill).toBeNull();
+  });
+
+  test('applyPrefill edge cases', () => {
+    const setting = makeSetting();
+    prepare(setting);
+    const pending = comp.prefill;
+    comp.applyPrefill(null);
+    expect(comp.prefill).toBe(pending);
+
+    comp.prefillNotice = true;
+    comp.prefillFocusPending = true;
+    comp.applyPrefill(makeSetting({ id: 'other' }));
+    expect(comp.prefillNotice).toBe(false);
+    expect(comp.prefillFocusPending).toBe(false);
+    expect(comp.prefill).toBe(pending);
+
+    comp.applyPrefill(makeSetting({ uiElements: undefined }));
+    expect(comp.prefill).toBe(pending);
+
+    comp.applyPrefill(makeSetting({ readonly: true }));
+    expect(comp.prefill).toBe(pending);
+    expect(comp.form.key).toBeNull();
+
+    comp.applyPrefill(makeSetting({ readonlyUi: true }));
+    expect(comp.prefill).toBe(pending);
+    expect(comp.form.key).toBeNull();
+
+    comp.applyPrefill(makeSetting({ uiElements: [{ field: 'name', required: true }] }));
+    expect(comp.prefillNotice).toBe(false);
+    expect(comp.form.entries[comp.form.entries.length - 1].query).toBeUndefined();
+  });
+
+  test('selectSetting applies a pending prefill', () => {
+    const setting = makeSetting();
+    comp.parsePrefill();
+    comp.settings = [setting];
+    comp.active = [setting.id];
+    comp.activeBackup = [setting.id];
+    comp.selectSetting();
+    expect(comp.form.entries[comp.form.entries.length - 1].query).toBe('* | groupby x');
+  });
+
+  test('onSettingShown focuses Name once', () => {
+    const focus = jest.fn();
+    document.getElementById = jest.fn(() => ({ focus }));
+    comp.form.entries = [{}, {}, {}];
+    comp.prefillFocusPending = true;
+    comp.onSettingShown();
+    expect(document.getElementById).toHaveBeenCalledWith('setting-entry-2-input-name');
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(comp.prefillFocusPending).toBe(false);
+    comp.onSettingShown();
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  test('prefillDescribedBy', () => {
+    comp.form.entries = [{}, {}, {}];
+    comp.prefillNotice = true;
+    expect(comp.prefillDescribedBy(2, { field: 'name' })).toBe('config-prefill-notice setting-entry-2-input-name-messages');
+    expect(comp.prefillDescribedBy(2, { field: 'query' })).toBe('setting-entry-2-input-query-messages');
+    expect(comp.prefillDescribedBy(1, { field: 'name' })).toBe('setting-entry-1-input-name-messages');
+    comp.prefillNotice = false;
+    expect(comp.prefillDescribedBy(2, { field: 'name' })).toBe('setting-entry-2-input-name-messages');
+  });
+
+  test('cancel clears the notice', () => {
+    comp.prefillNotice = true;
+    comp.cancel(true);
+    expect(comp.prefillNotice).toBe(false);
+  });
+
+  test('uiElementsHaveValidInputs checks the new entry directly', () => {
+    const setting = makeSetting();
+    comp.uiElementsValid = true;
+    comp.form.entries = [{ name: 'a', query: 'q' }, { name: '', description: '', query: 'q', showSubtitle: undefined }];
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(false);
+    comp.form.entries[1].name = '   ';
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(false);
+    comp.form.entries[1].name = 'n';
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+    comp.form.entries[1].showSubtitle = false;
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+    comp.form.entries[1].name = 5;
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+    const arr = makeSetting({ uiElements: [{ field: 'tags', required: true }, { field: 'name' }] });
+    comp.form.entries = [{ tags: [], name: 'x' }];
+    expect(comp.uiElementsHaveValidInputs(arr)).toBe(false);
+    comp.form.entries = [{ name: '', query: '', description: '', showSubtitle: undefined }];
+    expect(comp.uiElementsHaveValidInputs(setting)).toBe(true);
+  });
+
+  test('loadData shows a held prefill warning after loading finishes', async () => {
+    comp.$route.query['p.query'] = '{{7*7}}';
+    comp.parsePrefill();
+    expect(comp.$root.showWarning).not.toHaveBeenCalled();
+    const calls = [];
+    comp.$root.startLoading = jest.fn(() => calls.push('start'));
+    comp.$root.stopLoading = jest.fn(() => calls.push('stop'));
+    comp.$root.showWarning = jest.fn(() => calls.push('warn'));
+    comp.refreshTree = jest.fn();
+    mockPapi('get', { data: [] });
+    mockPapi('get', { data: [] });
+    await comp.loadData();
+    expect(calls).toEqual(['start', 'stop', 'warn']);
+    expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n.settingPrefillRefusedDelimiters);
+    expect(comp.prefillWarning).toBeNull();
+  });
+
+  test('prefillGridAllowed passes an entry without localGridOnly', () => {
+    comp.$route.query.gridId = 'abc';
+    comp.$root.selectedGridId = 'abc';
+    expect(comp.prefillGridAllowed({})).toBe(true);
+    expect(comp.prefillGridAllowed({ localGridOnly: false })).toBe(true);
+    expect(comp.prefillGridAllowed({ localGridOnly: true })).toBe(false);
+  });
+
+  describe('save', () => {
+    const prefilled = () => {
+      const setting = makeSetting();
+      prepare(setting);
+      comp.applyPrefill(setting);
+      comp.uiElementsValid = true;
+      comp.$root.showWarning = jest.fn();
+      comp.$root.showError = jest.fn();
+      return setting;
+    };
+
+    test('clears the notice when the put succeeds', async () => {
+      const setting = prefilled();
+      comp.form.entries[2].name = 'New';
+      const put = mockPapi('put');
+      await comp.save(setting, null);
+      expect(comp.showNoteDialog).toBe(true);
+      expect(comp.prefillNotice).toBe(true);
+      await comp.save();
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(comp.prefillNotice).toBe(false);
+    });
+
+    test('keeps the notice when the put fails', async () => {
+      const setting = prefilled();
+      comp.form.entries[2].name = 'New';
+      comp.$root.papi.put = jest.fn().mockRejectedValue(new Error('boom'));
+      await comp.save(setting, null);
+      await comp.save();
+      expect(comp.$root.papi.put).toHaveBeenCalledTimes(1);
+      expect(comp.$root.showError).toHaveBeenCalled();
+      expect(comp.prefillNotice).toBe(true);
+    });
+
+    test('warns and skips the note dialog when the new entry has no name', async () => {
+      const setting = prefilled();
+      expect(comp.form.entries[2].name).toBeFalsy();
+      const put = mockPapi('put');
+      await comp.save(setting, null);
+      expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n.settingIncomplete);
+      expect(comp.showNoteDialog).toBe(false);
+      expect(put).not.toHaveBeenCalled();
+    });
+  });
 });

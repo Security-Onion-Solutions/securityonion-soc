@@ -2371,3 +2371,27 @@ describe('applyDateRangePickerA11y', () => {
     expect(picker.hide).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('onLocationUpdated gridId', () => {
+  beforeEach(() => {
+    app.checkSubgridSelectorEnabled = () => true;
+    app.selectedGridId = 'sub';
+  });
+
+  test('empty gridId selects the local grid', () => {
+    app.onLocationUpdated({ query: { gridId: '' } });
+    expect(app.selectedGridId).toBe('');
+  });
+
+  test('missing or bare gridId leaves the selection', () => {
+    app.onLocationUpdated({ query: {} });
+    expect(app.selectedGridId).toBe('sub');
+    app.onLocationUpdated({ query: { gridId: null } });
+    expect(app.selectedGridId).toBe('sub');
+  });
+
+  test('named gridId selects that grid', () => {
+    app.onLocationUpdated({ query: { gridId: 'abc' } });
+    expect(app.selectedGridId).toBe('abc');
+  });
+});

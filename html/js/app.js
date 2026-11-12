@@ -61,6 +61,7 @@ if (typeof global !== 'undefined') {
   global.directives = directives;
   global.rootMethods = rootMethods;
   global.MAX_OVERRIDE_NOTE_LENGTH = MAX_OVERRIDE_NOTE_LENGTH;
+  global.LOCAL_GRID_ID = LOCAL_GRID_ID;
 }
 
 $(document).ready(function () {
@@ -433,7 +434,7 @@ $(document).ready(function () {
         onLocationUpdated(newLocation, oldLocation) {
           if (!this.checkSubgridSelectorEnabled(newLocation)) return;
           const gridId = newLocation.query['gridId'];
-          if (gridId) {
+          if (typeof gridId === 'string') {
             this.selectedGridId = gridId;
           }
         },

@@ -94,9 +94,12 @@
 									</v-list>
 								</v-menu>
 							</template>
-							<template v-if="isAdvanced()" #append-inner>
-								<v-btn variant="text" id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category" :aria-label="i18n.ariaToggleFullQuery">
+							<template v-if="isAdvanced() || canAddQueryToList()" #append-inner>
+								<v-btn v-if="isAdvanced()" variant="text" size="x-small" icon id="toggle-full-query-button" :title="i18n.toggleFullQueryHelp" @click="showFullQuery = !showFullQuery" :disabled="queryAltered" :data-aid="'toggle_full_query_' + category" :aria-label="i18n.ariaToggleFullQuery">
 									<v-icon>fa-ellipsis</v-icon>
+								</v-btn>
+								<v-btn v-if="canAddQueryToList()" variant="text" size="x-small" icon id="hunt-query-add-to-list" :title="i18n.queryAddToListHelp" @click="addQueryToList()" :data-aid="'query_add_to_list_' + category" :aria-label="i18n.queryAddToList">
+									<v-icon>fa-plus</v-icon>
 								</v-btn>
 							</template>
 							<template v-if="!isCategory('hunt')" #append>
