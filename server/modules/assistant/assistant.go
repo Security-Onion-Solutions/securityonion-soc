@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -55,6 +56,7 @@ var (
 	ErrInvalidModel       = errors.New("ERROR_ASSISTANT_INVALID_MODEL")
 	ErrInvalidAgent       = errors.New("ERROR_ASSISTANT_INVALID_AGENT")
 	ErrNoDatabase         = errors.New("no database configured")
+	ErrNoLicenseKey       = errors.New("no license key")
 	ErrInvalidMemory      = errors.New("ERROR_MEMORY_TEXT_REQUIRED")
 	ErrMemoryNotFound     = database.ErrMemoryNotFound
 	ErrUnauthorizedMemory = errors.New("ERROR_MEMORY_UNAUTHORIZED")
@@ -296,6 +298,10 @@ type AssistantCoordinator struct {
 	// terminateReembed interrupts it at the next batch boundary.
 	reembedding      bool
 	terminateReembed context.CancelCauseFunc
+	// Set when startReembed skipped a pass for want of a license; resumed when the license activates.
+	reembedDeferred bool
+	// Unregisters the licensing hook that resumes a deferred re-embed.
+	stopLicenseHook func()
 	// Interrupts the scan pass currently running, if any; nil between passes.
 	terminateMemoryScan context.CancelCauseFunc
 	// Embed model selector the last pass verified the store against; empty until
@@ -338,6 +344,26 @@ type memorySettings struct {
 	memoryPersona          string
 	reconcilePersona       string
 	dontScanBefore         string
+}
+
+// oaiLicenseGate logs a worker's OAI license changes once rather than every tick.
+type oaiLicenseGate struct {
+	unlicensed bool
+}
+
+func (g *oaiLicenseGate) allows(logger log.Interface, work string) bool {
+	licensed := licensing.IsEnabled(licensing.FEAT_OAI)
+
+	switch {
+	case !licensed && !g.unlicensed:
+		logger.Warn("no active license with OAI enabled; " + work + " will not start")
+	case licensed && g.unlicensed:
+		logger.Info("active license with OAI enabled; " + work + " will start")
+	}
+
+	g.unlicensed = !licensed
+
+	return licensed
 }
 
 func (ac *AssistantCoordinator) memorySnapshot() memorySettings {
@@ -627,6 +653,16 @@ func (ac *AssistantCoordinator) loadAdapters(config module.ModuleConfig) {
 			}
 
 			adapt, err := reg.New(ac.srv.Context, ac.srv, adapterEntry)
+			if errors.Is(err, ErrNoLicenseKey) {
+				// Every unlicensed grid logs this, so no WithError: so-log-check fails a grid on any line containing "error".
+				logger.WithFields(log.Fields{
+					"adapter":  name,
+					"protocol": protocol,
+				}).Warn("no license key; skipping assistant adapter that requires one")
+
+				continue
+			}
+
 			if err != nil {
 				logger.WithError(err).WithFields(log.Fields{
 					"adapter":  name,
@@ -887,6 +923,9 @@ func (ac *AssistantCoordinator) Start() error {
 		ac.reloadAgentConfiguration(ac.srv.Context)
 	}
 
+	// Before the first reload, so an activation right after it defers a re-embed still resumes it.
+	ac.stopLicenseHook = licensing.OnActivated(func() { ac.resumeDeferredReembed(ac.srv.Context) })
+
 	ac.reloadMemoryConfiguration(ac.srv.Context)
 
 	ac.reloadAutomationTickInterval(ac.srv.Context)
@@ -1023,10 +1062,16 @@ func (ac *AssistantCoordinator) Stop() error {
 
 	ac.applyScannerState(false)
 
+	if ac.stopLicenseHook != nil {
+		ac.stopLicenseHook()
+	}
+
 	ac.memoryWorkerMu.Lock()
 	if ac.terminateReembed != nil {
 		ac.terminateReembed(errors.New("assistant stopped"))
 	}
+	// A hook already running when it was unregistered must not start a pass.
+	ac.reembedDeferred = false
 	ac.memoryWorkerMu.Unlock()
 
 	// A zero-value coordinator (used by some tests) has nothing to stop.

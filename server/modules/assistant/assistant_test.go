@@ -2812,9 +2812,29 @@ func TestBuildApiKey(t *testing.T) {
 	license := `H4sIAAziJWgC/z2NW4+iQBSE/8qEV2YiCC3gGzcvKALSoONms2mgQZSbNFc3+98XZ5JJ6qFO6qs6fykcxzhs0g5TS2rOzMEHAz5YABlm+aUL9U7hoUpr1KRl8cMsPlgezrklkCa9mALlrwUXh22dNuObVUz4m12XU5ZGU5LUKEzxnwaTJkPBn9cMA1gwxVka4oLgV339Bb3Bb2jKYoyatsaEWv76/U61BNeTZaZ3ZYS/HSlDr86m7kRHqEE/B0mT4qs8nbuw6Ub6wm2eUb6wNUmQK+Q/R77J284zPDXT+dPdcRcFOEjrDd5Vea/LKwuuDgBZUazDLpk57PFuNX3VPZkTUK0EtIdkmHf0eNKGWrwLW6vnxj4k3W5XpAYnMwa5XirVZnucc9sWbV1QrfW4T7vOPaQsvc8VDrXPvSL4RyHbrOJS05HoJP1Je9SEjVMZGJxipot6iLz8qNKFMhb051otF0JM3w4mHYnyeYBzwUEQDHQYHUS1gFgY1MZktoocKMFKSmlxDe73HMbXlSQrSsjbZ4ueXc+fkOgqv9YJseX98NgwXDK2+Ix6ceRZfy88ofGQLG8UzN3xiFwZ841emhpub+LNWxCvz/Kszcx2P7K+thPVI6NwQUcLRmhZCdekz+21daPOCPNNU0vZfjazNdX0g4VuwCowUNQn5AIln547vL+y1xrcOkiaH9LHg+d7/tnVW77zN7JK63UYeD68MOx4+RRNQcCVfXYDseP5EpQKgSa4XE+wthTAtIRd6WJgtqHjHg0mvzm3ZsfZ1L//d3LBEekCAAA=`
 	licensing.Init(license)
 
-	key := buildApiKey()
+	key, err := buildApiKey(licensing.GetLicenseKey())
 
+	assert.NoError(t, err)
 	assert.Equal(t, key, "sk-46736dfccdc375085dfb8f701ea7f327860c51b4aac3629592649ae8a7bb7e29")
+}
+
+func TestBuildApiKey_NoLicenseKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		license *licensing.SignedLicenseKey
+	}{
+		{name: "no license", license: nil},
+		{name: "unsigned license", license: &licensing.SignedLicenseKey{LicenseKey: &licensing.LicenseKey{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, err := buildApiKey(tt.license)
+
+			assert.ErrorIs(t, err, ErrNoLicenseKey)
+			assert.Empty(t, key)
+		})
+	}
 }
 
 func TestAssistantCoordinator_GetPrompt(t *testing.T) {
@@ -3244,6 +3264,102 @@ func TestLoadAdapters_AirgapSkipsCloudProtocols(t *testing.T) {
 			assert.Equal(t, !tt.airgap, cloudBuilt, "a skipped adapter is never constructed")
 			for _, m := range srv.Config.ClientParams.AssistantParams.AvailableModels {
 				assert.Equal(t, tt.wantEnabled[m.Selector()], m.Enabled, m.Selector())
+			}
+		})
+	}
+}
+
+func TestLoadAdapters_SkipsAdapterWithoutLicenseKey(t *testing.T) {
+	const licensedProtocol = "licensed_protocol"
+	const localProtocol = "local_protocol"
+
+	origProtocols := protocols
+	t.Cleanup(func() {
+		protocols = origProtocols
+	})
+
+	protocols = map[string]ProtocolRegistration{
+		licensedProtocol: {New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+			return nil, ErrNoLicenseKey
+		}},
+		localProtocol: {New: func(_ context.Context, _ *server.Server, _ map[string]any) (server.AssistantAdapter, error) {
+			return &mockAdapter{protocol: localProtocol}, nil
+		}},
+	}
+
+	ctx, h := capturedLogger()
+	srv := &server.Server{
+		Context: ctx,
+		Config: &config.ServerConfig{
+			ClientParams: model.ClientParameters{
+				AssistantParams: model.AssistantParameters{
+					AvailableModels: []model.ModelParameters{
+						{ID: "a", Adapter: "licensed", Enabled: true},
+						{ID: "b", Adapter: "local", Enabled: true},
+					},
+				},
+			},
+		},
+	}
+	ac := &AssistantCoordinator{srv: srv}
+
+	ac.loadAdapters(module.ModuleConfig{
+		"adapters": []any{
+			map[string]any{"name": "licensed", "protocol": licensedProtocol},
+			map[string]any{"name": "local", "protocol": localProtocol},
+		},
+	})
+
+	assert.ElementsMatch(t, []string{"local"}, slices.Collect(maps.Keys(ac.adapters)))
+
+	available := srv.Config.ClientParams.AssistantParams.AvailableAdapters
+	if assert.Len(t, available, 1) {
+		assert.Equal(t, "local", available[0].Name)
+	}
+
+	assert.Equal(t, []string{"no license key; skipping assistant adapter that requires one"}, logMessagesAt(h, log.WarnLevel))
+	assert.Empty(t, logMessagesAt(h, log.ErrorLevel))
+
+	// Disabling its models would make validateAgentMappings log Error on every unlicensed grid.
+	for _, m := range srv.Config.ClientParams.AssistantParams.AvailableModels {
+		assert.True(t, m.Enabled, m.Selector())
+	}
+}
+
+func TestOAILicenseGate(t *testing.T) {
+	tests := []struct {
+		name          string
+		wasUnlicensed bool
+		licensed      bool
+		level         log.Level
+		message       string
+	}{
+		{name: "a lapse is logged", level: log.WarnLevel, message: "no active license with OAI enabled; scans will not start"},
+		{name: "a continuing lapse is quiet", wasUnlicensed: true},
+		{name: "a return is logged", wasUnlicensed: true, licensed: true, level: log.InfoLevel, message: "active license with OAI enabled; scans will start"},
+		{name: "a continuing license is quiet", licensed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.licensed {
+				licenseOAI(t)
+			} else {
+				licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+				t.Cleanup(licensing.Shutdown)
+			}
+
+			ctx, h := capturedLogger()
+			g := oaiLicenseGate{unlicensed: tt.wasUnlicensed}
+
+			assert.Equal(t, tt.licensed, g.allows(log.FromContext(ctx), "scans"))
+			assert.Equal(t, !tt.licensed, g.unlicensed)
+
+			if tt.message == "" {
+				assert.Empty(t, h.Entries)
+			} else if assert.Len(t, h.Entries, 1) {
+				assert.Equal(t, tt.level, h.Entries[0].Level)
+				assert.Equal(t, tt.message, h.Entries[0].Message)
 			}
 		})
 	}

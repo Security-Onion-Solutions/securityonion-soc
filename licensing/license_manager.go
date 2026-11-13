@@ -23,10 +23,14 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"io"
+	"maps"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/apex/log"
@@ -81,6 +85,8 @@ type licenseManager struct {
 	effectiveTimer  *time.Timer
 	pillarTimer     *time.Timer
 	licenseKey      *SignedLicenseKey
+	// Lets a woken monitor tell stopMonitor from its timer firing.
+	stopped atomic.Bool
 }
 
 type LicenseKey struct {
@@ -118,6 +124,38 @@ type SignedLicenseKey struct {
 
 var mutex sync.Mutex
 var manager *licenseManager
+
+var activatedMutex sync.Mutex
+var activatedCallbacks = map[uint64]func(){}
+var activatedNextId uint64
+
+// OnActivated registers fn to run, on the license monitor's goroutine, when a pending license
+// becomes active. The returned func unregisters it.
+func OnActivated(fn func()) func() {
+	activatedMutex.Lock()
+	defer activatedMutex.Unlock()
+
+	id := activatedNextId
+	activatedNextId++
+	activatedCallbacks[id] = fn
+
+	return func() {
+		activatedMutex.Lock()
+		defer activatedMutex.Unlock()
+
+		delete(activatedCallbacks, id)
+	}
+}
+
+func notifyActivated() {
+	activatedMutex.Lock()
+	callbacks := slices.Collect(maps.Values(activatedCallbacks))
+	activatedMutex.Unlock()
+
+	for _, fn := range callbacks {
+		fn()
+	}
+}
 
 func newLicenseManager() *licenseManager {
 	return &licenseManager{
@@ -251,7 +289,13 @@ func Init(key string) {
 	createManager(status, available, licenseKey, true)
 }
 
+// Test installs an active license enabling feat, or every feature when feat is empty. Outside
+// `go test` it does nothing, so a production binary can never fake a license.
 func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
+	if !testing.Testing() {
+		return
+	}
+
 	available := CreateAvailableFeatureList()
 
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
@@ -272,6 +316,16 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	createManager(LICENSE_STATUS_ACTIVE, available, licenseKey, false)
 }
 
+// TestActivate runs the OnActivated callbacks as a pending license becoming active would. Outside
+// `go test` it does nothing.
+func TestActivate() {
+	if !testing.Testing() {
+		return
+	}
+
+	notifyActivated()
+}
+
 func Shutdown() {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -285,14 +339,16 @@ func createManager(status string, available []string, signedLicenseKey *SignedLi
 
 	stopMonitor()
 
-	manager = newLicenseManager()
-	manager.status = status
-	manager.available = available
-	manager.licenseKey = signedLicenseKey
+	// Readers take no lock, so the manager is only published once fully built.
+	m := newLicenseManager()
+	m.status = status
+	m.available = available
+	m.licenseKey = signedLicenseKey
+	manager = m
 
 	if (status == LICENSE_STATUS_ACTIVE || status == LICENSE_STATUS_PENDING) && startMonitors {
-		go startExpirationMonitor()
-		go startEffectiveMonitor()
+		go startExpirationMonitor(m)
+		go startEffectiveMonitor(m)
 	}
 	pillarMonitorCount = 0
 	go startPillarMonitor()
@@ -312,58 +368,68 @@ func createManager(status string, available []string, signedLicenseKey *SignedLi
 	}).Info("Initialized license manager")
 }
 
-func startExpirationMonitor() {
-	if manager.licenseKey.Expiration.After(time.Now()) {
-		duration := time.Until(manager.licenseKey.Expiration)
-		if manager.expirationTimer != nil {
+// startExpirationMonitor marks m expired once its expiration passes. Scoped to m: stopMonitor
+// wakes this just before a replacement manager is published.
+func startExpirationMonitor(m *licenseManager) {
+	if m.licenseKey.Expiration.After(time.Now()) {
+		duration := time.Until(m.licenseKey.Expiration)
+		if m.expirationTimer != nil {
 			log.Error("Expiration timer is already running; aborting thread")
 			return
 		}
-		manager.expirationTimer = time.NewTimer(duration)
-		<-manager.expirationTimer.C
-		if manager.licenseKey.Expiration.Before(time.Now()) {
+		m.expirationTimer = time.NewTimer(duration)
+		<-m.expirationTimer.C
+		if m.licenseKey.Expiration.Before(time.Now()) {
 			log.WithFields(log.Fields{
-				"expiration": manager.licenseKey.Expiration,
+				"expiration": m.licenseKey.Expiration,
 				"duration":   duration,
 			}).Warn("License has expired")
-			manager.status = LICENSE_STATUS_EXPIRED
+			m.status = LICENSE_STATUS_EXPIRED
 		}
 	}
-	manager.expirationTimer = nil
+	m.expirationTimer = nil
 }
 
-func startEffectiveMonitor() {
-	if manager.licenseKey.Effective.After(time.Now()) {
-		duration := time.Until(manager.licenseKey.Effective)
-		if manager.effectiveTimer != nil {
+// startEffectiveMonitor moves a pending m to active, or exceeded when limits are hit, once its
+// effective date passes. Only an activation runs the OnActivated callbacks.
+func startEffectiveMonitor(m *licenseManager) {
+	if m.licenseKey.Effective.After(time.Now()) {
+		duration := time.Until(m.licenseKey.Effective)
+		if m.effectiveTimer != nil {
 			log.Error("Effective timer is already running; aborting thread")
 			return
 		}
-		manager.effectiveTimer = time.NewTimer(duration)
-		<-manager.effectiveTimer.C
+		m.effectiveTimer = time.NewTimer(duration)
+		<-m.effectiveTimer.C
 
-		if manager.status == LICENSE_STATUS_PENDING {
-			if len(manager.limits) > 0 {
+		if m.stopped.Load() {
+			m.effectiveTimer = nil
+			return
+		}
+
+		if m.status == LICENSE_STATUS_PENDING {
+			if len(m.limits) > 0 {
 				log.WithFields(log.Fields{
-					"effective": manager.licenseKey.Effective,
+					"effective": m.licenseKey.Effective,
 					"duration":  duration,
 				}).Warn("License has become effective but limits are exceeded")
-				manager.status = LICENSE_STATUS_EXCEEDED
+				m.status = LICENSE_STATUS_EXCEEDED
 			} else {
 				log.WithFields(log.Fields{
-					"effective": manager.licenseKey.Effective,
+					"effective": m.licenseKey.Effective,
 					"duration":  duration,
 				}).Warn("License has become effective")
-				manager.status = LICENSE_STATUS_ACTIVE
+				m.status = LICENSE_STATUS_ACTIVE
+				notifyActivated()
 			}
 		} else {
 			log.WithFields(log.Fields{
-				"effective": manager.licenseKey.Effective,
+				"effective": m.licenseKey.Effective,
 				"duration":  duration,
 			}).Warn("License has become effective but current status is no longer pending")
 		}
 	}
-	manager.effectiveTimer = nil
+	m.effectiveTimer = nil
 }
 
 func startPillarMonitor() {
@@ -428,6 +494,7 @@ func Usable() bool {
 
 func stopMonitor() {
 	if manager != nil {
+		manager.stopped.Store(true)
 		if manager.expirationTimer != nil {
 			manager.expirationTimer.Reset(time.Duration(0))
 		}

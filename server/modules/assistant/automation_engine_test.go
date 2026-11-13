@@ -20,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
@@ -235,6 +236,13 @@ func (f *engineFixture) snapshot() (opens, ticks int, closes []runClose) {
 	return f.opens, f.ticks, append([]runClose{}, f.closes...)
 }
 
+// licenseOAI installs an OAI license; synctest tests call it before the bubble, since licensing leaves a sleeping goroutine that would deadlock one.
+func licenseOAI(t *testing.T) {
+	t.Helper()
+	licensing.Test(licensing.FEAT_OAI, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+}
+
 // startAndWake starts the scheduler and runs its first tick now rather than an interval away.
 func (f *engineFixture) startAndWake() {
 	f.ac.startAutomationScheduler()
@@ -262,6 +270,8 @@ func enabledAutomation(id, kind string) *model.Automation {
 // Editing a running automation's params reaches the run through the cancel the engine
 // registered, and the row records why the run stopped.
 func TestSaveAutomationInterruptsTheRunningRun(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{"limit":10}`))
 
@@ -319,6 +329,8 @@ func TestStartDueAutomationRunsRequiresAStore(t *testing.T) {
 }
 
 func TestAutomationRunsAreNotPooled(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -410,6 +422,8 @@ func TestStartDueAutomationRunsSkipsQuietly(t *testing.T) {
 }
 
 func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		epoch := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -442,6 +456,8 @@ func TestAutomationRunCarriesItsPlumbing(t *testing.T) {
 }
 
 func TestAutomationRunPanicClosesFailedAndWorkerSurvives(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -466,6 +482,8 @@ func TestAutomationRunPanicClosesFailedAndWorkerSurvives(t *testing.T) {
 }
 
 func TestAutomationRunClosesWithADetachedContext(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -488,6 +506,8 @@ func TestAutomationRunClosesWithADetachedContext(t *testing.T) {
 }
 
 func TestAutomationConfigChangeWakes(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t)
 
@@ -517,6 +537,8 @@ func TestAutomationConfigChangeWakes(t *testing.T) {
 
 // A definition added outside SOC raises no callback; the next tick's read is what finds it.
 func TestEveryTickReadsTheStoredAutomations(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t)
 
@@ -534,9 +556,61 @@ func TestEveryTickReadsTheStoredAutomations(t *testing.T) {
 	})
 }
 
+func TestTickStartsNothingWithoutAnOAILicense(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
+	ctx, h := capturedLogger()
+	s := &automationScheduler{ctx: ctx}
+
+	f.ac.automationTick(s)
+	f.ac.automationTick(s)
+
+	opens, ticks, _ := f.snapshot()
+	assert.Zero(t, opens)
+	assert.Zero(t, ticks)
+	assert.Equal(t, []string{"no active license with OAI enabled; automations will not start"}, logMessagesAt(h, log.WarnLevel))
+}
+
+func TestTickResumesOnceOAIIsLicensed(t *testing.T) {
+	licenseOAI(t)
+
+	f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
+	ctx, h := capturedLogger()
+	s := &automationScheduler{ctx: ctx, license: oaiLicenseGate{unlicensed: true}}
+
+	f.ac.automationTick(s)
+	f.ac.automationRunsWg.Wait()
+
+	opens, _, _ := f.snapshot()
+	assert.Equal(t, 1, opens)
+	assert.False(t, s.license.unlicensed)
+	assert.Contains(t, logMessagesAt(h, log.InfoLevel), "active license with OAI enabled; automations will start")
+}
+
+func TestALapsedLicenseStopsNewAutomationRuns(t *testing.T) {
+	licenseOAI(t)
+
+	f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
+	s := &automationScheduler{ctx: context.Background()}
+
+	f.ac.automationTick(s)
+	f.ac.automationRunsWg.Wait()
+
+	licensing.Shutdown()
+	f.ac.automationTick(s)
+
+	opens, ticks, _ := f.snapshot()
+	assert.Equal(t, 1, opens)
+	assert.Equal(t, 1, ticks)
+}
+
 // A save that lands while the tick is reading would otherwise open a run on the definitions
 // read before it; the tick leaves the open to the tick the save woke.
 func TestASaveDuringTheTickReadDefersTheOpen(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{"limit":10}`))
 
@@ -581,6 +655,8 @@ func TestASaveDuringTheTickReadDefersTheOpen(t *testing.T) {
 // A row the in-flight index protects but no run here owns is one an open lost the result of or
 // a close could not end; failing it is what lets the automation run again before a restart.
 func TestAnAbandonedRunIsFailedSoTheNextTickCanOpen(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.scriptTicks()
@@ -693,6 +769,8 @@ func TestStartReloadsAutomationSettings(t *testing.T) {
 }
 
 func TestAutomationTickIntervalHotReload(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t)
 
@@ -739,6 +817,8 @@ func TestAutomationTickIntervalHotReload(t *testing.T) {
 }
 
 func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -766,6 +846,8 @@ func TestStopCancelsRunsAndShutsDownThePool(t *testing.T) {
 
 // A kind that ignores its context holds Stop for the budget and no longer.
 func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -795,6 +877,8 @@ func TestStopIsBoundedWhenARunIgnoresCancellation(t *testing.T) {
 
 // Pool work queued or submitted at stop fails without starting, and nothing is requeued.
 func TestStopFailsQueuedWorkWithoutWriting(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.ac.automationMaxConcurrentItems = 1
@@ -1004,6 +1088,8 @@ func TestAssistantCoordinator_Init_AutomationEngineConfig(t *testing.T) {
 // The due query blocks until its context ends, so the tick's deadline is what frees the worker;
 // a config write is not held up meanwhile.
 func TestAutomationTickIsBoundedByTheInterval(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newBareEngineFixture(t)
 
@@ -1030,6 +1116,8 @@ func TestAutomationTickIsBoundedByTheInterval(t *testing.T) {
 // A definition removed outside SOC never passes through DeleteAutomation, so the tick's sweep
 // of work outside the live set is what drops its queued work.
 func TestTickSweepsAutomationsRemovedFromConfig(t *testing.T) {
+	licenseOAI(t)
+
 	remove := func(t *testing.T, f *engineFixture) {
 		f.cfg.replace(automationsSetting(t, storedEnabledAutomation(otherAutomationTestId, `{}`)))
 		f.ac.OnConfigSettingUpdated(context.Background(), &model.Setting{Id: ConfigSettingAutomations}, false)
@@ -1317,6 +1405,8 @@ func lastLoggedFields(h *memory.Handler) log.Fields {
 }
 
 func TestAutomationRunContextCarriesItsLogger(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		ctx, h := capturedLogger()
@@ -1345,6 +1435,8 @@ func TestAutomationRunContextCarriesItsLogger(t *testing.T) {
 
 // A run executes under the server context, whatever the automation's creator.
 func TestAutomationRunContextCarriesTheServerRequestor(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 		f.ac.srv.Context = context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
@@ -1414,6 +1506,8 @@ func TestAwaitJoinsEveryJobError(t *testing.T) {
 }
 
 func TestAutomationEngineStatus(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 
@@ -1513,6 +1607,8 @@ func TestRecoverOrphanedWorkItemsKeepsWhatItCannotReset(t *testing.T) {
 
 // The creator is a record, not the identity a run needs, so an automation without one runs.
 func TestTickRunsAnAutomationWithNoCreator(t *testing.T) {
+	licenseOAI(t)
+
 	synctest.Test(t, func(t *testing.T) {
 		stored := storedEnabledAutomation(automationTestId, `{}`)
 		stored.UserId = ""
@@ -1527,6 +1623,8 @@ func TestTickRunsAnAutomationWithNoCreator(t *testing.T) {
 }
 
 func TestTickListsTheBuiltinAndRunsItOnceEnabled(t *testing.T) {
+	licenseOAI(t)
+
 	t.Run("never saved: live but never due", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			f := newEngineFixture(t)

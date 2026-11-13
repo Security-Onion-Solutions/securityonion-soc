@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server/mock"
@@ -3204,10 +3205,20 @@ func agentConfigRouterAuthorized(t *testing.T, authorized bool) (*chi.Mux, *mock
 	manager := mock.NewMockAssistantManager(ctrl)
 	srv.AssistantManager = manager
 
+	return licensedAssistantRouter(t, srv), manager
+}
+
+// licensedAssistantRouter wires the real routes behind an OAI license.
+func licensedAssistantRouter(t *testing.T, srv *Server) *chi.Mux {
+	t.Helper()
+
+	licensing.Test(licensing.FEAT_OAI, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
 	r := chi.NewRouter()
 	RegisterAssistantRoutes(srv, r, "/assistant")
 
-	return r, manager
+	return r
 }
 
 func agentConfigRequest(method, target string, body any) *http.Request {
@@ -3228,6 +3239,73 @@ func agentConfigContext(ctx context.Context) context.Context {
 	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
 
 	return context.WithValue(ctx, web.ContextKeyRequestId, "test-request")
+}
+
+func TestAssistantEnabled(t *testing.T) {
+	defer licensing.Shutdown()
+
+	cases := []struct {
+		name     string
+		license  func()
+		expected bool
+	}{
+		{"no license", licensing.Shutdown, false},
+		{"license without oai", func() { licensing.Test(licensing.FEAT_NTF, 0, 0, "", "") }, false},
+		{"license with oai", func() { licensing.Test(licensing.FEAT_OAI, 0, 0, "", "") }, true},
+		{"license with every feature", func() { licensing.Test("", 0, 0, "", "") }, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.license()
+
+			called := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+			})
+
+			h := NewAssistantHandler(&Server{})
+			w := httptest.NewRecorder()
+			h.assistantEnabled(next).ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/sessions", nil))
+
+			assert.Equal(t, tc.expected, called)
+			if !tc.expected {
+				assert.Equal(t, http.StatusBadRequest, w.Code)
+				assert.Equal(t, "ERROR_LICENSE_INVALID", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAssistantRoutesRequireLicense(t *testing.T) {
+	routes := []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "/assistant/automations"},
+		{http.MethodPost, "/assistant/chat"},
+		{http.MethodPost, "/assistant/tool/x"},
+		{http.MethodPut, "/assistant/agents/a"},
+		{http.MethodGet, "/assistant/admin/stats"},
+		{http.MethodDelete, "/assistant/memories/id"},
+	}
+
+	for _, route := range routes {
+		t.Run(route.method+" "+route.target, func(t *testing.T) {
+			// The mock manager expects no calls, so a request that got past the gate fails here.
+			r, _ := agentConfigRouterAuthorized(t, false)
+			licensing.Shutdown()
+
+			req := agentConfigRequest(route.method, route.target, nil)
+			req.Header.Set("Accept", "text/event-stream")
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, "ERROR_LICENSE_INVALID", w.Body.String())
+		})
+	}
 }
 
 func TestSaveAgentDecodesNameFromPath(t *testing.T) {
@@ -3601,10 +3679,7 @@ func automationRouter(t *testing.T, authorized bool) (*chi.Mux, *mock.MockAssist
 	manager := mock.NewMockAssistantManager(ctrl)
 	srv.AssistantManager = manager
 
-	r := chi.NewRouter()
-	RegisterAssistantRoutes(srv, r, "/assistant")
-
-	return r, manager, auth
+	return licensedAssistantRouter(t, srv), manager, auth
 }
 
 const automationHandlerTestId = "5c0b1f2e-0c6d-4a71-9f3e-1b8a2d4c6e90"
@@ -4153,8 +4228,7 @@ func TestCloneSession_OntoAlertNeedsBothParameters(t *testing.T) {
 
 func TestCloneSession_Route(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
-	r := chi.NewRouter()
-	RegisterAssistantRoutes(srv, r, "/assistant")
+	r := licensedAssistantRouter(t, srv)
 
 	mockStore.EXPECT().CloneSession(gomock.Any(), "abc", "", "").Return(&model.AssistantSession{SessionId: "new"}, nil)
 

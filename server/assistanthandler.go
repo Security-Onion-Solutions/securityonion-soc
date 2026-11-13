@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/util"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -42,6 +43,8 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	h := NewAssistantHandler(srv)
 
 	r.Route(prefix, func(r chi.Router) {
+		r.Use(h.assistantEnabled)
+
 		r.Post("/chat", h.PostChat)
 		r.Post("/tool/{name}", h.PostTool)
 		r.Get("/balance/*", h.GetBalance)
@@ -76,6 +79,18 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Get("/admin/sessions", h.getAllSessions)
 		r.Get("/admin/{userId}/sessions", h.GetSessionsAdmin)
 		r.Get("/admin/{userId}/sessions/{sessionId}/history", h.ManageSessionHistory)
+	})
+}
+
+// assistantEnabled rejects every request with 400 ERROR_LICENSE_INVALID unless OAI is licensed.
+func (h *AssistantHandler) assistantEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !licensing.IsEnabled(licensing.FEAT_OAI) {
+			web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -117,7 +132,7 @@ func streamingAccepted(r *http.Request) (bool, string) {
 // @Accept       json
 // @Produce      json,text/event-stream
 // @Success      200  {array}   model.Message "AI assistant response messages"
-// @Failure      400           "The provided input object or parameters are malformed or invalid"
+// @Failure      400           "The provided input object or parameters are malformed or invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -245,7 +260,7 @@ func (h *AssistantHandler) handleStreamingChat(ctx context.Context, w http.Respo
 // @Accept       json
 // @Produce      json,text/event-stream
 // @Success      200  {array}   model.Message "AI assistant response messages after tool execution"
-// @Failure      400           "The provided input object or parameters are malformed or invalid"
+// @Failure      400           "The provided input object or parameters are malformed or invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "No pending tool request with this ID exists in the session"
@@ -499,6 +514,7 @@ func writeResolvedMarker(w http.ResponseWriter, parentSessionId, parentToolUseId
 // @Param        modelAndAdapter  path  string  true  "Model selector to get balance for: the id@adapter pair (bare id allowed, slashes in ids supported), or an agent name in agentic mode" example(sonnet-4.5@SOAI)
 // @Produce      json
 // @Success      200  {object}  model.Usage "Current assistant balance and usage information"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -547,6 +563,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[assistant/read_authored]
 // @Produce      json
 // @Success      200  {array}   model.AssistantSession "List of previous conversation session metadata"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -591,7 +608,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Param        sessionId  path  string  true  "Session ID to retrieve history for"
 // @Produce      json
 // @Success      200 {object} model.AssistantSessionDetails "Complete chat history and session details"
-// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      400           "The provided session ID is invalid or missing, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -756,7 +773,7 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 // @Param        request  body  model.UpdateSessionRequest   true  "Indicate what field we're doing what operation with."
 // @Produce      json
 // @Success      204           "No content"
-// @Failure      400           "The provided session ID is invalid or missing, the action is not add or remove, the tag is blank, or the tag is reserved"
+// @Failure      400           "The provided session ID is invalid or missing, the action is not add or remove, the tag is blank, the tag is reserved, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request, or the session belongs to another user"
 // @Failure      404           "Session not found"
@@ -840,7 +857,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 // @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
 // @Produce      json
 // @Success      201  {object}  model.AssistantSession  "The new session"
-// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session, or the alert does not reference the session"
+// @Failure      400           "The provided session ID is invalid, missing, or names a delegation sub-session, the alert does not reference the session, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Session not found"
@@ -917,7 +934,7 @@ const MaxSessionAccessIds = 50
 // @Param        request  body  model.SessionAccessRequest  true  "The sessions to check"
 // @Produce      json
 // @Success      200  {object}  map[string]bool  "Whether each session can be opened, keyed by session id"
-// @Failure      400           "No session ids, or more than 50"
+// @Failure      400           "No session ids, more than 50 session ids, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -985,7 +1002,7 @@ func (h *AssistantHandler) PostSessionsAccess(w http.ResponseWriter, r *http.Req
 // @Security     bearer[assistant/delete_authored]
 // @Param        sessionId  path  string  true  "Session ID to delete"
 // @Success      204           "Session successfully deleted"
-// @Failure      400           "The provided session ID is invalid or missing"
+// @Failure      400           "The provided session ID is invalid or missing, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1048,7 +1065,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 // @Security     bearer[assistant/read_all]
 // @Produce      json
 // @Success      200  {array}   model.UserUsage "Usage statistics for the AI assistant"
-// @Failure      400           "The provided date range is invalid or missing"
+// @Failure      400           "The provided date range is invalid or missing, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1096,6 +1113,7 @@ func (h *AssistantHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[assistant/read_all]
 // @Produce      json
 // @Success      200  {array}   model.AssistantSession "List of previous chat session metadata"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1111,6 +1129,7 @@ func (h *AssistantHandler) getAllSessions(w http.ResponseWriter, r *http.Request
 // @Param        userId     path  string              true  "ID of the user to retrieve sessions from"
 // @Produce      json
 // @Success      200  {array}   model.AssistantSession "List of previous conversation sessions"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1174,6 +1193,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 // @Param        sessionId  path  string              true  "ID of the session to retrieve, it must belong to the indicated user"
 // @Produce      json
 // @Success      200  {array}   model.StoredMessage "List of messages belonging to the session"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1669,7 +1689,7 @@ func removeAuxData(messages []*model.StoredMessage) {
 // @Param        request  body  model.StoredAgent  true  "Agent definition"
 // @Produce      json
 // @Success      200           "Agent saved"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1701,6 +1721,7 @@ func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
 // @Param        name  path  string  true  "Agent name"
 // @Produce      json
 // @Success      200           "Agent deleted"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions, or the agent is system-provided"
 // @Failure      404           "Agent not found"
@@ -1725,7 +1746,7 @@ func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 // @Param        request  body  model.StoredSkill  true  "Skill definition"
 // @Produce      json
 // @Success      200           "Skill saved"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1757,6 +1778,7 @@ func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {
 // @Param        name  path  string  true  "Skill name"
 // @Produce      json
 // @Success      200           "Skill deleted"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions, or the skill is system-provided"
 // @Failure      404           "Skill not found"
@@ -1779,6 +1801,7 @@ func (h *AssistantHandler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 // @Security     bearer[automations/read]
 // @Produce      json
 // @Success      200 {array} model.Automation "The list of automations"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1802,6 +1825,7 @@ func (h *AssistantHandler) GetAutomations(w http.ResponseWriter, r *http.Request
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200 {object} model.Automation "The automation"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Automation not found"
@@ -1826,7 +1850,7 @@ func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request)
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
 // @Success      200 {object} model.Automation "The created automation"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1843,7 +1867,7 @@ func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Reque
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
 // @Success      200 {object} model.Automation "The updated automation"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Automation not found"
@@ -1885,6 +1909,7 @@ func (h *AssistantHandler) saveAutomation(w http.ResponseWriter, r *http.Request
 // @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200           "Automation deleted"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request, or the automation ships with the product"
 // @Failure      404           "Automation not found"
@@ -1915,7 +1940,7 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 // @Param        count         query  bool    false  "Also count every matching run" example(true)
 // @Produce      json
 // @Success      200 {object} model.AutomationRunPage "The page of runs"
-// @Failure      400           "The search is too long"
+// @Failure      400           "The search is too long, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "automationId is not a valid automation ID"
@@ -1955,6 +1980,7 @@ func (h *AssistantHandler) GetAllAutomationRuns(w http.ResponseWriter, r *http.R
 // @Param        offset  query  int     false  "Page offset" example(0)
 // @Produce      json
 // @Success      200 {object} model.AutomationRunHistory "The page of runs"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Automation not found and no runs remain for it"
@@ -1985,6 +2011,7 @@ func (h *AssistantHandler) GetAutomationRuns(w http.ResponseWriter, r *http.Requ
 // @Param        alertLimit  query  int     false  "Alerts to return, at most 10000" example(500)
 // @Produce      json
 // @Success      200 {object} model.AutomationRunDetails "The run"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Run not found under this automation"
@@ -2015,6 +2042,7 @@ func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Reque
 // @Security     bearer[automations/read]
 // @Produce      json
 // @Success      200 {object} model.AutomationActivity "The activity"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -2044,6 +2072,7 @@ func (h *AssistantHandler) GetAutomationActivity(w http.ResponseWriter, r *http.
 // @Param        offset  query  int     false  "Page offset" example(0)
 // @Produce      json
 // @Success      200 {object} model.MemoryResults "A page of memories"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -2078,7 +2107,7 @@ func (h *AssistantHandler) GetMemories(w http.ResponseWriter, r *http.Request) {
 // @Param        request  body  model.MemoryRequest  true  "Memory to create"
 // @Produce      json
 // @Success      200 {object} model.MemoryRecord "The created memory"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -2097,7 +2126,7 @@ func (h *AssistantHandler) CreateMemory(w http.ResponseWriter, r *http.Request) 
 // @Param        request  body  model.MemoryRequest  true  "Replacement memory"
 // @Produce      json
 // @Success      200 {object} model.MemoryRecord "The updated memory"
-// @Failure      400           "The request body is invalid"
+// @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Memory not found"
@@ -2152,6 +2181,7 @@ func (h *AssistantHandler) saveMemory(w http.ResponseWriter, r *http.Request, id
 // @Param        id  path  string  true  "Memory ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
 // @Produce      json
 // @Success      200           "Memory deleted"
+// @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Memory not found"
