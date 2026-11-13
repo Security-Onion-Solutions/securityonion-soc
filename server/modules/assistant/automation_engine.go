@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
-	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -38,8 +37,8 @@ type automationScheduler struct {
 	wake   chan struct{}
 	done   chan struct{}
 
-	// Worker goroutine only; logs a lapsed license once rather than every tick.
-	unlicensed bool
+	// Worker goroutine only.
+	license oaiLicenseGate
 }
 
 // startAutomationScheduler starts the worker where a run could succeed: agentic, with Postgres.
@@ -311,18 +310,8 @@ func (ac *AssistantCoordinator) automationTick(s *automationScheduler) {
 
 	logger := log.FromContext(s.ctx)
 
-	if !licensing.IsEnabled(licensing.FEAT_OAI) {
-		if !s.unlicensed {
-			logger.Warn("no active license with OAI enabled; automations will not start")
-			s.unlicensed = true
-		}
-
+	if !s.license.allows(logger, "automations") {
 		return
-	}
-
-	if s.unlicensed {
-		logger.Info("active license with OAI enabled; automations will start")
-		s.unlicensed = false
 	}
 
 	// Bounds the reads and the opens to one interval; runs descend from s.ctx.

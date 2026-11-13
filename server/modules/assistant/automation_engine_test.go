@@ -578,14 +578,14 @@ func TestTickResumesOnceOAIIsLicensed(t *testing.T) {
 
 	f := newEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
 	ctx, h := capturedLogger()
-	s := &automationScheduler{ctx: ctx, unlicensed: true}
+	s := &automationScheduler{ctx: ctx, license: oaiLicenseGate{unlicensed: true}}
 
 	f.ac.automationTick(s)
 	f.ac.automationRunsWg.Wait()
 
 	opens, _, _ := f.snapshot()
 	assert.Equal(t, 1, opens)
-	assert.False(t, s.unlicensed)
+	assert.False(t, s.license.unlicensed)
 	assert.Contains(t, logMessagesAt(h, log.InfoLevel), "active license with OAI enabled; automations will start")
 }
 

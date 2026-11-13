@@ -3278,14 +3278,34 @@ func TestAssistantEnabled(t *testing.T) {
 }
 
 func TestAssistantRoutesRequireLicense(t *testing.T) {
-	r, _ := agentConfigRouter(t)
-	licensing.Shutdown()
+	routes := []struct {
+		method string
+		target string
+	}{
+		{http.MethodGet, "/assistant/automations"},
+		{http.MethodPost, "/assistant/chat"},
+		{http.MethodPost, "/assistant/tool/x"},
+		{http.MethodPut, "/assistant/agents/a"},
+		{http.MethodGet, "/assistant/admin/stats"},
+		{http.MethodDelete, "/assistant/memories/id"},
+	}
 
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, agentConfigRequest(http.MethodGet, "/assistant/automations", nil))
+	for _, route := range routes {
+		t.Run(route.method+" "+route.target, func(t *testing.T) {
+			// The mock manager expects no calls, so a request that got past the gate fails here.
+			r, _ := agentConfigRouterAuthorized(t, false)
+			licensing.Shutdown()
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "ERROR_LICENSE_INVALID", w.Body.String())
+			req := agentConfigRequest(route.method, route.target, nil)
+			req.Header.Set("Accept", "text/event-stream")
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, "ERROR_LICENSE_INVALID", w.Body.String())
+		})
+	}
 }
 
 func TestSaveAgentDecodesNameFromPath(t *testing.T) {

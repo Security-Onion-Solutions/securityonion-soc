@@ -82,6 +82,7 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 	})
 }
 
+// assistantEnabled rejects every request with 400 ERROR_LICENSE_INVALID unless OAI is licensed.
 func (h *AssistantHandler) assistantEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !licensing.IsEnabled(licensing.FEAT_OAI) {

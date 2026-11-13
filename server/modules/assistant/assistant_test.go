@@ -3326,6 +3326,45 @@ func TestLoadAdapters_SkipsAdapterWithoutLicenseKey(t *testing.T) {
 	}
 }
 
+func TestOAILicenseGate(t *testing.T) {
+	tests := []struct {
+		name          string
+		wasUnlicensed bool
+		licensed      bool
+		level         log.Level
+		message       string
+	}{
+		{name: "a lapse is logged", level: log.WarnLevel, message: "no active license with OAI enabled; scans will not start"},
+		{name: "a continuing lapse is quiet", wasUnlicensed: true},
+		{name: "a return is logged", wasUnlicensed: true, licensed: true, level: log.InfoLevel, message: "active license with OAI enabled; scans will start"},
+		{name: "a continuing license is quiet", licensed: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.licensed {
+				licenseOAI(t)
+			} else {
+				licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+				t.Cleanup(licensing.Shutdown)
+			}
+
+			ctx, h := capturedLogger()
+			g := oaiLicenseGate{unlicensed: tt.wasUnlicensed}
+
+			assert.Equal(t, tt.licensed, g.allows(log.FromContext(ctx), "scans"))
+			assert.Equal(t, !tt.licensed, g.unlicensed)
+
+			if tt.message == "" {
+				assert.Empty(t, h.Entries)
+			} else if assert.Len(t, h.Entries, 1) {
+				assert.Equal(t, tt.level, h.Entries[0].Level)
+				assert.Equal(t, tt.message, h.Entries[0].Message)
+			}
+		})
+	}
+}
+
 func TestAssistantCoordinator_Init_MaxMemoryRetries(t *testing.T) {
 	tests := []struct {
 		name         string

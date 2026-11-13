@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,13 @@ func teardown() {
 func setup() func() {
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
 	return teardown
+}
+
+func countActivations(tester *testing.T) *int {
+	activated := 0
+	tester.Cleanup(OnActivated(func() { activated++ }))
+
+	return &activated
 }
 
 func TestInit_Missing(tester *testing.T) {
@@ -85,26 +93,54 @@ func TestExpirationMonitor_ReplacedManager(tester *testing.T) {
 
 func TestEffectiveMonitor_Unprovisioned(tester *testing.T) {
 	defer setup()()
+	activated := countActivations(tester)
 
 	Init("")
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
 	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_UNPROVISIONED, GetStatus())
+	assert.Zero(tester, *activated)
 }
 
 func TestEffectiveMonitor_Pending(tester *testing.T) {
 	defer setup()()
+	activated := countActivations(tester)
 
 	Init("")
 	manager.status = LICENSE_STATUS_PENDING
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
 	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_ACTIVE, GetStatus())
+	assert.Equal(tester, 1, *activated)
+}
+
+func TestActivate_RunsEveryCallback(tester *testing.T) {
+	counts := []*int{countActivations(tester), countActivations(tester), countActivations(tester)}
+
+	TestActivate()
+
+	for _, count := range counts {
+		assert.Equal(tester, 1, *count)
+	}
+}
+
+func TestOnActivated_Unregister(tester *testing.T) {
+	activated := 0
+	unregister := OnActivated(func() { activated++ })
+	kept := countActivations(tester)
+
+	unregister()
+	unregister()
+	TestActivate()
+
+	assert.Zero(tester, activated)
+	assert.Equal(tester, 1, *kept)
 }
 
 func TestEffectiveMonitor_Exceeded(tester *testing.T) {
 	defer setup()()
+	activated := countActivations(tester)
 
 	Init("")
 	manager.status = LICENSE_STATUS_PENDING
@@ -112,10 +148,12 @@ func TestEffectiveMonitor_Exceeded(tester *testing.T) {
 	manager.licenseKey.Effective = time.Now().Add(time.Second * 1)
 	startEffectiveMonitor(manager)
 	assert.Equal(tester, LICENSE_STATUS_EXCEEDED, GetStatus())
+	assert.Zero(tester, *activated)
 }
 
 func TestEffectiveMonitor_ReplacedManager(tester *testing.T) {
 	defer setup()()
+	activated := countActivations(tester)
 
 	Init("")
 	old := manager
@@ -127,8 +165,40 @@ func TestEffectiveMonitor_ReplacedManager(tester *testing.T) {
 	manager.status = LICENSE_STATUS_PENDING
 	startEffectiveMonitor(old)
 
-	assert.Equal(tester, LICENSE_STATUS_ACTIVE, old.status)
+	assert.Equal(tester, LICENSE_STATUS_PENDING, old.status)
 	assert.Equal(tester, LICENSE_STATUS_PENDING, GetStatus())
+	assert.Zero(tester, *activated)
+}
+
+func TestEffectiveMonitor_StopDoesNotActivate(tester *testing.T) {
+	activated := countActivations(tester)
+
+	synctest.Test(tester, func(t *testing.T) {
+		m := newLicenseManager()
+		m.status = LICENSE_STATUS_PENDING
+		m.licenseKey = &SignedLicenseKey{LicenseKey: &LicenseKey{Effective: time.Now().Add(time.Hour)}}
+		manager = m
+
+		done := make(chan struct{})
+		go func() {
+			startEffectiveMonitor(m)
+			close(done)
+		}()
+
+		synctest.Wait()
+		stopMonitor()
+		<-done
+
+		assert.Zero(t, *activated)
+	})
+}
+
+func TestActivate_RunsCallbacks(tester *testing.T) {
+	activated := countActivations(tester)
+
+	TestActivate()
+
+	assert.Equal(tester, 1, *activated)
 }
 
 func TestIsEnabled(tester *testing.T) {

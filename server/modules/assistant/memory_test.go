@@ -3145,36 +3145,6 @@ func TestOnConfigSettingUpdatedReloadsMemoryWithoutAgentic(t *testing.T) {
 	assert.True(t, ac.memorySnapshot().useMemory, "memory settings reload even when agentic is off")
 }
 
-func TestLogScanLicenseChange(t *testing.T) {
-	tests := []struct {
-		name          string
-		wasUnlicensed bool
-		licensed      bool
-		level         log.Level
-		message       string
-	}{
-		{name: "a lapse is logged", level: log.WarnLevel, message: "no active license with OAI enabled; memory scans will not start"},
-		{name: "a continuing lapse is quiet", wasUnlicensed: true},
-		{name: "a return is logged", wasUnlicensed: true, licensed: true, level: log.InfoLevel, message: "active license with OAI enabled; memory scans will start"},
-		{name: "a continuing license is quiet", licensed: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, h := capturedLogger()
-
-			logScanLicenseChange(log.FromContext(ctx), tt.wasUnlicensed, tt.licensed)
-
-			if tt.message == "" {
-				assert.Empty(t, h.Entries)
-			} else if assert.Len(t, h.Entries, 1) {
-				assert.Equal(t, tt.level, h.Entries[0].Level)
-				assert.Equal(t, tt.message, h.Entries[0].Message)
-			}
-		})
-	}
-}
-
 func TestMemoryWorkerSkipsScansWithoutAnOAILicense(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	t.Cleanup(licensing.Shutdown)
@@ -3233,6 +3203,51 @@ func TestMemoryWorkerStopsScanningWhenTheLicenseLapses(t *testing.T) {
 		<-done
 
 		assert.EqualValues(t, 1, scans.Load())
+	})
+}
+
+func TestMemoryWorkerResumesScansWhenLicenseReturns(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	// Started outside the bubble: licensing leaves a sleeping goroutine that would deadlock one.
+	relicense := make(chan struct{})
+	relicensed := make(chan struct{})
+	go func() {
+		<-relicense
+		licensing.Test(licensing.FEAT_OAI, 0, 0, "", "")
+		close(relicensed)
+	}()
+
+	synctest.Test(t, func(t *testing.T) {
+		store, scans := countingScanStore(t)
+		ac := newScanTestCoordinator(store, &mockdb.MockDB{}, &scriptedAdapter{}, singleEmbedAdapter(), &scriptedAdapter{})
+		ac.memory.scanInterval = time.Minute
+
+		ctx, h := capturedLogger()
+		ctx, cancel := context.WithCancelCause(ctx)
+
+		done := make(chan struct{})
+		go func() {
+			ac.memoryWorker(ctx, nil)
+			close(done)
+		}()
+
+		time.Sleep(2 * time.Minute)
+		synctest.Wait()
+		assert.Zero(t, scans.Load())
+
+		close(relicense)
+		<-relicensed
+
+		time.Sleep(time.Minute)
+		synctest.Wait()
+
+		cancel(nil)
+		<-done
+
+		assert.EqualValues(t, 1, scans.Load())
+		assert.Contains(t, logMessagesAt(h, log.InfoLevel), "active license with OAI enabled; memory scans will start")
 	})
 }
 
@@ -3844,13 +3859,13 @@ func TestResumeDeferredReembed(t *testing.T) {
 	}
 }
 
-func TestMemoryWorkerResumesADeferredReembedOnceLicensed(t *testing.T) {
+func TestDeferredReembedResumesWithoutTheScanner(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 	t.Cleanup(licensing.Shutdown)
 
 	mDB := &mockdb.MockDB{}
 	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
-	ac.memory.scanInterval = time.Minute
+	ac.memory.useMemory = true
 
 	expectStaleCount(mDB, "embed-model", 1)
 	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
@@ -3859,40 +3874,89 @@ func TestMemoryWorkerResumesADeferredReembedOnceLicensed(t *testing.T) {
 		"mem-1", mock.Anything, "embed-model").Return(nil).Once()
 
 	ac.startReembed(ac.srv.Context)
-
-	runWorker := func(d time.Duration) {
-		synctest.Test(t, func(t *testing.T) {
-			ctx, cancel := context.WithCancelCause(context.Background())
-
-			done := make(chan struct{})
-			go func() {
-				ac.memoryWorker(ctx, nil)
-				close(done)
-			}()
-
-			time.Sleep(d)
-			synctest.Wait()
-
-			cancel(nil)
-			<-done
-		})
-	}
-
-	runWorker(3 * time.Minute)
-
-	mDB.AssertNotCalled(t, "Exec", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	assert.True(t, ac.reembedDeferred, "an unlicensed scanner leaves the re-embed deferred")
+	assert.True(t, ac.reembedDeferred)
 
 	// Outside any bubble: licensing.Test starts monitor goroutines.
 	licenseOAI(t)
 
-	runWorker(time.Minute)
+	synctest.Test(t, func(t *testing.T) {
+		ac.resumeDeferredReembed(ac.srv.Context)
+	})
 
 	assert.False(t, ac.reembedDeferred)
 	assert.False(t, ac.reembedding)
+	assert.Nil(t, ac.terminateMemory, "no scanner ran")
 	assert.Equal(t, int64(0), ac.staleMemories.Load())
 	assert.Equal(t, "embed-model@EmbedAdapter", ac.lastReembedModel)
 	mDB.AssertExpectations(t)
+}
+
+func TestStopDropsADeferredReembed(t *testing.T) {
+	ac := newReembedTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter())
+	ac.reembedDeferred = true
+
+	assert.NoError(t, ac.Stop())
+	assert.False(t, ac.reembedDeferred)
+
+	licenseOAI(t)
+	ac.resumeDeferredReembed(ac.srv.Context)
+
+	ac.memoryWorkerMu.Lock()
+	defer ac.memoryWorkerMu.Unlock()
+	assert.False(t, ac.reembedding)
+}
+
+func TestStartResumesADeferredReembedWhenTheLicenseActivates(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	mDB := &mockdb.MockDB{}
+	ac := newReembedTestCoordinator(mDB, singleEmbedAdapter())
+	ac.memory.useMemory = true
+	ac.memory.embedModel = "embed-model@EmbedAdapter"
+
+	expectStaleCount(mDB, "embed-model", 1)
+	expectStaleBatch(mDB, "embed-model", [][2]string{{"mem-1", "likes tea"}})
+	expectStaleBatch(mDB, "embed-model", nil)
+	mDB.On("Exec", mock.Anything, sqlContains("UPDATE memories SET embedding = $2, model_id = $3"),
+		"mem-1", mock.Anything, "embed-model").Return(nil).Once()
+
+	assert.NoError(t, ac.Start())
+	assert.True(t, ac.reembedDeferred)
+
+	// Outside any bubble: licensing.Test starts monitor goroutines.
+	licenseOAI(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		licensing.TestActivate()
+	})
+
+	assert.False(t, ac.reembedDeferred)
+	assert.False(t, ac.reembedding)
+	assert.Equal(t, "embed-model@EmbedAdapter", ac.lastReembedModel)
+	mDB.AssertExpectations(t)
+}
+
+func TestStartIgnoresAnActivationAfterStop(t *testing.T) {
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	t.Cleanup(licensing.Shutdown)
+
+	ac := newReembedTestCoordinator(&mockdb.MockDB{}, singleEmbedAdapter())
+	ac.memory.useMemory = true
+	ac.memory.embedModel = "embed-model@EmbedAdapter"
+
+	assert.NoError(t, ac.Start())
+	assert.NoError(t, ac.Stop())
+
+	licenseOAI(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		licensing.TestActivate()
+	})
+
+	assert.False(t, ac.reembedDeferred)
+	assert.False(t, ac.reembedding)
+	assert.Empty(t, ac.lastReembedModel)
 }
 
 func TestReembedPacesBetweenBatches(t *testing.T) {

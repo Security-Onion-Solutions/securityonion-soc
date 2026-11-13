@@ -40,7 +40,6 @@ const (
 
 var (
 	ErrNon2XXResponse = errors.New("received a non-2XX response")
-	ErrNoLicenseKey   = errors.New("no license key to build the SOAI API key from")
 )
 
 type SOAiCloudAdapter struct {

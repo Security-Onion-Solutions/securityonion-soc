@@ -275,6 +275,8 @@ func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 	}()
 }
 
+// resumeDeferredReembed starts the re-embed pass that startReembed skipped while unlicensed, if
+// any. It runs from the licensing OnActivated hook.
 func (ac *AssistantCoordinator) resumeDeferredReembed(ctx context.Context) {
 	ac.memoryWorkerMu.Lock()
 	deferred := ac.reembedDeferred
@@ -516,7 +518,7 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 	logger := log.FromContext(ctx)
 
 	interval := ac.memorySnapshot().scanInterval
-	unlicensed := false
+	var license oaiLicenseGate
 	logger.WithField("interval", interval).Info("starting interval")
 	ticker := time.NewTicker(interval)
 
@@ -543,14 +545,9 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 		case <-ticker.C:
 		}
 
-		licensed := licensing.IsEnabled(licensing.FEAT_OAI)
-		logScanLicenseChange(logger, unlicensed, licensed)
-		unlicensed = !licensed
-		if !licensed {
+		if !license.allows(logger, "memory scans") {
 			continue
 		}
-
-		ac.resumeDeferredReembed(ctx)
 
 		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())
 
@@ -578,16 +575,6 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 		ac.memoryWorkerMu.Unlock()
 
 		logger.WithField("memoryScanDuration", time.Since(start)).Info("scan completed")
-	}
-}
-
-// logScanLicenseChange logs only when OAI licensing changes from what the scanner last saw.
-func logScanLicenseChange(logger log.Interface, wasUnlicensed, licensed bool) {
-	switch {
-	case !licensed && !wasUnlicensed:
-		logger.Warn("no active license with OAI enabled; memory scans will not start")
-	case licensed && wasUnlicensed:
-		logger.Info("active license with OAI enabled; memory scans will start")
 	}
 }
 

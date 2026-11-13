@@ -176,10 +176,19 @@ func TestSOAiConstructor_NoLicenseKey(t *testing.T) {
 	licensing.Init("")
 	t.Cleanup(licensing.Shutdown)
 
-	adapter, err := NewSOAiCloudAdapter(context.Background(), &server.Server{}, map[string]any{})
+	configs := map[string]map[string]any{
+		"default url": {},
+		"custom url":  {"apiUrl": "https://example.test"},
+	}
 
-	assert.ErrorIs(t, err, ErrNoLicenseKey)
-	assert.Nil(t, adapter)
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			adapter, err := NewSOAiCloudAdapter(context.Background(), &server.Server{}, config)
+
+			assert.ErrorIs(t, err, ErrNoLicenseKey)
+			assert.Nil(t, adapter)
+		})
+	}
 }
 
 func TestSOAiGetHealth(t *testing.T) {

@@ -23,10 +23,13 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"io"
+	"maps"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,6 +85,8 @@ type licenseManager struct {
 	effectiveTimer  *time.Timer
 	pillarTimer     *time.Timer
 	licenseKey      *SignedLicenseKey
+	// Lets a woken monitor tell stopMonitor from its timer firing.
+	stopped atomic.Bool
 }
 
 type LicenseKey struct {
@@ -119,6 +124,38 @@ type SignedLicenseKey struct {
 
 var mutex sync.Mutex
 var manager *licenseManager
+
+var activatedMutex sync.Mutex
+var activatedCallbacks = map[uint64]func(){}
+var activatedNextId uint64
+
+// OnActivated registers fn to run, on the license monitor's goroutine, when a pending license
+// becomes active. The returned func unregisters it.
+func OnActivated(fn func()) func() {
+	activatedMutex.Lock()
+	defer activatedMutex.Unlock()
+
+	id := activatedNextId
+	activatedNextId++
+	activatedCallbacks[id] = fn
+
+	return func() {
+		activatedMutex.Lock()
+		defer activatedMutex.Unlock()
+
+		delete(activatedCallbacks, id)
+	}
+}
+
+func notifyActivated() {
+	activatedMutex.Lock()
+	callbacks := slices.Collect(maps.Values(activatedCallbacks))
+	activatedMutex.Unlock()
+
+	for _, fn := range callbacks {
+		fn()
+	}
+}
 
 func newLicenseManager() *licenseManager {
 	return &licenseManager{
@@ -252,6 +289,8 @@ func Init(key string) {
 	createManager(status, available, licenseKey, true)
 }
 
+// Test installs an active license enabling feat, or every feature when feat is empty. Outside
+// `go test` it does nothing, so a production binary can never fake a license.
 func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	if !testing.Testing() {
 		return
@@ -275,6 +314,16 @@ func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
 	licenseKey.SocUrl = socUrl
 	licenseKey.DataUrl = dataUrl
 	createManager(LICENSE_STATUS_ACTIVE, available, licenseKey, false)
+}
+
+// TestActivate runs the OnActivated callbacks as a pending license becoming active would. Outside
+// `go test` it does nothing.
+func TestActivate() {
+	if !testing.Testing() {
+		return
+	}
+
+	notifyActivated()
 }
 
 func Shutdown() {
@@ -319,7 +368,8 @@ func createManager(status string, available []string, signedLicenseKey *SignedLi
 	}).Info("Initialized license manager")
 }
 
-// Scoped to m: stopMonitor wakes this just before a replacement manager is published.
+// startExpirationMonitor marks m expired once its expiration passes. Scoped to m: stopMonitor
+// wakes this just before a replacement manager is published.
 func startExpirationMonitor(m *licenseManager) {
 	if m.licenseKey.Expiration.After(time.Now()) {
 		duration := time.Until(m.licenseKey.Expiration)
@@ -340,6 +390,8 @@ func startExpirationMonitor(m *licenseManager) {
 	m.expirationTimer = nil
 }
 
+// startEffectiveMonitor moves a pending m to active, or exceeded when limits are hit, once its
+// effective date passes. Only an activation runs the OnActivated callbacks.
 func startEffectiveMonitor(m *licenseManager) {
 	if m.licenseKey.Effective.After(time.Now()) {
 		duration := time.Until(m.licenseKey.Effective)
@@ -349,6 +401,11 @@ func startEffectiveMonitor(m *licenseManager) {
 		}
 		m.effectiveTimer = time.NewTimer(duration)
 		<-m.effectiveTimer.C
+
+		if m.stopped.Load() {
+			m.effectiveTimer = nil
+			return
+		}
 
 		if m.status == LICENSE_STATUS_PENDING {
 			if len(m.limits) > 0 {
@@ -363,6 +420,7 @@ func startEffectiveMonitor(m *licenseManager) {
 					"duration":  duration,
 				}).Warn("License has become effective")
 				m.status = LICENSE_STATUS_ACTIVE
+				notifyActivated()
 			}
 		} else {
 			log.WithFields(log.Fields{
@@ -436,6 +494,7 @@ func Usable() bool {
 
 func stopMonitor() {
 	if manager != nil {
+		manager.stopped.Store(true)
 		if manager.expirationTimer != nil {
 			manager.expirationTimer.Reset(time.Duration(0))
 		}
