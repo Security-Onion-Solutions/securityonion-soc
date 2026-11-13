@@ -27,6 +27,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/apex/log"
@@ -252,6 +253,10 @@ func Init(key string) {
 }
 
 func Test(feat string, users int, nodes int, socUrl string, dataUrl string) {
+	if !testing.Testing() {
+		return
+	}
+
 	available := CreateAvailableFeatureList()
 
 	pillarFilename = "/tmp/soc_test_pillar_monitor.sls"
