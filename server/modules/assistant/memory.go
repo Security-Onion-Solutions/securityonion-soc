@@ -239,6 +239,10 @@ func (ac *AssistantCoordinator) setStaleMemoryCount(stale int) {
 
 func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 	if !licensing.IsEnabled(licensing.FEAT_OAI) {
+		ac.memoryWorkerMu.Lock()
+		ac.reembedDeferred = true
+		ac.memoryWorkerMu.Unlock()
+
 		log.FromContext(ctx).Warn("no active license with OAI enabled; not re-embedding memories")
 		return
 	}
@@ -269,6 +273,17 @@ func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 
 		ac.reembedStaleMemories(passCtx)
 	}()
+}
+
+func (ac *AssistantCoordinator) resumeDeferredReembed(ctx context.Context) {
+	ac.memoryWorkerMu.Lock()
+	deferred := ac.reembedDeferred
+	ac.reembedDeferred = false
+	ac.memoryWorkerMu.Unlock()
+
+	if deferred {
+		ac.startReembed(ctx)
+	}
 }
 
 func (ac *AssistantCoordinator) embedModelVerified(selector string) bool {
@@ -534,6 +549,8 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 		if !licensed {
 			continue
 		}
+
+		ac.resumeDeferredReembed(ctx)
 
 		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())
 

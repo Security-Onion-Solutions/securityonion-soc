@@ -296,6 +296,8 @@ type AssistantCoordinator struct {
 	// terminateReembed interrupts it at the next batch boundary.
 	reembedding      bool
 	terminateReembed context.CancelCauseFunc
+	// Set when startReembed skipped a pass for want of a license; the scanner retries it.
+	reembedDeferred bool
 	// Interrupts the scan pass currently running, if any; nil between passes.
 	terminateMemoryScan context.CancelCauseFunc
 	// Embed model selector the last pass verified the store against; empty until
