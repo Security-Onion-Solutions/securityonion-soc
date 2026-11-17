@@ -71,6 +71,21 @@ test('a failed notification with a known code shows the code\'s key text', () =>
   expect(s.notifications[0].error).toBe(comp.i18n.ERROR_ASSISTANT_NOTIFICATIONS_UNLICENSED);
 });
 
+const failedNotification = (text) => comp.summarize({ session: {}, history: [
+  { message: { role: 'assistant', contentBlocks: [{ type: 'tool_use', id: 'n1', name: 'send_notification', input: { title: 'T', summary: 's' } }] } },
+  { tags: ['tool_result'], message: { role: 'user', contentBlocks: [{ toolResult: { toolUseId: 'n1', status: 'error', isError: true, content: [{ text: text }] } }] } },
+] }).notifications[0];
+
+test('a failed notification whose text wraps a code shows the code\'s key text', () => {
+  const n = failedNotification('ERROR_ASSISTANT_NOTIFICATION_TITLE_REQUIRED: title was empty');
+  expect(n.error).toBe(comp.i18n.ERROR_ASSISTANT_NOTIFICATION_TITLE_REQUIRED);
+});
+
+test('a failed notification keeps long raw text whole', () => {
+  const long = 'smtp: ' + 'x'.repeat(500);
+  expect(failedNotification(long).error).toBe(long);
+});
+
 test('a failed load stores the response code\'s key text', async () => {
   const error = new Error('Request failed with status code 404');
   error.response = { status: 404, data: 'ERROR_SESSION_NOT_FOUND' };

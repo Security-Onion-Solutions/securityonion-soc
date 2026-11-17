@@ -1367,6 +1367,14 @@ $(document).ready(function () {
   
           return localized;
         },
+        // For {{ }} text. Tool errors are written for the model and can embed a code;
+        // anything without a known code is shown whole.
+        localizeErrorText(text) {
+          if (!text) return '';
+          const str = String(text);
+          const code = this.i18n[str] ? str : (str.match(/\bERROR_[A-Z0-9_]+\b/g) || []).find(c => this.i18n[c]);
+          return code ? this.stripHtml(this.i18n[code]) : str;
+        },
         tryLocalize(msg) {
           const localized = this.localizeMessage(msg);
           if (localized) {

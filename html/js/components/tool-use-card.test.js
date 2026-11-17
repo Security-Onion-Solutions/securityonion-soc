@@ -24,6 +24,20 @@ test('errorText leaves unknown text unchanged', () => {
   expect(errorText({ status: 'error', error: 'The query timed out' })).toBe('The query timed out');
 });
 
+test('errorText keeps long raw text whole', () => {
+  const long = 'x'.repeat(500);
+  expect(errorText({ status: 'error', error: long })).toBe(long);
+});
+
+test('errorText keeps angle brackets in raw text', () => {
+  expect(errorText({ status: 'error', error: 'unexpected value <nil>' })).toBe('unexpected value <nil>');
+});
+
+test('errorText shows the key text for a code wrapped in English', () => {
+  const text = errorText({ status: 'error', error: 'the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED' });
+  expect(text).toBe(app.i18n.ERROR_AGENT_TURN_STALLED);
+});
+
 test('errorText strips tags from key text that contains a link', () => {
   const text = errorText({ status: 'error', error: 'ERROR_UPSTREAM_SERVICE_ERROR' });
 

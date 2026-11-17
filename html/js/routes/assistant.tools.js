@@ -293,15 +293,16 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
           return;
         }
 
-        const errorText = this.$root.localizeMessage(error);
+        const body = error.response?.data;
+        const rawError = (typeof body === 'string' && this.i18n[body]) ? body : error.message;
 
         // Still busy after the retries: the agent is at its limit or the session is mid-turn.
         if (error.response && error.response.status === 409) {
-          this.$root.showWarning(errorText);
+          this.$root.showWarning(this.$root.localizeMessage(error));
         }
 
         toolUse.status = 'error';
-        toolUse.error = errorText;
+        toolUse.error = rawError;
         this.isStreaming = false;
 
         // If a delegation was still in flight, close the delegate here so a dropped/aborted
@@ -309,7 +310,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         const activeDelegate = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse;
         if (activeDelegate) {
           activeDelegate.status = 'error';
-          activeDelegate.error = errorText;
+          activeDelegate.error = rawError;
           activeDelegate.completedAt = new Date().toISOString();
         }
         if (this.delegationChildren.has(toolStreamingSessionId)) {
@@ -322,7 +323,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         if (isCurrentSession && !activeDelegate) {
           const errorMessage = {
             role: 'assistant',
-            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: errorText }),
+            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: this.$root.localizeErrorText(rawError) }),
             timestamp: new Date().toISOString(),
             isToolResult: true,
             toolName: toolUse.name,

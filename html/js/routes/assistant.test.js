@@ -1938,12 +1938,28 @@ test('executeTool reads a streamed error body once and shows its key text', asyn
 
   await comp.executeTool(toolUse);
 
-  const text = comp.i18n.ERROR_TOOL_REQUEST_MISMATCH;
   expect(reads).toBe(1);
   expect(toolUse.status).toBe('error');
-  expect(toolUse.error).toBe(text);
+  expect(toolUse.error).toBe('ERROR_TOOL_REQUEST_MISMATCH');
   expect(comp.messages).toHaveLength(1);
-  expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: 'query_events', error: text }));
+  expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: 'query_events', error: comp.i18n.ERROR_TOOL_REQUEST_MISMATCH }));
+});
+
+test('executeTool keeps link markup out of the chat message', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+
+  const error = new Error('Request failed with status code 500');
+  error.response = { status: 500, data: 'ERROR_UPSTREAM_SERVICE_ERROR' };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(comp.i18n.ERROR_UPSTREAM_SERVICE_ERROR).toContain('<a ');
+  expect(toolUse.error).toBe('ERROR_UPSTREAM_SERVICE_ERROR');
+  expect(comp.messages[0].content).not.toContain('<a');
+  expect(comp.messages[0].content).toContain('Security Onion status page');
 });
 
 test('executeTool uses the assistantToolExecutionError key', async () => {

@@ -75,6 +75,28 @@ test('stripHtml', () => {
   expect(app.stripHtml(null)).toBe('');
 });
 
+test('localizeErrorText', () => {
+  const original = app.i18n.ERROR_AGENT_TURN_STALLED;
+  app.i18n.ERROR_AGENT_TURN_STALLED = 'X';
+  try {
+    expect(app.localizeErrorText('ERROR_AGENT_TURN_STALLED')).toBe('X');
+    expect(app.localizeErrorText('ERROR_AGENT_TURN_STALLED: no reply in 5m')).toBe('X');
+    expect(app.localizeErrorText('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED')).toBe('X');
+  } finally {
+    app.i18n.ERROR_AGENT_TURN_STALLED = original;
+  }
+
+  expect(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR).toContain('<a ');
+  expect(app.localizeErrorText('ERROR_UPSTREAM_SERVICE_ERROR')).not.toContain('<');
+
+  const long = 'x'.repeat(500);
+  expect(app.localizeErrorText(long)).toBe(long);
+  expect(app.localizeErrorText('ERROR_NOT_A_KEY: x')).toBe('ERROR_NOT_A_KEY: x');
+  expect(app.localizeErrorText("must be '<>', got <-")).toBe("must be '<>', got <-");
+  expect(app.localizeErrorText('unexpected value <nil>')).toBe('unexpected value <nil>');
+  expect(app.localizeErrorText(null)).toBe('');
+});
+
 test('formatMarkdown', () => {
   expect(app.formatMarkdown('```code```')).toBe('<p><code>code</code></p>\n');
   expect(app.formatMarkdown('<scripts src="https://somebad.place"></script>bad')).toBe('<p>bad</p>\n');
