@@ -1501,7 +1501,6 @@ const i18n = {
       scheduleMonths: 'Months',
       month: 'Month',
       onDayOfMonth: 'On day(s) of month',
-      onDay: 'On day of month',
       onNthWeekday: 'On the Nth weekday',
       autoDetect: 'Auto-detect',
       currentlyActive: 'Currently Active',

@@ -8259,6 +8259,27 @@ test('executeTool errors the active delegate card when the stream dies mid-deleg
   expect(comp.messages).toEqual([]);
 });
 
+test('executeTool stores the raw error code on the active delegate card', async () => {
+  const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
+  comp.currentChatId = fakeSessionId;
+  comp.currentModel = 'test-model';
+  comp.messages = [];
+
+  const error = new Error('Request failed with status code 500');
+  error.response = { status: 500, data: 'ERROR_UPSTREAM_SERVICE_ERROR' };
+  mockPapi('post', mockToolStream([
+    sseChunk({ type: 'delegation_start', childSessionId: 'child-1', parentToolUseId: toolUse.id, agentName: 'Hunter' }),
+    sseChunk({ type: 'message_start', message: { role: 'assistant' } }),
+  ], { failWith: error }));
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe('ERROR_UPSTREAM_SERVICE_ERROR');
+  expect(comp.delegationChildren.size).toBe(0);
+  expect(comp.messages).toEqual([]);
+});
+
 test('executeTool reports a top-level error when the stream dies after resolution', async () => {
   const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
   comp.currentChatId = fakeSessionId;
