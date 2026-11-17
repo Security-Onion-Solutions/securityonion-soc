@@ -274,6 +274,9 @@ func TestPutRead_NoLicense(t *testing.T) {
 }
 
 func TestPutRead_InvalidBody(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -296,6 +299,7 @@ func TestPutRead_InvalidBody(t *testing.T) {
 	h.PutRead(w, r)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, web.GENERIC_ERROR_MESSAGE, w.Body.String())
 }
 
 func TestPutDismiss(t *testing.T) {
