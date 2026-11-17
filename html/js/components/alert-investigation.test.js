@@ -62,6 +62,25 @@ test('every notification is listed in order, each with whether it went out', () 
   expect(comp.severityLabel(undefined)).toBe('INFO');
 });
 
+test('a failed notification with a known code shows the code\'s key text', () => {
+  const s = comp.summarize({ session: {}, history: [
+    { message: { role: 'assistant', contentBlocks: [{ type: 'tool_use', id: 'n1', name: 'send_notification', input: { title: 'T', summary: 's' } }] } },
+    { tags: ['tool_result'], message: { role: 'user', contentBlocks: [{ toolResult: { toolUseId: 'n1', status: 'error', isError: true, content: [{ text: 'ERROR_ASSISTANT_NOTIFICATIONS_UNLICENSED' }] } }] } },
+  ] });
+
+  expect(s.notifications[0].error).toBe(comp.i18n.ERROR_ASSISTANT_NOTIFICATIONS_UNLICENSED);
+});
+
+test('a failed load stores the response code\'s key text', async () => {
+  const error = new Error('Request failed with status code 404');
+  error.response = { status: 404, data: 'ERROR_SESSION_NOT_FOUND' };
+  mockPapi('get', null, error);
+
+  await comp.load('gone_1');
+
+  expect(comp.summary('gone_1').error).toBe(comp.i18n.ERROR_SESSION_NOT_FOUND);
+});
+
 test('a reply still being streamed is not taken as the report', () => {
   const streaming = history.concat([
     { tags: ['partial'], message: { role: 'assistant', contentStr: '## Half a rep' }, createTime: '2026-09-24T10:03:00Z' },

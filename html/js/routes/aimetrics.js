@@ -439,9 +439,9 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           if (i > 0 && this.nbspRegexOp(blocks[i - 1].text) != '') {
             expandMessage += `\n\n<hr>\n\n<br>`;
           }
-          let toolMessage = `**Tool:** ${block.name}`;
+          let toolMessage = `**${this.i18n.aiMetricsTranscriptTool}:** ${block.name}`;
           if (block.input) {
-            toolMessage += `\n**Parameters:**`;
+            toolMessage += `\n**${this.i18n.parameters}:**`;
             for (let toolKey in block.input) {
               if (toolKey === 'limit') {
                 toolMessage += `\n- ${toolKey}: ${block.input[toolKey]}`;
@@ -452,7 +452,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
           }
           expandMessage += this.$root.formatMarkdown(toolMessage);
         } else if (block.toolResult) {
-          let resultMessage = `**Tool Result:**\n`;
+          let resultMessage = `**${this.i18n.aiMetricsTranscriptToolResult}:**\n`;
           if (block.toolResult.content) {
             for (let j = 0; j < block.toolResult.content.length; j++) {
               if (j > 0) {
@@ -461,7 +461,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
               let contentBlock = block.toolResult.content[j];
               if (contentBlock.text) {
                 if (block.toolResult.isError) {
-                  resultMessage += `\n**Error:** ${contentBlock.text}\n`;
+                  resultMessage += `\n**${this.i18n.error}:** ${contentBlock.text}\n`;
                 } else {
                   resultMessage += `\n${contentBlock.text}\n`;
                 }
@@ -479,17 +479,20 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (currUserId && currSessionId) {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
+            aid: 'Users',
             disabled: false,
             to: { name: 'aimetrics' },
           },
           {
-            title: 'Sessions',
+            title: this.i18n.aiMetricsSessions,
+            aid: 'Sessions',
             disabled: false,
             to: { name: 'aimetrics', params: { userId: currUserId } },
           },
           {
-            title: 'Messages',
+            title: this.i18n.aiMetricsMessages,
+            aid: 'Messages',
             disabled: true,
             to: null,
           },
@@ -497,12 +500,14 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else if (currUserId) {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
+            aid: 'Users',
             disabled: false,
             to: { name: 'aimetrics' },
           },
           {
-            title: 'Sessions',
+            title: this.i18n.aiMetricsSessions,
+            aid: 'Sessions',
             disabled: true,
             to: null,
           },
@@ -510,7 +515,8 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
+            aid: 'Users',
             disabled: true,
             to: null,
           },

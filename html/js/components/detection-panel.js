@@ -313,7 +313,7 @@ components.push({
 				} catch (error) {
 					switch (error.response.status) {
 						case 409:
-							this.$root.showWarning(this.i18n.publicIdConflictErr);
+							this.$root.showWarning(this.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT);
 							break;
 						case 423:
 							this.$root.showWarning(this.i18n.detectionSyncBlockedErr);

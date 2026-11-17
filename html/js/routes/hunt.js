@@ -2734,18 +2734,18 @@ const huntComponent = {
         let t = '';
 
         if (hours > 0) {
-          t += hours + 'h ';
+          t += hours + this.i18n.hHours + ' ';
         }
 
         if (minutes > 0 || t.length > 0) {
-          if (t.length > 0) {
+          if (t.length > 0 && minutes < 10) {
             minutes = `0${minutes}`;
           }
 
-          t += minutes + 'm ';
+          t += minutes + this.i18n.mMinutes + ' ';
         }
 
-        t += seconds.toFixed(0) + 's';
+        t += seconds.toFixed(0) + this.i18n.sSeconds;
 
         if (stats.filtered) {
           let msg = this.i18n.bulkSuccessFiltered;
@@ -3222,7 +3222,7 @@ const huntComponent = {
 
       let response = await this.$root.papi.get('events/', { params });
       if (response.data.events.length === 0) {
-        this.$root.showWarning('No events found');
+        this.$root.showWarning(this.i18n.noEventsFound);
         return;
       }
 
@@ -3355,7 +3355,7 @@ const huntComponent = {
             return;
           }
         } catch (error) {
-          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest + ': ' + error.message);
+          this.$root.showError(this.i18n.aiInvestigationUnableToFetchNewest + ': ' + this.$root.localizeMessage(error));
           return;
         }
       }

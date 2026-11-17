@@ -27,8 +27,15 @@ let comp;
 
 beforeEach(() => {
   comp = getComponent("config");
+  comp.i18n.setting_fake_setting_foo = 'Fake Setting Translated';
+  comp.i18n.settingHelp_fake_setting_foo = 'This is a transalated fake setting description.';
   resetPapi();
   global.localStorage = {};
+});
+
+afterEach(() => {
+  delete comp.i18n.setting_fake_setting_foo;
+  delete comp.i18n.settingHelp_fake_setting_foo;
 });
 
 test('loadData', async () => {
@@ -514,10 +521,10 @@ test('getFirstLine', () => {
 });
 
 test('getSortLabel', () => {
-  expect(comp.getSortLabel('ts')).toBe('Time');
-  expect(comp.getSortLabel('settingId')).toBe('Setting ID');
-  expect(comp.getSortLabel('user')).toBe('User');
-  expect(comp.getSortLabel('nodeId')).toBe('Node');
+  expect(comp.getSortLabel('ts')).toBe(comp.i18n.settingTime);
+  expect(comp.getSortLabel('settingId')).toBe(comp.i18n.settingIdLabel);
+  expect(comp.getSortLabel('user')).toBe(comp.i18n.settingUser);
+  expect(comp.getSortLabel('nodeId')).toBe(comp.i18n.settingNodeLabel);
   expect(comp.getSortLabel('unknown')).toBe('unknown');
   expect(comp.getSortLabel('anything')).toBe('anything');
 });
@@ -1385,6 +1392,48 @@ test('saveRegexFailure', async () => {
   expect(mock).toHaveBeenCalledTimes(0);
 });
 
+test('saveRegexFailureEscapesMessage', async () => {
+  comp.settings = [{
+    id: 'test.id',
+    value: '123',
+    regex: '^([0-9]){3}$',
+    regexFailureMessage: '<img src=x>',
+  }];
+
+  comp.form.value = "test-value";
+  comp.form.key = "test.id";
+  const showErrorMock = mockShowError();
+  mockPapi("post");
+  await comp.save(comp.settings[0], null);
+
+  expect(showErrorMock).toHaveBeenCalledWith('&lt;img src=x&gt;');
+});
+
+test('saveErrorShowsOnlyKnownCodes', async () => {
+  const cases = [
+    { error: { response: { data: 'ERROR_LICENSE_INVALID' } }, expected: 'ERROR_LICENSE_INVALID' },
+    { error: { response: { data: 'ERROR_REQUEST_FAILED' } }, expected: comp.i18n.settingSaveError },
+    { error: { response: { data: 'ERROR_<img src=x>' } }, expected: comp.i18n.settingSaveError },
+    { error: { response: { data: 'not a code' } }, expected: comp.i18n.settingSaveError },
+    { error: { response: { data: {} } }, expected: comp.i18n.settingSaveError },
+    { error: {}, expected: comp.i18n.settingSaveError },
+  ];
+
+  for (const c of cases) {
+    setupSettings();
+    comp.form.value = "test-value";
+    comp.form.key = "s-id";
+    const showErrorMock = mockShowError();
+    comp.$root.stopLoading = jest.fn();
+    await comp.save(comp.settings[0], null);
+    mockPapi("put", null, c.error);
+    await comp.save();
+
+    expect(showErrorMock).toHaveBeenCalledWith(c.expected);
+    expect(comp.$root.stopLoading).toHaveBeenCalled();
+  }
+});
+
 test('saveRegexFailureMultiline', async () => {
   comp.settings = [{
     id: 'test.id',
@@ -1630,6 +1679,26 @@ test('addToNode_Malformed', () => {
     comp.addToNode({name: 'test'}, {}, ['parent'], {name: 'test'});
   };
   expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
+});
+
+test('addToNode_Malformed_usesKeyAndEscapesName', () => {
+  const original = comp.i18n.settingNameConflict;
+  comp.i18n.settingNameConflict = 'X {name}';
+  try {
+    expect(() => comp.addToNode({name: '<img>'}, {}, ['parent'], {name: 'test'})).toThrow('X &lt;img&gt;');
+  } finally {
+    comp.i18n.settingNameConflict = original;
+  }
+});
+
+test('organizeTree_conflictShowsEscapedIdWithoutErrorPrefix', () => {
+  const showErrorMock = mockShowError();
+  comp.organizeTree([{id: 'a.<img>'}, {id: 'a.<img>.c'}]);
+
+  expect(showErrorMock).toHaveBeenCalledTimes(1);
+  const msg = showErrorMock.mock.calls[0][0];
+  expect(msg).toBe(comp.i18n.settingMalformed + ' (a.&lt;img&gt;.c): ' + comp.i18n.settingNameConflict.replace('{name}', '&lt;img&gt;'));
+  expect(msg).not.toContain('Error: ');
 });
 
 test('toggleDuplicate', () => {

@@ -162,7 +162,7 @@ func TestConfigHandler_putSyncModule_NoConfigstore(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	assert.Contains(t, w.Body.String(), "The request could not be processed.")
+	assert.Contains(t, w.Body.String(), web.GENERIC_ERROR_MESSAGE)
 }
 
 func TestConfigHandler_putSetting(t *testing.T) {

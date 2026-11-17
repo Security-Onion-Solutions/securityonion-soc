@@ -1151,7 +1151,9 @@ func TestAlertTriageWorkItemNoReport(t *testing.T) {
 		f.manager.result = &model.AgentSessionResult{Truncated: true}
 		f.store.failRunErr = database.ErrAutomationWorkItemNotFound
 
-		assert.ErrorIs(t, r.workItem(context.Background(), f.claimed(t)), database.ErrAutomationWorkItemNotFound)
+		err := r.workItem(context.Background(), f.claimed(t))
+		assert.ErrorIs(t, err, database.ErrAutomationWorkItemNotFound)
+		assert.EqualError(t, err, "ERROR_AUTOMATION_WORK_ITEM_NOT_FOUND")
 		assert.Empty(t, f.alerts.recorded())
 	})
 

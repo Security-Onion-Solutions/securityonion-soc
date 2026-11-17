@@ -222,10 +222,10 @@ test('formatCount', () => {
 
 test('formatCountMK', () => {
   expect(app.formatCountMK(null)).toBe('0');
-  expect(app.formatCountMK(1000000)).toBe('1.0m');
-  expect(app.formatCountMK(1240000)).toBe('1.2m');
-  expect(app.formatCountMK(900000)).toBe('900.0k');
-  expect(app.formatCountMK(456456)).toBe('456.5k');
+  expect(app.formatCountMK(1000000)).toBe('1.0M');
+  expect(app.formatCountMK(1240000)).toBe('1.2M');
+  expect(app.formatCountMK(900000)).toBe('900.0K');
+  expect(app.formatCountMK(456456)).toBe('456.5K');
   expect(app.formatCountMK(999)).toBe('999');
   expect(app.formatCountMK(0)).toBe('0');
 });
@@ -1506,6 +1506,15 @@ describe('export', () => {
     expect(mockShowTip).toHaveBeenCalledWith('Export job enqueued.');
     expect(mockShowError).not.toHaveBeenCalled();
     expect(mockStopLoading).toHaveBeenCalledTimes(1);
+  });
+
+  test('should escape the job ID in the export tip', async () => {
+    app.i18n = { exportJobEnqueued: 'Export job {jobId} enqueued.' };
+    mockPapi('post', { data: { id: '<img src=x>' } });
+
+    await app.export({ query: 'test' });
+
+    expect(mockShowTip).toHaveBeenCalledWith('Export job &lt;img src=x&gt; enqueued.');
   });
 
   test('should handle export job failure', async () => {

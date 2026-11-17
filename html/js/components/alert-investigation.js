@@ -149,7 +149,7 @@ components.push({
           const response = await this.$root.papi.get(`/assistant/sessions/${sessionId}`);
           this.summaries[sessionId] = this.summarize(response.data);
         } catch (error) {
-          this.summaries[sessionId] = { error: error.message || String(error) };
+          this.summaries[sessionId] = { error: this.$root.localizeMessage(error) };
         }
       },
       messageText(message) {
@@ -198,7 +198,7 @@ components.push({
             if (!result || !result.toolUseId) continue;
             const failed = !!result.isError || result.status === 'error' || result.status === 'rejected';
             const first = (result.content || [])[0] || {};
-            results[result.toolUseId] = { failed: failed, error: failed ? (first.text || '') : '' };
+            results[result.toolUseId] = { failed: failed, error: failed ? this.$root.localizeMessage(first.text) : '' };
           }
         }
         return results;

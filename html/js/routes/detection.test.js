@@ -994,6 +994,25 @@ test('saveDetection - statusEffectedByFilter', async () => {
 	expect(comp.extractDetection).toHaveBeenCalledTimes(1);
 });
 
+test('saveDetection - public ID conflict warns with the conflict key', async () => {
+	const original = comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT;
+	comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT = 'X';
+	try {
+		const error = new Error('Request failed with status code 409');
+		error.response = { status: 409, data: 'ERROR_DETECTION_PUBLIC_ID_CONFLICT' };
+		resetPapi().mockPapi('put', null, error);
+		comp.detect = { content: "", language: '' };
+		comp.origDetect = { content: "" };
+
+		await comp.saveDetection(false, false);
+
+		expect(comp.$root.warning).toBe(true);
+		expect(comp.$root.warningMessage).toBe('X');
+	} finally {
+		comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT = original;
+	}
+});
+
 test('validateElastAlert', () => {
 	comp.detect = {
 		language: 'sigma',

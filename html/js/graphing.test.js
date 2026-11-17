@@ -6,46 +6,51 @@
 
 require('./test_common.js');
 
-window.i18n = global.i18n;
-
 const graphing = window.socGraphing;
 
 describe('graphing.js', () => {
   describe('getTranslation', () => {
-    let originalGetLocalizedTranslations;
+    const originalGetLocalizedTranslations = global.i18n.getLocalizedTranslations;
 
-    beforeAll(() => {
-      originalGetLocalizedTranslations = window.i18n.getLocalizedTranslations;
+    afterEach(() => {
+      global.i18n.getLocalizedTranslations = originalGetLocalizedTranslations;
     });
 
-    afterAll(() => {
-      window.i18n.getLocalizedTranslations = originalGetLocalizedTranslations;
-    });
-
-    it('should return translation from window.i18n when key is found', () => {
-      window.i18n.getLocalizedTranslations = jest.fn(() => ({
+    it('should return the translation from the global i18n table', () => {
+      global.i18n.getLocalizedTranslations = jest.fn(() => ({
         testKey: 'Translated Value'
       }));
 
-      const val = graphing.getTranslation('testKey', 'Default Value');
-      expect(val).toBe('Translated Value');
+      expect(graphing.getTranslation('testKey')).toBe('Translated Value');
     });
 
-    it('should return defaultVal when key is not found', () => {
-      window.i18n.getLocalizedTranslations = jest.fn(() => ({
-        anotherKey: 'Translated Value'
-      }));
+    it('should format units from the real i18n table', () => {
+      expect(graphing.formatBytes(1024)).toBe('1 KB');
+      expect(graphing.formatDefaultNumber(1500)).toBe('1.5K');
+    });
+  });
 
-      const val = graphing.getTranslation('testKey', 'Default Value');
-      expect(val).toBe('Default Value');
+  describe('Count labels', () => {
+    const table = global.i18n.getLocalizedTranslations(navigator.language);
+    const originalCount = table.count;
+
+    afterEach(() => {
+      table.count = originalCount;
     });
 
-    it('should return defaultVal when window.i18n or function is not defined', () => {
-      const origI18n = window.i18n;
-      window.i18n = undefined;
-      const val = graphing.getTranslation('testKey', 'Default Value');
-      expect(val).toBe('Default Value');
-      window.i18n = origI18n;
+    it('should use the count key for every chart type', () => {
+      table.count = 'X';
+
+      const bar = {};
+      graphing.setupBarChart({}, bar, 'Bar', '#fff', '#000', '#abc');
+      const pie = {};
+      graphing.setupPieChart({}, pie, 'Pie', '#fff');
+      const sankey = {};
+      graphing.setupSankeyChart({}, sankey, 'Sankey', '#fff', true, jest.fn(), jest.fn());
+
+      expect(bar.datasets[0].label).toBe('X');
+      expect(pie.datasets[0].label).toBe('X');
+      expect(sankey.datasets[0].label).toBe('X');
     });
   });
 
@@ -94,11 +99,11 @@ describe('graphing.js', () => {
   describe('formatDefaultNumber', () => {
     it('should format standard numbers with appropriate SI prefixes', () => {
       expect(graphing.formatDefaultNumber(500)).toBe(500);
-      expect(graphing.formatDefaultNumber(1500)).toBe('1.5k');
-      expect(graphing.formatDefaultNumber(2500000)).toBe('2.5m');
+      expect(graphing.formatDefaultNumber(1500)).toBe('1.5K');
+      expect(graphing.formatDefaultNumber(2500000)).toBe('2.5M');
       expect(graphing.formatDefaultNumber(3500000000)).toBe('3.5B');
       expect(graphing.formatDefaultNumber(4500000000000)).toBe('4.5T');
-      expect(graphing.formatDefaultNumber(-1500)).toBe('-1.5k');
+      expect(graphing.formatDefaultNumber(-1500)).toBe('-1.5K');
     });
   });
 
@@ -135,8 +140,8 @@ describe('graphing.js', () => {
     });
 
     it('should delegate to formatDefaultNumber for unknown units or undefined units', () => {
-      expect(graphing.formatAxisValue(1500, 'unknown')).toBe('1.5k');
-      expect(graphing.formatAxisValue(1500)).toBe('1.5k');
+      expect(graphing.formatAxisValue(1500, 'unknown')).toBe('1.5K');
+      expect(graphing.formatAxisValue(1500)).toBe('1.5K');
     });
   });
 

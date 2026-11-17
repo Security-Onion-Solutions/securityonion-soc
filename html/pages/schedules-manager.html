@@ -126,7 +126,7 @@
                     <v-text-field v-model="def.startTime" :label="i18n.startTime" type="time" density="compact" hide-details="auto" data-aid="schedule_def_starttime"></v-text-field>
                   </v-col>
                   <v-col cols="12" sm="4">
-                    <v-text-field v-model="def.endTime" :label="i18n.endTime" type="time" density="compact" hide-details="auto" data-aid="schedule_def_endtime"></v-text-field>
+                    <v-text-field v-model="def.endTime" :label="i18n.scheduleEndTime" type="time" density="compact" hide-details="auto" data-aid="schedule_def_endtime"></v-text-field>
                   </v-col>
                 </template>
               </v-row>
@@ -162,7 +162,7 @@
               <template v-if="def.type === 'annually'">
                 <v-row dense>
                   <v-col cols="12">
-                    <v-select v-model="def.months" :items="monthOptions" item-title="title" item-value="value" :label="i18n.months" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
+                    <v-select v-model="def.months" :items="monthOptions" item-title="title" item-value="value" :label="i18n.scheduleMonths" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
                   </v-col>
                 </v-row>
                 <v-row dense>

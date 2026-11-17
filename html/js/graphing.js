@@ -78,29 +78,22 @@ window.socGraphing = {
     }
   },
 
-  getTranslation(key, defaultVal) {
-    if (window.i18n && typeof window.i18n.getLocalizedTranslations === 'function') {
-      const lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
-      const trans = window.i18n.getLocalizedTranslations(lang);
-      if (trans && trans[key] !== undefined) {
-        return trans[key];
-      }
-    }
-    return defaultVal;
+  getTranslation(key) {
+    return i18n.getLocalizedTranslations(navigator.language)[key];
   },
 
   formatBytes(value) {
     const k = 1024;
     const sizes = [
-      this.getTranslation('byteB', 'B'),
-      this.getTranslation('byteKB', 'KB'),
-      this.getTranslation('byteMB', 'MB'),
-      this.getTranslation('byteGB', 'GB'),
-      this.getTranslation('byteTB', 'TB'),
-      this.getTranslation('bytePB', 'PB'),
-      this.getTranslation('byteEB', 'EB'),
-      this.getTranslation('byteZB', 'ZB'),
-      this.getTranslation('byteYB', 'YB')
+      this.getTranslation('byteB'),
+      this.getTranslation('byteKB'),
+      this.getTranslation('byteMB'),
+      this.getTranslation('byteGB'),
+      this.getTranslation('byteTB'),
+      this.getTranslation('bytePB'),
+      this.getTranslation('byteEB'),
+      this.getTranslation('byteZB'),
+      this.getTranslation('byteYB')
     ];
     if (value === 0) return '0 ' + sizes[0];
     const i = Math.floor(Math.log(Math.abs(value)) / Math.log(k));
@@ -111,15 +104,15 @@ window.socGraphing = {
   formatBits(value) {
     const k = 1000;
     const sizes = [
-      this.getTranslation('bps', 'b/s'),
-      this.getTranslation('kbps', 'Kb/s'),
-      this.getTranslation('mbps', 'Mb/s'),
-      this.getTranslation('gbps', 'Gb/s'),
-      this.getTranslation('tbps', 'Tb/s'),
-      this.getTranslation('pbps', 'Pb/s'),
-      this.getTranslation('ebps', 'Eb/s'),
-      this.getTranslation('zbps', 'Zb/s'),
-      this.getTranslation('ybps', 'Yb/s')
+      this.getTranslation('bps'),
+      this.getTranslation('kbps'),
+      this.getTranslation('mbps'),
+      this.getTranslation('gbps'),
+      this.getTranslation('tbps'),
+      this.getTranslation('pbps'),
+      this.getTranslation('ebps'),
+      this.getTranslation('zbps'),
+      this.getTranslation('ybps')
     ];
     if (value === 0) return '0 ' + sizes[0];
     const i = Math.floor(Math.log(Math.abs(value)) / Math.log(k));
@@ -134,15 +127,15 @@ window.socGraphing = {
   formatSeconds(value) {
     const absVal = Math.abs(value);
     if (absVal < 60) {
-      return parseFloat(value.toFixed(1)) + this.getTranslation('sSeconds', 's');
+      return parseFloat(value.toFixed(1)) + this.getTranslation('sSeconds');
     }
     if (absVal < 3600) {
-      return parseFloat((value / 60).toFixed(1)) + this.getTranslation('mMinutes', 'm');
+      return parseFloat((value / 60).toFixed(1)) + this.getTranslation('mMinutes');
     }
     if (absVal < 86400) {
-      return parseFloat((value / 3600).toFixed(1)) + this.getTranslation('hHours', 'h');
+      return parseFloat((value / 3600).toFixed(1)) + this.getTranslation('hHours');
     }
-    return parseFloat((value / 86400).toFixed(1)) + this.getTranslation('dDays', 'd');
+    return parseFloat((value / 86400).toFixed(1)) + this.getTranslation('dDays');
   },
 
   formatMilliseconds(value) {
@@ -156,16 +149,16 @@ window.socGraphing = {
   formatDefaultNumber(value) {
     const absVal = Math.abs(value);
     if (absVal >= 1e12) {
-      return parseFloat((value / 1e12).toFixed(1)) + this.getTranslation('tTrillion', 'T');
+      return parseFloat((value / 1e12).toFixed(1)) + this.getTranslation('tTrillion');
     }
     if (absVal >= 1e9) {
-      return parseFloat((value / 1e9).toFixed(1)) + this.getTranslation('bBillion', 'B');
+      return parseFloat((value / 1e9).toFixed(1)) + this.getTranslation('bBillion');
     }
     if (absVal >= 1e6) {
-      return parseFloat((value / 1e6).toFixed(1)) + this.getTranslation('mMillion', 'M');
+      return parseFloat((value / 1e6).toFixed(1)) + this.getTranslation('mMillion');
     }
     if (absVal >= 1e3) {
-      return parseFloat((value / 1e3).toFixed(1)) + this.getTranslation('kThousand', 'K');
+      return parseFloat((value / 1e3).toFixed(1)) + this.getTranslation('kThousand');
     }
     return value;
   },
@@ -262,7 +255,7 @@ window.socGraphing = {
       pointRadius: 3,
       fill: false,
       data: [],
-      label: 'Count', // We can use a generic default, or set it caller-side if needed
+      label: this.getTranslation('count'),
     }];
   },
 
@@ -318,7 +311,7 @@ window.socGraphing = {
       ],
       borderColor: 'rgba(255, 255, 255, 0.5)',
       data: [],
-      label: 'Count',
+      label: this.getTranslation('count'),
     }];
   },
 
@@ -339,7 +332,7 @@ window.socGraphing = {
     data.labels = [];
     data.datasets = [{
       data: [],
-      label: 'Count',
+      label: this.getTranslation('count'),
       color: isDark ? 'white' : 'black',
       colorFrom: colorFromCallback,
       colorTo: colorToCallback,

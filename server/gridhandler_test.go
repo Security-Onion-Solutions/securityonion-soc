@@ -133,6 +133,7 @@ func TestGetMetricsHistory(t *testing.T) {
 
 		h.getMetricsHistory(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "ERROR_METRIC_REQUIRED", w.Body.String())
 	})
 
 	t.Run("invalid date range", func(t *testing.T) {

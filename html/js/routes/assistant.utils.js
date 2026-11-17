@@ -204,6 +204,7 @@ Object.assign(assistantRouteForUtils.component.methods, (function() {
       let investigationPrompt = this.investigationMsg;
       
       for (let alertKey in alertData) {
+        // 'Unknown' goes into the model's prompt, not the UI, so it stays English.
         investigationPrompt = this.$root.replaceActionVar(investigationPrompt, alertKey.toString(), alertData[alertKey] || 'Unknown');
       }
 

@@ -125,7 +125,7 @@ func TestPrepareForSave(t *testing.T) {
 					},
 				}, nil)
 			},
-			ExpectedErr: util.Ptr("publicId already exists for this engine"),
+			ExpectedErr: util.Ptr("ERROR_DETECTION_PUBLIC_ID_CONFLICT"),
 		},
 		{
 			Name: "With New Override",
@@ -428,7 +428,7 @@ func TestHandlerGetDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("all shards failed"))
 			},
 			Code: 500,
-			Body: []byte(`The request could not be processed.`),
+			Body: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully")),
 				handled,
@@ -599,7 +599,7 @@ func TestHandlerGetByPublicId(t *testing.T) {
 				mDetStore.EXPECT().GetDetectionByPublicId(gomock.Any(), "12345").Return(nil, errors.New("all shards failed"))
 			},
 			Code: 500,
-			Body: []byte(`The request could not be processed.`),
+			Body: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				NewEntryMatcher(LogLevelEq(log.WarnLevel), LogMessageContains("Request did not complete successfully")),
 				handled,
@@ -781,7 +781,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody:  []byte(`{"language":"sigma","content":"test","isCommunity":true}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -792,7 +792,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody:  []byte(`detection JSON goes here`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -803,7 +803,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 			ReqBody:  []byte(`{"language": "FooBar"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -819,7 +819,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -880,6 +880,44 @@ func TestHandlerCreateDetection(t *testing.T) {
 			Logs: []EntryMatcher{handled},
 		},
 		{
+			Name:    "Sync Errors",
+			ReqBody: []byte(`{"language":"yara","content":"test"}`),
+			InitMock: func(srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mUserStore := srv.Userstore.(*servermock.MockUserstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mUserStore.EXPECT().GetUserById(gomock.Any(), "11111111-1111-1111-1111-111111111111").Return(&model.User{
+					Email: "user@company.com",
+				}, nil)
+
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+
+				mDetStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					det.Id = "12345"
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(map[string]string{"12345": "/opt/so/rules/custom.yar: syntax error"}, nil)
+			},
+			Code:     500,
+			Response: []byte(`ERROR_DETECTION_SYNC_FAILED`),
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageEq("Unable to synchronize created detection")),
+				didNotComplete,
+				handled,
+			},
+		},
+		{
 			Name:    "Extract Details Failure - No Public ID",
 			ReqBody: []byte(`{"language":"sigma","content":"test"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {
@@ -890,8 +928,8 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("rule does not contain a public Id"))
 			},
 			Code:     400,
-			Response: []byte(`"missingPublicIdErr"`),
-			Logs:     []EntryMatcher{handled},
+			Response: []byte(`ERROR_DETECTION_PUBLIC_ID_REQUIRED`),
+			Logs:     []EntryMatcher{didNotComplete, handled},
 		},
 		{
 			Name:    "Extract Details Failure - Other",
@@ -904,7 +942,7 @@ func TestHandlerCreateDetection(t *testing.T) {
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -933,8 +971,8 @@ func TestHandlerCreateDetection(t *testing.T) {
 				mDetStore.EXPECT().CreateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("already exists"))
 			},
 			Code:     409,
-			Response: []byte(`"publicIdConflictErr"`),
-			Logs:     []EntryMatcher{handled},
+			Response: []byte(`ERROR_DETECTION_PUBLIC_ID_CONFLICT`),
+			Logs:     []EntryMatcher{didNotComplete, handled},
 		},
 	}
 
@@ -1038,7 +1076,7 @@ func TestHandlerGetDetectionHistory(t *testing.T) {
 				mDetStore.EXPECT().GetDetectionHistory(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1146,7 +1184,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("not found"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1164,7 +1202,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(orig, nil)
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1188,7 +1226,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				eng.EXPECT().DuplicateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("failed to duplicate"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1218,7 +1256,7 @@ func TestHandlerDuplicateDetection(t *testing.T) {
 				mDetStore.EXPECT().CreateDetection(gomock.Any(), dupe).Return(nil, errors.New("failed to create"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1432,7 +1470,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			ReqBody:  []byte(`not even close to JSON`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1443,7 +1481,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			ReqBody:  []byte(`{"engine":"foobar"}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1460,7 +1498,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1542,7 +1580,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{Content: "before"}, nil)
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1579,7 +1617,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1627,7 +1665,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				}, nil)
 			},
 			Code:     409,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(`ERROR_DETECTION_PUBLIC_ID_CONFLICT`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1646,8 +1684,9 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("rule does not contain a public Id"))
 			},
 			Code:     400,
-			Response: []byte(`"missingPublicIdErr"`),
+			Response: []byte(`ERROR_DETECTION_PUBLIC_ID_REQUIRED`),
 			Logs: []EntryMatcher{
+				didNotComplete,
 				handled,
 			},
 		},
@@ -1664,7 +1703,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("something else went wrong"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1687,7 +1726,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1712,7 +1751,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1737,7 +1776,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -1848,6 +1887,72 @@ func TestHandlerUpdateDetection(t *testing.T) {
 			},
 		},
 		{
+			Name:    "UpdateDetection - Sync Errors",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345"}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{}, nil)
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					return det, nil
+				})
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Return(time.Minute)
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(map[string]string{"12345": "/opt/so/rules/custom.yar: syntax error"}, nil)
+			},
+			Code:     500,
+			Response: []byte(`ERROR_DETECTION_SYNC_FAILED`),
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageEq("Unable to synchronize updated detection")),
+				didNotComplete,
+				handled,
+			},
+		},
+		{
+			Name:    "UpdateDetection - Sync Errors After Disable",
+			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
+			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
+				mDetStore := srv.Detectionstore.(*servermock.MockDetectionstore)
+				mAuth := srv.Authorizer.(*rbac.FakeAuthorizer)
+
+				eng := servermock.NewMockDetectionEngine(ctrl)
+				srv.DetectionEngines.Store(model.EngineNameStrelka, eng)
+
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", nil)
+				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
+				eng.EXPECT().ExtractDetails(gomock.Any()).Return(nil)
+
+				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(&model.Detection{IsEnabled: true}, nil)
+				mDetStore.EXPECT().UpdateDetection(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, det *model.Detection) (*model.Detection, error) {
+					return det, nil
+				}).Times(2)
+
+				mAuth.Authorized = true
+
+				eng.EXPECT().PartialSyncTimeout().Times(3).Return(time.Minute)
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
+				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(map[string]string{"12345": "/opt/so/rules/custom.yar: syntax error"}, nil)
+			},
+			Code:     500,
+			Response: []byte(`ERROR_DETECTION_SYNC_FAILED`),
+			Logs: []EntryMatcher{
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to sync detection; attempting to disable and resync")),
+				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageEq("Unable to synchronize updated detection")),
+				didNotComplete,
+				handled,
+			},
+		},
+		{
 			Name:    "UpdateDetection - Unsuccessful Disable After Bad Sync",
 			ReqBody: []byte(`{"engine":"strelka","content":"test","id":"12345","isEnabled":true}`),
 			InitMock: func(t *testing.T, srv *Server, ctrl *gomock.Controller) {
@@ -1881,7 +1986,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				})
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				NewEntryMatcher(LogLevelEq(log.ErrorLevel), LogMessageContains("unable to sync detection; attempting to disable and resync")),
 				didNotComplete,
@@ -1920,7 +2025,7 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2076,7 +2181,7 @@ func TestHandlerUpdateOverrideNote(t *testing.T) {
 			ReqBody:       []byte(`{"note":"note goes here"}`),
 			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:          400,
-			Response:      []byte("The request could not be processed."),
+			Response:      []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2089,7 +2194,7 @@ func TestHandlerUpdateOverrideNote(t *testing.T) {
 			ReqBody:       []byte(`JSON goes here`),
 			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:          400,
-			Response:      []byte("The request could not be processed."),
+			Response:      []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2102,7 +2207,7 @@ func TestHandlerUpdateOverrideNote(t *testing.T) {
 			ReqBody:       []byte(`{"note":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam rhoncus efficitur lectus. Aenean a feugiat odio, sit amet tempus ligula viverra fusce."}`),
 			InitMock:      func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:          400,
-			Response:      []byte("The request could not be processed."),
+			Response:      []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2223,8 +2328,9 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(orig, nil)
 			},
 			Code:     400,
-			Response: []byte(`"ERROR_DELETE_COMMUNITY"`),
+			Response: []byte(`ERROR_DELETE_COMMUNITY`),
 			Logs: []EntryMatcher{
+				didNotComplete,
 				handled,
 			},
 		},
@@ -2250,7 +2356,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mDetStore.EXPECT().GetDetection(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2267,7 +2373,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				mDetStore.EXPECT().DeleteDetection(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2294,7 +2400,7 @@ func TestHandlerDeleteDetection(t *testing.T) {
 				eng.EXPECT().SyncLocalDetections(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2758,8 +2864,9 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				return nil, nil
 			},
 			Code:     400,
-			Response: []byte(`"ERROR_BULK_COMMUNITY"`),
+			Response: []byte(`ERROR_BULK_COMMUNITY`),
 			Logs: []EntryMatcher{
+				didNotComplete,
 				handled,
 			},
 		},
@@ -2798,8 +2905,9 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				return nil, nil
 			},
 			Code:     400,
-			Response: []byte(`"ERROR_BULK_COMMUNITY"`),
+			Response: []byte(`ERROR_BULK_COMMUNITY`),
 			Logs: []EntryMatcher{
+				didNotComplete,
 				handled,
 			},
 		},
@@ -2818,7 +2926,7 @@ func TestHandlerBulkUpdateDetection(t *testing.T) {
 				return nil, nil
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2970,7 +3078,7 @@ func TestHandlerCreateComment(t *testing.T) {
 				mDetStore.EXPECT().CreateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2986,7 +3094,7 @@ func TestHandlerCreateComment(t *testing.T) {
 				mDetStore.EXPECT().CreateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -2998,7 +3106,7 @@ func TestHandlerCreateComment(t *testing.T) {
 			ReqBody:     []byte(`JSON`),
 			InitMock:    func(t *testing.T, srv *Server, ctrl *gomock.Controller) {},
 			Code:        400,
-			Response:    []byte(`The request could not be processed.`),
+			Response:    []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3105,7 +3213,7 @@ func TestHandlerGetDetectionComment(t *testing.T) {
 				mDetStore.EXPECT().GetComment(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3209,7 +3317,7 @@ func TestHandlerUpdateComment(t *testing.T) {
 			ReqBody:   []byte(`JSON`),
 			InitMock:  func(srv *Server, ctrl *gomock.Controller) {},
 			Code:      400,
-			Response:  []byte(`The request could not be processed.`),
+			Response:  []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3225,7 +3333,7 @@ func TestHandlerUpdateComment(t *testing.T) {
 				mDetStore.EXPECT().UpdateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3241,7 +3349,7 @@ func TestHandlerUpdateComment(t *testing.T) {
 				mDetStore.EXPECT().UpdateComment(gomock.Any(), gomock.Any()).Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3335,7 +3443,7 @@ func TestHandlerDeleteComment(t *testing.T) {
 				mDetStore.EXPECT().DeleteComment(gomock.Any(), "12345").Return(errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3349,7 +3457,7 @@ func TestHandlerDeleteComment(t *testing.T) {
 				mDetStore.EXPECT().DeleteComment(gomock.Any(), "12345").Return(errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3472,7 +3580,7 @@ func TestHandlerGetDetectionComments(t *testing.T) {
 				mDetStore.EXPECT().GetComments(gomock.Any(), "12345").Return(nil, errors.New("Object not found"))
 			},
 			Code:     404,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3487,7 +3595,7 @@ func TestHandlerGetDetectionComments(t *testing.T) {
 				mDetStore.EXPECT().GetComments(gomock.Any(), "12345").Return(nil, errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3584,7 +3692,7 @@ func TestHandlerConvertContent(t *testing.T) {
 			ReqBody:  []byte(`JSON`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3595,7 +3703,7 @@ func TestHandlerConvertContent(t *testing.T) {
 			ReqBody:  []byte(`{"engine": "suricata"}`),
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3630,7 +3738,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng.EXPECT().ValidateRule("sigma goes here").Return("", errors.New("missing required fields: id"))
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3663,7 +3771,7 @@ func TestHandlerConvertContent(t *testing.T) {
 				eng.EXPECT().ConvertRule(gomock.Any(), &model.Detection{Content: "sigma goes here", Engine: model.EngineNameElastAlert}).Return("", errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3808,7 +3916,7 @@ func TestHandlerSyncEngineDetections(t *testing.T) {
 				mAuth.Authorized = true
 			},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3905,7 +4013,7 @@ func TestHandlerGenPublicId(t *testing.T) {
 			Engine:   "foobar",
 			InitMock: func(srv *Server, ctrl *gomock.Controller) {},
 			Code:     400,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -3935,7 +4043,7 @@ func TestHandlerGenPublicId(t *testing.T) {
 				eng.EXPECT().GenerateUnusedPublicId(gomock.Any()).Return("", errors.New("something went wrong"))
 			},
 			Code:     500,
-			Response: []byte(`The request could not be processed.`),
+			Response: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,

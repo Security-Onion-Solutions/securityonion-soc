@@ -17,6 +17,6 @@ func TestValidate_Yaml(tester *testing.T) {
 		assert.NoError(tester, Validate("valid: yaml", syntax))
 		assert.NoError(tester, Validate("- one\n- two", syntax))
 		assert.NoError(tester, Validate("map_of_list:\n  - one\n  - two", syntax))
-		assert.EqualError(tester, Validate("[ lksdgf invalid yaml", syntax), "ERROR_MALFORMED_YAML -> yaml: line 1: did not find expected ',' or ']'")
+		assert.EqualError(tester, Validate("[ lksdgf invalid yaml", syntax), "ERROR_MALFORMED_YAML")
 	}
 }

@@ -166,6 +166,7 @@ if (gridRouteForEventsHealth && gridRouteForEventsHealth.component) {
         const stat = function(value) { return value ? value : '-'; };
         lines.push('');
         lines.push(this.i18n.eventsHealthReportSectionNodes);
+        // Field labels stay English: Security Onion support reads the copied report.
         nodes.forEach(function(node) {
           lines.push('  * ' + stat(node.name) + ' (' + stat(node.ip) + ') roles=' + stat(node.roles) + ' master=' + stat(node.master) +
               ' version=' + stat(node.version) + ' heap=' + stat(node.heapPercent) + '% ram=' + stat(node.ramPercent) + '%' +

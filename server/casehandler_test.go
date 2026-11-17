@@ -239,7 +239,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 			},
 			MockCheck:    func(srv *Server) {},
 			Code:         400,
-			ResponseBody: []byte(`The request could not be processed.`),
+			ResponseBody: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,
@@ -266,7 +266,7 @@ func TestHandlerCreateEvents(t *testing.T) {
 				assert.Contains(t, searchCriteria.RawQuery, `NOT event.escalated:true`)
 			},
 			Code:         500,
-			ResponseBody: []byte(`The request could not be processed.`),
+			ResponseBody: []byte(web.GENERIC_ERROR_MESSAGE),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,

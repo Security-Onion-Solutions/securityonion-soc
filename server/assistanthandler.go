@@ -135,6 +135,7 @@ func streamingAccepted(r *http.Request) (bool, string) {
 // @Failure      400           "The provided input object or parameters are malformed or invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      409           "The session or agent is busy; try again later"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/chat [post]
 func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +169,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// chat. Only an existing session owned by someone else is rejected.
 	if sessionExists && !ownedByUser {
 		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to post to a session they do not own")
-		web.Respond(w, r, http.StatusForbidden, nil)
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied)
 
 		return
 	}
@@ -176,7 +177,7 @@ func (h *AssistantHandler) PostChat(w http.ResponseWriter, r *http.Request) {
 	// prevent users from adding to automated sessions
 	if isAutomation {
 		logger.WithField("assistantSessionId", incMsg.SessionId).Warn("user attempted to continue an automation session")
-		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be continued")
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAutomationReadOnly)
 
 		return
 	}
@@ -303,13 +304,13 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !sessionExists {
-		web.Respond(w, r, http.StatusNotFound, "session does not exist")
+		web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound)
 		return
 	}
 
 	if sessionExists && !ownedByUser {
 		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to a session they do not own")
-		web.Respond(w, r, http.StatusForbidden, nil)
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied)
 
 		return
 	}
@@ -317,7 +318,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 	// Prevent users from interactings with tools in automated sessions
 	if isAutomation {
 		logger.WithField("assistantSessionId", toolReq.SessionId).Warn("user attempted to post a tool to an automation session")
-		web.Respond(w, r, http.StatusForbidden, "automation sessions cannot be modified")
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAutomationReadOnly)
 
 		return
 	}
@@ -365,7 +366,7 @@ func (h *AssistantHandler) PostTool(w http.ResponseWriter, r *http.Request) {
 
 	if _, ok := w.(http.Flusher); !ok {
 		logger.Error("response writer does not support flushing, cannot stream response")
-		web.Respond(w, r, http.StatusInternalServerError, "streaming not supported")
+		web.Respond(w, r, http.StatusInternalServerError, ErrStreamingUnsupported)
 		return
 	}
 
@@ -535,7 +536,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	health, err := h.server.AssistantManager.Health(ctx, model)
 	if err != nil {
 		logger.WithError(err).Error("unable to get assistant health")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		web.Respond(w, r, http.StatusInternalServerError, errors.New("ERROR_UPSTREAM_SERVICE_ERROR"))
 		return
 	}
 
@@ -548,7 +549,7 @@ func (h *AssistantHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	response, err := h.server.AssistantManager.Balance(ctx, model)
 	if err != nil {
 		logger.WithError(err).Error("unable to retrieve balance")
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		web.Respond(w, r, http.StatusInternalServerError, errors.New("ERROR_UPSTREAM_SERVICE_ERROR"))
 		return
 	}
 
@@ -611,6 +612,7 @@ func (h *AssistantHandler) GetSessions(w http.ResponseWriter, r *http.Request) {
 // @Failure      400           "The provided session ID is invalid or missing, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "The session was not found"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/sessions/{sessionId} [get]
 func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Request) {
@@ -626,7 +628,7 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
 		logger.Error("sessionId is required")
-		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionIdRequired)
 
 		return
 	}
@@ -664,9 +666,9 @@ func (h *AssistantHandler) GetSessionDetails(w http.ResponseWriter, r *http.Requ
 		}
 
 		if exists {
-			web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+			web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied)
 		} else {
-			web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound.Error())
+			web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound)
 		}
 
 		return
@@ -793,7 +795,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
 		logger.Error("sessionId is required")
-		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionIdRequired)
 
 		return
 	}
@@ -883,7 +885,7 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
 		logger.Error("sessionId is required")
-		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionIdRequired)
 
 		return
 	}
@@ -891,7 +893,7 @@ func (h *AssistantHandler) CloneSession(w http.ResponseWriter, r *http.Request) 
 	entityType := r.URL.Query().Get("entityType")
 	entityId := r.URL.Query().Get("entityId")
 	if (entityType != "" || entityId != "") && (entityType != "alert_investigation" || entityId == "") {
-		web.Respond(w, r, http.StatusBadRequest, "entityType must be alert_investigation, with the alert's soc_id as entityId")
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionEntityInvalid)
 		return
 	}
 
@@ -965,7 +967,7 @@ func (h *AssistantHandler) PostSessionsAccess(w http.ResponseWriter, r *http.Req
 	}
 
 	if len(ids) == 0 || len(ids) > MaxSessionAccessIds {
-		web.Respond(w, r, http.StatusBadRequest, fmt.Sprintf("between 1 and %d session ids are required", MaxSessionAccessIds))
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionIdsInvalid)
 		return
 	}
 
@@ -1020,7 +1022,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	sessionId := chi.URLParam(r, "sessionId")
 	if sessionId == "" {
 		logger.Error("sessionId is required")
-		web.Respond(w, r, http.StatusBadRequest, "sessionId is required")
+		web.Respond(w, r, http.StatusBadRequest, ErrSessionIdRequired)
 
 		return
 	}
@@ -1033,7 +1035,7 @@ func (h *AssistantHandler) DeleteSession(w http.ResponseWriter, r *http.Request)
 	}
 	if errors.Is(err, ErrSessionAccessDenied) {
 		logger.WithField("assistantSessionId", sessionId).Warn("user attempted to delete a session they do not own")
-		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied.Error())
+		web.Respond(w, r, http.StatusForbidden, ErrSessionAccessDenied)
 
 		return
 	}
@@ -1196,6 +1198,7 @@ func (h *AssistantHandler) GetSessionsAdmin(w http.ResponseWriter, r *http.Reque
 // @Failure      400           "License is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "The session was not found"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/admin/{userId}/sessions/{sessionId}/history [get]
 func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.Request) {
@@ -1224,7 +1227,7 @@ func (h *AssistantHandler) ManageSessionHistory(w http.ResponseWriter, r *http.R
 			"userId":    userId,
 			"sessionId": sessionId,
 		}).Warn("no matching session found")
-		web.Respond(w, r, http.StatusNotFound, "no matching session found")
+		web.Respond(w, r, http.StatusNotFound, ErrSessionNotFound)
 
 		return
 	}
@@ -1246,7 +1249,7 @@ func streamResponse(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	logger := log.FromContext(ctx)
 	if _, ok := w.(http.Flusher); !ok {
 		logger.Error("response writer does not support flushing, cannot stream response")
-		web.Respond(w, r, http.StatusInternalServerError, "streaming not supported")
+		web.Respond(w, r, http.StatusInternalServerError, ErrStreamingUnsupported)
 
 		return
 	}
@@ -1414,21 +1417,27 @@ func writeSSEDone(w http.ResponseWriter) {
 func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
 	if errors.Is(err, ErrToolTurnBusy) {
 		logger.WithError(err).Warn("tool turn busy; another tool is running for this session")
-		web.Respond(w, r, http.StatusConflict, err.Error())
+		web.Respond(w, r, http.StatusConflict, ErrToolTurnBusy)
 
 		return
 	}
 
 	if errors.Is(err, ErrToolUseNotFound) {
 		logger.WithError(err).Warn("tool request targets an unknown tool_use")
-		web.Respond(w, r, http.StatusNotFound, err.Error())
+		web.Respond(w, r, http.StatusNotFound, ErrToolUseNotFound)
 
 		return
 	}
 
 	if errors.Is(err, ErrToolAlreadyResolved) || errors.Is(err, ErrToolRequestMismatch) {
 		logger.WithError(err).Warn("tool request rejected by validation")
-		web.Respond(w, r, http.StatusBadRequest, err.Error())
+
+		sentinel := ErrToolRequestMismatch
+		if errors.Is(err, ErrToolAlreadyResolved) {
+			sentinel = ErrToolAlreadyResolved
+		}
+
+		web.Respond(w, r, http.StatusBadRequest, sentinel)
 
 		return
 	}
@@ -1443,7 +1452,13 @@ func (h *AssistantHandler) respondToolTurnError(w http.ResponseWriter, r *http.R
 func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Request, logger log.Interface, err error, logMsg string) {
 	if errors.Is(err, ErrAgentBusy) || errors.Is(err, ErrToolTurnBusy) {
 		logger.WithError(err).Warn(logMsg)
-		web.Respond(w, r, http.StatusConflict, err.Error())
+
+		sentinel := ErrToolTurnBusy
+		if errors.Is(err, ErrAgentBusy) {
+			sentinel = ErrAgentBusy
+		}
+
+		web.Respond(w, r, http.StatusConflict, sentinel)
 
 		return
 	}
@@ -1451,9 +1466,9 @@ func (h *AssistantHandler) respondChatError(w http.ResponseWriter, r *http.Reque
 	logger.WithError(err).Error(logMsg)
 
 	if isClientError(err) {
-		web.Respond(w, r, http.StatusBadRequest, err.Error())
+		web.Respond(w, r, http.StatusBadRequest, err)
 	} else {
-		web.Respond(w, r, http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR")
+		web.Respond(w, r, http.StatusInternalServerError, errors.New("ERROR_UPSTREAM_SERVICE_ERROR"))
 	}
 }
 
@@ -1692,6 +1707,7 @@ func removeAuxData(messages []*model.StoredMessage) {
 // @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      409           "The name is already in use"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/agents/{name} [put]
 func (h *AssistantHandler) SaveAgent(w http.ResponseWriter, r *http.Request) {
@@ -1749,6 +1765,7 @@ func (h *AssistantHandler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 // @Failure      400           "The request body is invalid, or the license is invalid"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
+// @Failure      409           "The name is already in use"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/skills/{name} [put]
 func (h *AssistantHandler) SaveSkill(w http.ResponseWriter, r *http.Request) {

@@ -79,6 +79,31 @@ test('initMetricsCharts with custom dashboard', () => {
 	expect(comp.metricPanels[0].type).toBe('single_stat');
 });
 
+test('single_stat panel shows the na key when it has no data', async () => {
+	const originalNa = comp.$root.i18n.na;
+	comp.$root.i18n.na = 'X';
+	try {
+		resetPapi();
+		comp.$root.parameters = {
+			grid: {
+				metricsDashboard: JSON.stringify({
+					panels: [{ id: 'custom_stat', title: 'Custom Stat', type: 'single_stat', metric: 'cpu', key: 'cpu_used' }]
+				})
+			}
+		};
+		comp.$root.getColor = jest.fn().mockReturnValue('#123456');
+		comp.initMetricsCharts();
+		expect(comp.metricPanels[0].singleStatValue).toBe('X');
+
+		comp.metricPanels[0].singleStatValue = 5;
+		comp.$root.papi.get = jest.fn().mockResolvedValue({ data: { cpu_used: [] } });
+		await comp.loadHistoricalMetrics();
+		expect(comp.metricPanels[0].singleStatValue).toBe('X');
+	} finally {
+		comp.$root.i18n.na = originalNa;
+	}
+});
+
 test('getMetricPanelCardHeight', () => {
 	expect(comp.getMetricPanelCardHeight({ height: 250 })).toBe('310px');
 	expect(comp.getMetricPanelCardHeight(null)).toBe('310px');
@@ -266,8 +291,8 @@ test('socGraphing.formatAxisValue handles default auto-sizing and custom units',
 
 	// Default auto-sizing (K, M, B, T)
 	expect(graphing.formatAxisValue(500)).toBe(500);
-	expect(graphing.formatAxisValue(1500)).toBe('1.5k');
-	expect(graphing.formatAxisValue(2500000)).toBe('2.5m');
+	expect(graphing.formatAxisValue(1500)).toBe('1.5K');
+	expect(graphing.formatAxisValue(2500000)).toBe('2.5M');
 	expect(graphing.formatAxisValue(45656234524)).toBe('45.7B');
 	expect(graphing.formatAxisValue(1200000000000)).toBe('1.2T');
 
@@ -302,7 +327,7 @@ test('socGraphing.formatAxisValue handles default auto-sizing and custom units',
 	expect(graphing.formatSeconds(10)).toBe('10s');
 	expect(graphing.formatBytes(1024)).toBe('1 KB');
 	expect(graphing.formatBits(1000000)).toBe('1 Mb/s');
-	expect(graphing.formatDefaultNumber(1500)).toBe('1.5k');
+	expect(graphing.formatDefaultNumber(1500)).toBe('1.5K');
 });
 
 test('loadUrlParameters parses tab and metrics parameters correctly', () => {

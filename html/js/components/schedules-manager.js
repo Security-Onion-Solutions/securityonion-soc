@@ -65,7 +65,7 @@ components.push({
       },
       patternModeOptions() {
         return [
-          { title: this.i18n?.onDayOfMonth || this.i18n?.onDay, value: 'dayOfMonth' },
+          { title: this.i18n?.onDayOfMonth, value: 'dayOfMonth' },
           { title: this.i18n?.onNthWeekday, value: 'nthWeekday' },
         ];
       },
@@ -110,7 +110,7 @@ components.push({
         const daysOfMonthList = [];
         for (let i = 1; i <= 31; i++) {
           daysOfMonthList.push({
-            title: `${this.i18n?.dayPrefix || 'Day'} ${i}`,
+            title: `${this.i18n?.dayPrefix} ${i}`,
             value: i,
           });
         }
@@ -232,7 +232,7 @@ components.push({
           isEdit: false,
           valid: true,
           id: '',
-          name: `${schedule.name} ${this.i18n.scheduleCopySuffix || ''}`.trim(),
+          name: `${schedule.name} ${this.i18n.scheduleCopySuffix}`.trim(),
           description: schedule.description || '',
           enabled: schedule.enabled !== false,
           timezone: schedule.timezone || schedule.Timezone || 'UTC',

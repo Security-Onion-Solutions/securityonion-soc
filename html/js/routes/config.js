@@ -300,7 +300,7 @@ routes.push({
     },
     addToNode(node, parent, path, setting) {
       if (node.children == undefined) {
-        throw new Error("Setting name '" + node.name + "' conflicts with another similarly named setting");
+        throw new Error(this.i18n.settingNameConflict.replace('{name}', this.$root.escapeHtml(node.name)));
       }
 
       const name = path.shift();
@@ -340,7 +340,7 @@ routes.push({
           this.addToNode(root, "", path, setting);
           this.settingsAvailable++;
         } catch(e) {
-          route.$root.showError(route.i18n.settingMalformed + " (" + setting.id + "): " + e);
+          route.$root.showError(route.i18n.settingMalformed + " (" + route.$root.escapeHtml(setting.id) + "): " + e.message);
         }
       });
       this.countCustomized();
@@ -412,10 +412,10 @@ routes.push({
     },
     getSortLabel(col) {
       switch (col) {
-        case 'ts': return 'Time';
-        case 'settingId': return 'Setting ID';
-        case 'user': return 'User';
-        case 'nodeId': return 'Node';
+        case 'ts': return this.i18n.settingTime;
+        case 'settingId': return this.i18n.settingIdLabel;
+        case 'user': return this.i18n.settingUser;
+        case 'nodeId': return this.i18n.settingNodeLabel;
         default: return col;
       }
     },
@@ -1101,7 +1101,7 @@ routes.push({
             for (var idx = 0; idx < test_values.length; idx++) {
               const re = new RegExp(setting.regex);
               if (!re.test(test_values[idx])) {
-                this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
+                this.$root.showError(setting.regexFailureMessage ? this.$root.escapeHtml(setting.regexFailureMessage) : this.i18n.settingValidationFailed);
                 return;
               }
             }
@@ -1156,11 +1156,10 @@ routes.push({
           this.countCustomized();
           this.notifyChangedSetting(s);
         } catch (error) {
-          var msg = this.i18n.settingSaveError;
-          if (error.response && error.response.data && error.response.data.startsWith("ERROR_")) {
-            msg = error.response.data;
-          }
-          this.$root.showError(msg);
+          // The generic code keeps the setting-specific message.
+          const body = error.response?.data;
+          const known = typeof body === 'string' && /^ERROR_[A-Z0-9_]+$/.test(body) && this.i18n[body] && body !== 'ERROR_REQUEST_FAILED';
+          this.$root.showError(known ? body : this.i18n.settingSaveError);
         }
         this.$root.stopLoading();
       }

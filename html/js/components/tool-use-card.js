@@ -25,6 +25,12 @@ components.push({
 			// value (and its tree walk) is evaluated once per render and cached by Vue,
 			// rather than recomputed at each of the template's status-icon/color/title uses.
 			displayStatus() { return this.ctx.displayStatus(this.toolUse); },
+			// The card renders text, but some error keys contain links.
+			errorText() {
+				if (this.toolUse.status === 'rejected') return this.ctx.i18n.assistantToolUseReject;
+
+				return this.$root.stripHtml(this.$root.localizeMessage(this.toolUse.error));
+			},
 		},
 		template: '#component-tool-use-card',
 	}

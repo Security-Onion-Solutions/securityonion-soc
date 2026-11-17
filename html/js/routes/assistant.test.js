@@ -278,6 +278,22 @@ test('loadStoredChats handles error', async () => {
   expect(comp.chatHistory).toEqual([]);
 });
 
+// codeError builds the axios rejection for a response whose body is an ERROR_* code.
+const codeError = (code, status) => {
+  const error = new Error(`Request failed with status code ${status}`);
+  error.response = { status, data: code };
+  return error;
+};
+
+test('loadStoredChats shows a code\'s key text after its prefix', async () => {
+  const showErrorMock = mockShowError();
+  mockPapi("get", null, codeError('ERROR_PERMISSION_DENIED', 403));
+
+  await comp.loadStoredChats();
+
+  expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadHistory + ': ' + comp.i18n.ERROR_PERMISSION_DENIED);
+});
+
 test('generateChatId creates unique ID', () => {
   const id1 = comp.generateChatId();
   const id2 = comp.generateChatId();
@@ -1178,6 +1194,20 @@ test('loadChat handles error', async () => {
   expect(showErrorMock).toHaveBeenCalledWith('Failed to load chat: Load failed');
 });
 
+test('loadChat shows a code\'s key text after its prefix', async () => {
+  const chat = fakeChatHistory[0];
+  const showErrorMock = mockShowError();
+  comp.saveCurrentChat = jest.fn().mockResolvedValue();
+  comp.loadChatFromBackend = jest.fn().mockRejectedValue(codeError('ERROR_SESSION_ACCESS_DENIED', 403));
+  comp.updateUrlWithSessionId = jest.fn();
+  comp.scrollToBottom = jest.fn();
+  comp.currentChatId = chat.sessionId;
+
+  await comp.loadChat(chat);
+
+  expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.assistantUnableToLoadChat + ': ' + comp.i18n.ERROR_SESSION_ACCESS_DENIED);
+});
+
 test('deleteChat success', async () => {
   const chatId = fakeSessionId;
   const mock = mockPapi("delete");
@@ -1204,6 +1234,15 @@ test('deleteChat handles error', async () => {
   await comp.deleteChat(chatId);
   
   expect(showErrorMock).toHaveBeenCalledWith('Failed to delete chat: Delete failed');
+});
+
+test('deleteChat shows a code\'s key text after its prefix', async () => {
+  const showErrorMock = mockShowError();
+  mockPapi("delete", null, codeError('ERROR_SESSION_ACCESS_DENIED', 403));
+
+  await comp.deleteChat(fakeSessionId);
+
+  expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.assistantUnableToDeleteChat + ': ' + comp.i18n.ERROR_SESSION_ACCESS_DENIED);
 });
 
 test('startNewChat', async () => {
@@ -1370,6 +1409,23 @@ test('checkContextLimitReached returns true when over small limit', () => {
   
   expect(result).toBe(true);
   expect(showErrorMock).toHaveBeenCalledWith(expect.stringContaining('100,000+ tokens'));
+});
+
+test('checkContextLimitReached fills the limit into one key', () => {
+  const original = comp.i18n.assistantContextLimit;
+  comp.i18n.assistantContextLimit = 'X {limit}';
+  try {
+    const showErrorMock = mockShowError();
+    comp.contextLength = 150000;
+    comp.contextLimitSmall = 100000;
+    comp.increaseContextLimit = false;
+    comp.formatCount = jest.fn().mockReturnValue('100,000');
+
+    expect(comp.checkContextLimitReached()).toBe(true);
+    expect(showErrorMock).toHaveBeenCalledWith('X 100,000');
+  } finally {
+    comp.i18n.assistantContextLimit = original;
+  }
 });
 
 test('checkContextLimitReached uses large limit when threshold increased', () => {
@@ -1856,8 +1912,55 @@ test('executeTool warns when the tool turn stays busy past the retries', async (
 
   await comp.executeTool(toolUse);
 
-  expect(comp.$root.showWarning).toHaveBeenCalledWith('ERROR_AGENT_BUSY');
+  expect(comp.$root.showWarning).toHaveBeenCalledWith(comp.i18n.ERROR_AGENT_BUSY);
   expect(toolUse.status).toBe('error');
+});
+
+// A real stream can be read only once, so every check in the catch must share one read.
+test('executeTool reads a streamed error body once and shows its key text', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+
+  let reads = 0;
+  const streamBody = {
+    pipeThrough: () => {
+      reads++;
+      if (reads > 1) throw new Error('stream already read');
+      return {
+        getReader: () => ({
+          read: async () => ({ done: false, value: 'ERROR_TOOL_REQUEST_MISMATCH' })
+        })
+      };
+    }
+  };
+  mockPapi('post', null, alreadyResolvedError(streamBody));
+
+  await comp.executeTool(toolUse);
+
+  const text = comp.i18n.ERROR_TOOL_REQUEST_MISMATCH;
+  expect(reads).toBe(1);
+  expect(toolUse.status).toBe('error');
+  expect(toolUse.error).toBe(text);
+  expect(comp.messages).toHaveLength(1);
+  expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: 'query_events', error: text }));
+});
+
+test('executeTool uses the assistantToolExecutionError key', async () => {
+  const original = comp.i18n.assistantToolExecutionError;
+  comp.i18n.assistantToolExecutionError = 'X {name} {error}';
+  try {
+    const toolUse = { ...fakeToolUse };
+    comp.currentChatId = fakeSessionId;
+    comp.scrollToBottom = jest.fn();
+    mockPapi('post', null, new Error('Network error'));
+
+    await comp.executeTool(toolUse);
+
+    expect(comp.messages[0].content).toBe('X query_events Network error');
+  } finally {
+    comp.i18n.assistantToolExecutionError = original;
+  }
 });
 
 test('executeTool processes streaming response with message_start', async () => {
@@ -3185,6 +3288,24 @@ test('startInvestigationSession handles sendMessage error', async () => {
   jest.useRealTimers();
 });
 
+test('startInvestigationSession shows a code\'s key text after its prefix', async () => {
+  const showErrorMock = mockShowError();
+  comp.messages = [fakeAssistantMessage];
+  comp.sendMessage = jest.fn().mockRejectedValue(codeError('ERROR_ASSISTANT_INVALID_MODEL', 400));
+  comp.creditsLoaded = true;
+
+  jest.useFakeTimers();
+  try {
+    await comp.startInvestigationSession('Investigate');
+    jest.advanceTimersByTime(2000);
+    await jest.runAllTimersAsync();
+  } finally {
+    jest.useRealTimers();
+  }
+
+  expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.assistantUnableToInvestigate + ': ' + comp.i18n.ERROR_ASSISTANT_INVALID_MODEL);
+});
+
 test('startInvestigationSession sets up investigation with complex prompt', async () => {
   const investigationPrompt = `Investigate the following security incident:
 - Multiple failed login attempts from IP 192.168.1.50
@@ -3394,12 +3515,18 @@ test('generateTitleFromMessage with long title', () => {
 });
 
 test('generateTitleFromMessage with no title', () => {
-  const session = {
-  };
-  
-  const title = comp.generateTitleFromMessage(session);
-  
-  expect(title).toMatch(/^New Chat - \d+\/\d+\/\d+$/);
+  const original = comp.i18n.chatNewChatTitle;
+  const warn = jest.spyOn(console, 'warn');
+  comp.i18n.chatNewChatTitle = 'X {date}';
+  jest.useFakeTimers().setSystemTime(new Date('2026-03-15T12:00:00Z'));
+  try {
+    expect(comp.generateTitleFromMessage({})).toBe('X 2026-03-15');
+    expect(warn).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+    warn.mockRestore();
+    comp.i18n.chatNewChatTitle = original;
+  }
 });
 
 // convertBackendMessagesToFrontend method tests
@@ -3570,10 +3697,16 @@ test('convertBackendMessagesToFrontend handles empty message', () => {
     }
   ];
   
-  const result = comp.convertBackendMessagesToFrontend(backendMessages);
-  
-  expect(result).toHaveLength(1);
-  expect(result[0].content).toBe('Empty message');
+  const original = comp.i18n.chatEmptyMessage;
+  comp.i18n.chatEmptyMessage = 'X';
+  try {
+    const result = comp.convertBackendMessagesToFrontend(backendMessages);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe('X');
+  } finally {
+    comp.i18n.chatEmptyMessage = original;
+  }
 });
 
 test('convertBackendMessagesToFrontend handles tool_use blocks with completed status', () => {

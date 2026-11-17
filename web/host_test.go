@@ -85,8 +85,35 @@ func TestGetSourceIp(tester *testing.T) {
 }
 
 func TestConvertErrorToSafeString(tester *testing.T) {
-	assert.Equal(tester, "ERROR_FOO", ConvertErrorToSafeString(errors.New("ERROR_FOO")))
-	assert.Equal(tester, GENERIC_ERROR_MESSAGE, ConvertErrorToSafeString(errors.New("ERROR2_FOO")))
+	tests := []struct {
+		Name     string
+		Input    string
+		Expected string
+	}{
+		{"Bare code", "ERROR_FOO", "ERROR_FOO"},
+		{"Code with number", "ERROR_FOO 3", "ERROR_FOO 3"},
+		{"Colon and space", "ERROR_FOO: detail", "ERROR_FOO"},
+		{"Colon", "ERROR_FOO:detail", "ERROR_FOO"},
+		{"Arrow", "ERROR_FOO -> detail", "ERROR_FOO"},
+		{"Newline", "ERROR_FOO\ndetail", "ERROR_FOO"},
+		{"Parenthesis", "ERROR_FOO (detail)", "ERROR_FOO"},
+		{"Dash", "ERROR_FOO - detail", "ERROR_FOO"},
+		{"Trailing text", "ERROR_FOO some text", "ERROR_FOO"},
+		{"Number then text", "ERROR_FOO 3 extra", "ERROR_FOO"},
+		{"Markup", "ERROR_<img>", GENERIC_ERROR_MESSAGE},
+		{"Mixed case", "ERROR_Foo", GENERIC_ERROR_MESSAGE},
+		{"Lowercase suffix", "ERROR_FOO_bar", GENERIC_ERROR_MESSAGE},
+		{"Other prefix", "ERROR2_FOO", GENERIC_ERROR_MESSAGE},
+		{"Not a code", "something else", GENERIC_ERROR_MESSAGE},
+	}
+
+	for _, test := range tests {
+		tester.Run(test.Name, func(t *testing.T) {
+			assert.Equal(t, test.Expected, ConvertErrorToSafeString(errors.New(test.Input)))
+		})
+	}
+
+	assert.Equal(tester, "ERROR_REQUEST_FAILED", GENERIC_ERROR_MESSAGE)
 }
 
 type DummyPreprocessor struct {

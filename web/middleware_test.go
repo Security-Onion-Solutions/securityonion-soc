@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -145,8 +147,15 @@ func TestRespond(t *testing.T) {
 			Name:         "200 but Error",
 			StatusCode:   http.StatusOK,
 			Obj:          io.EOF,
-			ExpectedBody: []byte(`The request could not be processed.`),
+			ExpectedBody: []byte(GENERIC_ERROR_MESSAGE),
 			ExpectedCode: http.StatusInternalServerError,
+		},
+		{
+			Name:         "Wrapped Code - 400",
+			StatusCode:   http.StatusBadRequest,
+			Obj:          fmt.Errorf("%w: detail", errors.New("ERROR_FOO")),
+			ExpectedBody: []byte(`ERROR_FOO`),
+			ExpectedCode: http.StatusBadRequest,
 		},
 		{
 			Name:         "Raw Response",
@@ -160,7 +169,7 @@ func TestRespond(t *testing.T) {
 			Name:         "Error Writing - 500",
 			StatusCode:   http.StatusOK,
 			Obj:          circle,
-			ExpectedBody: []byte(`The request could not be processed.`),
+			ExpectedBody: []byte(GENERIC_ERROR_MESSAGE),
 			ExpectedCode: http.StatusInternalServerError,
 		},
 	}

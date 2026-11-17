@@ -329,6 +329,30 @@ test('recurrenceTypes and patternModeOptions computed properties return translat
   ]);
 });
 
+test('daysOfMonthOptions titles use dayPrefix', () => {
+  comp.i18n = { dayPrefix: 'X' };
+  const days = typeof comp.daysOfMonthOptions === 'function' ? comp.daysOfMonthOptions() : comp.daysOfMonthOptions;
+  expect(days[0]).toEqual({ title: 'X 1', value: 1 });
+});
+
+test('duplicateSchedule names the copy with scheduleCopySuffix', () => {
+  comp.i18n = { scheduleCopySuffix: 'X' };
+  comp.duplicateSchedule({ id: 'sched-1', name: 'My Sched', definitions: [], exceptions: [] });
+  expect(comp.form.name).toBe('My Sched X');
+});
+
+test('schedules-manager template uses the schedule keys for end time and months', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tmplPath = path.resolve(__dirname, '../../pages/schedules-manager.html');
+  const tmpl = fs.readFileSync(tmplPath, 'utf8');
+
+  expect(tmpl).toContain(':label="i18n.scheduleEndTime"');
+  expect(tmpl).toContain(':label="i18n.scheduleMonths"');
+  expect(tmpl).not.toContain(':label="i18n.endTime"');
+  expect(tmpl).not.toContain(':label="i18n.months"');
+});
+
 test('schedules-manager template sets autofocus on schedule name field', () => {
   const fs = require('fs');
   const path = require('path');

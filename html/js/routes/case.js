@@ -1081,24 +1081,8 @@ routes.push({ path: '/case/:id', name: 'case', component: {
       };
 
       if (earliest) {
-        const from = earliest.toLocaleString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
-        }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3/$1/$2');
-        const to = new Date().toLocaleString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
-        }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3/$1/$2');
+        const from = moment(earliest).format(this.i18n.timePickerFormat);
+        const to = moment().format(this.i18n.timePickerFormat);
         obj.query.t = from + ' - ' + to;
       }
 

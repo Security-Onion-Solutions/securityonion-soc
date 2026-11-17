@@ -2245,7 +2245,7 @@ $(document).ready(function () {
               }
             });
             if (response && response.data) {
-              this.showTip(this.i18n.exportJobEnqueued.replace('{jobId}', response.data.id));
+              this.showTip(this.i18n.exportJobEnqueued.replace('{jobId}', this.escapeHtml(response.data.id)));
             }
           } catch (error) {
             this.showError(error);

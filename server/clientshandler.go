@@ -56,7 +56,7 @@ func RegisterClientsRoutes(srv *Server, r chi.Router, prefix string) {
 // @Router       /connect/clients/ [get]
 func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *ClientsHandler) getClients(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/clients/ [post]
 func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *ClientsHandler) postClient(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/clients/{id}/permission/{perm} [post]
 func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *ClientsHandler) postAddPermission(w http.ResponseWriter, r *http.Reques
 // @Router       /connect/clients/{id}/secret/ [put]
 func (h *ClientsHandler) putGeneratedSecret(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -209,7 +209,7 @@ func (h *ClientsHandler) putGeneratedSecret(w http.ResponseWriter, r *http.Reque
 // @Router       /connect/clients/{id} [put]
 func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *ClientsHandler) putClient(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/clients/{id}/ [delete]
 func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 
@@ -293,7 +293,7 @@ func (h *ClientsHandler) deleteClient(w http.ResponseWriter, r *http.Request) {
 // @Router       /connect/clients/{id}/permission/{perm} [delete]
 func (h *ClientsHandler) deleteClientPermission(w http.ResponseWriter, r *http.Request) {
 	if !licensing.IsEnabled(licensing.FEAT_API) {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_LICENSE_INVALID")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_LICENSE_INVALID"))
 		return
 	}
 

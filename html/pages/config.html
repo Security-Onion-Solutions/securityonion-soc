@@ -330,7 +330,7 @@
 														<v-btn class="ma-1" size="small" rounded="sm" @click.stop="moveEntry(selected, entryIdx, false)" :disabled="!canMoveEntry(entryIdx, false)" data-aid="config_entry_move_down" :aria-label="i18n.ariaMoveEntryDown">
 															<v-icon>fa-arrow-down</v-icon>
 														</v-btn>
-														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" title="Drag to reorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop data-aid="config_ui_element_drag_handle">fa-grip-vertical</v-icon>
+														<v-icon v-if="canDragEntry(entryIdx)" class="ml-2 grab-handle" :title="i18n.configDragToReorder" draggable="true" @dragstart="onEntryDragStart($event, entryIdx)" @dragend="onEntryDragEnd" @click.stop data-aid="config_ui_element_drag_handle">fa-grip-vertical</v-icon>
 													</div>
 												</v-expansion-panel-title>
 												<v-expansion-panel-text :eager="entryIdx == form.entries.length - 1">
@@ -582,7 +582,7 @@
 								<!-- Node and Time on right -->
 								<div class="d-flex align-center text-caption text-medium-emphasis flex-shrink-0 mt-1 mt-sm-0 flex-wrap ml-auto">
 									<v-chip size="x-small" variant="flat" color="grey-darken-3" class="text-white px-2 py-0.5 font-weight-medium mr-2 flex-shrink-0">
-										{{ entry?.nodeId || 'global' }}
+										{{ entry?.nodeId || i18n.global }}
 									</v-chip>
 									<v-icon size="x-small" class="mr-1 text-grey flex-shrink-0">fa-clock</v-icon>
 									<span class="flex-shrink-0">{{ $root.formatDateTime(entry?.timestamp) }}</span>

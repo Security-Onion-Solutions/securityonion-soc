@@ -557,7 +557,24 @@ func TestGetBalanceUnhealthy(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "ERROR_UPSTREAM_SERVICE_ERROR", w.Body.String())
 }
+func TestGetBalance_BalanceError(t *testing.T) {
+	srv, mockManager, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	mockManager.EXPECT().Health(gomock.Any(), gomock.Any()).Return(&model.HealthResponse{Status: "healthy"}, nil)
+	mockManager.EXPECT().Balance(gomock.Any(), gomock.Any()).Return(nil, errors.New("gateway unavailable"))
+
+	req := withAssistantContext(httptest.NewRequest("GET", "/assistant/balance", nil))
+	w := httptest.NewRecorder()
+
+	handler.GetBalance(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "ERROR_UPSTREAM_SERVICE_ERROR", w.Body.String())
+}
+
 func TestGetBalanceAirgapEnabled(t *testing.T) {
 	// Create mock server with airgap enabled
 	srv := &Server{
@@ -799,6 +816,7 @@ func TestManageSessionHistoryNotFound(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "ERROR_SESSION_NOT_FOUND", w.Body.String())
 }
 
 func TestManageSessionHistoryUnauthorized(t *testing.T) {
@@ -1139,7 +1157,7 @@ func TestGetSessionDetailsNotFound(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "ERROR_SESSION_NOT_FOUND")
+	assert.Equal(t, "ERROR_SESSION_NOT_FOUND", w.Body.String())
 }
 
 func TestGetSessionDetailsAccessDenied(t *testing.T) {
@@ -1169,7 +1187,7 @@ func TestGetSessionDetailsAccessDenied(t *testing.T) {
 	handler.GetSessionDetails(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "ERROR_SESSION_ACCESS_DENIED")
+	assert.Equal(t, "ERROR_SESSION_ACCESS_DENIED", w.Body.String())
 	assert.NotContains(t, w.Body.String(), sessionId)
 }
 
@@ -1206,6 +1224,7 @@ func TestGetSessionDetailsMissingSessionId(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ID_REQUIRED", w.Body.String())
 }
 
 func TestGetSessionDetailsUnauthorized(t *testing.T) {
@@ -1341,6 +1360,7 @@ func TestUpdateSessionMissingSessionId(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ID_REQUIRED", w.Body.String())
 }
 
 func TestRemoveAuxData(t *testing.T) {
@@ -1682,6 +1702,7 @@ func TestDeleteSessionMissingSessionId(t *testing.T) {
 
 	// Verify response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ID_REQUIRED", w.Body.String())
 }
 
 func TestDeleteSessionUnauthorized(t *testing.T) {
@@ -1743,7 +1764,7 @@ func TestDeleteSessionNotOwned(t *testing.T) {
 	handler.DeleteSession(w, newDeleteSessionRequest("theirs"))
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "ERROR_SESSION_ACCESS_DENIED")
+	assert.Equal(t, "ERROR_SESSION_ACCESS_DENIED", w.Body.String())
 }
 
 func TestDeleteSessionMissing(t *testing.T) {
@@ -1820,10 +1841,18 @@ func TestPostSessionsAccessLimits(t *testing.T) {
 	}
 	body, _ := json.Marshal(model.SessionAccessRequest{SessionIds: tooMany})
 
-	for _, reqBody := range []string{`{"sessionIds":[]}`, `{"sessionIds":["", " "]}`, string(body), `not json`} {
+	cases := map[string]string{
+		`{"sessionIds":[]}`:        "ERROR_SESSION_IDS_INVALID",
+		`{"sessionIds":["", " "]}`: "ERROR_SESSION_IDS_INVALID",
+		string(body):               "ERROR_SESSION_IDS_INVALID",
+		`not json`:                 web.GENERIC_ERROR_MESSAGE,
+	}
+
+	for reqBody, wantBody := range cases {
 		w := httptest.NewRecorder()
 		handler.PostSessionsAccess(w, newSessionsAccessRequest(reqBody))
 		assert.Equal(t, http.StatusBadRequest, w.Code, reqBody)
+		assert.Equal(t, wantBody, w.Body.String(), reqBody)
 	}
 }
 
@@ -2211,6 +2240,8 @@ func TestRespondChatError(t *testing.T) {
 		{name: "internal error surfaces as 500", err: errors.New("boom"), wantCode: http.StatusInternalServerError, wantBody: "ERROR_UPSTREAM_SERVICE_ERROR"},
 		{name: "busy agent surfaces as 409", err: ErrAgentBusy, wantCode: http.StatusConflict, wantBody: "ERROR_AGENT_BUSY"},
 		{name: "busy session surfaces as 409", err: ErrToolTurnBusy, wantCode: http.StatusConflict, wantBody: "ERROR_TOOL_TURN_BUSY"},
+		{name: "wrapped busy agent sends the bare code", err: fmt.Errorf("turn failed: %w", ErrAgentBusy), wantCode: http.StatusConflict, wantBody: "ERROR_AGENT_BUSY"},
+		{name: "wrapped busy session sends the bare code", err: fmt.Errorf("turn failed: %w", ErrToolTurnBusy), wantCode: http.StatusConflict, wantBody: "ERROR_TOOL_TURN_BUSY"},
 	}
 
 	for _, tc := range testCases {
@@ -2224,7 +2255,7 @@ func TestRespondChatError(t *testing.T) {
 			handler.respondChatError(w, req, log.FromContext(req.Context()), tc.err, "test chat error")
 
 			assert.Equal(t, tc.wantCode, w.Code)
-			assert.Contains(t, w.Body.String(), tc.wantBody)
+			assert.Equal(t, tc.wantBody, w.Body.String())
 		})
 	}
 }
@@ -2247,6 +2278,7 @@ func TestPostChat_SessionNotOwned(t *testing.T) {
 	handler.PostChat(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ACCESS_DENIED", w.Body.String())
 }
 
 func TestPostChat_AutomationSession(t *testing.T) {
@@ -2267,6 +2299,7 @@ func TestPostChat_AutomationSession(t *testing.T) {
 	handler.PostChat(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "ERROR_SESSION_AUTOMATION_READ_ONLY", w.Body.String())
 }
 
 func TestPostTool_AutomationSession(t *testing.T) {
@@ -2285,6 +2318,7 @@ func TestPostTool_AutomationSession(t *testing.T) {
 	handler.PostTool(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "ERROR_SESSION_AUTOMATION_READ_ONLY", w.Body.String())
 }
 
 func TestPostChat_SessionLookupError(t *testing.T) {
@@ -2514,6 +2548,7 @@ func TestStreamResponse_NotFlushable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, entire)
 	assert.Equal(t, http.StatusInternalServerError, w.code)
+	assert.Equal(t, "ERROR_STREAMING_UNSUPPORTED", w.buf.String())
 }
 
 func TestUnstreamResponse_EdgeCases(t *testing.T) {
@@ -2816,6 +2851,7 @@ func TestPostTool_SessionNotOwned(t *testing.T) {
 	handler.PostTool(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ACCESS_DENIED", w.Body.String())
 }
 
 func TestPostTool_SessionNotFound(t *testing.T) {
@@ -2832,6 +2868,7 @@ func TestPostTool_SessionNotFound(t *testing.T) {
 	handler.PostTool(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "ERROR_SESSION_NOT_FOUND", w.Body.String())
 }
 
 func TestPostTool_SessionLookupError(t *testing.T) {
@@ -3160,16 +3197,20 @@ func TestRespondToolTurnError(t *testing.T) {
 		name     string
 		err      error
 		wantCode int
+		wantBody string
 	}{
-		{"busy session", ErrToolTurnBusy, http.StatusConflict},
-		{"unknown tool_use", ErrToolUseNotFound, http.StatusNotFound},
-		{"already resolved tool_use", ErrToolAlreadyResolved, http.StatusBadRequest},
-		{"mismatched tool request", ErrToolRequestMismatch, http.StatusBadRequest},
-		{"client error (request too large)", errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), http.StatusBadRequest},
-		{"client error (invalid model)", errors.New("ERROR_ASSISTANT_INVALID_MODEL"), http.StatusBadRequest},
-		{"upstream/internal error", errors.New("boom"), http.StatusInternalServerError},
-		{"wrapped busy error", fmt.Errorf("continuation failed: %w", ErrToolTurnBusy), http.StatusConflict},
-		{"wrapped unknown tool_use", fmt.Errorf("validation failed: %w", ErrToolUseNotFound), http.StatusNotFound},
+		{"busy session", ErrToolTurnBusy, http.StatusConflict, "ERROR_TOOL_TURN_BUSY"},
+		{"unknown tool_use", ErrToolUseNotFound, http.StatusNotFound, "ERROR_TOOL_USE_NOT_FOUND"},
+		{"already resolved tool_use", ErrToolAlreadyResolved, http.StatusBadRequest, "ERROR_TOOL_ALREADY_RESOLVED"},
+		{"mismatched tool request", ErrToolRequestMismatch, http.StatusBadRequest, "ERROR_TOOL_REQUEST_MISMATCH"},
+		{"client error (request too large)", errors.New("ERROR_ASSISTANT_REQUEST_TOO_LARGE"), http.StatusBadRequest, "ERROR_ASSISTANT_REQUEST_TOO_LARGE"},
+		{"client error (invalid model)", errors.New("ERROR_ASSISTANT_INVALID_MODEL"), http.StatusBadRequest, "ERROR_ASSISTANT_INVALID_MODEL"},
+		{"upstream/internal error", errors.New("boom"), http.StatusInternalServerError, "ERROR_UPSTREAM_SERVICE_ERROR"},
+		{"wrapped busy error", fmt.Errorf("continuation failed: %w", ErrToolTurnBusy), http.StatusConflict, "ERROR_TOOL_TURN_BUSY"},
+		{"wrapped unknown tool_use", fmt.Errorf("validation failed: %w", ErrToolUseNotFound), http.StatusNotFound, "ERROR_TOOL_USE_NOT_FOUND"},
+		{"wrapped already resolved tool_use", fmt.Errorf("validation failed: %w", ErrToolAlreadyResolved), http.StatusBadRequest, "ERROR_TOOL_ALREADY_RESOLVED"},
+		{"wrapped mismatched tool request", fmt.Errorf("validation failed: %w", ErrToolRequestMismatch), http.StatusBadRequest, "ERROR_TOOL_REQUEST_MISMATCH"},
+		{"wrapped busy agent", fmt.Errorf("continuation failed: %w", ErrAgentBusy), http.StatusConflict, "ERROR_AGENT_BUSY"},
 	}
 
 	for _, tc := range tests {
@@ -3177,6 +3218,7 @@ func TestRespondToolTurnError(t *testing.T) {
 			req, w := newReqRec()
 			handler.respondToolTurnError(w, req, log.FromContext(req.Context()), tc.err, "unable to chat with assistant after tool execution")
 			assert.Equal(t, tc.wantCode, w.Code)
+			assert.Equal(t, tc.wantBody, w.Body.String())
 		})
 	}
 }
@@ -4081,6 +4123,17 @@ func cloneSessionRequest(sessionId string) *http.Request {
 	return withAssistantContext(req)
 }
 
+func TestCloneSession_MissingSessionId(t *testing.T) {
+	srv, _, _ := newAssistantTestServer(t, true)
+	handler := NewAssistantHandler(srv)
+
+	w := httptest.NewRecorder()
+	handler.CloneSession(w, cloneSessionRequest(""))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "ERROR_SESSION_ID_REQUIRED", w.Body.String())
+}
+
 func TestCloneSession_Created(t *testing.T) {
 	srv, _, mockStore := newAssistantTestServer(t, true)
 	handler := NewAssistantHandler(srv)
@@ -4223,6 +4276,7 @@ func TestCloneSession_OntoAlertNeedsBothParameters(t *testing.T) {
 		handler.CloneSession(w, cloneOntoAlertRequest("src-1", query))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code, query)
+		assert.Equal(t, "ERROR_SESSION_ENTITY_INVALID", w.Body.String(), query)
 	}
 }
 

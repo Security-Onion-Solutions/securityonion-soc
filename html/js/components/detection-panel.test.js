@@ -46,6 +46,24 @@ beforeEach(() => {
   comp.$root.i18n = global.i18n.getLocalizedTranslations('en-US');
 });
 
+test('saveDetection warns with the public-ID conflict key on a 409', async () => {
+  const original = comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT;
+  comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT = 'X';
+  try {
+    const error = new Error('Request failed with status code 409');
+    error.response = { status: 409, data: 'ERROR_DETECTION_PUBLIC_ID_CONFLICT' };
+    mockPapi('put', null, error);
+    comp.validateSuricata = jest.fn().mockReturnValue(null);
+    comp.$root.showWarning = jest.fn();
+
+    await comp.saveDetection();
+
+    expect(comp.$root.showWarning).toHaveBeenCalledWith('X');
+  } finally {
+    comp.i18n.ERROR_DETECTION_PUBLIC_ID_CONFLICT = original;
+  }
+});
+
 test('extractSummary for Suricata', () => {
   comp.detection.content = 'alert tcp any any -> any any (msg:"Test"; classtype:test-class; sid:1000;)';
   comp.prepareDetection();

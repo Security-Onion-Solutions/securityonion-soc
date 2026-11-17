@@ -2842,6 +2842,7 @@ func TestSaveMemoryGlobalRequiresWriteGlobal(t *testing.T) {
 	err := ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "the DMZ is 10.4.0.0/16"})
 
 	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+	assert.Equal(t, "ERROR_MEMORY_UNAUTHORIZED", web.ConvertErrorToSafeString(err))
 }
 
 func TestSaveMemoryAnotherUserRequiresWriteAll(t *testing.T) {

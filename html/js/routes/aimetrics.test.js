@@ -1206,6 +1206,46 @@ test('updateBreadcrumbs with no parameters', () => {
   expect(comp.breadcrumbs[0].to).toBe(null);
 });
 
+test('updateBreadcrumbs titles come from keys and data-aids stay fixed', () => {
+  const original = { users: comp.i18n.users, sessions: comp.i18n.aiMetricsSessions, messages: comp.i18n.aiMetricsMessages };
+  comp.i18n.users = 'U';
+  comp.i18n.aiMetricsSessions = 'S';
+  comp.i18n.aiMetricsMessages = 'M';
+  try {
+    comp.updateBreadcrumbs('user123', 'session456');
+
+    expect(comp.breadcrumbs.map(b => b.title)).toEqual(['U', 'S', 'M']);
+    expect(comp.breadcrumbs.map(b => b.aid)).toEqual(['Users', 'Sessions', 'Messages']);
+  } finally {
+    comp.i18n.users = original.users;
+    comp.i18n.aiMetricsSessions = original.sessions;
+    comp.i18n.aiMetricsMessages = original.messages;
+  }
+});
+
+test('formatExpandMessage transcript labels come from keys', () => {
+  const keys = ['aiMetricsTranscriptTool', 'parameters', 'aiMetricsTranscriptToolResult', 'error'];
+  const original = keys.map(k => comp.i18n[k]);
+  keys.forEach((k, i) => { comp.i18n[k] = 'K' + i; });
+  try {
+    comp.$root.formatMarkdown = jest.fn().mockReturnValue('');
+    comp.formatExpandMessage({ message: { role: 'assistant', contentBlocks: [
+      { type: 'tool_use', name: 'query_events', input: { oql_query: 'x' } },
+    ] } });
+    comp.formatExpandMessage({ message: { role: 'user', contentBlocks: [
+      { toolResult: { toolUseId: 'tool-123', isError: true, content: [{ text: 'Connection timeout' }] } },
+    ] } });
+
+    const args = comp.$root.formatMarkdown.mock.calls.map(c => c[0]).join('\n');
+    expect(args).toContain('**K0:** query_events');
+    expect(args).toContain('**K1:**');
+    expect(args).toContain('**K2:**');
+    expect(args).toContain('**K3:** Connection timeout');
+  } finally {
+    keys.forEach((k, i) => { comp.i18n[k] = original[i]; });
+  }
+});
+
 // Watcher tests
 test('watchers are properly configured', () => {
   // Test that the component has the expected watchers

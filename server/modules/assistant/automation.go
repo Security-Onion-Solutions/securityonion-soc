@@ -39,8 +39,9 @@ const (
 	BuiltinAlertTriageAutomationId = "a1d3f5b7-9c2e-4e68-8b4a-6f0c2d9e7b13"
 )
 
-// Wrap ErrInvalidAutomationParams with %w to name the offending field: respondConfigWrite
-// matches on the message substring, so the wrapped form still maps to the right status.
+// Wrap ErrInvalidAutomationParams with %w to name the offending field in the log: web.Respond
+// logs the full text, but only the code reaches the client. respondAutomation matches on the
+// message substring, so the wrapped form still maps to the right status.
 var (
 	ErrAutomationNotFound      = errors.New("ERROR_AUTOMATION_NOT_FOUND")
 	ErrAutomationKindNotFound  = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")

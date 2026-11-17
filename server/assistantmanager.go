@@ -38,6 +38,21 @@ var ErrSessionAccessDenied = errors.New("ERROR_SESSION_ACCESS_DENIED")
 // session targets a delegation sub-session. The handler maps it to 400.
 var ErrSessionNotRoot = errors.New("ERROR_SESSION_NOT_ROOT")
 
+// ErrSessionAutomationReadOnly means the session was run by an automation, so it can't be resumed or changed (403).
+var ErrSessionAutomationReadOnly = errors.New("ERROR_SESSION_AUTOMATION_READ_ONLY")
+
+// ErrSessionIdRequired means the request names no session (400).
+var ErrSessionIdRequired = errors.New("ERROR_SESSION_ID_REQUIRED")
+
+// ErrSessionEntityInvalid means a continue request isn't for an alert investigation with the alert's ID (400).
+var ErrSessionEntityInvalid = errors.New("ERROR_SESSION_ENTITY_INVALID")
+
+// ErrSessionIdsInvalid means a request names too few or too many session IDs (400).
+var ErrSessionIdsInvalid = errors.New("ERROR_SESSION_IDS_INVALID")
+
+// ErrStreamingUnsupported means the response writer can't flush, so the response can't be streamed (500).
+var ErrStreamingUnsupported = errors.New("ERROR_STREAMING_UNSUPPORTED")
+
 // ErrSessionNotOnAlert means the target alert does not reference the cloned session (400).
 var ErrSessionNotOnAlert = errors.New("ERROR_SESSION_NOT_ON_ALERT")
 

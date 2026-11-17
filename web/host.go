@@ -11,9 +11,9 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +23,14 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 )
 
-const GENERIC_ERROR_MESSAGE = "The request could not be processed."
+// An i18n.js key: the code sent for errors that carry none of their own.
+const GENERIC_ERROR_MESSAGE = "ERROR_REQUEST_FAILED"
+
+// Only a code, optionally followed by a number (ERROR_SESSION_ATTACHED_TO_CASES <n>),
+// reaches the client; anything after the code is English or internal detail,
+// which Respond has already logged.
+var safeErrorBody = regexp.MustCompile(`^ERROR_[A-Z0-9_]+( [0-9]+)?$`)
+var errorCode = regexp.MustCompile(`^(ERROR_[A-Z0-9_]+)(?:$|[^A-Za-z0-9_])`)
 
 type ContextKey string
 
@@ -323,8 +330,13 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 
 func ConvertErrorToSafeString(err error) string {
 	msg := err.Error()
-	if !strings.HasPrefix(msg, "ERROR_") {
-		msg = GENERIC_ERROR_MESSAGE
+	if safeErrorBody.MatchString(msg) {
+		return msg
 	}
-	return msg
+
+	if m := errorCode.FindStringSubmatch(msg); m != nil {
+		return m[1]
+	}
+
+	return GENERIC_ERROR_MESSAGE
 }

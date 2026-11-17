@@ -878,7 +878,7 @@ func (r *alertTriageRun) gone(ctx context.Context, item *model.AutomationWorkIte
 
 	logger.Error("alert triage item vanished while held")
 
-	return fmt.Errorf("%w: work item %s vanished while held", database.ErrAutomationWorkItemNotFound, item.Id)
+	return database.ErrAutomationWorkItemNotFound
 }
 
 // fail records that this run failed the item, on the item and on its alerts, and gives the item

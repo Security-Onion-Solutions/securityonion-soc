@@ -17,6 +17,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 )
 
+// ErrMetricRequired means a metrics history request names no metric (400).
+var ErrMetricRequired = errors.New("ERROR_METRIC_REQUIRED")
+
 type GridHandler struct {
 	server *Server
 }
@@ -131,7 +134,7 @@ func (h *GridHandler) getMetricsHistory(w http.ResponseWriter, r *http.Request) 
 	zone := r.Form.Get("zone")
 
 	if metricType == "" {
-		web.Respond(w, r, http.StatusBadRequest, "metric is required")
+		web.Respond(w, r, http.StatusBadRequest, ErrMetricRequired)
 		return
 	}
 

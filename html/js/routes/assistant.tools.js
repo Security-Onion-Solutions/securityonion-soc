@@ -273,6 +273,11 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
           await this.loadCredits();
         }
       } catch (error) {
+        // A stream body can be read only once, so keep its text for every check below.
+        if (error.response) {
+          error.response.data = await this.readErrorBody(error);
+        }
+
         // An already-resolved tool_use isn't a failure: the result is persisted, so re-fetch
         // the session and render truth. Sessions not in view reload on the next switch instead.
         if (await this.isToolAlreadyResolvedError(error)) {
@@ -288,13 +293,15 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
           return;
         }
 
+        const errorText = this.$root.localizeMessage(error);
+
         // Still busy after the retries: the agent is at its limit or the session is mid-turn.
         if (error.response && error.response.status === 409) {
-          this.$root.showWarning(await this.readErrorBody(error));
+          this.$root.showWarning(errorText);
         }
 
         toolUse.status = 'error';
-        toolUse.error = error.message;
+        toolUse.error = errorText;
         this.isStreaming = false;
 
         // If a delegation was still in flight, close the delegate here so a dropped/aborted
@@ -302,7 +309,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         const activeDelegate = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse;
         if (activeDelegate) {
           activeDelegate.status = 'error';
-          activeDelegate.error = error.message;
+          activeDelegate.error = errorText;
           activeDelegate.completedAt = new Date().toISOString();
         }
         if (this.delegationChildren.has(toolStreamingSessionId)) {
@@ -315,7 +322,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         if (isCurrentSession && !activeDelegate) {
           const errorMessage = {
             role: 'assistant',
-            content: `Error executing tool "${toolUse.name}": ${error.message}`,
+            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: errorText }),
             timestamp: new Date().toISOString(),
             isToolResult: true,
             toolName: toolUse.name,

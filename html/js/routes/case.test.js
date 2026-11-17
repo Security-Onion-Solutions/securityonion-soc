@@ -1045,6 +1045,21 @@ test('sumHours', () => {
   expect(comp.sumHours()).toBe(5.3);
 });
 
+test('huntCase formats its time range with timePickerFormat', () => {
+  const original = comp.i18n.timePickerFormat;
+  comp.i18n.timePickerFormat = '[X]YYYY';
+  jest.useFakeTimers().setSystemTime(new Date('2026-03-15T12:00:00Z'));
+  try {
+    comp.caseObj.id = 'myCaseId';
+    comp.associations.events = [{ fields: { soc_timestamp: '2025-02-03T21:31:02.140Z' } }];
+
+    expect(comp.huntCase().query.t).toBe('X2025 - X2026');
+  } finally {
+    jest.useRealTimers();
+    comp.i18n.timePickerFormat = original;
+  }
+});
+
 test('huntCase', () => {
   comp.caseObj.id = 'myCaseId';
   comp.associations.events = [

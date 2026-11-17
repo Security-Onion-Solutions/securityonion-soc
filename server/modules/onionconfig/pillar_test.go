@@ -580,7 +580,7 @@ func TestUpdatePillarSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 	setting.Value = "[s new advanced"
 	setting.Syntax = "yaml"
 	err := UpdatePillarSetting(saltstackDir, setting, false)
-	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML -> yaml: line 1: did not find expected ',' or ']'")
+	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML")
 }
 
 func TestUpdatePillarSetting_AlignIntType(tester *testing.T) {

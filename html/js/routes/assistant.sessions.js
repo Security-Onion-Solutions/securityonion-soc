@@ -160,7 +160,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
       const maxContextLength = this.increaseContextLimit ? this.contextLimitLarge : this.contextLimitSmall;
       if (this.contextLength >= maxContextLength) {
         const formattedLimit = this.formatCount(maxContextLength);
-        this.$root.showError(this.i18n.assistantContextLimitPt1 + ` (${formattedLimit}+ tokens). ` + this.i18n.assistantContextLimitPt2);
+        this.$root.showError(this.i18n.assistantContextLimit.replace('{limit}', formattedLimit));
         return true;
       }
       return false;
@@ -212,7 +212,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           this.chatHistory = [];
         }
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadHistory + ': ' + error.message);
+        this.$root.showError(this.i18n.assistantUnableToLoadHistory + ': ' + this.$root.localizeMessage(error));
 
         this.chatHistory = [];
       } finally {
@@ -351,7 +351,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
         await this.updateUrlWithSessionId(chat.sessionId);
 
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + error.message);
+        this.$root.showError(this.i18n.assistantUnableToLoadChat + ': ' + this.$root.localizeMessage(error));
       } finally {
         this.$root.stopLoading();
       }
@@ -371,7 +371,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
         }
         
       } catch (error) {
-        this.$root.showError(this.i18n.assistantUnableToDeleteChat + ': ' + (error.response?.data?.error || error.message));
+        this.$root.showError(this.i18n.assistantUnableToDeleteChat + ': ' + this.$root.localizeMessage(error));
       }
     },
     async startNewChat() {
@@ -418,7 +418,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           try {
             await this.sendMessage();
           } catch (error) {
-            this.$root.showError(this.i18n.assistantUnableToInvestigate + ': ' + error.message);
+            this.$root.showError(this.i18n.assistantUnableToInvestigate + ': ' + this.$root.localizeMessage(error));
           }
         }
       }, 2000);
@@ -434,7 +434,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           return title;
         }
       }
-      return 'New Chat - ' + new Date().toLocaleDateString();
+      return this.i18n.chatNewChatTitle.replace('{date}', this.$root.formatDate(new Date().toISOString(), this.i18n.dateFormat));
     },
 
     // Throws on failure; missing is routine for new chats, so the caller decides.
@@ -554,7 +554,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           frontendMsg.content = '';
         }
       } else {
-        frontendMsg.content = 'Empty message';
+        frontendMsg.content = this.i18n.chatEmptyMessage;
       }
     },
     

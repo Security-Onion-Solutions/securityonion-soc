@@ -27,7 +27,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-var errPublicIdExists = errors.New("publicId already exists for this engine")
+var errPublicIdExists = errors.New("ERROR_DETECTION_PUBLIC_ID_CONFLICT")
+var errPublicIdRequired = errors.New("ERROR_DETECTION_PUBLIC_ID_REQUIRED")
 
 type BulkOp struct {
 	// The list of detection IDs to bulk update when a specific query is not provided
@@ -215,6 +216,7 @@ func (h *DetectionHandler) GetByPublicId(w http.ResponseWriter, r *http.Request)
 // @Router       /connect/detection/ [post]
 func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := log.FromContext(ctx)
 
 	detect := &model.Detection{}
 
@@ -268,7 +270,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 	err = engine.ExtractDetails(detect)
 	if err != nil {
 		if err.Error() == "rule does not contain a public Id" {
-			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+			web.Respond(w, r, http.StatusBadRequest, errPublicIdRequired)
 		} else {
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
@@ -300,7 +302,7 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 	detect, err = h.server.Detectionstore.CreateDetection(ctx, detect)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			web.Respond(w, r, http.StatusConflict, "publicIdConflictErr")
+			web.Respond(w, r, http.StatusConflict, errPublicIdExists)
 			return
 		}
 
@@ -323,7 +325,8 @@ func (h *DetectionHandler) CreateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	if len(errMap) != 0 {
-		web.Respond(w, r, http.StatusInternalServerError, errMap)
+		logger.WithField("detectionSyncErrors", errMap).Error("Unable to synchronize created detection")
+		web.Respond(w, r, http.StatusInternalServerError, errors.New("ERROR_DETECTION_SYNC_FAILED"))
 		return
 	}
 
@@ -469,7 +472,7 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 		} else if errors.Is(err, errPublicIdExists) {
 			web.Respond(w, r, http.StatusConflict, err)
 		} else if err.Error() == "rule does not contain a public Id" {
-			web.Respond(w, r, http.StatusBadRequest, "missingPublicIdErr")
+			web.Respond(w, r, http.StatusBadRequest, errPublicIdRequired)
 		} else {
 			web.Respond(w, r, http.StatusBadRequest, err)
 		}
@@ -528,7 +531,8 @@ func (h *DetectionHandler) UpdateDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	if len(errMap) != 0 {
-		web.Respond(w, r, http.StatusInternalServerError, errMap)
+		logger.WithField("detectionSyncErrors", errMap).Error("Unable to synchronize updated detection")
+		web.Respond(w, r, http.StatusInternalServerError, errors.New("ERROR_DETECTION_SYNC_FAILED"))
 		return
 	}
 
@@ -631,7 +635,7 @@ func (h *DetectionHandler) DeleteDetection(w http.ResponseWriter, r *http.Reques
 	}
 
 	if det.IsCommunity {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_DELETE_COMMUNITY")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_DELETE_COMMUNITY"))
 		return
 	}
 
@@ -755,7 +759,7 @@ func (h *DetectionHandler) BulkUpdateDetection(w http.ResponseWriter, r *http.Re
 	}
 
 	if containsCommunity && body.Delete {
-		web.Respond(w, r, http.StatusBadRequest, "ERROR_BULK_COMMUNITY")
+		web.Respond(w, r, http.StatusBadRequest, errors.New("ERROR_BULK_COMMUNITY"))
 		return
 	}
 

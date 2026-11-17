@@ -299,6 +299,6 @@ func TestPostCancelQueryError(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	// Check the response body
-	expected := `The request could not be processed.`
+	expected := web.GENERIC_ERROR_MESSAGE
 	assert.Equal(t, expected, w.Body.String())
 }

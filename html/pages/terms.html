@@ -69,37 +69,37 @@
 											</v-row>
 										</span>
 										<v-sheet v-else id="proFeatures" rounded="lg" class="marketing pa-4 ma-4 mx-auto" elevation="10" style="max-width: 1300px;">
-											<h2>You're missing out on some Pro features!</h2>
+											<h2>{{ i18n.proFeaturesTitle }}</h2>
 											<ul class="my-2">
-												<li>Onion AI</li>
-												<li>Agent Studio</li>
-												<li>Agentic Automations</li>
-												<li>OpenID Connect 3rd-party authentication</li>
-												<li>Disk encryption</li>
-												<li>FIPS OS compliance</li>
-												<li>STIG OS compliance</li>
-												<li>Notifications</li>
-												<li>Time tracking inside of Cases</li>
-												<li>Guaranteed Message Delivery</li>
-												<li>Security Onion API</li>
-												<li>Active Query Management</li>
-												<li>Reporting & CSV Exports</li>
-												<li>AI/LLM MCP Server</li>
-												<li>Manager of Managers<sup aria-describedby="footnote-asterisk">*</sup></li>
-												<li>Splunk App<sup aria-describedby="footnote-dagger">†</sup></li>
-												<li>Hardware Virtualization<sup aria-describedby="footnote-double-dagger">‡</sup></li>
+												<li>{{ i18n.oai }}</li>
+												<li>{{ i18n.agentstudio }}</li>
+												<li>{{ i18n.proFeatureAgenticAutomations }}</li>
+												<li>{{ i18n.proFeatureOidc }}</li>
+												<li>{{ i18n.proFeatureDiskEncryption }}</li>
+												<li>{{ i18n.proFeatureFips }}</li>
+												<li>{{ i18n.proFeatureStig }}</li>
+												<li>{{ i18n.ntf }}</li>
+												<li>{{ i18n.proFeatureCaseTimeTracking }}</li>
+												<li>{{ i18n.gmd }}</li>
+												<li>{{ i18n.api }}</li>
+												<li>{{ i18n.qry }}</li>
+												<li>{{ i18n.proFeatureReporting }}</li>
+												<li>{{ i18n.proFeatureMcpServer }}</li>
+												<li>{{ i18n.proFeatureManagerOfManagers }}<sup aria-describedby="footnote-asterisk">*</sup></li>
+												<li>{{ i18n.proFeatureSplunkApp }}<sup aria-describedby="footnote-dagger">†</sup></li>
+												<li>{{ i18n.proFeatureHardwareVirtualization }}<sup aria-describedby="footnote-double-dagger">‡</sup></li>
 											</ul>
-											To learn more about these Pro features, please visit our website:
+											{{ i18n.proFeaturesLearnMore }}
 											<a href="https://securityonion.com/pro">https://securityonion.com/pro</a>
 											<div class="mt-2">
 												<div id="footnote-asterisk">
-													* Additional licensing requirements may apply
+													{{ i18n.proFeatureFootnoteLicensing }}
 												</div>
 												<div id="footnote-dagger">
-													† Security Onion Solutions does not provide support for this feature
+													{{ i18n.proFeatureFootnoteUnsupported }}
 												</div>
 												<div id="footnote-double-dagger">
-													‡ Available on select server hardware
+													{{ i18n.proFeatureFootnoteHardware }}
 												</div>
 											</div>
 										</v-sheet>
@@ -151,6 +151,7 @@
 				<v-tabs-window-item value="terms">
 					<v-card variant="outlined" class="my-4 subtle-border">
 						<v-card-text>
+							<!-- The license text is the legal instrument, so it is not translated. -->
 							<h1 class="mt-8 mb-3">
 								Elastic License 2.0 (ELv2) Terms
 							</h1>

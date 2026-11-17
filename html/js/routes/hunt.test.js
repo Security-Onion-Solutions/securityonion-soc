@@ -1871,6 +1871,24 @@ test('bulkUpdateReport - filtered success', () => {
 );
 });
 
+test('bulkUpdateReport - durations use the unit keys and pad minutes only under 10', () => {
+  const original = { h: comp.i18n.hHours, m: comp.i18n.mMinutes, s: comp.i18n.sSeconds };
+  comp.i18n.hHours = 'H';
+  comp.i18n.mMinutes = 'M';
+  comp.i18n.sSeconds = 'S';
+  try {
+    const cases = { 4205: '1H 10M 5S', 3665: '1H 01M 5S', 3600: '1H 00M 0S', 3605: '1H 00M 5S', 5: '5S' };
+    for (const [time, expected] of Object.entries(cases)) {
+      comp.bulkUpdateReport({ time: Number(time), filtered: 0, verb: 'update', modified: 1, total: 1 });
+      expect(comp.$root.infoMessage).toContain(`(${expected})`);
+    }
+  } finally {
+    comp.i18n.hHours = original.h;
+    comp.i18n.mMinutes = original.m;
+    comp.i18n.sSeconds = original.s;
+  }
+});
+
 test('toggleQuickAction - Tune Detection, Yara => Source Tab, Other Engines => Tuning Tab', async () => {
   comp.category = 'alerts';
   comp.escalationMenuVisible = comp.quickActionVisible = false;
@@ -2339,6 +2357,24 @@ test('fetchNewestEvent', async () => {
   });
 
   resetPapi();
+});
+
+test('fetchNewestEvent warns with the noEventsFound key when nothing matches', async () => {
+  const original = comp.i18n.noEventsFound;
+  comp.i18n.noEventsFound = 'X';
+  try {
+    mockPapi('get', { data: { events: [] } });
+    comp.$root.showWarning = jest.fn();
+    comp.filterToggles = [];
+    comp.dateRange = 'x - y';
+    comp.zone = 'zone';
+
+    await comp.fetchNewestEvent({ a: 1, count: 2 });
+
+    expect(comp.$root.showWarning).toHaveBeenCalledWith('X');
+  } finally {
+    comp.i18n.noEventsFound = original;
+  }
 });
 
 test('fetchNewestEvent searches the missing bucket by its marker, not its label', async () => {
@@ -3017,6 +3053,17 @@ test('startAIInvestigation - grouped alert', async () => {
 
   expect(comp.fetchNewestEvent).toHaveBeenCalledWith(item);
   expect(comp.investigationMenu.newLink.query).toEqual({ investigation: true, socId: 'alert456' });
+});
+
+test('startAIInvestigation - grouped alert fetch failure shows a code\'s key text after its prefix', async () => {
+  const error = new Error('Request failed with status code 403');
+  error.response = { status: 403, data: 'ERROR_PERMISSION_DENIED' };
+  comp.fetchNewestEvent = jest.fn().mockRejectedValue(error);
+  const showErrorMock = mockShowError();
+
+  await comp.startAIInvestigation({ count: 5, 'rule.uuid': 'rule-uuid-123' });
+
+  expect(showErrorMock).toHaveBeenCalledWith(comp.i18n.aiInvestigationUnableToFetchNewest + ': ' + comp.i18n.ERROR_PERMISSION_DENIED);
 });
 
 test('openAssessment expands the row onto its AI Investigation tab', () => {

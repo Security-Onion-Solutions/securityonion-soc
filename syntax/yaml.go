@@ -8,7 +8,6 @@ package syntax
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -28,11 +27,7 @@ func ValidateYaml(value string) error {
 			"length": len(value),
 		}).WithError(err).Error("Unable to parse valid YAML from value")
 
-		// Clean up error string
-		errMsg := strings.Replace(err.Error(), " into map[string]interface {}", "", 1)
-
-		// Prepend error message with ERROR_ to ensure the string does not get replaced by the safestring method in BaseHandler.
-		err = errors.New("ERROR_MALFORMED_YAML -> " + errMsg)
+		err = errors.New("ERROR_MALFORMED_YAML")
 	}
 
 	return err
