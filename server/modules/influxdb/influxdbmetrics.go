@@ -471,8 +471,9 @@ func (metrics *InfluxDBMetrics) getOsNeedsRestart(host string) int {
 }
 
 func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *model.Node) bool {
-	var status bool
-	if err := metrics.server.CheckAuthorized(ctx, "write", "nodes"); err == nil {
+	// A faulted node has stopped reporting; keep its last metrics instead of copying empty cache values.
+	faulted := node.ConnectionStatus == model.NodeStatusFault
+	if !faulted {
 		node.RaidStatus = metrics.getRaidStatus(node.Id)
 		node.ProcessStatus = metrics.getProcessStatus(node.Id)
 		node.ProcessJson = metrics.getProcessJson(node.Id)
@@ -515,15 +516,14 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.FpsEnabled = metrics.fpsEnabled[node.Id]
 		node.LksEnabled = metrics.lksEnabled[node.Id]
 
-		node.HistoricalMetricsEnabled = false
-		enhancedStatusEnabled := (metrics.client != nil)
-		status = node.UpdateOverallStatus(enhancedStatusEnabled)
-
 		licensing.ValidateFeature(licensing.FEAT_FPS, node.FpsEnabled == 1)
 		licensing.ValidateFeature(licensing.FEAT_GMD, node.IsProcessRunning("so-kafka"))
 		licensing.ValidateFeature(licensing.FEAT_LKS, node.LksEnabled == 1)
 	}
-	return status
+
+	node.HistoricalMetricsEnabled = false
+	enhancedStatusEnabled := (metrics.client != nil)
+	return node.UpdateOverallStatus(enhancedStatusEnabled)
 }
 
 func (metrics *InfluxDBMetrics) GetTimeSeriesMetrics(ctx context.Context, nodeId, container string, metricType string, startTime, endTime time.Time) (map[string][]model.MetricSample, error) {

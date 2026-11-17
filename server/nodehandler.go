@@ -7,6 +7,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
+
+var ErrNodeIdRequired = errors.New("ERROR_NODE_ID_REQUIRED")
 
 type NodeHandler struct {
 	server *Server
@@ -49,6 +52,11 @@ func (h *NodeHandler) postNode(w http.ResponseWriter, r *http.Request) {
 	err := web.ReadJson(r, node)
 	if err != nil {
 		web.Respond(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	if node.Id == "" {
+		web.Respond(w, r, http.StatusBadRequest, ErrNodeIdRequired)
 		return
 	}
 

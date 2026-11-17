@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -209,4 +210,162 @@ func TestInfluxDBMetrics_GetTimeSeriesMetrics(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, res)
 	})
+}
+
+func newCachedInfluxDBMetrics() *InfluxDBMetrics {
+	metrics := NewInfluxDBMetrics(server.NewFakeUnauthorizedServer())
+	now := time.Now()
+	metrics.lastRaidUpdateTime = now
+	metrics.lastProcessUpdateTime = now
+	metrics.lastEpsUpdateTime = now
+	metrics.lastEventstoreUpdateTime = now
+	metrics.lastOsUpdateTime = now
+	metrics.cacheExpirationMs = 9999999
+	return metrics
+}
+
+func TestUpdateNodeMetricsUnauthorized(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.processStatus["id1"] = 0
+	metrics.processJson["id1"] = `{"some":"value"}`
+	metrics.osUptime["id1"] = 34
+	metrics.diskUsedRootPct = make(map[string]float64)
+	metrics.diskUsedRootPct["id1"] = 56.7
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = model.NodeStatusOk
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusOk, node.ProcessStatus)
+	assert.Equal(tester, `{"some":"value"}`, node.ProcessJson)
+	assert.Equal(tester, 34, node.OsUptimeSeconds)
+	assert.Equal(tester, 56.7, node.DiskUsedRootPct)
+	assert.Equal(tester, model.NodeStatusOk, node.Status)
+}
+
+func TestUpdateNodeMetricsFaultedNodeKeepsMetrics(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = model.NodeStatusFault
+	node.OsUptimeSeconds = 12
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, 12, node.OsUptimeSeconds)
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+}
+
+func TestUpdateNodeMetricsUnknownConnectionStillCopies(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.processStatus["id1"] = 1
+	metrics.osUptime["id1"] = 44
+	metrics.diskUsedRootPct = make(map[string]float64)
+	metrics.diskUsedRootPct["id1"] = 42.5
+
+	node := model.NewNode("id1")
+	node.HistoricalMetricsEnabled = true
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusFault, node.ProcessStatus)
+	assert.Equal(tester, 44, node.OsUptimeSeconds)
+	assert.Equal(tester, 42.5, node.DiskUsedRootPct)
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+	assert.False(tester, node.HistoricalMetricsEnabled)
+}
+
+func TestUpdateNodeMetricsFaultedNodeStaleComponents(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.processStatus["id1"] = 1
+	metrics.osUptime["id1"] = 999
+	metrics.diskUsedRootPct = make(map[string]float64)
+	metrics.diskUsedRootPct["id1"] = 99.9
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = model.NodeStatusFault
+	node.ProcessStatus = model.NodeStatusOk
+	node.OsUptimeSeconds = 12
+	node.DiskUsedRootPct = 11.1
+	node.HistoricalMetricsEnabled = true
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusOk, node.ProcessStatus)
+	assert.Equal(tester, 12, node.OsUptimeSeconds)
+	assert.Equal(tester, 11.1, node.DiskUsedRootPct)
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+	assert.False(tester, node.HistoricalMetricsEnabled)
+
+	assert.False(tester, metrics.UpdateNodeMetrics(context.Background(), node))
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+}
+
+func TestUpdateNodeMetricsEmptyConnectionStillCopies(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.processStatus["id1"] = 0
+	metrics.osUptime["id1"] = 21
+	metrics.fpsEnabled = make(map[string]int)
+	metrics.fpsEnabled["id1"] = 1
+	metrics.lksEnabled = make(map[string]int)
+	metrics.lksEnabled["id1"] = 1
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = ""
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusOk, node.ProcessStatus)
+	assert.Equal(tester, 21, node.OsUptimeSeconds)
+	assert.Equal(tester, 1, node.FpsEnabled)
+	assert.Equal(tester, 1, node.LksEnabled)
+	assert.False(tester, node.HistoricalMetricsEnabled)
+}
+
+func TestUpdateNodeMetricsEnhancedStatusWithClient(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.client = influxdb2.NewClient("http://influx.invalid:8086", "token")
+	metrics.raidStatus["id1"] = 1
+	metrics.processStatus["id1"] = 0
+	metrics.eventstoreStatus["id1"] = "green"
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = model.NodeStatusOk
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	// A cached RAID fault only counts toward the overall status when enhanced
+	// status is on, which requires a non-nil client.
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+	assert.True(tester, node.MetricsEnabled)
+	assert.False(tester, node.HistoricalMetricsEnabled)
+
+	assert.False(tester, metrics.UpdateNodeMetrics(context.Background(), node))
+}
+
+func TestUpdateNodeMetricsFaultedNodeWithClient(tester *testing.T) {
+	metrics := newCachedInfluxDBMetrics()
+	metrics.client = influxdb2.NewClient("http://influx.invalid:8086", "token")
+	metrics.raidStatus["id1"] = 1
+
+	node := model.NewNode("id1")
+	node.ConnectionStatus = model.NodeStatusFault
+	node.RaidStatus = model.NodeStatusOk
+	node.OsUptimeSeconds = 12
+
+	changed := metrics.UpdateNodeMetrics(context.Background(), node)
+
+	assert.True(tester, changed)
+	assert.Equal(tester, model.NodeStatusOk, node.RaidStatus)
+	assert.Equal(tester, 12, node.OsUptimeSeconds)
+	assert.Equal(tester, model.NodeStatusFault, node.Status)
+	assert.True(tester, node.MetricsEnabled)
+	assert.False(tester, node.HistoricalMetricsEnabled)
 }
