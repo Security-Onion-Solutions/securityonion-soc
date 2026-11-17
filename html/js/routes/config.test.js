@@ -1412,6 +1412,9 @@ test('saveRegexFailureEscapesMessage', async () => {
 test('saveErrorShowsOnlyKnownCodes', async () => {
   const cases = [
     { error: { response: { data: 'ERROR_LICENSE_INVALID' } }, expected: 'ERROR_LICENSE_INVALID' },
+    { error: { response: { data: 'ERROR_MALFORMED_YAML 12' } }, expected: comp.i18n.malformedYamlLine.replace('{line}', '12') },
+    { error: { response: { data: 'ERROR_MALFORMED_YAML' } }, expected: 'ERROR_MALFORMED_YAML' },
+    { error: { response: { data: 'ERROR_MALFORMED_YAML 12 x' } }, expected: comp.i18n.settingSaveError },
     { error: { response: { data: 'ERROR_REQUEST_FAILED' } }, expected: comp.i18n.settingSaveError },
     { error: { response: { data: 'ERROR_<img src=x>' } }, expected: comp.i18n.settingSaveError },
     { error: { response: { data: 'not a code' } }, expected: comp.i18n.settingSaveError },

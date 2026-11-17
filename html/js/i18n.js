@@ -1279,6 +1279,7 @@ const i18n = {
       lowercaseRequired: 'Values must be all lower case.',
       manualSyncFull: 'Full Update',
       manualSyncUpdate: 'Differential Update',
+      malformedYamlLine: 'The value is not valid YAML. Check line {line}.',
       manualSyncHint: 'Select an engine to synchronize',
       markAsRead: 'Mark as Read',
       markAllAsRead: 'Mark all as Read',

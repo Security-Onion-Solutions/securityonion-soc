@@ -8,10 +8,18 @@ package syntax
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
 )
+
+var ErrMalformedYaml = errors.New("ERROR_MALFORMED_YAML")
+
+// yaml.v3 exports no error type carrying the line, only text such as
+// "yaml: line N: ..." or "yaml: unmarshal errors:\n  line N: ...".
+var yamlErrorLine = regexp.MustCompile(`\bline ([0-9]+):`)
 
 func ValidateYaml(value string) error {
 	var err error
@@ -27,7 +35,11 @@ func ValidateYaml(value string) error {
 			"length": len(value),
 		}).WithError(err).Error("Unable to parse valid YAML from value")
 
-		err = errors.New("ERROR_MALFORMED_YAML")
+		if m := yamlErrorLine.FindStringSubmatch(err.Error()); m != nil {
+			return fmt.Errorf("%w %s", ErrMalformedYaml, m[1])
+		}
+
+		err = ErrMalformedYaml
 	}
 
 	return err
