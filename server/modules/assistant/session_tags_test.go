@@ -145,7 +145,7 @@ func TestUpdateSessionTag_Rejected(t *testing.T) {
 		{name: "not owner remove shared", root: notOwned, tag: model.SessionTagShared, present: false, wantErr: server.ErrSessionAccessDenied},
 		{name: "no requestor", root: owned, noRequestor: true, tag: "case-2", present: true, wantErr: server.ErrSessionAccessDenied},
 		{name: "remove missing tag", root: owned, tag: "case-2", present: false, wantErr: server.ErrSessionTagMissing},
-		{name: "remove attached to cases", root: sharedOwned, tag: model.SessionTagShared, present: false, cases: []string{"case-1", "case-2"}, wantErr: server.ErrSessionAttachedToCases, wantMsg: "ERROR_SESSION_ATTACHED_TO_CASES 2"},
+		{name: "remove attached to cases", root: sharedOwned, tag: model.SessionTagShared, present: false, cases: []string{"case-1", "case-2"}, wantErr: server.ErrSessionAttachedToCases, wantMsg: "ERROR_SESSION_ATTACHED_TO_CASES count=2"},
 		{name: "case lookup failure", root: owned, tag: "case-1", present: false, caseErr: caseErr, wantErr: caseErr},
 		{name: "tag exists", root: owned, tag: "case-1", present: true, wantErr: server.ErrSessionTagExists},
 	}

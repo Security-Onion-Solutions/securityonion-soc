@@ -7,7 +7,6 @@ package assistant
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -95,7 +94,7 @@ func (ac *AssistantCoordinator) canRemoveTag(ctx context.Context, session *model
 	}
 
 	if len(cases) != 0 {
-		return fmt.Errorf("%w %d", server.ErrSessionAttachedToCases, len(cases))
+		return model.NewErrorWithArgs(server.ErrSessionAttachedToCases, map[string]interface{}{"count": len(cases)})
 	}
 
 	return nil

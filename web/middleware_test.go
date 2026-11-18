@@ -142,6 +142,7 @@ func TestRespond(t *testing.T) {
 			Obj:          &model.Unauthorized{},
 			ExpectedBody: []byte(`ERROR_PERMISSION_DENIED`),
 			ExpectedCode: http.StatusForbidden,
+			ExpectedType: "text/plain; charset=utf-8",
 		},
 		{
 			Name:         "200 but Error",
@@ -149,6 +150,7 @@ func TestRespond(t *testing.T) {
 			Obj:          io.EOF,
 			ExpectedBody: []byte(GENERIC_ERROR_MESSAGE),
 			ExpectedCode: http.StatusInternalServerError,
+			ExpectedType: "text/plain; charset=utf-8",
 		},
 		{
 			Name:         "Wrapped Code - 400",
@@ -156,6 +158,25 @@ func TestRespond(t *testing.T) {
 			Obj:          fmt.Errorf("%w: detail", errors.New("ERROR_FOO")),
 			ExpectedBody: []byte(`ERROR_FOO`),
 			ExpectedCode: http.StatusBadRequest,
+			ExpectedType: "text/plain; charset=utf-8",
+		},
+		{
+			Name:           "Error With Args - 409",
+			StatusCode:     http.StatusConflict,
+			Obj:            model.NewErrorWithArgs(errors.New("ERROR_FOO"), map[string]interface{}{"count": 2}),
+			ExpectBodyJSON: true,
+			ExpectedBody:   []byte(`{"code":"ERROR_FOO","count":2}`),
+			ExpectedCode:   http.StatusConflict,
+			ExpectedType:   "application/json",
+		},
+		{
+			Name:           "Wrapped Error With Args - 500",
+			StatusCode:     http.StatusInternalServerError,
+			Obj:            fmt.Errorf("saving: %w", model.NewErrorWithArgs(errors.New("ERROR_FOO"), map[string]interface{}{"line": 3})),
+			ExpectBodyJSON: true,
+			ExpectedBody:   []byte(`{"code":"ERROR_FOO","line":3}`),
+			ExpectedCode:   http.StatusInternalServerError,
+			ExpectedType:   "application/json",
 		},
 		{
 			Name:         "Raw Response",

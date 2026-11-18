@@ -26,10 +26,9 @@ import (
 // An i18n.js key: the code sent for errors that carry none of their own.
 const GENERIC_ERROR_MESSAGE = "ERROR_REQUEST_FAILED"
 
-// Only a code, optionally followed by a number (ERROR_SESSION_ATTACHED_TO_CASES <n>),
-// reaches the client; anything after the code is English or internal detail,
-// which Respond has already logged.
-var safeErrorBody = regexp.MustCompile(`^ERROR_[A-Z0-9_]+( [0-9]+)?$`)
+// Only a code reaches the client; anything after it is English or internal detail,
+// which Respond has already logged. Values the UI needs travel in a model.ErrorWithArgs.
+var safeErrorBody = regexp.MustCompile(`^ERROR_[A-Z0-9_]+$`)
 var errorCode = regexp.MustCompile(`^(ERROR_[A-Z0-9_]+)(?:$|[^A-Za-z0-9_])`)
 
 type ContextKey string

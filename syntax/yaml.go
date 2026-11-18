@@ -8,8 +8,10 @@ package syntax
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
+	"strconv"
+
+	"github.com/security-onion-solutions/securityonion-soc/model"
 
 	"github.com/apex/log"
 	"gopkg.in/yaml.v3"
@@ -36,7 +38,8 @@ func ValidateYaml(value string) error {
 		}).WithError(err).Error("Unable to parse valid YAML from value")
 
 		if m := yamlErrorLine.FindStringSubmatch(err.Error()); m != nil {
-			return fmt.Errorf("%w %s", ErrMalformedYaml, m[1])
+			line, _ := strconv.Atoi(m[1])
+			return model.NewErrorWithArgs(ErrMalformedYaml, map[string]interface{}{"line": line})
 		}
 
 		err = ErrMalformedYaml

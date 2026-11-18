@@ -498,13 +498,7 @@ Object.assign(assistantRouteForUtils.component.methods, (function() {
         await this.$root.papi.put(`/assistant/sessions/${sessionId}`, payload);
 
       } catch (error) {
-        let msg = error.response.data;
-        if (msg.startsWith('ERROR_SESSION_ATTACHED_TO_CASES')) { 
-          const count = (msg.replaceAll('ERROR_SESSION_ATTACHED_TO_CASES', '') + '').trim();
-          msg = this.$root.replaceActionVar(this.i18n.ERROR_SESSION_ATTACHED_TO_CASES, 'count', count);
-        }
-
-        this.$root.showError(msg);
+        this.$root.showError(error);
       }
     },
     focusChatInput() {

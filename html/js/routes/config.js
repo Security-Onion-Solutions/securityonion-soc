@@ -1158,11 +1158,11 @@ routes.push({
         } catch (error) {
           // The generic code keeps the setting-specific message.
           const body = error.response?.data;
-          const [, code, line] = (typeof body === 'string' && body.match(/^(ERROR_[A-Z0-9_]+)(?: ([0-9]+))?$/)) || [];
-          if (code === 'ERROR_MALFORMED_YAML' && line) {
-            this.$root.showError(this.$root.localizeMessage('malformedYamlLine', { line }));
+          const code = typeof body === 'string' ? body : body?.code;
+          if (code === 'ERROR_MALFORMED_YAML' && body.line) {
+            this.$root.showError(this.$root.localizeMessage('malformedYamlLine', { line: body.line }));
           } else {
-            const known = code && this.i18n[code] && code !== 'ERROR_REQUEST_FAILED';
+            const known = typeof code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(code) && this.i18n[code] && code !== 'ERROR_REQUEST_FAILED';
             this.$root.showError(known ? code : this.i18n.settingSaveError);
           }
         }

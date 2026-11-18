@@ -779,7 +779,7 @@ func pendingToolApproval(sessionId string, history []*model.StoredMessage, deleg
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request, or the session belongs to another user"
 // @Failure      404           "Session not found"
-// @Failure      409           "The session is an automation session, already has the tag being added, lacks the tag being removed, or is attached to cases"
+// @Failure      409  {object}  model.ErrorWithArgs  "The session is an automation session, already has the tag being added, lacks the tag being removed, or is attached to cases. Attached to cases returns JSON with code ERROR_SESSION_ATTACHED_TO_CASES and count, the number of cases; other conflicts return a plain-text error code"
 // @Failure      500           "Internal SOC error; review SOC logs"
 // @Router       /connect/assistant/sessions/{sessionId} [put]
 func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {

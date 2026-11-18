@@ -7,8 +7,10 @@
 package syntax
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +19,7 @@ func TestValidate_Yaml(tester *testing.T) {
 		assert.NoError(tester, Validate("valid: yaml", syntax))
 		assert.NoError(tester, Validate("- one\n- two", syntax))
 		assert.NoError(tester, Validate("map_of_list:\n  - one\n  - two", syntax))
-		assert.EqualError(tester, Validate("[ lksdgf invalid yaml", syntax), "ERROR_MALFORMED_YAML 1")
+		assert.ErrorIs(tester, Validate("[ lksdgf invalid yaml", syntax), ErrMalformedYaml)
 	}
 }
 
@@ -25,19 +27,29 @@ func TestValidateYaml_MalformedLine(tester *testing.T) {
 	tests := []struct {
 		name  string
 		value string
-		want  string
+		line  int
 	}{
-		{name: "parser error on later line", value: "a: 1\nb: 2\nc: [\n", want: "ERROR_MALFORMED_YAML 3"},
-		{name: "tab indentation", value: "a:\n\tb: 1", want: "ERROR_MALFORMED_YAML 2"},
-		{name: "duplicate key", value: "a: 1\na: 2", want: "ERROR_MALFORMED_YAML 2"},
-		{name: "no line in parser error", value: "a: \x01", want: "ERROR_MALFORMED_YAML"},
+		{name: "parser error on first line", value: "[ lksdgf invalid yaml", line: 1},
+		{name: "parser error on later line", value: "a: 1\nb: 2\nc: [\n", line: 3},
+		{name: "tab indentation", value: "a:\n\tb: 1", line: 2},
+		{name: "duplicate key", value: "a: 1\na: 2", line: 2},
 	}
 
 	for _, test := range tests {
 		tester.Run(test.name, func(t *testing.T) {
 			err := ValidateYaml(test.value)
-			assert.EqualError(t, err, test.want)
 			assert.ErrorIs(t, err, ErrMalformedYaml)
+
+			var argsErr *model.ErrorWithArgs
+			if assert.True(t, errors.As(err, &argsErr)) {
+				assert.Equal(t, "ERROR_MALFORMED_YAML", argsErr.Code)
+				assert.Equal(t, map[string]interface{}{"line": test.line}, argsErr.Args)
+			}
 		})
 	}
+}
+
+func TestValidateYaml_MalformedNoLine(tester *testing.T) {
+	err := ValidateYaml("a: \x01")
+	assert.Equal(tester, ErrMalformedYaml, err)
 }

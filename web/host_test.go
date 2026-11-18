@@ -91,7 +91,7 @@ func TestConvertErrorToSafeString(tester *testing.T) {
 		Expected string
 	}{
 		{"Bare code", "ERROR_FOO", "ERROR_FOO"},
-		{"Code with number", "ERROR_FOO 3", "ERROR_FOO 3"},
+		{"Code with number", "ERROR_FOO 3", "ERROR_FOO"},
 		{"Colon and space", "ERROR_FOO: detail", "ERROR_FOO"},
 		{"Colon", "ERROR_FOO:detail", "ERROR_FOO"},
 		{"Arrow", "ERROR_FOO -> detail", "ERROR_FOO"},

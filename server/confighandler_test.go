@@ -22,7 +22,8 @@ import (
 )
 
 type FakeConfigstore struct {
-	SyncModuleError error
+	SyncModuleError    error
+	UpdateSettingError error
 }
 
 func (f *FakeConfigstore) GetSettings(ctx context.Context, advanced bool) ([]*model.Setting, error) {
@@ -38,7 +39,7 @@ func (f *FakeConfigstore) LookupSetting(ctx context.Context, id string) (*model.
 }
 
 func (f *FakeConfigstore) UpdateSetting(ctx context.Context, setting *model.Setting, remove bool) error {
-	return nil
+	return f.UpdateSettingError
 }
 
 func (f *FakeConfigstore) GetAuditHistory(ctx context.Context, settingID, nodeID string, limit, offset int, sort, order string) (*ConfigHistory, error) {
@@ -228,4 +229,30 @@ func TestConfigHandler_putSetting(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigHandler_putSetting_ErrorWithArgs(t *testing.T) {
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Configstore = &FakeConfigstore{
+		UpdateSettingError: model.NewErrorWithArgs(errors.New("ERROR_MALFORMED_YAML"), map[string]interface{}{"line": 3}),
+	}
+
+	h := &ConfigHandler{
+		server: srv,
+	}
+
+	r := chi.NewRouter()
+	r.Put("/", h.putSetting)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/", bytes.NewReader([]byte(`{"id":"soc.test","value":"a: ["}`)))
+	ctx := context.WithValue(req.Context(), web.ContextKeyRequestId, "test-request")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	req = req.WithContext(ctx)
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	assert.JSONEq(t, `{"code":"ERROR_MALFORMED_YAML","line":3}`, w.Body.String())
 }

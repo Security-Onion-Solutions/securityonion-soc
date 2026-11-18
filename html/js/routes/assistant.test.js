@@ -7635,21 +7635,24 @@ test('updateSessionTag sends correct API request for remove action', async () =>
 test('updateSessionTag handles API error', async () => {
   const sessionId = 'test-session';
   const showErrorMock = mockShowError();
-  mockPapi('put', null, { response: { data: "Update failed"} });
+  const error = { response: { data: "Update failed"} };
+  mockPapi('put', null, error);
   
   await comp.updateSessionTag(sessionId, 'add', 'shared');
   
-  expect(showErrorMock).toHaveBeenCalledWith("Update failed");
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.$root.localizeMessage(error)).toBe("Update failed");
 });
 
 test('updateSessionTag passes error codes through for localization', async () => {
   const showErrorMock = mockShowError();
-  mockPapi('put', null, { response: { data: 'ERROR_SESSION_TAG_MISSING' } });
+  const error = { response: { data: 'ERROR_SESSION_TAG_MISSING' } };
+  mockPapi('put', null, error);
 
   await comp.updateSessionTag('test-session', 'remove', 'shared');
 
-  expect(showErrorMock).toHaveBeenCalledWith('ERROR_SESSION_TAG_MISSING');
-  expect(comp.$root.localizeMessage('ERROR_SESSION_TAG_MISSING')).toBe(comp.i18n.ERROR_SESSION_TAG_MISSING);
+  expect(showErrorMock).toHaveBeenCalledWith(error);
+  expect(comp.$root.localizeMessage(error)).toBe(comp.i18n.ERROR_SESSION_TAG_MISSING);
 });
 
 test('updateSessionTag', async () => {
@@ -7665,12 +7668,14 @@ test('updateSessionTag', async () => {
   expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
   expect(showError).not.toHaveBeenCalled();
 
-  put = mockPapi('put', {}, { response: { data: 'ERROR_SESSION_ATTACHED_TO_CASES 2' } });
+  const error = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 } } };
+  put = mockPapi('put', {}, error);
 
   await comp.updateSessionTag(sessionId, action, tag);
 
   expect(put).toHaveBeenCalledWith(`/assistant/sessions/${sessionId}`, { action: action, tag: tag });
-  expect(showError).toHaveBeenCalledWith('Unable to unshare session. The session is attached to 2 case(s).');
+  expect(showError).toHaveBeenCalledWith(error);
+  expect(comp.$root.localizeMessage(error)).toBe('Unable to unshare session. The session is attached to 2 case(s).');
 });
 
 test('attachToCase', async () => {

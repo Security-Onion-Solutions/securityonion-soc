@@ -1273,18 +1273,19 @@ func TestUpdateSession(t *testing.T) {
 		err     error
 		status  int
 		body    string
+		ctype   string
 	}{
 		{name: "add", action: "add", present: true, status: http.StatusNoContent},
 		{name: "remove", action: "remove", present: false, status: http.StatusNoContent},
 		{name: "action ignores case", action: "Remove", present: false, status: http.StatusNoContent},
-		{name: "blank", action: "add", present: true, err: ErrSessionTagInvalid, status: http.StatusBadRequest, body: "ERROR_SESSION_TAG_INVALID"},
+		{name: "blank", action: "add", present: true, err: ErrSessionTagInvalid, status: http.StatusBadRequest, body: "ERROR_SESSION_TAG_INVALID", ctype: "text/plain; charset=utf-8"},
 		{name: "reserved", action: "add", present: true, err: ErrSessionTagReserved, status: http.StatusBadRequest, body: "ERROR_SESSION_TAG_RESERVED"},
 		{name: "not found", action: "add", present: true, err: ErrSessionNotFound, status: http.StatusNotFound, body: "ERROR_SESSION_NOT_FOUND"},
 		{name: "not owner", action: "add", present: true, err: ErrSessionAccessDenied, status: http.StatusForbidden, body: "ERROR_SESSION_ACCESS_DENIED"},
 		{name: "automation", action: "add", present: true, err: ErrSessionAutomationTags, status: http.StatusConflict, body: "ERROR_SESSION_AUTOMATION_TAGS"},
 		{name: "exists", action: "add", present: true, err: ErrSessionTagExists, status: http.StatusConflict, body: "ERROR_SESSION_TAG_EXISTS"},
 		{name: "missing", action: "remove", present: false, err: ErrSessionTagMissing, status: http.StatusConflict, body: "ERROR_SESSION_TAG_MISSING"},
-		{name: "attached to cases", action: "remove", present: false, err: fmt.Errorf("%w %d", ErrSessionAttachedToCases, 2), status: http.StatusConflict, body: "ERROR_SESSION_ATTACHED_TO_CASES 2"},
+		{name: "attached to cases", action: "remove", present: false, err: model.NewErrorWithArgs(ErrSessionAttachedToCases, map[string]interface{}{"count": 2}), status: http.StatusConflict, body: `{"code":"ERROR_SESSION_ATTACHED_TO_CASES","count":2}`, ctype: "application/json"},
 		{name: "unauthorized", action: "add", present: true, err: model.NewUnauthorized("test-user", "write_authored", "assistant"), status: http.StatusForbidden, body: "ERROR_PERMISSION_DENIED"},
 		{name: "write failure", action: "add", present: true, err: errors.New("es down"), status: http.StatusInternalServerError, body: web.GENERIC_ERROR_MESSAGE},
 	}
@@ -1301,6 +1302,9 @@ func TestUpdateSession(t *testing.T) {
 
 			assert.Equal(t, tc.status, w.Code)
 			assert.Equal(t, tc.body, w.Body.String())
+			if tc.ctype != "" {
+				assert.Equal(t, tc.ctype, w.Header().Get("Content-Type"))
+			}
 		})
 	}
 }

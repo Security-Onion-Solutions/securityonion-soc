@@ -74,7 +74,7 @@ var ErrSessionTagExists = errors.New("ERROR_SESSION_TAG_EXISTS")
 // ErrSessionTagMissing means the session does not have the tag being removed (409).
 var ErrSessionTagMissing = errors.New("ERROR_SESSION_TAG_MISSING")
 
-// ErrSessionAttachedToCases is wrapped with the case count, which the UI parses from the message (409).
+// ErrSessionAttachedToCases is sent with the case count as its count arg (409).
 var ErrSessionAttachedToCases = errors.New("ERROR_SESSION_ATTACHED_TO_CASES")
 
 // ErrToolAlreadyResolved is returned when the targeted tool_use already has a

@@ -486,6 +486,17 @@ test('localizeMessage', () => {
   expect(app.localizeMessage('"single quote"')).toBe("single quote");
 });
 
+test('localizeMessageErrorWithArgs', () => {
+  const attached = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 } } };
+  expect(app.localizeMessage(attached)).toBe('Unable to unshare session. The session is attached to 2 case(s).');
+  expect(app.localizeMessage(attached, { count: 5 })).toBe('Unable to unshare session. The session is attached to 5 case(s).');
+
+  const unknown = { message: 'Request failed with status code 409', response: { data: { code: 'ERROR_NOT_A_KEY', count: 2 } } };
+  expect(app.localizeMessage(unknown)).toBe('Request failed with status code 409');
+
+  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML', line: 3 } } })).toBe(app.i18n.ERROR_MALFORMED_YAML);
+});
+
 test('localizeMessageWithArgs', () => {
   expect(app.localizeMessage('Hello {name}', {name: 'World'})).toBe('Hello World');
   expect(app.localizeMessage('Hello {name}, you have {count} messages', {name: 'John', count: 5})).toBe('Hello John, you have 5 messages');

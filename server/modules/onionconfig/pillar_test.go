@@ -15,6 +15,7 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
+	"github.com/security-onion-solutions/securityonion-soc/syntax"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -580,7 +581,8 @@ func TestUpdatePillarSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 	setting.Value = "[s new advanced"
 	setting.Syntax = "yaml"
 	err := UpdatePillarSetting(saltstackDir, setting, false)
-	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML 1")
+	assert.ErrorIs(tester, err, syntax.ErrMalformedYaml)
+	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML line=1")
 }
 
 func TestUpdatePillarSetting_AlignIntType(tester *testing.T) {

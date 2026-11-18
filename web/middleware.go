@@ -158,10 +158,24 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 			statusCode = http.StatusNotFound
 		}
 
-		bytes := []byte(ConvertErrorToSafeString(err))
+		var bytes []byte
+		contentType := "text/plain; charset=utf-8"
+
+		var argsErr *model.ErrorWithArgs
+		if errors.As(err, &argsErr) {
+			if b, marshalErr := json.Marshal(argsErr); marshalErr == nil {
+				bytes = b
+				contentType = "application/json"
+			} else {
+				bytes = []byte(GENERIC_ERROR_MESSAGE)
+			}
+		} else {
+			bytes = []byte(ConvertErrorToSafeString(err))
+		}
 		contentLength = len(bytes)
 
 		if w != nil {
+			w.Header().Set("Content-Type", contentType)
 			w.WriteHeader(statusCode)
 			_, _ = w.Write(bytes)
 		}

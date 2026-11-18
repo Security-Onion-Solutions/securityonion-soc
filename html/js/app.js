@@ -1343,6 +1343,12 @@ $(document).ready(function () {
             }
           }
 
+          // Errors with args arrive as JSON: {code, <arg>: value}.
+          if (msg && typeof msg.code === 'string') {
+            vars = { ...msg, ...vars };
+            msg = msg.code;
+          }
+
           // Remove encapsulating quotes
           if (msg.startsWith != undefined && msg.startsWith("\"") && msg.endsWith("\"")) {
             msg = msg.substring(1, msg.length - 1);

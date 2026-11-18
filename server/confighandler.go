@@ -107,7 +107,7 @@ func (h *ConfigHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 // @Failure      401                         "Request was not properly authenticated"
 // @Failure      403                         "Insufficient permissions for this request"
 // @Failure      405                         "Configuration module has not been loaded"
-// @Failure      500                         "Internal SOC error; review SOC logs"
+// @Failure      500  {object}  model.ErrorWithArgs  "Internal SOC error; review SOC logs. A value that is not valid YAML returns JSON with code ERROR_MALFORMED_YAML and line, the line the parser rejected; other errors return a plain-text error code"
 // @Router       /connect/config/ [put]
 func (h *ConfigHandler) putSetting(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
