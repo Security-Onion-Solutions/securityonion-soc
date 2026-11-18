@@ -18,6 +18,7 @@ import (
 )
 
 var ErrMalformedYaml = errors.New("ERROR_MALFORMED_YAML")
+var ErrMalformedYamlLine = errors.New("ERROR_MALFORMED_YAML_LINE")
 
 // yaml.v3 exports no error type carrying the line, only text such as
 // "yaml: line N: ..." or "yaml: unmarshal errors:\n  line N: ...".
@@ -39,7 +40,7 @@ func ValidateYaml(value string) error {
 
 		if m := yamlErrorLine.FindStringSubmatch(err.Error()); m != nil {
 			line, _ := strconv.Atoi(m[1])
-			return model.NewErrorWithArgs(ErrMalformedYaml, map[string]interface{}{"line": line})
+			return model.NewErrorWithArgs(ErrMalformedYamlLine, map[string]interface{}{"line": line})
 		}
 
 		err = ErrMalformedYaml

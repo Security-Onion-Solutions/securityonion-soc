@@ -491,7 +491,8 @@ test('localizeMessageErrorWithArgs', () => {
   const unknown = { message: 'Request failed with status code 409', response: { data: { code: 'ERROR_NOT_A_KEY', count: 2 } } };
   expect(app.localizeMessage(unknown)).toBe('Request failed with status code 409');
 
-  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML', line: 3 } } })).toBe(app.i18n.ERROR_MALFORMED_YAML);
+  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: 3 } } })).toBe('The value is not valid YAML. Check line 3.');
+  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: '<b>' } } })).toBe('The value is not valid YAML. Check line &lt;b&gt;.');
 
   const zero = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 0 } } };
   expect(app.localizeMessage(zero)).toBe('Unable to unshare session. The session is attached to 0 case(s).');
@@ -1180,14 +1181,14 @@ test('checkUserSecuritySettings', () => {
 
 test('showWarning', () => {
   var longString = 'x';
-  for (var i = 0; i < 8; i++) {
+  for (var i = 0; i < 9; i++) {
     longString += longString;
   }
 
   app.showWarning(longString);
 
   expect(app.warning).toBe(true);
-  expect(app.warningMessage.length).toBe(202); // truncated in the middle to 200, plus "..."
+  expect(app.warningMessage.length).toBe(352); // truncated in the middle to 350, plus "..."
 
   app.showWarning(longString, true);
 
@@ -1199,11 +1200,11 @@ test('showErrorTruncates', () => {
   const oldShowError = app.showError;
   app.showError = origShowError;
   try {
-    const long = 'a'.repeat(150) + 'b'.repeat(150);
+    const long = 'a'.repeat(250) + 'b'.repeat(250);
     app.showError(long);
 
     expect(app.error).toBe(true);
-    expect(app.errorMessage).toBe('a'.repeat(99) + '...' + 'b'.repeat(100));
+    expect(app.errorMessage).toBe('a'.repeat(174) + '...' + 'b'.repeat(175));
 
     // The status page link must survive the cut.
     const upstream = new Error('Request failed with status code 500');

@@ -1156,18 +1156,14 @@ routes.push({
           this.countCustomized();
           this.notifyChangedSetting(s);
         } catch (error) {
-          // The generic code keeps the setting-specific message. The body can come from a
-          // subgrid and showError renders with v-html, so only an integer line is used.
-          const body = error.response?.data;
-          const code = typeof body === 'string' ? body : body?.code;
-          if (code === 'ERROR_MALFORMED_YAML' && Number.isInteger(body.line) && body.line > 0) {
-            this.$root.showError(this.$root.localizeMessage('malformedYamlLine', { line: body.line }));
-          } else {
-            const known = typeof code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(code) && this.i18n[code] && code !== 'ERROR_REQUEST_FAILED';
-            this.$root.showError(known ? code : this.i18n.settingSaveError);
-          }
+          // The body can come from a subgrid; for unknown text localizeMessage falls back to error.message.
+          const data = error.response?.data;
+          const code = typeof data === 'string' ? data : data?.code;
+          const known = typeof code === 'string' && code.startsWith('ERROR_') && this.i18n[code];
+          this.$root.showError(known ? error : this.i18n.settingSaveError);
+        } finally {
+          this.$root.stopLoading();
         }
-        this.$root.stopLoading();
       }
     },
     notifyChangedSetting(setting) {
@@ -1179,7 +1175,7 @@ routes.push({
         await this.$root.papi.put('config/sync');
         this.$root.showTip(this.i18n.settingsSynchronized);
       } catch (error) {
-         this.$root.showError(error);
+        this.$root.showError(error);
       }
       this.$root.stopLoading();
     },

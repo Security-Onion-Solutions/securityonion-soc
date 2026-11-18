@@ -581,8 +581,8 @@ func TestUpdatePillarSetting_UpdateAdvancedFailToParse(tester *testing.T) {
 	setting.Value = "[s new advanced"
 	setting.Syntax = "yaml"
 	err := UpdatePillarSetting(saltstackDir, setting, false)
-	assert.ErrorIs(tester, err, syntax.ErrMalformedYaml)
-	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML line=1")
+	assert.ErrorIs(tester, err, syntax.ErrMalformedYamlLine)
+	assert.EqualError(tester, err, "ERROR_MALFORMED_YAML_LINE line=1")
 }
 
 func TestUpdatePillarSetting_AlignIntType(tester *testing.T) {

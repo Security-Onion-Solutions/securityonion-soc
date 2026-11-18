@@ -32,7 +32,7 @@ const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
 // Longer messages crowd the error and warning snackbars.
-const SNACKBAR_MESSAGE_LENGTH_MAX = 200;
+const SNACKBAR_MESSAGE_LENGTH_MAX = 350;
 
 // Markdown can carry untrusted text, so nothing in it may fetch a URL on render.
 const MARKDOWN_PURIFY_CONFIG = {
@@ -1351,7 +1351,7 @@ $(document).ready(function () {
           if (msg && typeof msg.code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(msg.code)) {
             const { code, ...args } = msg;
             const safeArgs = Object.fromEntries(Object.entries(args).map(([key, value]) =>
-              [key, typeof value === 'number' || typeof value === 'boolean' ? value : this.escapeHtml(value)]));
+              [key, typeof value === 'number' ? value : this.escapeHtml(value)]));
             vars = { ...safeArgs, ...vars };
             msg = code;
           }

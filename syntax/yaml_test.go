@@ -19,7 +19,7 @@ func TestValidate_Yaml(tester *testing.T) {
 		assert.NoError(tester, Validate("valid: yaml", syntax))
 		assert.NoError(tester, Validate("- one\n- two", syntax))
 		assert.NoError(tester, Validate("map_of_list:\n  - one\n  - two", syntax))
-		assert.ErrorIs(tester, Validate("[ lksdgf invalid yaml", syntax), ErrMalformedYaml)
+		assert.ErrorIs(tester, Validate("[ lksdgf invalid yaml", syntax), ErrMalformedYamlLine)
 	}
 }
 
@@ -38,11 +38,11 @@ func TestValidateYaml_MalformedLine(tester *testing.T) {
 	for _, test := range tests {
 		tester.Run(test.name, func(t *testing.T) {
 			err := ValidateYaml(test.value)
-			assert.ErrorIs(t, err, ErrMalformedYaml)
+			assert.ErrorIs(t, err, ErrMalformedYamlLine)
 
 			var argsErr *model.ErrorWithArgs
 			if assert.True(t, errors.As(err, &argsErr)) {
-				assert.Equal(t, "ERROR_MALFORMED_YAML", argsErr.Code)
+				assert.Equal(t, "ERROR_MALFORMED_YAML_LINE", argsErr.Code)
 				assert.Equal(t, map[string]interface{}{"line": test.line}, argsErr.Args)
 			}
 		})

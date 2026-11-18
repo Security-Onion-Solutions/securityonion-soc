@@ -13,7 +13,7 @@ import (
 )
 
 // An error whose code is sent to the client as JSON along with the values the UI
-// substitutes into the code's message, e.g. {"code":"ERROR_MALFORMED_YAML","line":3}.
+// substitutes into the code's message, e.g. {"code":"ERROR_MALFORMED_YAML_LINE","line":3}.
 type ErrorWithArgs struct {
 	// The error code; an i18n key in the UI
 	Code string `json:"code" example:"ERROR_SESSION_ATTACHED_TO_CASES"`

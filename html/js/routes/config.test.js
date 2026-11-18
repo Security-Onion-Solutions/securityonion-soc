@@ -1411,20 +1411,19 @@ test('saveRegexFailureEscapesMessage', async () => {
 
 test('saveErrorShowsOnlyKnownCodes', async () => {
   const cases = [
-    { error: { response: { data: 'ERROR_LICENSE_INVALID' } }, expected: 'ERROR_LICENSE_INVALID' },
-    { error: { response: { data: { code: 'ERROR_MALFORMED_YAML', line: 12 } } }, expected: comp.i18n.malformedYamlLine.replace('{line}', '12') },
-    { error: { response: { data: { code: 'ERROR_MALFORMED_YAML' } } }, expected: 'ERROR_MALFORMED_YAML' },
-    { error: { response: { data: { code: 'ERROR_MALFORMED_YAML', line: '<img src=x onerror=alert(1)>' } } }, expected: 'ERROR_MALFORMED_YAML' },
-    { error: { response: { data: { code: 'ERROR_MALFORMED_YAML', line: '12' } } }, expected: 'ERROR_MALFORMED_YAML' },
-    { error: { response: { data: { code: 'ERROR_MALFORMED_YAML', line: 0 } } }, expected: 'ERROR_MALFORMED_YAML' },
-    { error: { response: { data: { code: 'ERROR_<img src=x>', line: 12 } } }, expected: comp.i18n.settingSaveError },
-    { error: { response: { data: 'ERROR_MALFORMED_YAML' } }, expected: 'ERROR_MALFORMED_YAML' },
-    { error: { response: { data: 'ERROR_MALFORMED_YAML 12' } }, expected: comp.i18n.settingSaveError },
-    { error: { response: { data: 'ERROR_REQUEST_FAILED' } }, expected: comp.i18n.settingSaveError },
-    { error: { response: { data: 'ERROR_<img src=x>' } }, expected: comp.i18n.settingSaveError },
-    { error: { response: { data: 'not a code' } }, expected: comp.i18n.settingSaveError },
-    { error: { response: { data: {} } }, expected: comp.i18n.settingSaveError },
-    { error: {}, expected: comp.i18n.settingSaveError },
+    { data: 'ERROR_LICENSE_INVALID', known: true },
+    { data: 'ERROR_MALFORMED_YAML', known: true },
+    { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: 12 }, known: true },
+    { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: '<img src=x onerror=alert(1)>' }, known: true },
+    { data: { code: 'ERROR_<img src=x>', line: 12 }, known: false },
+    { data: { code: 5 }, known: false },
+    { data: { code: 'constructor' }, known: false },
+    { data: 'ERROR_MALFORMED_YAML 12', known: false },
+    { data: 'ERROR_<img src=x onerror=alert(1)>', known: false },
+    { data: 'ERROR_NOT_A_KEY', known: false },
+    { data: 'not a code', known: false },
+    { data: {}, known: false },
+    { data: undefined, known: false },
   ];
 
   for (const c of cases) {
@@ -1434,10 +1433,11 @@ test('saveErrorShowsOnlyKnownCodes', async () => {
     const showErrorMock = mockShowError();
     comp.$root.stopLoading = jest.fn();
     await comp.save(comp.settings[0], null);
-    mockPapi("put", null, c.error);
+    const error = { response: { data: c.data } };
+    mockPapi("put", null, error);
     await comp.save();
 
-    expect(showErrorMock).toHaveBeenCalledWith(c.expected);
+    expect(showErrorMock).toHaveBeenCalledWith(c.known ? error : comp.i18n.settingSaveError);
     expect(comp.$root.stopLoading).toHaveBeenCalled();
   }
 });
@@ -2580,7 +2580,7 @@ describe('prefill', () => {
   });
 
   test('parsePrefill refuses hidden characters', () => {
-    for (const v of ['a\nb', 'a\tb', 'a‮b', 'a​b', 'a b', 'aㅤb', 'a️b']) {
+    for (const v of ['a\nb', 'a\tb', 'a‮b', 'a​b', 'a\u2028b', 'aㅤb', 'a️b']) {
       comp.$root.showWarning.mockClear();
       comp.$route.query['p.query'] = v;
       comp.parsePrefill();

@@ -234,7 +234,7 @@ func TestConfigHandler_putSetting(t *testing.T) {
 func TestConfigHandler_putSetting_ErrorWithArgs(t *testing.T) {
 	srv := NewFakeAuthorizedServer(nil)
 	srv.Configstore = &FakeConfigstore{
-		UpdateSettingError: model.NewErrorWithArgs(errors.New("ERROR_MALFORMED_YAML"), map[string]interface{}{"line": 3}),
+		UpdateSettingError: model.NewErrorWithArgs(errors.New("ERROR_MALFORMED_YAML_LINE"), map[string]interface{}{"line": 3}),
 	}
 
 	h := &ConfigHandler{
@@ -254,5 +254,5 @@ func TestConfigHandler_putSetting_ErrorWithArgs(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-	assert.JSONEq(t, `{"code":"ERROR_MALFORMED_YAML","line":3}`, w.Body.String())
+	assert.JSONEq(t, `{"code":"ERROR_MALFORMED_YAML_LINE","line":3}`, w.Body.String())
 }
