@@ -1343,10 +1343,14 @@ $(document).ready(function () {
             }
           }
 
-          // Errors with args arrive as JSON: {code, <arg>: value}.
-          if (msg && typeof msg.code === 'string') {
-            vars = { ...msg, ...vars };
-            msg = msg.code;
+          // Errors with args arrive as JSON: {code, <arg>: value}. The body can come from a
+          // subgrid and the result is rendered with v-html, so args are escaped.
+          if (msg && typeof msg.code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(msg.code)) {
+            const { code, ...args } = msg;
+            const safeArgs = Object.fromEntries(Object.entries(args).map(([key, value]) =>
+              [key, typeof value === 'number' || typeof value === 'boolean' ? value : this.escapeHtml(value)]));
+            vars = { ...safeArgs, ...vars };
+            msg = code;
           }
 
           // Remove encapsulating quotes

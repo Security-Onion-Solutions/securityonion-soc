@@ -495,6 +495,18 @@ test('localizeMessageErrorWithArgs', () => {
   expect(app.localizeMessage(unknown)).toBe('Request failed with status code 409');
 
   expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML', line: 3 } } })).toBe(app.i18n.ERROR_MALFORMED_YAML);
+
+  const zero = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 0 } } };
+  expect(app.localizeMessage(zero)).toBe('Unable to unshare session. The session is attached to 0 case(s).');
+
+  const injected = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: '<img src=x onerror="alert(1)">' } } };
+  expect(app.localizeMessage(injected)).toBe('Unable to unshare session. The session is attached to &lt;img src=x onerror=&quot;alert(1)&quot;&gt; case(s).');
+
+  const badCode = { message: 'Request failed with status code 302', response: { data: { code: '<b>x</b>', count: 2 } } };
+  expect(app.localizeMessage(badCode)).toBe('Request failed with status code 302');
+
+  const network = { message: 'Network Error', code: 'ERR_NETWORK' };
+  expect(app.localizeMessage(network)).toBe('Network Error');
 });
 
 test('localizeMessageWithArgs', () => {
