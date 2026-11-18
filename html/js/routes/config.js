@@ -1156,10 +1156,11 @@ routes.push({
           this.countCustomized();
           this.notifyChangedSetting(s);
         } catch (error) {
-          // The generic code keeps the setting-specific message.
+          // The generic code keeps the setting-specific message. The body can come from a
+          // subgrid and showError renders with v-html, so only an integer line is used.
           const body = error.response?.data;
           const code = typeof body === 'string' ? body : body?.code;
-          if (code === 'ERROR_MALFORMED_YAML' && body.line) {
+          if (code === 'ERROR_MALFORMED_YAML' && Number.isInteger(body.line) && body.line > 0) {
             this.$root.showError(this.$root.localizeMessage('malformedYamlLine', { line: body.line }));
           } else {
             const known = typeof code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(code) && this.i18n[code] && code !== 'ERROR_REQUEST_FAILED';
