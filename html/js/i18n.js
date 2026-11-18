@@ -2191,7 +2191,7 @@ const i18n = {
       ERROR_BULK_COMMUNITY: 'Unable to complete bulk delete. Batch contains Community rules. No rules were deleted.',
       ERROR_DELETE_COMMUNITY: 'Unable to delete Community rule.',
       ERROR_TOOL_TURN_BUSY: 'This session is already processing a request. Please try again in a moment.',
-      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a class="text-white" target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
+      ERROR_UPSTREAM_SERVICE_ERROR: 'Error while communicating with remote, upstream service. Check the <a target="sos" href="https://status.securityonion.net">Security Onion status page</a> for any known incidents.',
       ERROR_AGENT_NAME_REQUIRED: 'An agent name must be specified.',
       ERROR_AGENT_NOT_FOUND: 'The agent or skill could not be found.',
       ERROR_AGENT_SESSION_BUSY: 'The session is already running another turn.',

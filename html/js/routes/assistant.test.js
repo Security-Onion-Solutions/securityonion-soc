@@ -1945,7 +1945,23 @@ test('executeTool reads a streamed error body once and shows its key text', asyn
   expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: 'query_events', error: comp.i18n.ERROR_TOOL_REQUEST_MISMATCH }));
 });
 
-test('executeTool keeps link markup out of the chat message', async () => {
+test('executeTool localizes a structured error with its args', async () => {
+  const toolUse = { ...fakeToolUse };
+  comp.currentChatId = fakeSessionId;
+  comp.scrollToBottom = jest.fn();
+
+  const error = new Error('Request failed with status code 500');
+  error.response = { status: 500, data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 } };
+  mockPapi('post', null, error);
+
+  await comp.executeTool(toolUse);
+
+  expect(toolUse.error).toEqual({ code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 });
+  const expected = 'Unable to unshare session. The session is attached to 2 case(s).';
+  expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: expected }));
+});
+
+test('executeTool keeps the status page link in the chat message', async () => {
   const toolUse = { ...fakeToolUse };
   comp.currentChatId = fakeSessionId;
   comp.scrollToBottom = jest.fn();
@@ -1956,10 +1972,8 @@ test('executeTool keeps link markup out of the chat message', async () => {
 
   await comp.executeTool(toolUse);
 
-  expect(comp.i18n.ERROR_UPSTREAM_SERVICE_ERROR).toContain('<a ');
   expect(toolUse.error).toBe('ERROR_UPSTREAM_SERVICE_ERROR');
-  expect(comp.messages[0].content).not.toContain('<a');
-  expect(comp.messages[0].content).toContain('Security Onion status page');
+  expect(comp.messages[0].content).toContain('href="https://status.securityonion.net"');
 });
 
 test('executeTool uses the assistantToolExecutionError key', async () => {

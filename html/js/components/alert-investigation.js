@@ -198,7 +198,7 @@ components.push({
             if (!result || !result.toolUseId) continue;
             const failed = !!result.isError || result.status === 'error' || result.status === 'rejected';
             const first = (result.content || [])[0] || {};
-            results[result.toolUseId] = { failed: failed, error: failed ? this.$root.localizeErrorText(first.text) : '' };
+            results[result.toolUseId] = { failed: failed, error: failed ? this.$root.localizeMessage(first.text) : '' };
           }
         }
         return results;

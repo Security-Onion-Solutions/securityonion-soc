@@ -31,6 +31,9 @@ const USER_PASSWORD_INVALID_RX = /["'$&!]/;
 
 const MAX_OVERRIDE_NOTE_LENGTH = 150;
 
+// Longer messages crowd the error and warning snackbars.
+const SNACKBAR_MESSAGE_LENGTH_MAX = 200;
+
 // Markdown can carry untrusted text, so nothing in it may fetch a URL on render.
 const MARKDOWN_PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
@@ -1358,13 +1361,18 @@ $(document).ready(function () {
             msg = msg.substring(1, msg.length - 1);
           }
 
+          // Server and tool errors can wrap a code in detail: "CODE: detail" or "prefix: CODE".
+          if (!this.i18n[msg] && typeof msg === 'string') {
+            const code = (msg.match(/\bERROR_[A-Z0-9_]+\b/g) || []).find(c => this.i18n[c]);
+            if (code) {
+              msg = code;
+            }
+          }
+
           var localized = this.i18n[msg];
           if (!localized) {
             if (origMsg.message) {
               msg = origMsg.message;
-            }
-            if (msg.length > 200) {
-              msg = msg.substring(0, 200) + "...";
             }
             localized = msg;
           }
@@ -1376,14 +1384,6 @@ $(document).ready(function () {
           }
   
           return localized;
-        },
-        // For {{ }} text. Tool errors are written for the model and can embed a code;
-        // anything without a known code is shown whole.
-        localizeErrorText(text) {
-          if (!text) return '';
-          const str = String(text);
-          const code = this.i18n[str] ? str : (str.match(/\bERROR_[A-Z0-9_]+\b/g) || []).find(c => this.i18n[c]);
-          return code ? this.stripHtml(this.i18n[code]) : str;
         },
         tryLocalize(msg) {
           const localized = this.localizeMessage(msg);
@@ -1408,7 +1408,7 @@ $(document).ready(function () {
             return;
           }
           this.error = true;
-          this.errorMessage = this.localizeMessage(msg);
+          this.errorMessage = this.truncate(this.localizeMessage(msg), SNACKBAR_MESSAGE_LENGTH_MAX);
           if (this.debug && msg && msg.stack) {
             console.log(msg.stack);
           }
@@ -1418,7 +1418,7 @@ $(document).ready(function () {
           if (skipLocalization) {
             this.warningMessage = msg;
           } else {
-            this.warningMessage = this.localizeMessage(msg);
+            this.warningMessage = this.truncate(this.localizeMessage(msg), SNACKBAR_MESSAGE_LENGTH_MAX);
           }
         },
         showInfo(msg) {

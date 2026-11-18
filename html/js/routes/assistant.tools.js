@@ -293,8 +293,9 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
           return;
         }
 
+        // The card localizes the raw error itself, so it gets the code or structured body, not HTML.
         const body = error.response?.data;
-        const rawError = (typeof body === 'string' && this.i18n[body]) ? body : error.message;
+        const rawError = (typeof body?.code === 'string' || this.i18n[body]) ? body : error.message;
 
         // Still busy after the retries: the agent is at its limit or the session is mid-turn.
         if (error.response && error.response.status === 409) {
@@ -323,7 +324,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         if (isCurrentSession && !activeDelegate) {
           const errorMessage = {
             role: 'assistant',
-            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: this.$root.localizeErrorText(rawError) }),
+            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: this.$root.localizeMessage(error) }),
             timestamp: new Date().toISOString(),
             isToolResult: true,
             toolName: toolUse.name,

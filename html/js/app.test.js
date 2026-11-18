@@ -75,26 +75,23 @@ test('stripHtml', () => {
   expect(app.stripHtml(null)).toBe('');
 });
 
-test('localizeErrorText', () => {
+test('localizeMessageEmbeddedCode', () => {
   const original = app.i18n.ERROR_AGENT_TURN_STALLED;
   app.i18n.ERROR_AGENT_TURN_STALLED = 'X';
   try {
-    expect(app.localizeErrorText('ERROR_AGENT_TURN_STALLED')).toBe('X');
-    expect(app.localizeErrorText('ERROR_AGENT_TURN_STALLED: no reply in 5m')).toBe('X');
-    expect(app.localizeErrorText('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED')).toBe('X');
+    expect(app.localizeMessage('ERROR_AGENT_TURN_STALLED')).toBe('X');
+    expect(app.localizeMessage('ERROR_AGENT_TURN_STALLED: no reply in 5m')).toBe('X');
+    expect(app.localizeMessage('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED')).toBe('X');
+    expect(app.localizeMessage({ message: 'Request failed with status code 500', response: { data: 'ERROR_AGENT_TURN_STALLED: no reply' } })).toBe('X');
   } finally {
     app.i18n.ERROR_AGENT_TURN_STALLED = original;
   }
 
-  expect(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR).toContain('<a ');
-  expect(app.localizeErrorText('ERROR_UPSTREAM_SERVICE_ERROR')).not.toContain('<');
-
   const long = 'x'.repeat(500);
-  expect(app.localizeErrorText(long)).toBe(long);
-  expect(app.localizeErrorText('ERROR_NOT_A_KEY: x')).toBe('ERROR_NOT_A_KEY: x');
-  expect(app.localizeErrorText("must be '<>', got <-")).toBe("must be '<>', got <-");
-  expect(app.localizeErrorText('unexpected value <nil>')).toBe('unexpected value <nil>');
-  expect(app.localizeErrorText(null)).toBe('');
+  expect(app.localizeMessage(long)).toBe(long);
+  expect(app.localizeMessage('ERROR_NOT_A_KEY: x')).toBe('ERROR_NOT_A_KEY: x');
+  expect(app.localizeMessage("must be '<>', got <-")).toBe("must be '<>', got <-");
+  expect(app.localizeMessage('unexpected value <nil>')).toBe('unexpected value <nil>');
 });
 
 test('formatMarkdown', () => {
@@ -1190,12 +1187,33 @@ test('showWarning', () => {
   app.showWarning(longString);
 
   expect(app.warning).toBe(true);
-  expect(app.warningMessage.length).toBe(203); // truncate to 200, add "..."
+  expect(app.warningMessage.length).toBe(202); // truncated in the middle to 200, plus "..."
 
   app.showWarning(longString, true);
 
   expect(app.warning).toBe(true);
   expect(app.warningMessage.length).toBe(longString.length);
+});
+
+test('showErrorTruncates', () => {
+  const oldShowError = app.showError;
+  app.showError = origShowError;
+  try {
+    const long = 'a'.repeat(150) + 'b'.repeat(150);
+    app.showError(long);
+
+    expect(app.error).toBe(true);
+    expect(app.errorMessage).toBe('a'.repeat(99) + '...' + 'b'.repeat(100));
+
+    // The status page link must survive the cut.
+    const upstream = new Error('Request failed with status code 500');
+    upstream.response = { data: 'ERROR_UPSTREAM_SERVICE_ERROR' };
+    app.showError(upstream);
+    expect(app.errorMessage).toBe(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
+    expect(app.errorMessage).toContain('href="https://status.securityonion.net"');
+  } finally {
+    app.showError = oldShowError;
+  }
 });
 
 test('hasSubgrids', () => {

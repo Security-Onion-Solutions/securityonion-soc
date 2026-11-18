@@ -57,7 +57,7 @@
     <!-- Tool Error -->
     <div v-if="(toolUse.status === 'error' || toolUse.status === 'rejected') && toolUse.error" class="mb-2">
       <div :id="'tool-problem-label-' + toolUse.id" class="text-body-small text-medium-emphasis mb-1">{{ (toolUse.status === 'rejected' ? ctx.i18n.rejected : ctx.i18n.error) }}:</div>
-      <div class="text-error text-body-2" :aria-labelledby="'tool-problem-label-' + toolUse.id">{{ errorText }}</div>
+      <div class="text-error text-body-2" :aria-labelledby="'tool-problem-label-' + toolUse.id" v-html="errorText"></div>
     </div>
 
     <!-- Execution Time (top-level cards only) -->
