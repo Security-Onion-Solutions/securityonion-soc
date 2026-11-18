@@ -127,45 +127,45 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 		decoder.DisallowUnknownFields()
 
 		if err := decoder.Decode(params); err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidAutomationParams, err)
+			return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: err.Error()})
 		}
 	}
 
 	if len(params.GroupBy) == 0 {
-		return nil, fmt.Errorf("%w: groupBy requires at least one field", ErrInvalidAutomationParams)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "groupBy requires at least one field"})
 	}
 
 	for i, field := range params.GroupBy {
 		field = strings.TrimSpace(field)
 
 		if field == "" || strings.ContainsAny(field, " \t\r\n|\"'") || strings.HasPrefix(field, "-") || strings.Trim(field, "*") == "" {
-			return nil, fmt.Errorf("%w: groupBy field %q is not a field name", ErrInvalidAutomationParams, field)
+			return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: fmt.Sprintf("groupBy field %q is not a field name", field)})
 		}
 
 		params.GroupBy[i] = field
 	}
 
 	if err := model.NewQuery().Parse("tags:alert | groupby " + strings.Join(params.GroupBy, " ")); err != nil {
-		return nil, fmt.Errorf("%w: groupBy: %v", ErrInvalidAutomationParams, err)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "groupBy: " + err.Error()})
 	}
 
 	params.Filter = strings.TrimSpace(params.Filter)
 	if params.Filter != "" {
 		if err := model.ValidateAlertTriageSearch(params.Filter); err != nil {
-			return nil, fmt.Errorf("%w: filter: %v", ErrInvalidAutomationParams, err)
+			return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "filter: " + err.Error()})
 		}
 	}
 
 	switch {
 	case params.MaxGroupsPerScan < 0:
-		return nil, fmt.Errorf("%w: maxGroupsPerScan must not be negative", ErrInvalidAutomationParams)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "maxGroupsPerScan must not be negative"})
 	case params.MaxGroupsPerScan == 0:
 		params.MaxGroupsPerScan = alertTriageDefaultGroupCap
 	}
 
 	switch {
 	case params.MaxFailures < 0:
-		return nil, fmt.Errorf("%w: maxFailures must not be negative", ErrInvalidAutomationParams)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "maxFailures must not be negative"})
 	case params.MaxFailures == 0:
 		params.MaxFailures = model.DefaultAlertTriageMaxFailures
 	}
@@ -174,7 +174,7 @@ func parseAlertTriageParams(raw json.RawMessage) (*alertTriageParams, error) {
 	if params.Floor != "" {
 		floor, err := time.Parse(time.RFC3339, params.Floor)
 		if err != nil {
-			return nil, fmt.Errorf("%w: floor must be a date and time such as 2026-10-01T00:00:00Z: %v", ErrInvalidAutomationParams, err)
+			return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "floor must be a date and time such as 2026-10-01T00:00:00Z: " + err.Error()})
 		}
 
 		params.floor = floor

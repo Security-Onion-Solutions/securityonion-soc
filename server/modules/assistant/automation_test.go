@@ -609,7 +609,7 @@ func TestSaveAutomationRejectsANonUuidId(t *testing.T) {
 
 	err := ac.SaveAutomation(automationSaveCtx(), automation)
 
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, "id must be a UUID", errorDetail(t, err, ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -621,7 +621,7 @@ func TestSaveAutomationRejectsAnEmptyDisplayName(t *testing.T) {
 
 	err := automationCoordinator(cfg).SaveAutomation(automationSaveCtx(), automation)
 
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, "displayName is required", errorDetail(t, err, ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -640,7 +640,7 @@ func TestSaveAutomationCapsTheDisplayNameInRunes(t *testing.T) {
 	tooLong := validAutomation()
 	tooLong.DisplayName = strings.Repeat("a", MaxAutomationDisplayNameLength+1)
 
-	assert.ErrorIs(t, ac.SaveAutomation(automationSaveCtx(), tooLong), ErrInvalidAutomationParams)
+	assert.Equal(t, fmt.Sprintf("displayName must be at most %d characters", MaxAutomationDisplayNameLength), errorDetail(t, ac.SaveAutomation(automationSaveCtx(), tooLong), ErrInvalidAutomationParams))
 	assert.Len(t, cfg.updates, 1, "nothing more is written")
 }
 
@@ -653,7 +653,7 @@ func TestSaveAutomationRejectsANonPositiveInterval(t *testing.T) {
 
 	err := automationCoordinator(cfg).SaveAutomation(automationSaveCtx(), automation)
 
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, "intervalSeconds must be positive", errorDetail(t, err, ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -687,7 +687,11 @@ func TestSaveAutomationRequiresAnAvailableAgent(t *testing.T) {
 
 			err := ac.SaveAutomation(automationSaveCtx(), automation)
 
-			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+			want := fmt.Sprintf("agent %q is not available", tt.agent)
+			if strings.TrimSpace(tt.agent) == "" {
+				want = "agent is required"
+			}
+			assert.Equal(t, want, errorDetail(t, err, ErrInvalidAutomationParams))
 			assert.Empty(t, cfg.updates)
 		})
 	}
@@ -729,7 +733,7 @@ func TestSaveAutomationDisabledKeepsALostAgent(t *testing.T) {
 		automation.Id = automationTestId
 		automation.Enabled = true
 
-		assert.ErrorIs(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams)
+		assert.Equal(t, fmt.Sprintf("agent %q is not available", automationTestAgent), errorDetail(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams))
 		assert.Empty(t, cfg.updates)
 	})
 }
@@ -747,7 +751,7 @@ func TestSaveAutomationRejectsAKindChange(t *testing.T) {
 
 	err := ac.SaveAutomation(automationSaveCtx(), automation)
 
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, "automationKind cannot be changed", errorDetail(t, err, ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -1600,7 +1604,7 @@ func TestSaveAutomationRefusesANegativeIntervalOnTheBuiltin(t *testing.T) {
 		IntervalSeconds: -1,
 	})
 
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, "intervalSeconds must be positive", errorDetail(t, err, ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -1747,7 +1751,7 @@ func TestSaveAutomationRejectsAnIsSystemThatDisagreesWithTheId(t *testing.T) {
 
 			err := ac.SaveAutomation(automationSaveCtx(), c.automation)
 
-			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+			assert.Equal(t, "isSystem does not match this automation", errorDetail(t, err, ErrInvalidAutomationParams))
 			assert.ErrorContains(t, err, "isSystem")
 			assert.Empty(t, cfg.updates)
 		})
@@ -1766,7 +1770,7 @@ func TestSaveAutomationRequiresAnAvailableAgentForTheBuiltin(t *testing.T) {
 		Agent:     "Nobody",
 	}
 
-	assert.ErrorIs(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams)
+	assert.Equal(t, `agent "Nobody" is not available`, errorDetail(t, ac.SaveAutomation(automationSaveCtx(), automation), ErrInvalidAutomationParams))
 	assert.Empty(t, cfg.updates)
 }
 
@@ -1876,4 +1880,23 @@ func TestSweepOrphanedAutomationWorkKeepsTheBuiltinBeforeItsFirstSave(t *testing
 
 	assert.Equal(t, []string{BuiltinAlertTriageAutomationId}, *live)
 	mDB.AssertExpectations(t)
+}
+
+func TestSaveAutomationRequiresAnAutomation(t *testing.T) {
+	ac := automationCoordinator(&automationConfigstore{})
+
+	assert.Equal(t, "automation is required", errorDetail(t, ac.SaveAutomation(automationSaveCtx(), nil), ErrInvalidAutomationParams))
+}
+
+// errorDetail checks that err carries code in a model.ErrorWithArgs and returns its detail.
+func errorDetail(t *testing.T, err error, code error) string {
+	t.Helper()
+	require.ErrorIs(t, err, code)
+
+	var argsErr *model.ErrorWithArgs
+	require.ErrorAs(t, err, &argsErr)
+
+	detail, _ := argsErr.Args[model.ErrorArgDetail].(string)
+
+	return detail
 }

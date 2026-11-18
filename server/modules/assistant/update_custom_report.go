@@ -28,6 +28,8 @@ func init() {
 	knownTools[t.GetName()] = t
 }
 
+var errReportTemplateInvalid = errors.New("ERROR_ASSISTANT_REPORT_TEMPLATE_INVALID")
+
 type UpdateCustomReportTool struct{}
 
 func (t *UpdateCustomReportTool) GetName() string {
@@ -173,7 +175,7 @@ func (t *UpdateCustomReportTool) Execute(ctx context.Context, srv *server.Server
 
 	if err = validateReportTemplate(args.Content); err != nil {
 		logger.WithError(err).Warn("authored report template failed validation")
-		return nil, fmt.Errorf("ERROR_ASSISTANT_REPORT_TEMPLATE_INVALID: %w", err)
+		return nil, model.NewErrorWithArgs(errReportTemplateInvalid, map[string]interface{}{model.ErrorArgDetail: err.Error()})
 	}
 
 	target, updating, err := selectReportSlot(custom, args.Filename)

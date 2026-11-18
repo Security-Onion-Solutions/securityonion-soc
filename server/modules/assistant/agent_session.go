@@ -486,7 +486,9 @@ func (ac *AssistantCoordinator) runAgentDelegation(ctx context.Context, sess *mo
 			return nil, context.Cause(ctx)
 		}
 
-		return buildToolResultMessage(toolReq.ToolUseId, nil, fmt.Errorf("the delegated sub-agent could not complete: %w", err)), nil
+		log.FromContext(childCtx).WithError(err).Warn("delegated sub-agent could not complete; resolving parent delegate with error")
+
+		return buildToolResultMessage(toolReq.ToolUseId, nil, err), nil
 	}
 
 	return buildDelegationResultMessage(toolReq.ToolUseId, text), nil

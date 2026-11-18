@@ -3686,7 +3686,7 @@ func TestDeleteMemoryMapsErrors(t *testing.T) {
 var (
 	errAutomationNotFoundStub     = errors.New("ERROR_AUTOMATION_NOT_FOUND")
 	errAutomationKindNotFoundStub = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
-	errAutomationParamsStub       = fmt.Errorf("%w: displayName is required", errors.New("ERROR_AUTOMATION_PARAMS_INVALID"))
+	errAutomationParamsStub       = model.NewErrorWithArgs(errors.New("ERROR_AUTOMATION_PARAMS_INVALID"), map[string]interface{}{model.ErrorArgDetail: "displayName is required"})
 	errAutomationRunNotFoundStub  = errors.New("ERROR_AUTOMATION_RUN_NOT_FOUND")
 )
 
@@ -3831,10 +3831,11 @@ func TestSaveAutomationMapsErrors(t *testing.T) {
 		name       string
 		err        error
 		wantStatus int
+		wantBody   string
 	}{
 		{name: "saved", err: nil, wantStatus: http.StatusOK},
 		{name: "unknown kind", err: errAutomationKindNotFoundStub, wantStatus: http.StatusBadRequest},
-		{name: "bad params", err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
+		{name: "bad params", err: errAutomationParamsStub, wantStatus: http.StatusBadRequest, wantBody: `{"code":"ERROR_AUTOMATION_PARAMS_INVALID","detail":"displayName is required"}`},
 		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
 		{name: "broken", err: errors.New("no requestor in context"), wantStatus: http.StatusInternalServerError},
 	}
@@ -3849,6 +3850,9 @@ func TestSaveAutomationMapsErrors(t *testing.T) {
 				model.Automation{DisplayName: "Nightly"}))
 
 			assert.Equal(t, c.wantStatus, w.Code)
+			if c.wantBody != "" {
+				assert.JSONEq(t, c.wantBody, w.Body.String())
+			}
 		})
 	}
 }
@@ -4013,7 +4017,7 @@ func TestGetAllAutomationRunsMapsErrors(t *testing.T) {
 	}{
 		{name: "found", err: nil, wantStatus: http.StatusOK},
 		{name: "bad automation", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
-		{name: "search too long", err: errors.New("ERROR_AUTOMATION_PARAMS_INVALID: search must be at most 256 characters"), wantStatus: http.StatusBadRequest},
+		{name: "search too long", err: model.NewErrorWithArgs(errors.New("ERROR_AUTOMATION_PARAMS_INVALID"), map[string]interface{}{model.ErrorArgDetail: "search must be at most 256 characters"}), wantStatus: http.StatusBadRequest},
 		{name: "broken", err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
 	}
 

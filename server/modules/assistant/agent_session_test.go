@@ -697,8 +697,7 @@ func TestRunAgentSession_FailedChildResolvesAsErrorResult(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, "d1", results[0].ToolUseId)
 	assert.True(t, results[0].IsError)
-	assert.Contains(t, results[0].Content[0].Text, "the delegated sub-agent could not complete")
-	assert.Contains(t, results[0].Content[0].Text, "child exploded")
+	assert.Equal(t, "type: error, message: child exploded", results[0].Content[0].Text)
 
 	childMsgs := f.store.messages("child-1")
 	require.Len(t, childMsgs, 2)

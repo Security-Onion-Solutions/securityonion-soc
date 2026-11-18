@@ -1947,6 +1947,10 @@ func TestExtractDetailsStoredExtraDocument(t *testing.T) {
 	_, err := eng.ValidateRule(detect.Content)
 	assert.ErrorIs(t, err, errRuleInvalidExtraDocument)
 
+	var argsErr *model.ErrorWithArgs
+	require.ErrorAs(t, err, &argsErr)
+	assert.Equal(t, "document 2 is not a Sigma filter for this rule", argsErr.Args[model.ErrorArgDetail])
+
 	require.NoError(t, eng.ExtractDetails(detect))
 	assert.Equal(t, SimpleRuleSID, detect.PublicID)
 }

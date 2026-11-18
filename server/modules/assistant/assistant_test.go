@@ -4244,6 +4244,16 @@ func TestBuildToolResultMessage_Error(t *testing.T) {
 	assert.Equal(t, "boom", tr.Content[0].Text)
 }
 
+// The model and the UI read the same JSON an HTTP response carries.
+func TestBuildToolResultMessage_ErrorWithArgs(t *testing.T) {
+	err := model.NewErrorWithArgs(errInvalidAssessment, map[string]interface{}{model.ErrorArgDetail: "assessment must be 90, 50 or 10"})
+	msg := buildToolResultMessage("tooluse-4", nil, err)
+
+	tr := msg.ContentBlocks[0].ToolResult
+	assert.True(t, tr.IsError)
+	assert.JSONEq(t, `{"code":"ERROR_ASSISTANT_INVALID_ASSESSMENT","detail":"assessment must be 90, 50 or 10"}`, tr.Content[0].Text)
+}
+
 func TestBuildToolResultMessage_Result(t *testing.T) {
 	msg := buildToolResultMessage("tooluse-3", &model.ToolResponse{ToolName: "query_events", Result: "data"}, nil)
 

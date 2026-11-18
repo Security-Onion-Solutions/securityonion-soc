@@ -1293,7 +1293,8 @@ func (ac *AssistantCoordinator) checkMemoryWrite(ctx context.Context, requestorI
 	}
 
 	if err := ac.srv.CheckAuthorized(ctx, op, "memory"); err != nil {
-		return fmt.Errorf("%w: %s", ErrUnauthorizedMemory, err)
+		log.FromContext(ctx).WithError(err).WithField("memoryWriteOperation", op).Warn("memory write not authorized")
+		return ErrUnauthorizedMemory
 	}
 
 	return nil

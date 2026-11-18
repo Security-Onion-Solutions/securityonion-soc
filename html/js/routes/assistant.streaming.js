@@ -480,7 +480,7 @@ Object.assign(assistantRouteForStreaming.component.methods, (function() {
           const busy = error && error.response && error.response.status === 409;
 
           if (error && error.response && error.response.data) {
-            error = await this.readErrorBody(error);
+            error.response.data = await this.readErrorBody(error);
           }
 
           if (busy) {

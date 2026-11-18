@@ -293,9 +293,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
           return;
         }
 
-        // The card localizes the raw error itself, so it gets the code or structured body, not HTML.
-        const body = error.response?.data;
-        const rawError = (typeof body?.code === 'string' || this.i18n[body]) ? body : error.message;
+        const localizedError = this.$root.localizeMessage(error);
 
         // Still busy after the retries: the agent is at its limit or the session is mid-turn.
         if (error.response && error.response.status === 409) {
@@ -303,7 +301,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         }
 
         toolUse.status = 'error';
-        toolUse.error = rawError;
+        toolUse.error = localizedError;
         this.isStreaming = false;
 
         // If a delegation was still in flight, close the delegate here so a dropped/aborted
@@ -311,7 +309,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         const activeDelegate = this.delegationChildren.get(toolStreamingSessionId)?.parentToolUse;
         if (activeDelegate) {
           activeDelegate.status = 'error';
-          activeDelegate.error = rawError;
+          activeDelegate.error = localizedError;
           activeDelegate.completedAt = new Date().toISOString();
         }
         if (this.delegationChildren.has(toolStreamingSessionId)) {
@@ -324,7 +322,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         if (isCurrentSession && !activeDelegate) {
           const errorMessage = {
             role: 'assistant',
-            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: this.$root.localizeMessage(error) }),
+            content: this.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: localizedError }),
             timestamp: new Date().toISOString(),
             isToolResult: true,
             toolName: toolUse.name,

@@ -17,6 +17,6 @@ test('restored keys keep their original text', () => {
 
 test('keys the UI reads are defined', () => {
   expect(table.currentValue).toBe('Current Value');
-  expect(table.ERROR_REQUEST_FAILED).toBe('The request could not be processed.');
+  expect(table.ERROR_REQUEST_FAILED).toBe('Something went wrong while processing the request. Check SOC logs for details.');
   expect(table.ERROR_PERMISSION_DENIED).toBeTruthy();
 });

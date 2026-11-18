@@ -17,8 +17,13 @@ import (
 var errTestCode = errors.New("ERROR_TEST")
 
 func TestErrorWithArgs_Error(t *testing.T) {
-	assert.Equal(t, "ERROR_TEST", NewErrorWithArgs(errTestCode, nil).Error())
-	assert.Equal(t, "ERROR_TEST a=1 b=two", NewErrorWithArgs(errTestCode, map[string]interface{}{"b": "two", "a": 1}).Error())
+	assert.Equal(t, `{"code":"ERROR_TEST"}`, NewErrorWithArgs(errTestCode, nil).Error())
+	assert.Equal(t, `{"a":1,"b":"two","code":"ERROR_TEST"}`, NewErrorWithArgs(errTestCode, map[string]interface{}{"b": "two", "a": 1}).Error())
+	assert.Equal(t, `{"code":"ERROR_TEST","detail":"x must be set"}`, NewErrorWithArgs(errTestCode, map[string]interface{}{ErrorArgDetail: "x must be set"}).Error())
+}
+
+func TestErrorWithArgs_Error_UnmarshalableArg(t *testing.T) {
+	assert.Equal(t, "ERROR_TEST", NewErrorWithArgs(errTestCode, map[string]interface{}{"bad": make(chan int)}).Error())
 }
 
 func TestErrorWithArgs_Unwrap(t *testing.T) {

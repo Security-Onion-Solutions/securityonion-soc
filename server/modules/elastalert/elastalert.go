@@ -437,7 +437,7 @@ func (e *ElastAlertEngine) ValidateRule(data string) (string, error) {
 		for _, code := range []error{errRuleInvalidCorrelation, errRuleInvalidExtraDocument} {
 			if errors.Is(err, code) {
 				log.WithError(err).Warn("invalid Sigma rule")
-				return "", code
+				return "", err
 			}
 		}
 

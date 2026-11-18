@@ -29,23 +29,25 @@ test('errorText keeps long raw text whole', () => {
   expect(errorText({ status: 'error', error: long })).toBe(long);
 });
 
-test('errorText escapes raw text for v-html', () => {
-  expect(errorText({ status: 'error', error: 'unexpected value <nil>' })).toBe('unexpected value &lt;nil&gt;');
-  expect(errorText({ status: 'error', error: '<img src=x onerror="alert(1)">' })).toBe('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
+test('errorText keeps angle brackets in raw text', () => {
+  expect(errorText({ status: 'error', error: 'unexpected value <nil>' })).toBe('unexpected value <nil>');
 });
 
-test('errorText shows the key text for a code wrapped in English', () => {
+test('errorText shows text with a code that does not lead as it is', () => {
   const text = errorText({ status: 'error', error: 'the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED' });
-  expect(text).toBe(app.i18n.ERROR_AGENT_TURN_STALLED);
+  expect(text).toBe('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED');
 });
 
-test('errorText keeps the link in key text', () => {
-  const text = errorText({ status: 'error', error: 'ERROR_UPSTREAM_SERVICE_ERROR' });
-  expect(text).toBe(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
-  expect(text).toContain('href="https://status.securityonion.net"');
+test('errorText shows the key text for a bare code', () => {
+  expect(errorText({ status: 'error', error: 'ERROR_UPSTREAM_SERVICE_ERROR' })).toBe(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
 });
 
-test('errorText localizes a structured error', () => {
-  const text = errorText({ status: 'error', error: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 } });
-  expect(text).toBe('Unable to unshare session. The session is attached to 2 case(s).');
+test('errorText shows the detail from a JSON tool error', () => {
+  const text = errorText({ status: 'error', error: '{"code":"ERROR_ASSISTANT_REPORT_TEMPLATE_INVALID","detail":"missing query directive"}' });
+  expect(text).toBe('The report template is not valid: missing query directive');
+});
+
+test('errorText shows quotes and ampersands in a JSON detail as written', () => {
+  const text = errorText({ status: 'error', error: '{"code":"ERROR_ASSISTANT_REPORT_TEMPLATE_INVALID","detail":"function \\"foo\\" isn\'t defined & <nil>"}' });
+  expect(text).toBe('The report template is not valid: function "foo" isn\'t defined & <nil>');
 });

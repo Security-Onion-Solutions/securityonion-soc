@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -377,7 +378,7 @@ func TestAutomationRunPageRejectsBadFilters(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAutomationNotFound)
 
 	_, err = f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{Search: strings.Repeat("é", maxAutomationRunSearchRunes+1)})
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+	assert.Equal(t, fmt.Sprintf("search must be at most %d characters", maxAutomationRunSearchRunes), errorDetail(t, err, ErrInvalidAutomationParams))
 
 	_, err = f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{Search: strings.Repeat("é", maxAutomationRunSearchRunes)})
 	assert.NoError(t, err, "the cap counts characters, not bytes")

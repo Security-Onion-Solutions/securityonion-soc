@@ -1867,7 +1867,7 @@ func (h *AssistantHandler) GetAutomation(w http.ResponseWriter, r *http.Request)
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
 // @Success      200 {object} model.Automation "The created automation"
-// @Failure      400           "The request body is invalid, or the license is invalid"
+// @Failure      400  {object}  model.ErrorWithArgs  "The request body is invalid, or the license is invalid. Invalid automation settings return JSON with code ERROR_AUTOMATION_PARAMS_INVALID and detail, what failed; other errors return a plain-text error code"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      500           "Internal SOC error; review SOC logs"
@@ -1884,7 +1884,7 @@ func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Reque
 // @Param        request  body  model.Automation  true  "Automation definition"
 // @Produce      json
 // @Success      200 {object} model.Automation "The updated automation"
-// @Failure      400           "The request body is invalid, or the license is invalid"
+// @Failure      400  {object}  model.ErrorWithArgs  "The request body is invalid, or the license is invalid. Invalid automation settings return JSON with code ERROR_AUTOMATION_PARAMS_INVALID and detail, what failed; other errors return a plain-text error code"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "Automation not found"
@@ -1957,7 +1957,7 @@ func (h *AssistantHandler) DeleteAutomation(w http.ResponseWriter, r *http.Reque
 // @Param        count         query  bool    false  "Also count every matching run" example(true)
 // @Produce      json
 // @Success      200 {object} model.AutomationRunPage "The page of runs"
-// @Failure      400           "The search is too long, or the license is invalid"
+// @Failure      400  {object}  model.ErrorWithArgs  "The search is too long, or the license is invalid. A search that is too long returns JSON with code ERROR_AUTOMATION_PARAMS_INVALID and detail, the limit; other errors return a plain-text error code"
 // @Failure      401           "Request was not properly authenticated"
 // @Failure      403           "Insufficient permissions for this request"
 // @Failure      404           "automationId is not a valid automation ID"

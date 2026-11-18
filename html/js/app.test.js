@@ -75,13 +75,13 @@ test('stripHtml', () => {
   expect(app.stripHtml(null)).toBe('');
 });
 
-test('localizeMessageEmbeddedCode', () => {
+test('localizeMessageLeadingCode', () => {
   const original = app.i18n.ERROR_AGENT_TURN_STALLED;
   app.i18n.ERROR_AGENT_TURN_STALLED = 'X';
   try {
     expect(app.localizeMessage('ERROR_AGENT_TURN_STALLED')).toBe('X');
     expect(app.localizeMessage('ERROR_AGENT_TURN_STALLED: no reply in 5m')).toBe('X');
-    expect(app.localizeMessage('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED')).toBe('X');
+    expect(app.localizeMessage('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED')).toBe('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED');
     expect(app.localizeMessage({ message: 'Request failed with status code 500', response: { data: 'ERROR_AGENT_TURN_STALLED: no reply' } })).toBe('X');
   } finally {
     app.i18n.ERROR_AGENT_TURN_STALLED = original;
@@ -92,6 +92,25 @@ test('localizeMessageEmbeddedCode', () => {
   expect(app.localizeMessage('ERROR_NOT_A_KEY: x')).toBe('ERROR_NOT_A_KEY: x');
   expect(app.localizeMessage("must be '<>', got <-")).toBe("must be '<>', got <-");
   expect(app.localizeMessage('unexpected value <nil>')).toBe('unexpected value <nil>');
+});
+
+test('localizeMessageJsonText', () => {
+  const invalid = 'The automation request or its settings are not valid: ';
+  expect(app.localizeMessage('{"code":"ERROR_AUTOMATION_PARAMS_INVALID","detail":"groupBy requires at least one field"}')).toBe(invalid + 'groupBy requires at least one field');
+  expect(app.localizeMessage('{"code":"ERROR_AUTOMATION_PARAMS_INVALID","detail":"field <b> is bad"}')).toBe(invalid + 'field <b> is bad');
+  expect(app.localizeMessage('{"code":"ERROR_AUTOMATION_PARAMS_INVALID","detail":"function \\"foo\\" isn\'t defined & <nil>"}')).toBe(invalid + 'function "foo" isn\'t defined & <nil>');
+  expect(app.localizeMessage('{"code":"invalid_request","message":"x"}')).toBe('{"code":"invalid_request","message":"x"}');
+  expect(app.localizeMessage('{"code":"ERROR_AUTOMATION_PARAMS_INVALID","detail":"x"}', { detail: 'caller' })).toBe(invalid + 'caller');
+
+  expect(app.localizeMessage('{not json')).toBe('{not json');
+  expect(app.localizeMessage('{"detail":"no code"}')).toBe('{"detail":"no code"}');
+});
+
+test('localizeMessageLegacyDetail', () => {
+  const invalid = 'The assessment value is not valid: ';
+  expect(app.localizeMessage('ERROR_ASSISTANT_INVALID_ASSESSMENT: assessment must be 90, 50 or 10')).toBe(invalid + 'assessment must be 90, 50 or 10');
+  expect(app.localizeMessage('tool failed: ERROR_ASSISTANT_INVALID_ASSESSMENT: value <nil>')).toBe('tool failed: ERROR_ASSISTANT_INVALID_ASSESSMENT: value <nil>');
+  expect(app.localizeMessage('ERROR_ASSISTANT_INVALID_ASSESSMENT: x', { detail: 'caller' })).toBe(invalid + 'caller');
 });
 
 test('formatMarkdown', () => {
@@ -489,22 +508,36 @@ test('localizeMessageErrorWithArgs', () => {
   expect(app.localizeMessage(attached, { count: 5 })).toBe('Unable to unshare session. The session is attached to 5 case(s).');
 
   const unknown = { message: 'Request failed with status code 409', response: { data: { code: 'ERROR_NOT_A_KEY', count: 2 } } };
-  expect(app.localizeMessage(unknown)).toBe('Request failed with status code 409');
+  expect(app.localizeMessage(unknown)).toBe('ERROR_NOT_A_KEY');
 
   expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: 3 } } })).toBe('The value is not valid YAML. Check line 3.');
-  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: '<b>' } } })).toBe('The value is not valid YAML. Check line &lt;b&gt;.');
+  expect(app.localizeMessage({ response: { data: { code: 'ERROR_MALFORMED_YAML_LINE', line: '<b>' } } })).toBe('The value is not valid YAML. Check line <b>.');
 
   const zero = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 0 } } };
   expect(app.localizeMessage(zero)).toBe('Unable to unshare session. The session is attached to 0 case(s).');
 
   const injected = { response: { data: { code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: '<img src=x onerror="alert(1)">' } } };
-  expect(app.localizeMessage(injected)).toBe('Unable to unshare session. The session is attached to &lt;img src=x onerror=&quot;alert(1)&quot;&gt; case(s).');
+  expect(app.localizeMessage(injected)).toBe('Unable to unshare session. The session is attached to <img src=x onerror="alert(1)"> case(s).');
 
   const badCode = { message: 'Request failed with status code 302', response: { data: { code: '<b>x</b>', count: 2 } } };
-  expect(app.localizeMessage(badCode)).toBe('Request failed with status code 302');
+  expect(app.localizeMessage(badCode)).toBe(app.i18n.ERROR_REQUEST_FAILED);
 
   const network = { message: 'Network Error', code: 'ERR_NETWORK' };
   expect(app.localizeMessage(network)).toBe('Network Error');
+});
+
+test('localizeMessageUnrecognizedResponse', () => {
+  const response = (data) => ({ message: 'Request failed with status code 500', response: { status: 500, data: data } });
+
+  expect(app.localizeMessage(response('<html>502 Bad Gateway</html>'))).toBe(app.i18n.ERROR_REQUEST_FAILED);
+  expect(app.localizeMessage(response('the delegated sub-agent could not complete: ERROR_AGENT_TURN_STALLED'))).toBe(app.i18n.ERROR_REQUEST_FAILED);
+  expect(app.localizeMessage(response({ error: 'x' }))).toBe(app.i18n.ERROR_REQUEST_FAILED);
+  expect(app.localizeMessage(response(''))).toBe(app.i18n.ERROR_REQUEST_FAILED);
+  expect(app.localizeMessage(response('ERROR_NOT_A_KEY <img src=x onerror="alert(1)">'))).toBe('ERROR_NOT_A_KEY');
+  expect(app.localizeMessage(response('ERROR_SESSION_TAG_MISSING'))).toBe(app.i18n.ERROR_SESSION_TAG_MISSING);
+
+  // Not a response: a label or tool text that isn't a code is shown as it is.
+  expect(app.localizeMessage('Custom action')).toBe('Custom action');
 });
 
 test('localizeMessageWithArgs', () => {
@@ -1179,6 +1212,12 @@ test('checkUserSecuritySettings', () => {
   expect(location.hash).toBe("#/settings?alreadyhere");
 });
 
+// Error text is shown in {{ }} as well as v-html, so it can't carry markup.
+test('errorKeysHaveNoMarkup', () => {
+  const marked = Object.keys(app.i18n).filter(key => key.startsWith('ERROR_') && /[<>]/.test(app.i18n[key]));
+  expect(marked).toEqual([]);
+});
+
 test('showWarning', () => {
   var longString = 'x';
   for (var i = 0; i < 9; i++) {
@@ -1205,13 +1244,6 @@ test('showErrorTruncates', () => {
 
     expect(app.error).toBe(true);
     expect(app.errorMessage).toBe('a'.repeat(174) + '...' + 'b'.repeat(175));
-
-    // The status page link must survive the cut.
-    const upstream = new Error('Request failed with status code 500');
-    upstream.response = { data: 'ERROR_UPSTREAM_SERVICE_ERROR' };
-    app.showError(upstream);
-    expect(app.errorMessage).toBe(app.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
-    expect(app.errorMessage).toContain('href="https://status.securityonion.net"');
   } finally {
     app.showError = oldShowError;
   }

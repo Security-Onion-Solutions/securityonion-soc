@@ -859,16 +859,6 @@ code {
   flex-basis: calc(25% - 4px);
 }
 
-.warning-message a,
-.error-message a {
-  color: white;
-}
-
-.warning-message a:visited,
-.error-message a:visited {
-  color: white;
-}
-
 .unset-vertical-align {
   vertical-align: unset !important;
 }

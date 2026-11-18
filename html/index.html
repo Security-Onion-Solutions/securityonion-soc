@@ -305,7 +305,7 @@
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
-            <div class="error-message" v-html="errorMessage"></div>
+            <div class="hard-wrap">{{ errorMessage }}</div>
             <div class="mt-2 no-underline">
               {{ i18n.errorHelp }}
               <a :target="$root.target('so-help')" :href="parameters.docsUrl + 'help'" class="text-decoration-none" data-aid="nav_docs_error" :aria-label="i18n.ariaHelpLink">
@@ -324,7 +324,7 @@
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
-            <div class="warning-message" v-html="warningMessage"></div>
+            <div class="hard-wrap">{{ warningMessage }}</div>
           </v-snackbar>
           <v-alert dismissible type="info" icon="fa-info" v-model="info" transition="scale-transition" v-html="infoMessage" data-aid="banner_info"></v-alert>
           <v-snackbar id="tip" location="center top" rounded close :timeout="currentTipTimeout" v-model="tip" color="info" data-aid="banner_tip">
@@ -333,7 +333,7 @@
                 <v-icon>fa-times</v-icon>
               </v-btn>
             </template>
-            <div v-html="tipMessage" class="tip-message"></div>
+            <div v-html="tipMessage" class="tip-message hard-wrap"></div>
           </v-snackbar>
           <v-snackbar
             v-if="isLicensed(FEAT_NTF) && notificationsStarted"

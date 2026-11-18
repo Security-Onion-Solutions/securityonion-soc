@@ -161,8 +161,9 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, obj interfa
 		var bytes []byte
 		contentType := "text/plain; charset=utf-8"
 
+		// Code is err.Error() of whatever the caller passed, so a wrapped error would carry its detail.
 		var argsErr *model.ErrorWithArgs
-		if errors.As(err, &argsErr) {
+		if errors.As(err, &argsErr) && safeErrorBody.MatchString(argsErr.Code) {
 			if b, marshalErr := json.Marshal(argsErr); marshalErr == nil {
 				bytes = b
 				contentType = "application/json"

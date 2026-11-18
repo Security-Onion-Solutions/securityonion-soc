@@ -1867,7 +1867,7 @@ test('bulkUpdateReport - filtered success', () => {
   comp.bulkUpdateReport(stats)
 
   expect(comp.$root.warning).toBe(true);
-  expect(comp.$root.warningMessage).toBe('Bulk update successfully updated 20 of 20 events. However, the statuses of 1 of the updated detections are controlled by the current regex filter settings and were reverted. <a href="/#/config?s=soc.config.server.modules.suricataengine" data-aid="warning_bulk_update_configure_filters">Click here to configure those filters.</a> (3m 20s)'
+  expect(comp.$root.warningMessage).toBe('Bulk update successfully updated 20 of 20 events. However, the statuses of 1 of the updated detections are controlled by the current regex filter settings and were reverted. These filters can be changed on the Configuration page with the soc.config.server.modules.suricataengine.enableRegex and disableRegex settings. (3m 20s)'
 );
 });
 

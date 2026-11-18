@@ -61,6 +61,8 @@ func (t *RecordAssessmentTool) GetSchema() model.JSONSchema {
 	}
 }
 
+var errInvalidAssessment = errors.New("ERROR_ASSISTANT_INVALID_ASSESSMENT")
+
 type recordAssessmentArgs struct {
 	Assessment int `json:"assessment"`
 }
@@ -102,7 +104,7 @@ func (t *RecordAssessmentTool) Execute(ctx context.Context, srv *server.Server, 
 	// Only the automated run carries its own request id; a follow-up chat arrives on a web request.
 	if requestId, _ := ctx.Value(web.ContextKeyRequestId).(string); requestId != automationRequestId(rootSessionId) {
 		logger.Info("record_assessment called after the alert triage run; the alerts keep the run's assessment")
-		return nil, errors.New("ERROR_ASSISTANT_ASSESSMENT_AFTER_TRIAGE_RUN: the alerts keep the assessment recorded by the automated run")
+		return nil, errors.New("ERROR_ASSISTANT_ASSESSMENT_AFTER_TRIAGE_RUN")
 	}
 
 	result.Result = fmt.Sprintf("Assessment %d recorded. It is written to the alerts when this triage ends.", args.Assessment)
@@ -119,7 +121,8 @@ func parseRecordAssessmentArgs(params json.RawMessage) (*recordAssessmentArgs, e
 	}
 
 	if !model.IsValidAlertTriageAssessment(args.Assessment) {
-		return nil, fmt.Errorf("ERROR_ASSISTANT_INVALID_ASSESSMENT: assessment must be %d, %d or %d", model.AlertTriageAssessmentLikelyMalicious, model.AlertTriageAssessmentNeedsReview, model.AlertTriageAssessmentLikelyBenign)
+		detail := fmt.Sprintf("assessment must be %d, %d or %d", model.AlertTriageAssessmentLikelyMalicious, model.AlertTriageAssessmentNeedsReview, model.AlertTriageAssessmentLikelyBenign)
+		return nil, model.NewErrorWithArgs(errInvalidAssessment, map[string]interface{}{model.ErrorArgDetail: detail})
 	}
 
 	return args, nil

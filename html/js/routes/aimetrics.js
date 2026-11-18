@@ -461,7 +461,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
               let contentBlock = block.toolResult.content[j];
               if (contentBlock.text) {
                 if (block.toolResult.isError) {
-                  resultMessage += `\n**${this.i18n.error}:** ${contentBlock.text}\n`;
+                  resultMessage += `\n**${this.i18n.error}:** ${this.$root.localizeMessage(contentBlock.text)}\n`;
                 } else {
                   resultMessage += `\n${contentBlock.text}\n`;
                 }

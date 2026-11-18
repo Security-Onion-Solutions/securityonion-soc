@@ -1406,7 +1406,7 @@ test('saveRegexFailureEscapesMessage', async () => {
   mockPapi("post");
   await comp.save(comp.settings[0], null);
 
-  expect(showErrorMock).toHaveBeenCalledWith('&lt;img src=x&gt;');
+  expect(showErrorMock).toHaveBeenCalledWith('<img src=x>');
 });
 
 test('saveErrorShowsOnlyKnownCodes', async () => {
@@ -1418,7 +1418,10 @@ test('saveErrorShowsOnlyKnownCodes', async () => {
     { data: { code: 'ERROR_<img src=x>', line: 12 }, known: false },
     { data: { code: 5 }, known: false },
     { data: { code: 'constructor' }, known: false },
-    { data: 'ERROR_MALFORMED_YAML 12', known: false },
+    { data: 'ERROR_MALFORMED_YAML 12', known: true },
+    { data: 'ERROR_MALFORMED_YAML -> yaml: line 3: did not find expected key', known: true },
+    { data: 'ERROR_REQUEST_FAILED', known: false },
+    { data: { code: 'ERROR_REQUEST_FAILED' }, known: false },
     { data: 'ERROR_<img src=x onerror=alert(1)>', known: false },
     { data: 'ERROR_NOT_A_KEY', known: false },
     { data: 'not a code', known: false },
@@ -1689,23 +1692,23 @@ test('addToNode_Malformed', () => {
   expect(closure).toThrow("Setting name 'test' conflicts with another similarly named setting");
 });
 
-test('addToNode_Malformed_usesKeyAndEscapesName', () => {
+test('addToNode_Malformed_usesKey', () => {
   const original = comp.i18n.settingNameConflict;
   comp.i18n.settingNameConflict = 'X {name}';
   try {
-    expect(() => comp.addToNode({name: '<img>'}, {}, ['parent'], {name: 'test'})).toThrow('X &lt;img&gt;');
+    expect(() => comp.addToNode({name: '<img>'}, {}, ['parent'], {name: 'test'})).toThrow('X <img>');
   } finally {
     comp.i18n.settingNameConflict = original;
   }
 });
 
-test('organizeTree_conflictShowsEscapedIdWithoutErrorPrefix', () => {
+test('organizeTree_conflictShowsIdWithoutErrorPrefix', () => {
   const showErrorMock = mockShowError();
   comp.organizeTree([{id: 'a.<img>'}, {id: 'a.<img>.c'}]);
 
   expect(showErrorMock).toHaveBeenCalledTimes(1);
   const msg = showErrorMock.mock.calls[0][0];
-  expect(msg).toBe(comp.i18n.settingMalformed + ' (a.&lt;img&gt;.c): ' + comp.i18n.settingNameConflict.replace('{name}', '&lt;img&gt;'));
+  expect(msg).toBe(comp.i18n.settingMalformed + ' (a.<img>.c): ' + comp.i18n.settingNameConflict.replace('{name}', '<img>'));
   expect(msg).not.toContain('Error: ');
 });
 

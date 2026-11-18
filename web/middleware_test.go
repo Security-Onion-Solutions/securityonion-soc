@@ -179,6 +179,22 @@ func TestRespond(t *testing.T) {
 			ExpectedType:   "application/json",
 		},
 		{
+			Name:         "Error With Args From Wrapped Code - 400",
+			StatusCode:   http.StatusBadRequest,
+			Obj:          model.NewErrorWithArgs(fmt.Errorf("%w: internal detail", errors.New("ERROR_FOO")), map[string]interface{}{"line": 3}),
+			ExpectedBody: []byte(GENERIC_ERROR_MESSAGE),
+			ExpectedCode: http.StatusBadRequest,
+			ExpectedType: "text/plain; charset=utf-8",
+		},
+		{
+			Name:         "Error With Args Unmarshalable - 400",
+			StatusCode:   http.StatusBadRequest,
+			Obj:          model.NewErrorWithArgs(errors.New("ERROR_FOO"), map[string]interface{}{"bad": make(chan int)}),
+			ExpectedBody: []byte(GENERIC_ERROR_MESSAGE),
+			ExpectedCode: http.StatusBadRequest,
+			ExpectedType: "text/plain; charset=utf-8",
+		},
+		{
 			Name:         "Raw Response",
 			StatusCode:   http.StatusOK,
 			Obj:          []byte{1, 2, 3},

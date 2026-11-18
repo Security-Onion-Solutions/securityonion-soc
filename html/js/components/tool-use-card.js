@@ -28,9 +28,7 @@ components.push({
 			errorText() {
 				if (this.toolUse.status === 'rejected') return this.ctx.i18n.assistantToolUseReject;
 
-				// Rendered with v-html for links in key text; tool and ES error text isn't trusted.
-				const error = this.toolUse.error;
-				return this.$root.localizeMessage(typeof error === 'string' ? this.$root.escapeHtml(error) : error);
+				return this.$root.localizeMessage(this.toolUse.error);
 			},
 		},
 		template: '#component-tool-use-card',

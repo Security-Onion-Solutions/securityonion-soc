@@ -1593,13 +1593,13 @@ func TestHandlerUpdateDetection(t *testing.T) {
 				eng := servermock.NewMockDetectionEngine(ctrl)
 				srv.DetectionEngines.Store(model.EngineNameElastAlert, eng)
 
-				// the validation code is returned, not the parse error
+				// the validation error is returned, not the parse error
 				eng.EXPECT().ApplyFilters(gomock.Any()).Return(false, nil)
-				eng.EXPECT().ValidateRule(gomock.Any()).Return("", errors.New("ERROR_RULE_INVALID__CORRELATION"))
+				eng.EXPECT().ValidateRule(gomock.Any()).Return("", model.NewErrorWithArgs(errors.New("ERROR_RULE_INVALID__CORRELATION"), map[string]interface{}{model.ErrorArgDetail: "missing required fields: correlation.rules"}))
 				eng.EXPECT().ExtractDetails(gomock.Any()).Return(errors.New("unparseable"))
 			},
 			Code:     400,
-			Response: []byte(`ERROR_RULE_INVALID__CORRELATION`),
+			Response: []byte(`{"code":"ERROR_RULE_INVALID__CORRELATION","detail":"missing required fields: correlation.rules"}`),
 			Logs: []EntryMatcher{
 				didNotComplete,
 				handled,

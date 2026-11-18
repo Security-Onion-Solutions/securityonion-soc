@@ -243,8 +243,8 @@ func (c *SigmaRuleCollection) Validate() error {
 		// sigma-cli applies Sigma filter documents to the rule they name
 		for i, doc := range c.Referenced {
 			if !doc.filters(c.Primary) {
-				return fmt.Errorf("%w: document %d is not a Sigma filter for this rule; a plain rule may only be followed by filters that name it",
-					errRuleInvalidExtraDocument, i+2)
+				detail := fmt.Sprintf("document %d is not a Sigma filter for this rule", i+2)
+				return model.NewErrorWithArgs(errRuleInvalidExtraDocument, map[string]interface{}{model.ErrorArgDetail: detail})
 			}
 		}
 
@@ -257,7 +257,7 @@ func (c *SigmaRuleCollection) Validate() error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("%w: %w", errRuleInvalidCorrelation, err)
+		return model.NewErrorWithArgs(errRuleInvalidCorrelation, map[string]interface{}{model.ErrorArgDetail: err.Error()})
 	}
 
 	return nil

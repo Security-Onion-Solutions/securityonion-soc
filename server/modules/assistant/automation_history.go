@@ -101,7 +101,7 @@ func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store aut
 
 	search := strings.TrimSpace(filter.Search)
 	if utf8.RuneCountInString(search) > maxAutomationRunSearchRunes {
-		return nil, fmt.Errorf("%w: search must be at most %d characters", ErrInvalidAutomationParams, maxAutomationRunSearchRunes)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: fmt.Sprintf("search must be at most %d characters", maxAutomationRunSearchRunes)})
 	}
 
 	automations, unreadable, err := ac.scanAutomations(ctx)

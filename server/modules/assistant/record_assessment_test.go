@@ -89,3 +89,9 @@ func TestRecordAssessmentTool_Execute(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRecordAssessmentArgsDetail(t *testing.T) {
+	_, err := parseRecordAssessmentArgs(json.RawMessage(`{"assessment":75}`))
+
+	assert.Equal(t, "assessment must be 90, 50 or 10", errorDetail(t, err, errInvalidAssessment))
+}

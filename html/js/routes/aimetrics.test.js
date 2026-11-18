@@ -1110,6 +1110,31 @@ test('formatExpandMessage handles ToolResult with error text', () => {
   expect(result).toContain('Connection timeout');
 });
 
+test('formatExpandMessage localizes ErrorWithArgs JSON in error text', () => {
+  const data = {
+    message: {
+      role: 'user',
+      contentBlocks: [
+        {
+          toolResult: {
+            toolUseId: 'tool-123',
+            isError: true,
+            content: [{ text: '{"code":"ERROR_ASSISTANT_REPORT_TEMPLATE_INVALID","detail":"missing query directive"}' }]
+          }
+        }
+      ]
+    }
+  };
+
+  comp.$root.formatMarkdown = jest.fn().mockReturnValueOnce('');
+
+  comp.formatExpandMessage(data);
+
+  const markdownArg = comp.$root.formatMarkdown.mock.calls[0][0];
+  expect(markdownArg).toContain('**Error:** The report template is not valid: missing query directive');
+  expect(markdownArg).not.toContain('"code"');
+});
+
 test('formatExpandMessage handles ToolResult with non-error text', () => {
   const data = {
     message: {

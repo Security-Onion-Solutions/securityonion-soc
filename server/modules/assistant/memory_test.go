@@ -2841,7 +2841,8 @@ func TestSaveMemoryGlobalRequiresWriteGlobal(t *testing.T) {
 
 	err := ac.SaveMemory(memoryTestCtx(), &model.Memory{MemoryText: "the DMZ is 10.4.0.0/16"})
 
-	assert.ErrorIs(t, err, ErrUnauthorizedMemory)
+	// The RBAC text names the user and a timestamp, so it stays in the log.
+	assert.Equal(t, ErrUnauthorizedMemory, err)
 	assert.Equal(t, "ERROR_MEMORY_UNAUTHORIZED", web.ConvertErrorToSafeString(err))
 }
 

@@ -300,7 +300,7 @@ routes.push({
     },
     addToNode(node, parent, path, setting) {
       if (node.children == undefined) {
-        throw new Error(this.i18n.settingNameConflict.replace('{name}', this.$root.escapeHtml(node.name)));
+        throw new Error(this.i18n.settingNameConflict.replace('{name}', node.name));
       }
 
       const name = path.shift();
@@ -340,7 +340,7 @@ routes.push({
           this.addToNode(root, "", path, setting);
           this.settingsAvailable++;
         } catch(e) {
-          route.$root.showError(route.i18n.settingMalformed + " (" + route.$root.escapeHtml(setting.id) + "): " + e.message);
+          route.$root.showError(route.i18n.settingMalformed + " (" + setting.id + "): " + e.message);
         }
       });
       this.countCustomized();
@@ -1101,7 +1101,7 @@ routes.push({
             for (var idx = 0; idx < test_values.length; idx++) {
               const re = new RegExp(setting.regex);
               if (!re.test(test_values[idx])) {
-                this.$root.showError(setting.regexFailureMessage ? this.$root.escapeHtml(setting.regexFailureMessage) : this.i18n.settingValidationFailed);
+                this.$root.showError(setting.regexFailureMessage ? setting.regexFailureMessage : this.i18n.settingValidationFailed);
                 return;
               }
             }
@@ -1156,10 +1156,11 @@ routes.push({
           this.countCustomized();
           this.notifyChangedSetting(s);
         } catch (error) {
-          // The body can come from a subgrid; for unknown text localizeMessage falls back to error.message.
+          // A 3.4 subgrid sends "CODE -> detail" text. ERROR_REQUEST_FAILED is the server's code for
+          // errors without their own, such as a value of the wrong type, which settingSaveError explains.
           const data = error.response?.data;
-          const code = typeof data === 'string' ? data : data?.code;
-          const known = typeof code === 'string' && code.startsWith('ERROR_') && this.i18n[code];
+          const code = typeof data === 'string' ? (data.match(/^ERROR_[A-Z0-9_]+/) || [])[0] : data?.code;
+          const known = typeof code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(code) && code !== 'ERROR_REQUEST_FAILED' && this.i18n[code];
           this.$root.showError(known ? error : this.i18n.settingSaveError);
         } finally {
           this.$root.stopLoading();

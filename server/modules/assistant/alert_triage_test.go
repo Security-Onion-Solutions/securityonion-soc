@@ -622,7 +622,7 @@ func TestAlertTriageValidateParams(t *testing.T) {
 		{"null", `null`, "groupBy"},
 		{"no groupBy", `{"filter":"tags:alert"}`, "groupBy"},
 		{"empty groupBy", `{"groupBy":[]}`, "groupBy"},
-		{"blank field", `{"groupBy":[" "]}`, "not a field name"},
+		{"blank field", `{"groupBy":[" "]}`, `groupBy field "" is not a field name`},
 		{"pipe in field", `{"groupBy":["a|b"]}`, "not a field name"},
 		{"option as field", `{"groupBy":["-pie"]}`, "not a field name"},
 		{"bare wildcard", `{"groupBy":["*"]}`, "not a field name"},
@@ -637,8 +637,7 @@ func TestAlertTriageValidateParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := kind.ValidateParams(json.RawMessage(tt.params))
 			require.Error(t, err)
-			assert.ErrorIs(t, err, ErrInvalidAutomationParams)
-			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Contains(t, errorDetail(t, err, ErrInvalidAutomationParams), tt.wantErr)
 		})
 	}
 
@@ -964,7 +963,7 @@ func TestAlertTriageStoreUnsupported(t *testing.T) {
 func TestAlertTriageRejectsBadStoredParams(t *testing.T) {
 	f := newTriageFixture(t, `{"groupBy":["rule.name"],"flor":"x"}`)
 
-	assert.ErrorIs(t, f.kind.Execute(context.Background(), f.run), ErrInvalidAutomationParams)
+	assert.Contains(t, errorDetail(t, f.kind.Execute(context.Background(), f.run), ErrInvalidAutomationParams), `unknown field "flor"`)
 	assert.Empty(t, f.es.InputSearchCriterias)
 }
 

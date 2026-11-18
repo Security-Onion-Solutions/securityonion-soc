@@ -328,12 +328,7 @@ func (host *Host) Preprocess(ctx context.Context, req *http.Request) (context.Co
 }
 
 func ConvertErrorToSafeString(err error) string {
-	msg := err.Error()
-	if safeErrorBody.MatchString(msg) {
-		return msg
-	}
-
-	if m := errorCode.FindStringSubmatch(msg); m != nil {
+	if m := errorCode.FindStringSubmatch(err.Error()); m != nil {
 		return m[1]
 	}
 

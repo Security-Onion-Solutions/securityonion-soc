@@ -78,6 +78,7 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 		noAdmin       bool
 		unauthorized  bool
 		expectedError bool
+		errorCode     error
 		assertResult  func(t *testing.T, result *model.ToolResponse, store *server.MemConfigStore)
 	}{
 		{
@@ -169,6 +170,7 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 			name:          "invalid template",
 			params:        `{"content": "Just a title\n===\nno query directive"}`,
 			expectedError: true,
+			errorCode:     errReportTemplateInvalid,
 		},
 		{
 			name:          "invalid params",
@@ -240,6 +242,10 @@ func TestUpdateCustomReportTool_Execute(t *testing.T) {
 
 			if tc.expectedError {
 				assert.Error(t, err)
+				if tc.errorCode != nil {
+					assert.NotEmpty(t, errorDetail(t, err, tc.errorCode))
+				}
+
 				return
 			}
 

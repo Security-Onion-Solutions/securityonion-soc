@@ -1940,7 +1940,7 @@ test('executeTool reads a streamed error body once and shows its key text', asyn
 
   expect(reads).toBe(1);
   expect(toolUse.status).toBe('error');
-  expect(toolUse.error).toBe('ERROR_TOOL_REQUEST_MISMATCH');
+  expect(toolUse.error).toBe(comp.i18n.ERROR_TOOL_REQUEST_MISMATCH);
   expect(comp.messages).toHaveLength(1);
   expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: 'query_events', error: comp.i18n.ERROR_TOOL_REQUEST_MISMATCH }));
 });
@@ -1956,24 +1956,9 @@ test('executeTool localizes a structured error with its args', async () => {
 
   await comp.executeTool(toolUse);
 
-  expect(toolUse.error).toEqual({ code: 'ERROR_SESSION_ATTACHED_TO_CASES', count: 2 });
   const expected = 'Unable to unshare session. The session is attached to 2 case(s).';
+  expect(toolUse.error).toBe(expected);
   expect(comp.messages[0].content).toBe(comp.$root.localizeMessage('assistantToolExecutionError', { name: toolUse.name, error: expected }));
-});
-
-test('executeTool keeps the status page link in the chat message', async () => {
-  const toolUse = { ...fakeToolUse };
-  comp.currentChatId = fakeSessionId;
-  comp.scrollToBottom = jest.fn();
-
-  const error = new Error('Request failed with status code 500');
-  error.response = { status: 500, data: 'ERROR_UPSTREAM_SERVICE_ERROR' };
-  mockPapi('post', null, error);
-
-  await comp.executeTool(toolUse);
-
-  expect(toolUse.error).toBe('ERROR_UPSTREAM_SERVICE_ERROR');
-  expect(comp.messages[0].content).toContain('href="https://status.securityonion.net"');
 });
 
 test('executeTool uses the assistantToolExecutionError key', async () => {
@@ -2494,7 +2479,9 @@ test('callAIAPI warns and restores the message when the agent is busy', async ()
 
   await comp.callAIAPI('Test message');
 
-  expect(comp.$root.showWarning).toHaveBeenCalledWith('"ERROR_AGENT_BUSY"');
+  expect(comp.$root.showWarning).toHaveBeenCalledWith(error);
+  expect(error.response.data).toBe('"ERROR_AGENT_BUSY"');
+  expect(comp.$root.localizeMessage(error)).toBe(comp.i18n.ERROR_AGENT_BUSY);
   expect(comp.$root.showError).not.toHaveBeenCalled();
   expect(comp.messages).toHaveLength(0);
   expect(comp.newMessage).toBe('Test message');
@@ -7655,7 +7642,7 @@ test('updateSessionTag handles API error', async () => {
   await comp.updateSessionTag(sessionId, 'add', 'shared');
   
   expect(showErrorMock).toHaveBeenCalledWith(error);
-  expect(comp.$root.localizeMessage(error)).toBe("Update failed");
+  expect(comp.$root.localizeMessage(error)).toBe(comp.i18n.ERROR_REQUEST_FAILED);
 });
 
 test('updateSessionTag passes error codes through for localization', async () => {
@@ -8278,7 +8265,7 @@ test('executeTool errors the active delegate card when the stream dies mid-deleg
   expect(comp.messages).toEqual([]);
 });
 
-test('executeTool stores the raw error code on the active delegate card', async () => {
+test('executeTool stores the localized error on the active delegate card', async () => {
   const toolUse = { ...fakeToolUse, name: 'delegate_to_Hunter' };
   comp.currentChatId = fakeSessionId;
   comp.currentModel = 'test-model';
@@ -8294,7 +8281,7 @@ test('executeTool stores the raw error code on the active delegate card', async 
   await comp.executeTool(toolUse);
 
   expect(toolUse.status).toBe('error');
-  expect(toolUse.error).toBe('ERROR_UPSTREAM_SERVICE_ERROR');
+  expect(toolUse.error).toBe(comp.i18n.ERROR_UPSTREAM_SERVICE_ERROR);
   expect(comp.delegationChildren.size).toBe(0);
   expect(comp.messages).toEqual([]);
 });

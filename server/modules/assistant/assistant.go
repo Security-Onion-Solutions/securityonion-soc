@@ -2649,7 +2649,7 @@ func (ac *AssistantCoordinator) startDelegation(ctx context.Context, toolReq *mo
 // of the tool_result SSE event), updating the delegate card to "error" live as well
 // as in storage. No delegation_start was emitted, so no resolved marker is needed.
 func (ac *AssistantCoordinator) resolveFailedDelegation(ctx context.Context, toolReq *model.ToolRequest, cause error) (*model.StreamedTurn, error) {
-	toolMsg := buildToolResultMessage(toolReq.ToolUseId, nil, fmt.Errorf("the delegated sub-agent could not be started: %w", cause))
+	toolMsg := buildToolResultMessage(toolReq.ToolUseId, nil, cause)
 
 	parentSess := ac.loadTurnSession(ctx, toolReq.SessionId)
 	parentModel := modelForSession(parentSess, toolReq.Model)

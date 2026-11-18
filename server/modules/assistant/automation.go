@@ -39,9 +39,9 @@ const (
 	BuiltinAlertTriageAutomationId = "a1d3f5b7-9c2e-4e68-8b4a-6f0c2d9e7b13"
 )
 
-// Wrap ErrInvalidAutomationParams with %w to name the offending field in the log: web.Respond
-// logs the full text, but only the code reaches the client. respondAutomation matches on the
-// message substring, so the wrapped form still maps to the right status.
+// Return ErrInvalidAutomationParams in a model.ErrorWithArgs with a detail naming the offending
+// field; the detail reaches the client and the log. respondAutomation matches on the message
+// substring, so it still maps to the right status.
 var (
 	ErrAutomationNotFound      = errors.New("ERROR_AUTOMATION_NOT_FOUND")
 	ErrAutomationKindNotFound  = errors.New("ERROR_AUTOMATION_KIND_NOT_FOUND")
@@ -527,7 +527,7 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	}
 
 	if automation == nil {
-		return ErrInvalidAutomationParams
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "automation is required"})
 	}
 
 	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
@@ -537,7 +537,7 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	builtin := ac.isBuiltinAutomation(automation.Id)
 
 	if automation.IsSystem != builtin {
-		return fmt.Errorf("%w: isSystem does not match this automation", ErrInvalidAutomationParams)
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "isSystem does not match this automation"})
 	}
 
 	// Into the caller's value: the handler answers with what it passed in. A rejected save
@@ -554,7 +554,7 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 	// one that does.
 	if automation.Enabled {
 		if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
-			return fmt.Errorf("%w: agent %q is not available", ErrInvalidAutomationParams, automation.Agent)
+			return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: fmt.Sprintf("agent %q is not available", automation.Agent)})
 		}
 	}
 
@@ -616,21 +616,20 @@ func validateAutomation(automation *model.Automation) error {
 	name := strings.TrimSpace(automation.DisplayName)
 
 	if name == "" {
-		return fmt.Errorf("%w: displayName is required", ErrInvalidAutomationParams)
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "displayName is required"})
 	}
 
 	// Runes, not bytes: the cap is on what an admin typed, not on its encoding.
 	if utf8.RuneCountInString(name) > MaxAutomationDisplayNameLength {
-		return fmt.Errorf("%w: displayName must be at most %d characters",
-			ErrInvalidAutomationParams, MaxAutomationDisplayNameLength)
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: fmt.Sprintf("displayName must be at most %d characters", MaxAutomationDisplayNameLength)})
 	}
 
 	if automation.IntervalSeconds <= 0 {
-		return fmt.Errorf("%w: intervalSeconds must be positive", ErrInvalidAutomationParams)
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "intervalSeconds must be positive"})
 	}
 
 	if strings.TrimSpace(automation.Agent) == "" {
-		return fmt.Errorf("%w: agent is required", ErrInvalidAutomationParams)
+		return model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "agent is required"})
 	}
 
 	return nil
@@ -649,7 +648,7 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 	if create {
 		id = uuid.NewString()
 	} else if !isAutomationId(id) {
-		return nil, fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
+		return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "id must be a UUID"})
 	}
 
 	// The stored copy, not the overlay: only it says whether a builtin was ever saved.
@@ -679,7 +678,7 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 		// Existing runs and work items hold payloads only the original kind can read. A
 		// builtin's kind is fixed here, so a stored drift heals instead.
 		if !ac.isBuiltinAutomation(id) && existing.AutomationKind != automation.AutomationKind {
-			return nil, fmt.Errorf("%w: automationKind cannot be changed", ErrInvalidAutomationParams)
+			return nil, model.NewErrorWithArgs(ErrInvalidAutomationParams, map[string]interface{}{model.ErrorArgDetail: "automationKind cannot be changed"})
 		}
 
 		// UserId records who created the automation; an edit does not reassign it.

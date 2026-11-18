@@ -7,10 +7,11 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
 )
+
+// ErrorArgDetail is the arg for English detail about what failed, shown by the UI after the
+// code's message.
+const ErrorArgDetail = "detail"
 
 // An error whose code is sent to the client as JSON along with the values the UI
 // substitutes into the code's message, e.g. {"code":"ERROR_MALFORMED_YAML_LINE","line":3}.
@@ -30,19 +31,15 @@ func NewErrorWithArgs(err error, args map[string]interface{}) *ErrorWithArgs {
 	}
 }
 
+// Error is the JSON body, so text that carries err.Error() (tool results, stored automation
+// failures) holds the same form the UI parses from an HTTP response.
 func (e *ErrorWithArgs) Error() string {
-	keys := make([]string, 0, len(e.Args))
-	for k := range e.Args {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	parts := []string{e.Code}
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%v", k, e.Args[k]))
+	bytes, err := json.Marshal(e)
+	if err != nil {
+		return e.Code
 	}
 
-	return strings.Join(parts, " ")
+	return string(bytes)
 }
 
 func (e *ErrorWithArgs) Unwrap() error {

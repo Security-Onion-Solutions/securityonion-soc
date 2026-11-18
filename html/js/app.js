@@ -1346,13 +1346,24 @@ $(document).ready(function () {
             }
           }
 
-          // Errors with args arrive as JSON: {code, <arg>: value}. The body can come from a
-          // subgrid and the result is rendered with v-html, so args are escaped.
+          // Tool result text, automation run errors and streamed response bodies are
+          // strings that may hold ErrorWithArgs JSON; axios already parses other bodies.
+          if (typeof msg === 'string' && msg.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(msg);
+              if (parsed && typeof parsed.code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(parsed.code)) {
+                msg = parsed;
+              }
+            } catch {
+              // not JSON; handled as text below
+            }
+          }
+
+          // Errors with args arrive as JSON: {code, <arg>: value}. Args can come from a
+          // subgrid, so callers must render the result as text, never with v-html.
           if (msg && typeof msg.code === 'string' && /^ERROR_[A-Z0-9_]+$/.test(msg.code)) {
             const { code, ...args } = msg;
-            const safeArgs = Object.fromEntries(Object.entries(args).map(([key, value]) =>
-              [key, typeof value === 'number' ? value : this.escapeHtml(value)]));
-            vars = { ...safeArgs, ...vars };
+            vars = { ...args, ...vars };
             msg = code;
           }
 
@@ -1361,20 +1372,27 @@ $(document).ready(function () {
             msg = msg.substring(1, msg.length - 1);
           }
 
-          // Server and tool errors can wrap a code in detail: "CODE: detail" or "prefix: CODE".
-          if (!this.i18n[msg] && typeof msg === 'string') {
-            const code = (msg.match(/\bERROR_[A-Z0-9_]+\b/g) || []).find(c => this.i18n[c]);
-            if (code) {
-              msg = code;
+          const code = typeof msg === 'string' ? (msg.match(/^ERROR_[A-Z0-9_]+/) || [])[0] : undefined;
+          if (!this.i18n[msg] && code && this.i18n[code]) {
+            // Legacy: 3.3 and 3.4 stored "CODE: detail" text (tool results in session history,
+            // automation run errors). New errors carry their detail as JSON, never in this form.
+            const legacyDetail = msg.slice(code.length).match(/^:\s*([\s\S]+)/);
+            if (legacyDetail) {
+              vars = { detail: legacyDetail[1], ...vars };
             }
+
+            msg = code;
           }
 
           var localized = this.i18n[msg];
           if (!localized) {
-            if (origMsg.message) {
-              msg = origMsg.message;
+            if (origMsg.response) {
+              // A response body that is neither a code nor JSON with one isn't from SOC's error
+              // handling; only the code is shown since the rest of the body is untrusted.
+              localized = code || this.i18n.ERROR_REQUEST_FAILED;
+            } else {
+              localized = origMsg.message || msg;
             }
-            localized = msg;
           }
 
           if (vars && typeof vars == 'object') {
