@@ -255,6 +255,7 @@ test('loadData', async () => {
 });
 
 test('getSettingName', () => {
+  comp.i18n = { ...comp.i18n, setting_fake_setting_foo: 'Fake Setting Translated' };
   expect(comp.getSettingName({id:"fake.setting.foo", title: 'fake'})).toBe("Fake Setting Translated");
   expect(comp.getSettingName({id:"fake.setting.untranslated", title: "Untranslated Name"})).toBe("Untranslated Name");
   expect(comp.getSettingName({id:"fake.setting.untranslated"})).toBe(undefined);
@@ -272,7 +273,8 @@ test('getSettingName_noTitle_noTranslation', () => {
 });
 
 test('getSettingDescription', () => {
-  expect(comp.getSettingDescription({id:"fake.setting.foo"})).toBe("This is a transalated fake setting description.");
+  comp.i18n = { ...comp.i18n, settingHelp_fake_setting_foo: 'This is a translated fake setting description.' };
+  expect(comp.getSettingDescription({id:"fake.setting.foo"})).toBe("This is a translated fake setting description.");
   expect(comp.getSettingDescription({id:"fake.setting.untranslated", description: "some description"})).toBe("some description");
   expect(comp.getSettingDescription({id:"fake.setting.untranslated"})).toBe("fake.setting.untranslated");
   expect(comp.getSettingDescription({id:"foo.advanced", name:"advanced", multiline: true})).toBe("Provide optional, custom configuration in YAML format. Note that improper customizations often are the cause of grid malfunctions.");

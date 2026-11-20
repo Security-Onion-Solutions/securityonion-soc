@@ -240,7 +240,7 @@
 							<div class="d-flex align-start">
 								<v-avatar id="message-avatar" size="32" class="mr-3" :color="message.role === 'user' ? 'primary' : 'transparent'">
 									<v-icon v-if="message.role === 'user'" class="text-white" size="small">fa-user</v-icon>
-									<img v-else src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
+									<img v-else src="images/favicon/onion.png" :alt="i18n.assistantAvatarAlt" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div :id="`message-header-${index}`" class="d-flex align-center mb-1">
@@ -277,13 +277,13 @@
 							</div>
 						</div>
 						<div id="chat-empty-state" v-if="messages.length === 0" class="text-center text-medium-emphasis py-8">
-							<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;" class="mb-4">
+							<img src="images/favicon/onion.png" :alt="i18n.assistantAvatarAlt" style="width: 24px; height: 24px;" class="mb-4">
 							<div>{{ i18n.chatEmpty }}</div>
 						</div>
 						<div id="typing-indicator" v-if="isTyping" class="message-item mb-3">
 							<div class="d-flex align-start">
 								<v-avatar size="32" class="mr-3" color="secondary-lighten-1">
-									<img src="images/favicon/onion.png" alt="Assistant" style="width: 24px; height: 24px;">
+									<img src="images/favicon/onion.png" :alt="i18n.assistantAvatarAlt" style="width: 24px; height: 24px;">
 								</v-avatar>
 								<div class="flex-grow-1">
 									<div class="d-flex align-center mb-1">
@@ -365,7 +365,7 @@
 							<v-list-item-title class="text-wrap">{{ chat.title }}</v-list-item-title>
 							<v-list-item-subtitle>
 								{{ formatChatDate(chat.lastUpdated) }}
-								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" title="Shared Session">fa-link</v-icon>
+								<v-icon v-if="chat?.tags?.includes('shared')" class="ml-1 tiny-link-icon" :title="i18n.assistantSharedSession">fa-link</v-icon>
 							<v-icon v-if="chat?.tags?.includes('incognito')" class="ml-1 tiny-link-icon" :title="i18n.assistantIncognitoSession">fa-mask</v-icon>
 							</v-list-item-subtitle>
 							<template #append>

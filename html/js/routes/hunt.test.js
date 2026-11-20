@@ -1057,6 +1057,14 @@ test('relative query string', async () => {
   comp.setupDateRangePicker = orig;
 });
 
+test('relative query string with capitalized months', () => {
+  comp.$route = { path: "hunt", query: { rt: 3, rtu: 'Months' } };
+  comp.parseUrlParameters();
+
+  expect(comp.relativeTimeUnit).toBe(60);
+  expect(comp.relativeTimeValue).toBe(3);
+});
+
 test('expand query string deep links to the alert', () => {
   comp.activeTabs = { 3: 'playbook' };
   comp.expandedEvents = ['stale'];

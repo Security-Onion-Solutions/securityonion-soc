@@ -434,7 +434,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           return title;
         }
       }
-      return 'New Chat - ' + new Date().toLocaleDateString();
+      return this.$root.localizeMessage('chatNewChatTitle', { date: new Date().toLocaleDateString() });
     },
 
     // Throws on failure; missing is routine for new chats, so the caller decides.
@@ -554,7 +554,7 @@ Object.assign(assistantRouteForSessions.component.methods, (function() {
           frontendMsg.content = '';
         }
       } else {
-        frontendMsg.content = 'Empty message';
+        frontendMsg.content = this.i18n.chatEmptyMessage;
       }
     },
     

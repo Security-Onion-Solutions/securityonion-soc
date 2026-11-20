@@ -479,17 +479,17 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       if (currUserId && currSessionId) {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
             disabled: false,
             to: { name: 'aimetrics' },
           },
           {
-            title: 'Sessions',
+            title: this.i18n.aiMetricsSessions,
             disabled: false,
             to: { name: 'aimetrics', params: { userId: currUserId } },
           },
           {
-            title: 'Messages',
+            title: this.i18n.aiMetricsMessages,
             disabled: true,
             to: null,
           },
@@ -497,12 +497,12 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else if (currUserId) {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
             disabled: false,
             to: { name: 'aimetrics' },
           },
           {
-            title: 'Sessions',
+            title: this.i18n.aiMetricsSessions,
             disabled: true,
             to: null,
           },
@@ -510,7 +510,7 @@ routes.push({ path: '/aimetrics/:userId?/:sessionId?', name: 'aimetrics', compon
       } else {
         this.breadcrumbs = [
           {
-            title: 'Users',
+            title: this.i18n.users,
             disabled: true,
             to: null,
           },
