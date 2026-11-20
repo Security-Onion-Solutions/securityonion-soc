@@ -1537,6 +1537,7 @@ const i18n = {
       operatorContains: 'Contains',
       alarmActive: 'Alarming',
       alarmCleared: 'OK',
+      alarmLastValue: 'Last Recorded Value',
       ariaAlarmNew: 'Add a new alarm',
       ariaAlarmEdit: 'Edit alarm',
       ariaAlarmDelete: 'Delete alarm',

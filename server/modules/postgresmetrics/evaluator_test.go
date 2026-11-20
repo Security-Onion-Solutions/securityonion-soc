@@ -6,6 +6,7 @@
 package postgresmetrics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -34,6 +35,47 @@ func TestEvaluateCondition(t *testing.T) {
 	// Boolean comparisons
 	assert.True(t, postgresmetrics.EvaluateCondition("eq", "true", true))
 	assert.False(t, postgresmetrics.EvaluateCondition("eq", "false", true))
+}
+
+func TestFormatMetricValue(t *testing.T) {
+	// Default precision
+	assert.Equal(t, "5.6", postgresmetrics.FormatMetricValue(5.604744403578607, "80"))
+	assert.Equal(t, "85.44", postgresmetrics.FormatMetricValue(85.4351, "80"))
+	assert.Equal(t, "100", postgresmetrics.FormatMetricValue(99.999, "80"))
+	assert.Equal(t, "86400", postgresmetrics.FormatMetricValue(float64(86400), "80"))
+	assert.Equal(t, "0", postgresmetrics.FormatMetricValue(0.001, "80"))
+	assert.Equal(t, "0", postgresmetrics.FormatMetricValue(-0.001, "80"))
+	assert.Equal(t, "-1.5", postgresmetrics.FormatMetricValue(-1.5, "0"))
+	assert.Equal(t, "2.5", postgresmetrics.FormatMetricValue(float32(2.5), "0"))
+	assert.Equal(t, "85.44", postgresmetrics.FormatMetricValue(85.4351, "80.5"))
+	assert.Equal(t, "85.44", postgresmetrics.FormatMetricValue(85.4351, "fault"))
+	assert.Equal(t, "85.44", postgresmetrics.FormatMetricValue(85.4351, ""))
+
+	// One more place than the threshold, when that exceeds the default
+	assert.Equal(t, "85.441", postgresmetrics.FormatMetricValue(85.441, "85.44"))
+	assert.Equal(t, "0.0014", postgresmetrics.FormatMetricValue(0.00144, "0.001"))
+	assert.Equal(t, "85.4351", postgresmetrics.FormatMetricValue(85.4351, " 85.4350 "))
+	assert.Equal(t, "85.5", postgresmetrics.FormatMetricValue(85.5, "85.4350"))
+
+	// Exponent thresholds count the places of their expanded form
+	assert.Equal(t, "0.0012", postgresmetrics.FormatMetricValue(0.0012, "1e-3"))
+	assert.Equal(t, "1500.25", postgresmetrics.FormatMetricValue(1500.254, "1.5e3"))
+
+	// Extra places when the value differs from the threshold but would render equal to it
+	assert.Equal(t, "80.004", postgresmetrics.FormatMetricValue(80.004, "80"))
+	assert.Equal(t, "99.999", postgresmetrics.FormatMetricValue(99.999, "100"))
+	assert.Equal(t, "0.001", postgresmetrics.FormatMetricValue(0.001, "0"))
+	assert.Equal(t, "-0.001", postgresmetrics.FormatMetricValue(-0.001, "0"))
+	assert.Equal(t, "85.44001", postgresmetrics.FormatMetricValue(85.44001, "85.44"))
+	assert.Equal(t, "80", postgresmetrics.FormatMetricValue(float64(80), "80"))
+	assert.Equal(t, "85.44", postgresmetrics.FormatMetricValue(85.4351, "NaN"))
+
+	// Non-finite and non-float values
+	assert.Equal(t, "NaN", postgresmetrics.FormatMetricValue(math.NaN(), "80"))
+	assert.Equal(t, "+Inf", postgresmetrics.FormatMetricValue(math.Inf(1), "80"))
+	assert.Equal(t, "fault", postgresmetrics.FormatMetricValue("fault", "fault"))
+	assert.Equal(t, "42", postgresmetrics.FormatMetricValue(42, "80"))
+	assert.Equal(t, "<nil>", postgresmetrics.FormatMetricValue(nil, "80"))
 }
 
 func TestExtractMetricValue(t *testing.T) {

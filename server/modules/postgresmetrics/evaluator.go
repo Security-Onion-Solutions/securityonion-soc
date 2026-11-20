@@ -109,6 +109,51 @@ func ValidateAlarmThreshold(metric, threshold string) error {
 	return nil
 }
 
+// ALARM_VALUE_DECIMAL_PLACES is the minimum number of decimal places kept when a
+// numeric metric value is rendered for alarm states and notifications.
+const ALARM_VALUE_DECIMAL_PLACES = 2
+
+// FormatMetricValue renders a metric value for display in alarm states and
+// notifications. Floats are rounded to one more decimal place than the threshold
+// has, or ALARM_VALUE_DECIMAL_PLACES if that is greater, with trailing zeros removed.
+// A value that differs from the threshold gains places until it no longer renders
+// equal to it. All other values use their default formatting.
+func FormatMetricValue(val any, threshold string) string {
+	var f float64
+	switch typed := val.(type) {
+	case float64:
+		f = typed
+	case float32:
+		f = float64(typed)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return fmt.Sprintf("%v", f)
+	}
+	places := ALARM_VALUE_DECIMAL_PLACES
+	if t, err := strconv.ParseFloat(strings.TrimSpace(threshold), 64); err == nil {
+		// Expand the parsed threshold so exponent forms such as 1e-3 count their places.
+		expanded := strconv.FormatFloat(t, 'f', -1, 64)
+		if dot := strings.IndexByte(expanded, '.'); dot >= 0 {
+			places = max(places, len(expanded)-dot)
+		}
+		for f != t && formatFloat(f, places) == formatFloat(t, places) {
+			places++
+		}
+	}
+	return formatFloat(f, places)
+}
+
+// formatFloat renders a float with the given decimal places, without trailing zeros.
+func formatFloat(f float64, places int) string {
+	formatted := strings.TrimRight(strings.TrimRight(strconv.FormatFloat(f, 'f', places, 64), "0"), ".")
+	if formatted == "-0" {
+		return "0"
+	}
+	return formatted
+}
+
 // EvaluateCondition evaluates whether an actual metric value breaches the configured threshold.
 func EvaluateCondition(op string, thresholdStr string, actualVal any) bool {
 	normOp := model.NormalizeOperator(op)

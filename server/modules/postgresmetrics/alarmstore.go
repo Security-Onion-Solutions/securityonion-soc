@@ -429,10 +429,10 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 				breached = containerBreached
 				if breached {
 					val = breachVal
-					valStr = fmt.Sprintf("%s: %v", breachContainer, breachVal)
+					valStr = fmt.Sprintf("%s: %s", breachContainer, FormatMetricValue(breachVal, alarm.Threshold))
 				} else {
 					val = maxVal
-					valStr = fmt.Sprintf("%v", maxVal)
+					valStr = FormatMetricValue(maxVal, alarm.Threshold)
 				}
 			} else {
 				nodeVal, found := ExtractMetricValue(node, alarm.Metric, alarm.MetricKey)
@@ -440,7 +440,7 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 					continue
 				}
 				val = nodeVal
-				valStr = fmt.Sprintf("%v", val)
+				valStr = FormatMetricValue(val, alarm.Threshold)
 				breached = EvaluateCondition(alarm.Operator, alarm.Threshold, val)
 			}
 
