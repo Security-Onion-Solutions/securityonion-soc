@@ -11,13 +11,16 @@ import (
 	"testing"
 	"time"
 
+	mockdb "github.com/security-onion-solutions/securityonion-soc/db/mock"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/rbac"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics"
+	"github.com/security-onion-solutions/securityonion-soc/server/modules/postgresmetrics/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestAlarmstore_GetAlarms(t *testing.T) {
@@ -407,7 +410,7 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 		Configstore: cfgStore,
 		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
 		Notifier:    fakeNotifier,
-		Datastore:   &fakeDatastore{nodes: []*model.Node{{Id: "node-1", CpuUsedPct: 85.0}}},
+		Datastore:   &fakeDatastore{nodes: []*model.Node{{Id: "node-1", CpuUsedPct: 85.4351}}},
 	}
 	alarmStore := postgresmetrics.NewAlarmstore(srv, nil)
 
@@ -419,6 +422,7 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 	assert.Len(t, fakeNotifier.InputPayloads, 1)
 	assert.Contains(t, fakeNotifier.InputPayloads[0].Title, "High CPU")
 	assert.Equal(t, "high", fakeNotifier.InputPayloads[0].Severity)
+	assert.Equal(t, "85.44", fakeNotifier.InputPayloads[0].Fields["Value"])
 	assert.Equal(t, "true", fakeNotifier.InputPayloads[0].Fields["Triggered"])
 	assert.NotContains(t, fakeNotifier.InputPayloads[0].Fields, "Status")
 }
@@ -497,7 +501,7 @@ func TestAlarmstore_EvaluateAlarms_ContainerBreach(t *testing.T) {
 				{Timestamp: now, Value: 45.0},
 			},
 			"so-suricata": {
-				{Timestamp: now, Value: 92.5},
+				{Timestamp: now, Value: 92.5049},
 			},
 		},
 	}
@@ -518,6 +522,73 @@ func TestAlarmstore_EvaluateAlarms_ContainerBreach(t *testing.T) {
 	assert.Len(t, fakeNotifier.InputPayloads, 1)
 	assert.Contains(t, fakeNotifier.InputPayloads[0].Title, "High Container CPU")
 	assert.Equal(t, "high", fakeNotifier.InputPayloads[0].Severity)
+	assert.Equal(t, "so-suricata: 92.5", fakeNotifier.InputPayloads[0].Fields["Value"])
+}
+
+func TestAlarmstore_EvaluateAlarms_ContainerCleared(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	alarmsJSON, _ := json.Marshal([]model.Alarm{
+		{
+			ID:              "alarm-container-1",
+			Name:            "High Container CPU",
+			Enabled:         true,
+			Metric:          "container_cpu",
+			Operator:        "gt",
+			Threshold:       "80",
+			Severity:        "high",
+			ClearedSeverity: "info",
+		},
+	})
+	cfgStore := server.NewMemConfigStore([]*model.Setting{
+		{
+			Id:    postgresmetrics.ConfigSettingPostgresMetricsAlarms,
+			Value: string(alarmsJSON),
+		},
+	})
+
+	// Previously active state, so the non-breach evaluation clears the alarm
+	mDB := new(mockdb.MockDB)
+	mockRow := new(mockdb.MockRow)
+	mDB.On("QueryRow", mock.Anything, mock.Anything, "alarm-container-1", "node-1").Return(mockRow).Once()
+	mockRow.On("Scan",
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Run(func(args mock.Arguments) {
+		*args.Get(0).(*string) = "alarm-container-1"
+		*args.Get(1).(*string) = "node-1"
+		*args.Get(2).(*string) = model.AlarmStatusActive
+	}).Return(nil).Once()
+	mDB.On("Exec", mock.Anything, mock.Anything,
+		"alarm-container-1", "node-1", model.AlarmStatusOk, "45",
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil).Once()
+
+	now := time.Now()
+	fakeNotifier := &server.FakeNotifier{}
+	srv := &server.Server{
+		Configstore: cfgStore,
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+		Notifier:    fakeNotifier,
+		Metrics: &fakeMetrics{
+			samples: map[string][]model.MetricSample{
+				"so-elasticsearch": {{Timestamp: now, Value: 45.0049}},
+				"so-suricata":      {{Timestamp: now, Value: 30.5}},
+			},
+		},
+		Datastore: &fakeDatastore{nodes: []*model.Node{{Id: "node-1"}}},
+	}
+	alarmStore := postgresmetrics.NewAlarmstore(srv, database.New(mDB))
+
+	err := alarmStore.EvaluateAlarms(context.Background())
+	assert.NoError(t, err)
+
+	assert.Len(t, fakeNotifier.InputPayloads, 1)
+	assert.Contains(t, fakeNotifier.InputPayloads[0].Summary, "current value: 45)")
+	mDB.AssertExpectations(t)
 }
 
 func TestAlarmstore_GetContainerLookbackDuration(t *testing.T) {

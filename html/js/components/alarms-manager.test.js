@@ -466,6 +466,12 @@ test('tableHeaders filtering based on license and admin status', () => {
   expect(headers.some(h => h.value === 'clearedSeverity')).toBe(true);
   expect(headers.some(h => h.value === 'actions')).toBe(true);
 
+  // Lowercase keys must match the slot names, which the HTML parser lowercases
+  const currentValue = headers.find(h => h.value === 'currentValue');
+  expect(currentValue.title).toBe(comp.$root.i18n.alarmLastValue);
+  expect(currentValue.key).toBe('currentvalue');
+  expect(headers.find(h => h.value === 'clearedSeverity').key).toBe('clearedseverity');
+
   // When unlicensed for notifications
   comp.$root.isLicensed = () => false;
   headers = comp.tableHeaders;
