@@ -1329,7 +1329,7 @@ const i18n = {
       metricsContainerMem: 'Container Memory Usage',
       metricsContainerNetIn: 'Container Traffic - Inbound',
       metricsRedisQueue: 'Redis Queue',
-      metricsLogstashEps: 'Logstash Events Received',
+      metricsLogstashEps: 'Logstash Event Receive Rate',
       metricsEventsReceived: 'Events Received',
       metricsLoadAverage: 'System Load Average',
       metricsMonitorDrops: 'Monitor Interface Drops - Inbound',

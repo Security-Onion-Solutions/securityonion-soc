@@ -529,13 +529,13 @@ test('activeTab watcher delegates loadData to alarmsManager when switching to al
 	expect(loadDataMock).toHaveBeenCalled();
 });
 
-test('logstash_eps panel resolves title to Logstash Events Received and labelKeys to metricsEventsReceived', () => {
+test('logstash_eps panel resolves title to Logstash Event Receive Rate and labelKeys to metricsEventsReceived', () => {
 	comp.$root.getColor = jest.fn().mockReturnValue('#123456');
 	comp.initMetricsCharts();
 	const logstashPanel = comp.metricPanels.find(p => p.id === 'logstash_eps');
 	expect(logstashPanel).toBeDefined();
 	expect(logstashPanel.titleKey).toBe('metricsLogstashEps');
-	expect(comp.$root.i18n.metricsLogstashEps).toBe('Logstash Events Received');
+	expect(comp.$root.i18n.metricsLogstashEps).toBe('Logstash Event Receive Rate');
 	expect(logstashPanel.labelKeys).toEqual(['metricsEventsReceived']);
 });
 

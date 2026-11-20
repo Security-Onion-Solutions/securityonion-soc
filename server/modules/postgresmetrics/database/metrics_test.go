@@ -6,8 +6,11 @@
 package database
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/security-onion-solutions/securityonion-soc/db"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,6 +19,35 @@ func TestMetricConfigs_LogstashEps(t *testing.T) {
 	assert.True(t, ok, "logstash_eps metric config should exist")
 	assert.Equal(t, "metricsLogstashEps", config.TitleKey)
 	assert.Equal(t, []string{"metricsEventsReceived"}, config.LabelKeys)
+	assert.Equal(t, []string{"logstash_eps"}, config.Keys)
+	assert.Empty(t, config.Tables)
+	assert.Empty(t, config.Fields)
+	assert.Zero(t, config.Factor)
+	assert.Empty(t, config.Aggregate)
+	assert.NotNil(t, config.CustomHandler)
+
+	var capturedSql string
+	mockDb := &MockDB{
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+			capturedSql = sql
+			return &MockRows{}, nil
+		},
+	}
+	_, err := New(mockDb).GetTimeSeriesMetrics(context.Background(), "node1", "", "logstash_eps", time.Now().Add(-time.Hour), time.Now())
+	assert.NoError(t, err)
+	assert.Contains(t, capturedSql, "telegraf.logstash_events")
+	assert.Contains(t, capturedSql, "m.fields->>'in'")
+	assert.Contains(t, capturedSql, "tag.tags->>'pipeline'")
+	assert.NotContains(t, capturedSql, "LEAST")
+}
+
+func TestMetricConfigs_Eps(t *testing.T) {
+	assert.Equal(t, "AVG", MetricConfigs["eps"].Aggregate)
+}
+
+func TestMetricConfigs_LossFactors(t *testing.T) {
+	assert.Equal(t, 100.0, MetricConfigs["loss"].Factor)
+	assert.Equal(t, 1.0, MetricConfigs["capture_loss"].Factor)
 }
 
 func TestMetricConfigs_ElasticsearchDocs(t *testing.T) {
