@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
@@ -237,6 +238,15 @@ func (ac *AssistantCoordinator) setStaleMemoryCount(stale int) {
 }
 
 func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
+	if !licensing.IsEnabled(licensing.FEAT_OAI) {
+		ac.memoryWorkerMu.Lock()
+		ac.reembedDeferred = true
+		ac.memoryWorkerMu.Unlock()
+
+		log.FromContext(ctx).Warn("no active license with OAI enabled; not re-embedding memories")
+		return
+	}
+
 	ac.memoryWorkerMu.Lock()
 	if ac.reembedding || ac.store == nil {
 		ac.memoryWorkerMu.Unlock()
@@ -263,6 +273,19 @@ func (ac *AssistantCoordinator) startReembed(ctx context.Context) {
 
 		ac.reembedStaleMemories(passCtx)
 	}()
+}
+
+// resumeDeferredReembed starts the re-embed pass that startReembed skipped while unlicensed, if
+// any. It runs from the licensing OnActivated hook.
+func (ac *AssistantCoordinator) resumeDeferredReembed(ctx context.Context) {
+	ac.memoryWorkerMu.Lock()
+	deferred := ac.reembedDeferred
+	ac.reembedDeferred = false
+	ac.memoryWorkerMu.Unlock()
+
+	if deferred {
+		ac.startReembed(ctx)
+	}
 }
 
 func (ac *AssistantCoordinator) embedModelVerified(selector string) bool {
@@ -495,6 +518,7 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 	logger := log.FromContext(ctx)
 
 	interval := ac.memorySnapshot().scanInterval
+	var license oaiLicenseGate
 	logger.WithField("interval", interval).Info("starting interval")
 	ticker := time.NewTicker(interval)
 
@@ -519,6 +543,10 @@ func (ac *AssistantCoordinator) memoryWorker(ctx context.Context, wake <-chan st
 
 			continue
 		case <-ticker.C:
+		}
+
+		if !license.allows(logger, "memory scans") {
+			continue
 		}
 
 		logger := log.FromContext(ctx).WithField("memoryScanId", uuid.NewString())

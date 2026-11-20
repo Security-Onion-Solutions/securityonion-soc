@@ -324,6 +324,7 @@ $(document).ready(function () {
             email: value => {
               if (!value) return true;
               const v = typeof value === 'string' ? value.trim() : String(value);
+              
               return /^([^@\s<>]+@[^@\s<>]+\.[^@\s<>]+|[^<]*<[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+>)$/.test(v) || _i18n.invalidEmail;
             },
             url: value => {

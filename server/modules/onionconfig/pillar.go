@@ -296,8 +296,8 @@ func UpdatePillarSetting(saltstackDir string, setting *model.Setting, remove boo
 		} else {
 			path = fmt.Sprintf("%s/local/pillar/minions/adv_%s.sls", saltstackDir, setting.NodeId)
 		}
-		return os.WriteFile(path, []byte(setting.Value), 0600)
 
+		return os.WriteFile(path, []byte(setting.Value), 0600)
 	} else if setting.File {
 		path := fmt.Sprintf("%s/local/salt/%s", saltstackDir, RelPathFromId(setting.Id))
 		if !remove {

@@ -65,8 +65,15 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 		}
 	}
 
-	if isDefaultUrl && licensing.GetLicenseKey() != nil && licensing.GetLicenseKey().AiGatewayUrl != "" {
-		apiUrl = licensing.GetLicenseKey().AiGatewayUrl
+	license := licensing.GetLicenseKey()
+
+	apiKey, err := buildApiKey(license)
+	if err != nil {
+		return nil, err
+	}
+
+	if isDefaultUrl && license.AiGatewayUrl != "" {
+		apiUrl = license.AiGatewayUrl
 		if !strings.HasPrefix(apiUrl, "http://") && !strings.HasPrefix(apiUrl, "https://") {
 			apiUrl = "https://" + apiUrl
 		}
@@ -75,8 +82,6 @@ func NewSOAiCloudAdapter(_ context.Context, srv *server.Server, config map[strin
 		log.WithField("aiGatewayUrl", apiUrl).Info("using configured API URL")
 	}
 	healthTimeoutSeconds := module.GetIntDefault(config, "healthTimeoutSeconds", DEFAULT_HEALTH_TIMEOUT_SECONDS)
-
-	apiKey := buildApiKey()
 
 	return &SOAiCloudAdapter{
 		srv:                  srv,
@@ -97,11 +102,14 @@ func (a *SOAiCloudAdapter) SupportsEmbeddings() bool {
 	return true
 }
 
-func buildApiKey() string {
-	key := licensing.GetLicenseKey()
-	hash := sha256.Sum256([]byte(key.Signature))
+func buildApiKey(license *licensing.SignedLicenseKey) (string, error) {
+	if license == nil || license.Signature == "" {
+		return "", ErrNoLicenseKey
+	}
 
-	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:]))
+	hash := sha256.Sum256([]byte(license.Signature))
+
+	return fmt.Sprintf("sk-%s", hex.EncodeToString(hash[:])), nil
 }
 
 func (a *SOAiCloudAdapter) Embed(ctx context.Context, req *model.EmbeddingRequest) (*model.EmbeddingResponse, error) {

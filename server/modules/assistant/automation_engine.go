@@ -36,6 +36,9 @@ type automationScheduler struct {
 	cancel context.CancelCauseFunc
 	wake   chan struct{}
 	done   chan struct{}
+
+	// Worker goroutine only.
+	license oaiLicenseGate
 }
 
 // startAutomationScheduler starts the worker where a run could succeed: agentic, with Postgres.
@@ -306,6 +309,10 @@ func (ac *AssistantCoordinator) automationTick(s *automationScheduler) {
 	}
 
 	logger := log.FromContext(s.ctx)
+
+	if !s.license.allows(logger, "automations") {
+		return
+	}
 
 	// Bounds the reads and the opens to one interval; runs descend from s.ctx.
 	tickCtx, cancel := context.WithTimeout(s.ctx, ac.getAutomationTickInterval())
