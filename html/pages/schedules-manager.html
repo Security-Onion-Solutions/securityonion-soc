@@ -95,7 +95,7 @@
         </div>
 
         <div v-if="!form.definitions || form.definitions.length === 0" class="pa-4 text-center text-medium-emphasis border rounded mb-3">
-          {{ i18n.alwaysActive }} (0 definitions)
+          {{ i18n.alwaysActive }} {{ i18n.scheduleNoDefinitions }}
         </div>
 
         <v-expansion-panels v-else v-model="expandedDefinitions" multiple variant="accordion" class="mb-3" data-aid="schedule_definitions_panels">
@@ -162,7 +162,7 @@
               <template v-if="def.type === 'annually'">
                 <v-row dense>
                   <v-col cols="12">
-                    <v-select v-model="def.months" :items="monthOptions" item-title="title" item-value="value" :label="i18n.months" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
+                    <v-select v-model="def.months" :items="monthOptions" item-title="title" item-value="value" :label="i18n.scheduleMonths" multiple chips closable-chips density="compact" data-aid="schedule_def_months"></v-select>
                   </v-col>
                 </v-row>
                 <v-row dense>

@@ -300,7 +300,7 @@ routes.push({
     },
     addToNode(node, parent, path, setting) {
       if (node.children == undefined) {
-        throw new Error("Setting name '" + node.name + "' conflicts with another similarly named setting");
+        throw new Error(this.$root.localizeMessage('settingNameConflict', { name: node.name }));
       }
 
       const name = path.shift();
@@ -412,10 +412,10 @@ routes.push({
     },
     getSortLabel(col) {
       switch (col) {
-        case 'ts': return 'Time';
-        case 'settingId': return 'Setting ID';
-        case 'user': return 'User';
-        case 'nodeId': return 'Node';
+        case 'ts': return this.i18n.settingTime;
+        case 'settingId': return this.i18n.settingIdLabel;
+        case 'user': return this.i18n.settingUser;
+        case 'nodeId': return this.i18n.settingNodeLabel;
         default: return col;
       }
     },

@@ -2442,7 +2442,7 @@ const huntComponent = {
       return value;
     },
     getRelativeTimeUnits() {
-      let text = 'hours';
+      let text = this.i18n.hours;
 
       this.relativeTimeUnits.forEach((unit) => {
         if (unit.value == this.relativeTimeUnit) {
@@ -3222,7 +3222,7 @@ const huntComponent = {
 
       let response = await this.$root.papi.get('events/', { params });
       if (response.data.events.length === 0) {
-        this.$root.showWarning('No events found');
+        this.$root.showWarning(this.i18n.noEventsFound);
         return;
       }
 

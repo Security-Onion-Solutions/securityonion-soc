@@ -52,7 +52,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
           ...panel,
           chartData,
           chartOptions,
-          singleStatValue: 'N/A',
+          singleStatValue: i18n.na,
           loading: false
         };
       });
@@ -116,7 +116,7 @@ if (gridRouteForMetrics && gridRouteForMetrics.component) {
                   const latestVal = series[series.length - 1].value;
                   panel.singleStatValue = typeof latestVal === 'number' ? Number(latestVal.toFixed(1)) : latestVal;
                 } else {
-                  panel.singleStatValue = 'N/A';
+                  panel.singleStatValue = this.$root.i18n.na;
                 }
               }
               panel.loading = false;

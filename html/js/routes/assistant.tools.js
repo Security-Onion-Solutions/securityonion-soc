@@ -315,7 +315,7 @@ Object.assign(assistantRouteForTools.component.methods, (function() {
         if (isCurrentSession && !activeDelegate) {
           const errorMessage = {
             role: 'assistant',
-            content: `Error executing tool "${toolUse.name}": ${error.message}`,
+            content: this.$root.localizeMessage('chatToolExecutionError', { tool: toolUse.name, error: error?.message ?? String(error) }),
             timestamp: new Date().toISOString(),
             isToolResult: true,
             toolName: toolUse.name,

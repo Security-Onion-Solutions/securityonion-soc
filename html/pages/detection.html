@@ -729,19 +729,19 @@
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span class="case tabular-label" :class="checkChangedKey(item.id, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
-													<v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? 'True' : 'False' }}</span></v-col>
+													<v-col cols="8"><span class="case" :class="checkChangedKey(item.id, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? i18n.trueLabel : i18n.falseLabel }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span class="case tabular-label">{{ i18n.community }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.isCommunity ? 'True' : 'False' }}</span></v-col>
+													<v-col cols="8"><span class="case">{{ item.isCommunity ? i18n.trueLabel : i18n.falseLabel }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
 												<v-row no-gutters class="py-1 case tabular-row">
 													<v-col cols="4"><span class="case tabular-label">{{ i18n.reporting }}:</span></v-col>
-													<v-col cols="8"><span class="case">{{ item.isReporting ? 'True' : 'False' }}</span></v-col>
+													<v-col cols="8"><span class="case">{{ item.isReporting ? i18n.trueLabel : i18n.falseLabel }}</span></v-col>
 												</v-row>
 											</div>
 											<div>
@@ -811,7 +811,7 @@
 															<div class="mt-2">
 																<v-row no-gutters class="py-1 case tabular-row">
 																	<v-col cols="4"><span class="case tabular-label" :class="checkOverrideChangedKey(item.id, index, 'isEnabled') ? 'key-changed' : ''">{{ i18n.enabled }}:</span></v-col>
-																	<v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? 'True' : 'False' }}</pre></v-col>
+																	<v-col cols="8"><pre class="case" :class="checkOverrideChangedKey(item.id, index, 'isEnabled') ? 'key-changed' : ''">{{ item.isEnabled ? i18n.trueLabel : i18n.falseLabel }}</pre></v-col>
 																</v-row>
 															</div>
 															<div>

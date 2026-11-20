@@ -7,11 +7,11 @@
 				<v-alert v-else type="warning" id="agentUnavailable" v-html="i18n.downloadsAgentUnavailable" data-aid="downloads_agent_unavailable"></v-alert>
 			</div>
 			<ul id="installer-list" class="ml-5 mt-3">
-				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64'" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">Windows x86_64 Installer (EXE)</a></li>
-				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64_msi'" download="so-elastic-agent_windows_amd64.msi" data-aid="downloads_windows_agent_msi">Windows x86_64 Installer (MSI)</a></li>
-				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_linux_amd64'" download="so-elastic-agent_linux_amd64" data-aid="downloads_linux_agent">Linux x86_64 Installer</a></li>
-				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_darwin_amd64'" download="so-elastic-agent_darwin_amd64" data-aid="downloads_mac_intel_agent">macOS x86_64 Installer</a></li>
-				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_darwin_arm64'" download="so-elastic-agent_darwin_arm64" data-aid="downloads_mac_arm_agent">macOS arm64 Installer</a></li>
+				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64'" download="so-elastic-agent_windows_amd64.exe" data-aid="downloads_windows_agent">{{ i18n.downloadsWindowsExe }}</a></li>
+				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_windows_amd64_msi'" download="so-elastic-agent_windows_amd64.msi" data-aid="downloads_windows_agent_msi">{{ i18n.downloadsWindowsMsi }}</a></li>
+				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_linux_amd64'" download="so-elastic-agent_linux_amd64" data-aid="downloads_linux_agent">{{ i18n.downloadsLinux }}</a></li>
+				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_darwin_amd64'" download="so-elastic-agent_darwin_amd64" data-aid="downloads_mac_intel_agent">{{ i18n.downloadsMacIntel }}</a></li>
+				<li><a :href="getBaseUrl() + '/packages/so-elastic-agent_darwin_arm64'" download="so-elastic-agent_darwin_arm64" data-aid="downloads_mac_arm_agent">{{ i18n.downloadsMacArm }}</a></li>
 			</ul>
 			<p></p>
 			<div v-html="i18n.downloadsInfo" data-aid="downloads_info"></div>

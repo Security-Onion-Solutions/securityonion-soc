@@ -385,7 +385,7 @@
 													</v-btn>
 													<v-btn id="aiInvestigateButton" v-if="investigateEnabled && $root.canReadInvestigations() && item['rule.uuid']" variant="text" size="x-small" icon
 														@click="startAIInvestigation(item, $event)" @auxclick="startAIInvestigation(item, $event)"
-														:data-aid="'groups_ai_investigate_' + category" :aria-label="'AI Investigation'">
+														:data-aid="'groups_ai_investigate_' + category" :aria-label="i18n.aiInvestigation">
 														<v-icon :title="getAIInvestigationTooltip(item)"
 															:color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
 													</v-btn>
@@ -684,7 +684,7 @@
 											</v-btn>
 											<v-btn id="aiInvestigateButton" v-if="investigateEnabled && $root.canReadInvestigations() && item['rule.uuid']" variant="text" icon size="x-small"
 												@click="startAIInvestigation(item, $event)" @auxclick="startAIInvestigation(item, $event)"
-												:data-aid="'events_ai_investigate_' + category" :aria-label="'AI Investigation'">
+												:data-aid="'events_ai_investigate_' + category" :aria-label="i18n.aiInvestigation">
 												<v-icon :title="getAIInvestigationTooltip(item)" :color="getAIInvestigationButtonColor(item)">fa-microchip</v-icon>
 											</v-btn>
 											<v-btn id="info-button-single" v-if="item['rule.uuid'] && showDetailsPanel" variant="text" size="x-small" icon @click="highlightDetection(item['rule.uuid'], item, groupIdx)" :title="i18n.openInPanel" :aria-label="$root.replaceActionVar(i18n.displayInfo, 'display_state', (highlightedDetection && highlightedDetection.publicId === item['rule.uuid'] ? i18n.displayed : ''))">
