@@ -33,6 +33,7 @@ type PostgresMetrics struct {
 	processStatus        map[string]int
 	processJson          map[string]string
 	consumptionEps       map[string]int
+	searchConsumptionEps map[string]int
 	productionEps        map[string]int
 	failedEvents         map[string]int
 	eventstoreStatus     map[string]string
@@ -83,6 +84,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		processStatus:        make(map[string]int),
 		processJson:          make(map[string]string),
 		consumptionEps:       make(map[string]int),
+		searchConsumptionEps: make(map[string]int),
 		productionEps:        make(map[string]int),
 		failedEvents:         make(map[string]int),
 		eventstoreStatus:     make(map[string]string),
@@ -144,7 +146,7 @@ func (pm *PostgresMetrics) GetGridEps(ctx context.Context) int {
 	defer pm.cacheLock.Unlock()
 
 	eps := 0
-	for _, hostEps := range pm.consumptionEps {
+	for _, hostEps := range pm.searchConsumptionEps {
 		eps += hostEps
 	}
 	return eps
@@ -332,6 +334,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 	pm.processStatus = pm.dbStore.FetchIntValues(ctx, "sostatus", "status", "", "", startTime)
 	pm.processJson = pm.dbStore.FetchStringValues(ctx, "sostatus", "json", "", "", startTime)
 	pm.consumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "", "", startTime)
+	pm.searchConsumptionEps = pm.dbStore.FetchIntValues(ctx, "consumptioneps", "eps", "stage", "search", startTime)
 
 	// Elasticsearch
 	pm.eventstoreStatus = pm.dbStore.FetchStringValues(ctx, "elasticsearch_cluster_health", "status", "", "", startTime)

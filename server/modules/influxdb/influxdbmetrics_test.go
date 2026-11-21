@@ -8,9 +8,13 @@ package influxdb
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -94,12 +98,62 @@ func TestGetConsumptionEps(tester *testing.T) {
 	metrics.consumptionEps["foo"] = 0
 	metrics.consumptionEps["bar"] = 1
 	metrics.consumptionEps["zoo"] = 2
+	metrics.searchConsumptionEps["foo"] = 5
 
 	assert.Equal(tester, 0, metrics.getConsumptionEps("foo"))
 	assert.Equal(tester, 1, metrics.getConsumptionEps("bar"))
 	assert.Equal(tester, 2, metrics.getConsumptionEps("zoo"))
 	assert.Equal(tester, 0, metrics.getConsumptionEps("missing"))
-	assert.Equal(tester, 3, metrics.GetGridEps(newContext()))
+	assert.Equal(tester, 5, metrics.GetGridEps(newContext()))
+}
+
+func TestGetGridEps_Unauthorized(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeUnauthorizedServer())
+	metrics.lastEpsUpdateTime = time.Now()
+	metrics.searchConsumptionEps["foo"] = 5
+	metrics.searchConsumptionEps["bar"] = 7
+
+	assert.Equal(tester, 0, metrics.GetGridEps(newContext()))
+}
+
+func TestSearchStageFilter(tester *testing.T) {
+	assert.Equal(tester, `|> filter(fn: (r) => r["stage"] == "search")`, searchStageFilter)
+}
+
+type fakeInfluxClient struct {
+	influxdb2.Client
+}
+
+type recordingQueryApi struct {
+	api.QueryAPI
+	queries []string
+}
+
+func (q *recordingQueryApi) Query(ctx context.Context, query string) (*api.QueryTableResult, error) {
+	q.queries = append(q.queries, query)
+	return nil, errors.New("recorded query")
+}
+
+func TestUpdateEpsQueriesSearchStage(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	queryApi := &recordingQueryApi{}
+	metrics.client = &fakeInfluxClient{}
+	metrics.queryApi = queryApi
+
+	metrics.updateEps()
+
+	consumptionQueries := 0
+	searchQueries := 0
+	for _, query := range queryApi.queries {
+		if strings.Contains(query, `r._measurement == "consumptioneps"`) {
+			consumptionQueries++
+			if strings.Contains(query, `r["stage"] == "search"`) {
+				searchQueries++
+			}
+		}
+	}
+	assert.Equal(tester, 2, consumptionQueries)
+	assert.Equal(tester, 1, searchQueries)
 }
 
 func TestGetFailedEvents(tester *testing.T) {

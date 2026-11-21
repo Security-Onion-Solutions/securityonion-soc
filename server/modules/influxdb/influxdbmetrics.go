@@ -21,6 +21,9 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server"
 )
 
+// Must match the stage tag that eps.sh writes on search-stage nodes.
+const searchStageFilter = `|> filter(fn: (r) => r["stage"] == "search")`
+
 type InfluxDBMetrics struct {
 	client   influxdb2.Client
 	server   *server.Server
@@ -41,6 +44,7 @@ type InfluxDBMetrics struct {
 	processStatus            map[string]int
 	processJson              map[string]string
 	consumptionEps           map[string]int
+	searchConsumptionEps     map[string]int
 	productionEps            map[string]int
 	failedEvents             map[string]int
 	eventstoreStatus         map[string]string
@@ -81,20 +85,21 @@ type InfluxDBMetrics struct {
 
 func NewInfluxDBMetrics(srv *server.Server) *InfluxDBMetrics {
 	return &InfluxDBMetrics{
-		server:              srv,
-		raidStatus:          make(map[string]int),
-		processStatus:       make(map[string]int),
-		processJson:         make(map[string]string),
-		consumptionEps:      make(map[string]int),
-		productionEps:       make(map[string]int),
-		failedEvents:        make(map[string]int),
-		eventstoreStatus:    make(map[string]string),
-		osNeedsRestart:      make(map[string]int),
-		osUptime:            make(map[string]int),
-		suriRulesLoaded:     make(map[string]int),
-		suriRulesFailed:     make(map[string]int),
-		suriRulesReloadTime: make(map[string]string),
-		suriRulesStatus:     make(map[string]string),
+		server:               srv,
+		raidStatus:           make(map[string]int),
+		processStatus:        make(map[string]int),
+		processJson:          make(map[string]string),
+		consumptionEps:       make(map[string]int),
+		searchConsumptionEps: make(map[string]int),
+		productionEps:        make(map[string]int),
+		failedEvents:         make(map[string]int),
+		eventstoreStatus:     make(map[string]string),
+		osNeedsRestart:       make(map[string]int),
+		osUptime:             make(map[string]int),
+		suriRulesLoaded:      make(map[string]int),
+		suriRulesFailed:      make(map[string]int),
+		suriRulesReloadTime:  make(map[string]string),
+		suriRulesStatus:      make(map[string]string),
 	}
 }
 
@@ -255,6 +260,9 @@ func (metrics *InfluxDBMetrics) updateEps() {
 	if now.Sub(metrics.lastEpsUpdateTime).Milliseconds() > int64(metrics.cacheExpirationMs) {
 		values := metrics.fetchLatestValuesByHost("consumptioneps", "eps", "", "")
 		metrics.consumptionEps = metrics.convertValuesToInt(values)
+
+		values = metrics.fetchLatestValuesByHost("consumptioneps", "eps", "", searchStageFilter)
+		metrics.searchConsumptionEps = metrics.convertValuesToInt(values)
 
 		values = metrics.fetchLatestValuesByHost("fbstats", "eps", "", "")
 		metrics.productionEps = metrics.convertValuesToInt(values)
@@ -435,7 +443,7 @@ func (metrics *InfluxDBMetrics) GetGridEps(ctx context.Context) int {
 	eps := 0
 	if err := metrics.server.CheckAuthorized(ctx, "read", "nodes"); err == nil {
 		metrics.updateEps()
-		for _, hostEps := range metrics.consumptionEps {
+		for _, hostEps := range metrics.searchConsumptionEps {
 			eps = eps + hostEps
 		}
 	}

@@ -293,6 +293,51 @@ func TestPostgresMetrics_UpdateNodeMetrics_And_GetGridEps(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOk, node.EventstoreStatus)
 }
 
+func TestPostgresMetrics_GetGridEps_SearchStageOnly(t *testing.T) {
+	isSearchStageQuery := func(sql string, args []interface{}) bool {
+		if !contains(sql, "tag.tags->>'stage'") {
+			return false
+		}
+		for _, arg := range args {
+			if arg == "search" {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, searchRows := range [][][]interface{}{
+		{{"search-host", 100}},
+		{},
+	} {
+		filteredQueries := 0
+		unfilteredQueries := 0
+		srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+		srv.DB = &MockDB{
+			QueryFunc: func(sql string, args ...interface{}) (db.Rows, error) {
+				if contains(sql, "telegraf.consumptioneps") {
+					if isSearchStageQuery(sql, args) {
+						filteredQueries++
+						return &MockRows{rows: searchRows}, nil
+					}
+					unfilteredQueries++
+					return &MockRows{rows: [][]interface{}{{"search-host", 100}, {"receiver", 100}}}, nil
+				}
+				return &MockRows{}, nil
+			},
+		}
+
+		pm := NewPostgresMetrics(srv)
+		pm.Init(10000, 600)
+
+		eps := pm.GetGridEps(context.Background())
+		assert.Equal(t, 1, filteredQueries)
+		assert.Equal(t, 1, unfilteredQueries)
+		assert.Equal(t, 100*len(searchRows), eps)
+		assert.Equal(t, 100, pm.consumptionEps["receiver"])
+	}
+}
+
 func TestPostgresMetrics_UpdateNodeMetrics_LicenseFeatures(t *testing.T) {
 	defer licensing.Shutdown()
 
