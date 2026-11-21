@@ -7,6 +7,9 @@ package database
 
 import (
 	"context"
+	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,4 +67,28 @@ func TestMetricConfigs_ElasticsearchSize(t *testing.T) {
 	assert.Equal(t, "metricsElasticsearchSize", config.TitleKey)
 	assert.Equal(t, []string{"metricsStorageSize"}, config.LabelKeys)
 	assert.Equal(t, "AVG", config.Aggregate)
+}
+
+func TestMetricConfigs_TagRateHandlerNamesAreValid(t *testing.T) {
+	found := 0
+	for metric, config := range MetricConfigs {
+		if config.CustomHandler == nil {
+			continue
+		}
+		fnName := runtime.FuncForPC(reflect.ValueOf(config.CustomHandler).Pointer()).Name()
+		if !strings.Contains(fnName, ".tagRateHandler.") {
+			continue
+		}
+		found++
+
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				return &MockRows{}, nil
+			},
+		}
+		_, err := config.CustomHandler(context.Background(), New(mockDb), "node1", "", singleNodeHostFilter, "$2", "$3",
+			[]interface{}{60, time.Now().Add(-time.Hour), time.Now(), "node1"})
+		assert.NoError(t, err, "metric %s has an invalid identifier", metric)
+	}
+	assert.Positive(t, found, "expected at least one tagRateHandler metric config")
 }

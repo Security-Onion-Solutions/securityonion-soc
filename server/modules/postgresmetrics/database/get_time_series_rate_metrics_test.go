@@ -209,14 +209,73 @@ func TestTagRateHandler_IgnoresContainer(t *testing.T) {
 	assert.Equal(t, []model.MetricSample{{Timestamp: ts, Value: 3.0}}, resB["search"])
 }
 
+func TestQueryTagRateMetric_RowsErr(t *testing.T) {
+	t1 := time.Now().Add(-2 * time.Minute)
+
+	runRows := func(rowsErr error) (map[string][]model.MetricSample, error) {
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				return &MockRows{rows: [][]interface{}{{t1, "node1", "search", 10.0}}, err: rowsErr}, nil
+			},
+		}
+		s := New(mockDb)
+		return tagRateHandler("logstash_events", "in", "pipeline", 1, 0)(context.Background(), s, "node1", "", singleNodeHostFilter, "$2", "$3",
+			[]interface{}{60, time.Now().Add(-time.Hour), time.Now(), "node1"})
+	}
+
+	res, err := runRows(errors.New("stream interrupted"))
+	assert.EqualError(t, err, "stream interrupted")
+	assert.Nil(t, res)
+
+	streamErr := &pgconn.PgError{Code: "42P01", Message: `relation "telegraf.logstash_events" does not exist`}
+	res, err = runRows(streamErr)
+	assert.NoError(t, err)
+	assert.Equal(t, []model.MetricSample{{Timestamp: t1, Value: 10.0}}, res["search"])
+}
+
 func TestTagRateHandler_ValidatesNames(t *testing.T) {
-	assert.Panics(t, func() { tagRateHandler("logstash_events'", "in", "pipeline", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("logstash_events", "in out", "pipeline", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("logstash_events", "in", "pipe'line", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("", "in", "pipeline", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("logstash_events", "", "pipeline", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("logstash_events", "in", "", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("Logstash_Events", "in", "pipeline", 1, 0) })
-	assert.Panics(t, func() { tagRateHandler("logstash_events", "1n", "pipeline", 1, 0) })
-	assert.NotPanics(t, func() { tagRateHandler("diskio", "read_bytes", "name", 1, 0) })
+	invalid := []struct {
+		name      string
+		table     string
+		field     string
+		seriesTag string
+		badName   string
+	}{
+		{"quote in table", "logstash_events'", "in", "pipeline", "logstash_events'"},
+		{"space in field", "logstash_events", "in out", "pipeline", "in out"},
+		{"quote in series tag", "logstash_events", "in", "pipe'line", "pipe'line"},
+		{"empty table", "", "in", "pipeline", ""},
+		{"empty field", "logstash_events", "", "pipeline", ""},
+		{"empty series tag", "logstash_events", "in", "", ""},
+		{"uppercase table", "Logstash_Events", "in", "pipeline", "Logstash_Events"},
+		{"leading digit in field", "logstash_events", "1n", "pipeline", "1n"},
+	}
+
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			queryCalled := false
+			mockDb := &MockDB{
+				QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+					queryCalled = true
+					return &MockRows{}, nil
+				},
+			}
+			s := New(mockDb)
+
+			var res map[string][]model.MetricSample
+			var err error
+			assert.NotPanics(t, func() {
+				res, err = tagRateHandler(tt.table, tt.field, tt.seriesTag, 1, 0)(context.Background(), s, "node1", "", singleNodeHostFilter, "$2", "$3",
+					[]interface{}{60, time.Now().Add(-time.Hour), time.Now(), "node1"})
+			})
+			assert.ErrorContains(t, err, "tag rate metric has invalid identifier")
+			assert.ErrorContains(t, err, tt.badName)
+			assert.Nil(t, res)
+			assert.False(t, queryCalled, "no SQL should be sent for an invalid identifier")
+		})
+	}
+
+	sql, _, _, err := runTagRate(t, "diskio", "read_bytes", "name", 1, 0, "node1", nil, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, sql, "m.fields->>'read_bytes'")
 }

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 )
 
@@ -70,16 +71,26 @@ func queryTagRateMetric(ctx context.Context, s *Store, table, field, seriesTag s
 		var bucket time.Time
 		var host, series string
 		var val float64
-		if err := rows.Scan(&bucket, &host, &series, &val); err == nil {
-			key := series
-			if nodeId == "" {
-				key = host + "::" + series
-			}
-			res[key] = append(res[key], model.MetricSample{
-				Timestamp: bucket,
-				Value:     val,
-			})
+		if err := rows.Scan(&bucket, &host, &series, &val); err != nil {
+			log.WithError(err).WithField("tagRateTable", table).Warn("Postgres metrics: skipping tag rate row that failed to scan")
+			continue
 		}
+		key := series
+		if nodeId == "" {
+			key = host + "::" + series
+		}
+		res[key] = append(res[key], model.MetricSample{
+			Timestamp: bucket,
+			Value:     val,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		s.handleQueryError(err, "GetTimeSeriesMetrics tag_rate rows")
+		if s.isMissingRelationError(err) {
+			return res, nil
+		}
+		return nil, err
 	}
 
 	for _, samples := range res {
@@ -94,13 +105,12 @@ func queryTagRateMetric(ctx context.Context, s *Store, table, field, seriesTag s
 // tagRateHandler returns a CustomHandler that turns a cumulative counter into a per-second
 // rate, one series per value of seriesTag. A max of 0 leaves the rate uncapped.
 func tagRateHandler(table, field, seriesTag string, factor, max float64) func(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
-	for _, name := range []string{table, field, seriesTag} {
-		if !tagRateIdentifierRegex.MatchString(name) {
-			panic(fmt.Sprintf("tagRateHandler: invalid identifier %q", name))
-		}
-	}
-
 	return func(ctx context.Context, s *Store, nodeId, container string, hostFilter, startPlaceholder, endPlaceholder string, args []interface{}) (map[string][]model.MetricSample, error) {
+		for _, name := range []string{table, field, seriesTag} {
+			if !tagRateIdentifierRegex.MatchString(name) {
+				return nil, fmt.Errorf("tag rate metric has invalid identifier %q", name)
+			}
+		}
 		return queryTagRateMetric(ctx, s, table, field, seriesTag, factor, max, nodeId, hostFilter, startPlaceholder, endPlaceholder, args)
 	}
 }
