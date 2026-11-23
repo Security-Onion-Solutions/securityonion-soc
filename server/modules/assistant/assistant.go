@@ -1535,7 +1535,8 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 	}
 
 	// A tool with no required inputs may be called with none.
-	if len(bytes.TrimSpace(toolReq.Params)) == 0 {
+	schema := tool.GetSchema().Json
+	if len(bytes.TrimSpace(toolReq.Params)) == 0 && (schema == nil || len(schema.Required) == 0) {
 		toolReq.Params = json.RawMessage("{}")
 	}
 
