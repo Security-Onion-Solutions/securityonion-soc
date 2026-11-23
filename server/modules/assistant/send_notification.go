@@ -81,8 +81,9 @@ func (t *SendNotificationTool) GetDescription() string {
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.
 	If it fails with ERROR_DESTINATION_NOT_FOUND, nothing was sent. If the user named destinations,
 	correct the ids once with list_destinations, or ask the user; never drop destinations to send to every
-	destination instead. If the user named none, send once more without destinations. After any other
-	error, don't resend; tell the user what failed.`
+	destination instead. If the user named none, send once more without destinations. After
+	ERROR_NOTIFICATION_TARGETED_SEND_FAILED, tell the user which destinations failed; resend only to those,
+	and only if the user asks. After any other error, don't resend; tell the user what failed.`
 }
 
 func (t *SendNotificationTool) GetSchema() model.JSONSchema {
@@ -286,17 +287,13 @@ func resolveDestinationIds(logger *log.Entry, dests map[string]model.Destination
 		values = v
 	}
 
-	if len(values) == 0 {
-		logger.WithField("notifyDestinationIds", fmt.Sprint(raw)).Info("notification destinations are malformed")
-		return nil, notFound
-	}
-
+	malformed := len(values) == 0
 	ids := make([]string, 0, len(values))
 	for _, value := range values {
 		id, ok := value.(string)
 		if !ok {
-			logger.WithField("notifyDestinationIds", fmt.Sprint(raw)).Info("notification destinations are malformed")
-			return nil, notFound
+			malformed = true
+			break
 		}
 		id = strings.TrimSpace(id)
 		if id == "" {
@@ -306,6 +303,10 @@ func resolveDestinationIds(logger *log.Entry, dests map[string]model.Destination
 		if !slices.Contains(ids, id) {
 			ids = append(ids, id)
 		}
+	}
+	if malformed {
+		logger.WithField("notifyDestinationIds", fmt.Sprint(raw)).Info("notification destinations are malformed")
+		return nil, notFound
 	}
 	slices.Sort(ids)
 
@@ -348,7 +349,7 @@ func sendToDestinations(ctx context.Context, logger *log.Entry, notifier server.
 		if len(sent) > 0 {
 			sentText = strings.Join(sent, ", ")
 		}
-		return "", fmt.Errorf("ERROR_NOTIFICATION_TARGETED_SEND_FAILED: %d of %d sent; do not resend. Sent: %s. Failed: %s.%s",
+		return "", fmt.Errorf("ERROR_NOTIFICATION_TARGETED_SEND_FAILED: %d of %d sent; resend only to the failed destinations, and only if the user asks. Sent: %s. Failed: %s.%s",
 			len(sent), len(ids), sentText, strings.Join(failed, ", "), skippedText)
 	}
 

@@ -192,7 +192,7 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, webhookErrorBodyReadMax))
-		return errors.New(fmt.Sprintf("webhook returned non-2xx status code %d: ", resp.StatusCode) + redactor.body(body))
+		return fmt.Errorf("webhook returned non-2xx status code %d: %s", resp.StatusCode, redactor.body(body))
 	}
 
 	return nil

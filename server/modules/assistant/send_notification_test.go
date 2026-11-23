@@ -579,7 +579,7 @@ func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 			name:         "a failure names what was sent and what failed",
 			destinations: `["ir-slack", "soc-bell"]`,
 			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "soc-bell": {Err: failure}},
-			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 2 sent; do not resend",
+			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 2 sent; resend only to the failed destinations, and only if the user asks.",
 			errorHas:     []string{"Sent: IR Slack (ir-slack).", "Failed: soc-bell."},
 			errorExcludes: []string{
 				"SECRET", "hooks.slack.com", "Skipped",
@@ -589,7 +589,7 @@ func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 			name:         "a failure also lists skips",
 			destinations: `["ir-slack", "off", "soc-bell"]`,
 			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "off": {}, "soc-bell": {Err: failure}},
-			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 3 sent; do not resend",
+			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 3 sent;",
 			errorHas:     []string{"Sent: IR Slack (ir-slack).", "Failed: soc-bell.", "Skipped: Off (off) (disabled)."},
 		},
 		{
@@ -602,7 +602,7 @@ func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 			name:          "nothing sent",
 			destinations:  `["soc-bell"]`,
 			results:       map[string]server.FakeSendResult{"soc-bell": {Err: failure}},
-			errorPrefix:   "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 0 of 1 sent; do not resend. Sent: none. Failed: soc-bell.",
+			errorPrefix:   "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 0 of 1 sent; resend only to the failed destinations, and only if the user asks. Sent: none. Failed: soc-bell.",
 			errorExcludes: []string{"SECRET", "hooks.slack.com"},
 		},
 	}
