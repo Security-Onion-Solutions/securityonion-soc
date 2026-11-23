@@ -10,6 +10,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -299,25 +300,42 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 
 	// Skill wiring is a permission boundary: Tuning (the write skill) is
 	// Engineer-only, and the Orchestrator holds no skills.
-	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond"}, ac.agents["Investigator"].AllowedSkills)
+	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond", "Notify"}, ac.agents["Investigator"].AllowedSkills)
+	assert.Contains(t, ac.agents["Investigator"].Description, "Sends or reads notifications when the analyst asks; objectives must relay that request verbatim.")
 	assert.ElementsMatch(t, []string{"Detections", "Tuning", "Hunt"}, ac.agents["DetectionEngineer"].AllowedSkills)
 	// Triage runs unattended, so it cannot respond to alerts; it records its assessment through
 	// Assess and sends its own notification through Notify.
 	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Assess", "Notify"}, ac.agents["AlertTriage"].AllowedSkills)
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
-	// Notify is granted to AlertTriage alone.
-	assert.Equal(t, []string{"send_notification"}, ac.SkillLibrary["Notify"].Tools)
+	// Notify holds the notification tools and is granted to AlertTriage and Investigator only.
+	assert.Equal(t, []string{"send_notification", "query_notifications"}, ac.SkillLibrary["Notify"].Tools)
 	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
 	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
 	assert.Contains(t, ac.builtinSkills, "Notify")
 	assert.Equal(t, []string{"record_assessment"}, ac.SkillLibrary["Assess"].Tools)
 	assert.True(t, ac.SkillLibrary["Assess"].IsSystem)
+	notifyAgents := []string{"AlertTriage", "Investigator"}
 	for name, agent := range ac.agents {
-		if name != "AlertTriage" {
+		if slices.Contains(notifyAgents, name) {
+			assert.Contains(t, agent.AllowedSkills, "Notify", name)
+		} else {
 			assert.NotContains(t, agent.AllowedSkills, "Notify", name)
 		}
 	}
+
+	// Older stored overrides get the built-in tools and skills back on load.
+	agents := map[string]model.Agent{
+		"Investigator": {Name: "Investigator", Enabled: true, AllowedSkills: []string{"Hunt", "Playbooks", "Respond"}},
+	}
+	ac.applyBuiltinDefaults(agents)
+	assert.ElementsMatch(t, []string{"Hunt", "Playbooks", "Respond", "Notify"}, agents["Investigator"].AllowedSkills)
+	skills := map[string]model.Skill{
+		"Notify": {Name: "Notify", Enabled: false, Tools: []string{"send_notification"}},
+	}
+	ac.applyBuiltinSkillDefaults(skills)
+	assert.Equal(t, []string{"send_notification", "query_notifications"}, skills["Notify"].Tools)
+	assert.False(t, skills["Notify"].Enabled, "an admin who disabled Notify keeps it disabled")
 
 	// Delegate tools are registered under both the agent name and the
 	// sanitized tool name.

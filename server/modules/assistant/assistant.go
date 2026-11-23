@@ -1534,6 +1534,11 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 		}
 	}
 
+	// A tool with no required inputs may be called with none.
+	if len(bytes.TrimSpace(toolReq.Params)) == 0 {
+		toolReq.Params = json.RawMessage("{}")
+	}
+
 	assistantCtx := modcontext.WriteIsAssistant(ctx, true)
 	assistantCtx = log.NewContext(assistantCtx, logger)
 

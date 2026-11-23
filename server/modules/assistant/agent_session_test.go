@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/config"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
@@ -1370,6 +1371,38 @@ func TestRunAgentSession_OwnerComesFromContextUnlessRequested(t *testing.T) {
 			assert.Equal(t, tc.want, seen)
 		})
 	}
+}
+
+// Automated runs read as SYSTEM_ID, which has no inbox, so the store refuses them.
+func TestRunAgentSession_HeadlessNotificationReadIsRefused(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	f := newHeadlessFixture(t, ctrl, sseToolUses(sseToolCall{"n1", "query_notifications", `{}`}), sseText("done"))
+	f.ac.srv.Config.DeveloperEnabled = true
+	f.ac.FunctionLibrary["query_notifications"] = &QueryNotificationsTool{}
+	f.ac.SkillLibrary["Hunt"] = model.Skill{Name: "Hunt", Tools: []string{"query_events", "query_notifications"}, Enabled: true}
+
+	missingUser := errors.New("unauthorized: missing user in context")
+	store := servermock.NewMockNotificationstore(ctrl)
+	store.EXPECT().GetNotifications(gomock.Any(), "", queryNotificationsDefaultLimit).DoAndReturn(
+		func(ctx context.Context, _ string, _ ...int) (*model.NotificationListResponse, error) {
+			assert.Equal(t, server.SYSTEM_ID, ctx.Value(web.ContextKeyRequestorId))
+			assert.Nil(t, ctx.Value(web.ContextKeyRunAsUsername))
+			return nil, missingUser
+		})
+	f.ac.srv.Notificationstore = store
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+	res, err := f.ac.RunAgentSession(ctx, baseRequest())
+	require.NoError(t, err)
+
+	results := toolResults(f.store.messages(res.SessionId))
+	require.Len(t, results, 1)
+	assert.True(t, results[0].IsError)
+	assert.Contains(t, results[0].Content[0].Text, missingUser.Error())
 }
 
 // --- AutomationRun wrapper --------------------------------------------------
