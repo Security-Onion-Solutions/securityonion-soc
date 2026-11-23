@@ -108,6 +108,26 @@ window.socGraphing = {
     return formatted + ' ' + (sizes[i] || '');
   },
 
+  formatBytesPerSecond(value) {
+    const k = 1024;
+    const sizes = [
+      this.getTranslation('bytePerSecB', 'B/s'),
+      this.getTranslation('bytePerSecKB', 'KB/s'),
+      this.getTranslation('bytePerSecMB', 'MB/s'),
+      this.getTranslation('bytePerSecGB', 'GB/s'),
+      this.getTranslation('bytePerSecTB', 'TB/s'),
+      this.getTranslation('bytePerSecPB', 'PB/s'),
+      this.getTranslation('bytePerSecEB', 'EB/s'),
+      this.getTranslation('bytePerSecZB', 'ZB/s'),
+      this.getTranslation('bytePerSecYB', 'YB/s')
+    ];
+    if (value === 0) return '0 ' + sizes[0];
+    // Idle disks average below 1 B/s on long ranges, which would give a negative index.
+    const i = Math.min(Math.max(Math.floor(Math.log(Math.abs(value)) / Math.log(k)), 0), sizes.length - 1);
+    const formatted = parseFloat((value / Math.pow(k, i)).toFixed(1));
+    return formatted + ' ' + sizes[i];
+  },
+
   formatBits(value) {
     const k = 1000;
     const sizes = [
@@ -176,6 +196,9 @@ window.socGraphing = {
     const self = window.socGraphing;
     if (units === 'byte' || units === 'bytes') {
       return self.formatBytes(value);
+    }
+    if (units === 'bytes_per_second') {
+      return self.formatBytesPerSecond(value);
     }
     if (units === 'bit' || units === 'bits') {
       return self.formatBits(value * 1000000);

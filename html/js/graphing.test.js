@@ -10,6 +10,17 @@ window.i18n = global.i18n;
 
 const graphing = window.socGraphing;
 
+const bytePerSecKeys = [
+  'bytePerSecB', 'bytePerSecKB', 'bytePerSecMB', 'bytePerSecGB', 'bytePerSecTB',
+  'bytePerSecPB', 'bytePerSecEB', 'bytePerSecZB', 'bytePerSecYB',
+];
+
+const chartKeys = bytePerSecKeys.concat([
+  'metricsDiskRead', 'metricsDiskWrite', 'metricsDiskBusy', 'metricsLogstashSent',
+  'metricsProcesses', 'metricsProcessesTotal', 'metricsProcBlocked', 'metricsProcZombies',
+  'metricsProcTotal', 'metricsProcSleeping', 'stateRunning',
+]);
+
 describe('graphing.js', () => {
   describe('getTranslation', () => {
     let originalGetLocalizedTranslations;
@@ -61,6 +72,78 @@ describe('graphing.js', () => {
     });
   });
 
+  describe('formatBytesPerSecond', () => {
+    it('should format byte rates correctly', () => {
+      expect(graphing.formatBytesPerSecond(0)).toBe('0 B/s');
+      expect(graphing.formatBytesPerSecond(0.5)).toBe('0.5 B/s');
+      expect(graphing.formatBytesPerSecond(512)).toBe('512 B/s');
+      expect(graphing.formatBytesPerSecond(1536)).toBe('1.5 KB/s');
+      expect(graphing.formatBytesPerSecond(1024 * 1024 * 45)).toBe('45 MB/s');
+      expect(graphing.formatBytesPerSecond(-1024 * 1024 * 15)).toBe('-15 MB/s');
+      expect(graphing.formatBytesPerSecond(-0.5)).toBe('-0.5 B/s');
+    });
+
+    it('should stay in the largest unit above its range', () => {
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 8))).toBe('1 YB/s');
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 8) * 2048)).toBe('2048 YB/s');
+    });
+
+    it('should round rates below one byte per second to zero in B/s', () => {
+      expect(graphing.formatBytesPerSecond(0.04)).toBe('0 B/s');
+      expect(graphing.formatBytesPerSecond(-0.001)).toBe('0 B/s');
+    });
+
+    it('should look up unit labels from i18n', () => {
+      const original = window.i18n.getLocalizedTranslations;
+      window.i18n.getLocalizedTranslations = jest.fn(() => ({ bytePerSecKB: 'Ko/s' }));
+      try {
+        expect(graphing.formatBytesPerSecond(1536)).toBe('1.5 Ko/s');
+      } finally {
+        window.i18n.getLocalizedTranslations = original;
+      }
+    });
+
+    it('should look up every unit label from i18n', () => {
+      const units = {};
+      bytePerSecKeys.forEach((key, i) => units[key] = `u${i}`);
+      const original = window.i18n.getLocalizedTranslations;
+      window.i18n.getLocalizedTranslations = jest.fn(() => units);
+      try {
+        expect(graphing.formatBytesPerSecond(0)).toBe('0 u0');
+        expect(graphing.formatBytesPerSecond(0.5)).toBe('0.5 u0');
+        for (let i = 1; i < bytePerSecKeys.length; i++) {
+          expect(graphing.formatBytesPerSecond(Math.pow(1024, i))).toBe(`1 u${i}`);
+        }
+      } finally {
+        window.i18n.getLocalizedTranslations = original;
+      }
+    });
+
+    it('should have translations for every byte-rate unit label', () => {
+      const translations = global.i18n.getLocalizedTranslations('en-US');
+      for (const key of bytePerSecKeys) {
+        expect(translations[key]).toEqual(expect.any(String));
+        expect(translations[key]).not.toBe(key);
+      }
+    });
+
+    it('should have translations for the new chart titles and series labels', () => {
+      const translations = global.i18n.getLocalizedTranslations('en-US');
+      for (const key of chartKeys) {
+        expect(translations[key]).toEqual(expect.any(String));
+        expect(translations[key]).not.toBe(key);
+      }
+    });
+
+    it('should format each scale with the default labels', () => {
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 3) * 2.5)).toBe('2.5 GB/s');
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 4) * 3)).toBe('3 TB/s');
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 5) * 1.25)).toBe('1.3 PB/s');
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 6) * 7)).toBe('7 EB/s');
+      expect(graphing.formatBytesPerSecond(Math.pow(1024, 7) * 9)).toBe('9 ZB/s');
+    });
+  });
+
   describe('formatBits', () => {
     it('should format bits correctly', () => {
       expect(graphing.formatBits(0)).toBe('0 b/s');
@@ -108,9 +191,21 @@ describe('graphing.js', () => {
       expect(graphing.formatAxisValue(null, 'bytes')).toBe(null);
     });
 
+    it('should return non-numbers unchanged for bytes_per_second unit', () => {
+      expect(graphing.formatAxisValue('not a number', 'bytes_per_second')).toBe('not a number');
+      expect(graphing.formatAxisValue(null, 'bytes_per_second')).toBe(null);
+    });
+
     it('should delegate to formatBytes for byte/bytes unit', () => {
       expect(graphing.formatAxisValue(2048, 'byte')).toBe('2 KB');
       expect(graphing.formatAxisValue(2048, 'bytes')).toBe('2 KB');
+    });
+
+    it('should delegate to formatBytesPerSecond for bytes_per_second unit', () => {
+      const spy = jest.spyOn(graphing, 'formatBytesPerSecond');
+      expect(graphing.formatAxisValue(1024 * 1024 * 45, 'bytes_per_second')).toBe('45 MB/s');
+      expect(spy).toHaveBeenCalledWith(1024 * 1024 * 45);
+      spy.mockRestore();
     });
 
     it('should delegate to formatBits for bit/bits unit (with 1000000 multiplier)', () => {

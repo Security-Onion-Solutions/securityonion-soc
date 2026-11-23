@@ -514,7 +514,7 @@ func TestGenerateDefaultMetricsDashboard(t *testing.T) {
 	dash, err := database.GenerateDefaultMetricsDashboard()
 	assert.NoError(t, err)
 	assert.NotNil(t, dash)
-	assert.Len(t, dash.Panels, 26)
+	assert.Len(t, dash.Panels, len(database.DashboardMetricOrder))
 	assert.Equal(t, "cpu", dash.Panels[0].ID)
 	assert.Equal(t, "metricsCpuUsage", dash.Panels[0].TitleKey)
 	assert.Equal(t, "percent", dash.Panels[0].Units)
@@ -545,7 +545,7 @@ func TestPostgresMetricsModule_Init_DefaultDashboard(t *testing.T) {
 	// Since MetricsDashboard was empty, Init should have populated it with default dashboard
 	dash := srv.Config.ClientParams.GridParams.MetricsDashboard
 	assert.NotNil(t, dash)
-	assert.Len(t, dash.Panels, 26)
+	assert.Len(t, dash.Panels, len(database.DashboardMetricOrder))
 }
 
 func TestPostgresMetricsModule_Start_Stop_EvaluationLoop(t *testing.T) {

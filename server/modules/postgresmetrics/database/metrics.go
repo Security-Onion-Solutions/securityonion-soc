@@ -38,8 +38,9 @@ var defaultColors = []string{
 }
 
 var DashboardMetricOrder = []string{
-	"cpu", "memory", "load", "swap", "io_wait", "system_uptime", "disk", "net", "net_drops", "pcap_retention",
-	"eps", "logstash_eps", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
+	"cpu", "memory", "load", "processes", "processes_total", "swap", "io_wait", "system_uptime",
+	"disk", "disk_read", "disk_write", "disk_busy", "net", "net_drops", "pcap_retention",
+	"eps", "logstash_eps", "logstash_out", "elasticsearch_size", "elasticsearch_docs", "elastic_ingest_time", "loss", "capture_loss",
 	"container_uptime", "container_cpu", "container_mem", "container_net_in", "redis_queue",
 	"kafka_eps", "kafka_controllers", "kafka_brokers", "kafka_under_replicated",
 }
@@ -202,6 +203,12 @@ var MetricConfigs = map[string]MetricConfig{
 		TitleKey:      "metricsLogstashEps",
 		LabelKeys:     []string{"metricsEventsReceived"},
 	},
+	"logstash_out": {
+		Keys:          []string{"logstash_out"},
+		CustomHandler: tagRateHandler("logstash_events", "out", "pipeline", 1, 0),
+		TitleKey:      "metricsLogstashSent",
+		LabelKeys:     []string{"metricsLogstashSent"},
+	},
 	"kafka_under_replicated": {
 		Tables:    []string{"kafka_partition"},
 		Fields:    []string{"UnderReplicatedPartitions"},
@@ -231,6 +238,47 @@ var MetricConfigs = map[string]MetricConfig{
 		TitleKey:  "metricsDiskUsage",
 		LabelKeys: []string{"diskUsageRootAbbr", "diskUsageNsmAbbr"},
 		Units:     "percent",
+	},
+	"disk_read": {
+		Keys:          []string{"disk_read"},
+		CustomHandler: tagRateHandler("diskio", "read_bytes", "name", 1, 0),
+		TitleKey:      "metricsDiskRead",
+		LabelKeys:     []string{"metricsDiskRead"},
+		Units:         "bytes_per_second",
+	},
+	"disk_write": {
+		Keys:          []string{"disk_write"},
+		CustomHandler: tagRateHandler("diskio", "write_bytes", "name", 1, 0),
+		TitleKey:      "metricsDiskWrite",
+		LabelKeys:     []string{"metricsDiskWrite"},
+		Units:         "bytes_per_second",
+	},
+	"disk_busy": {
+		Keys: []string{"disk_busy"},
+		// io_time is milliseconds the device was busy, so ms per second / 10 is percent; some
+		// multi-queue devices can briefly exceed wall time, hence the cap at 100.
+		CustomHandler: tagRateHandler("diskio", "io_time", "name", 0.1, 100),
+		TitleKey:      "metricsDiskBusy",
+		LabelKeys:     []string{"metricsDiskBusy"},
+		Units:         "percent",
+	},
+	"processes": {
+		Tables:    []string{"processes"},
+		Fields:    []string{"running", "blocked", "zombies"},
+		Keys:      []string{"running", "blocked", "zombies"},
+		Factor:    1.0,
+		Aggregate: "AVG",
+		TitleKey:  "metricsProcesses",
+		LabelKeys: []string{"stateRunning", "metricsProcBlocked", "metricsProcZombies"},
+	},
+	"processes_total": {
+		Tables:    []string{"processes"},
+		Fields:    []string{"total", "sleeping"},
+		Keys:      []string{"total", "sleeping"},
+		Factor:    1.0,
+		Aggregate: "AVG",
+		TitleKey:  "metricsProcessesTotal",
+		LabelKeys: []string{"metricsProcTotal", "metricsProcSleeping"},
 	},
 	"eps": {
 		Tables:    []string{"consumptioneps"},
