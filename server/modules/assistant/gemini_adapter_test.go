@@ -1424,3 +1424,12 @@ func TestGeminiAdapterSendMessageStream_ReleasesCallerWithoutContent(t *testing.
 		})
 	}
 }
+
+func TestConvertToolConfigToGemini_NoInputTool(t *testing.T) {
+	tools, _ := convertToolConfigToGemini(&model.ChatRequest{ToolConfig: toolConfigFor(&ListDestinationsTool{})})
+
+	if assert.Len(t, tools, 1) && assert.Len(t, tools[0].FunctionDeclarations, 1) {
+		assert.Equal(t, "list_destinations", tools[0].FunctionDeclarations[0].Name)
+		assert.Nil(t, tools[0].FunctionDeclarations[0].Parameters)
+	}
+}

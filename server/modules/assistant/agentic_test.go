@@ -309,7 +309,7 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 	assert.Empty(t, ac.agents["Orchestrator"].AllowedSkills)
 
 	// Notify holds the notification tools and is granted to AlertTriage and Investigator only.
-	assert.Equal(t, []string{"send_notification", "query_notifications"}, ac.SkillLibrary["Notify"].Tools)
+	assert.Equal(t, []string{"send_notification", "list_destinations", "query_notifications"}, ac.SkillLibrary["Notify"].Tools)
 	assert.True(t, ac.SkillLibrary["Notify"].IsSystem)
 	assert.True(t, ac.SkillLibrary["Notify"].Enabled)
 	assert.Contains(t, ac.builtinSkills, "Notify")
@@ -334,7 +334,7 @@ func TestAssistantCoordinator_InitAgenticEnabledMapsAgents(t *testing.T) {
 		"Notify": {Name: "Notify", Enabled: false, Tools: []string{"send_notification"}},
 	}
 	ac.applyBuiltinSkillDefaults(skills)
-	assert.Equal(t, []string{"send_notification", "query_notifications"}, skills["Notify"].Tools)
+	assert.Equal(t, []string{"send_notification", "list_destinations", "query_notifications"}, skills["Notify"].Tools)
 	assert.False(t, skills["Notify"].Enabled, "an admin who disabled Notify keeps it disabled")
 
 	// Delegate tools are registered under both the agent name and the

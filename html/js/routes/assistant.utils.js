@@ -282,6 +282,7 @@ Object.assign(assistantRouteForUtils.component.methods, (function() {
             'query_detections',
             'query_reports',
             'query_notifications',
+            'list_destinations',
           ].includes(toolName) ||
           /^delegate_to_.+$/.test(toolName)
         )

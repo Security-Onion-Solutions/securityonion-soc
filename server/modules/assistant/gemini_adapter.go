@@ -477,7 +477,11 @@ func convertToolConfigToGemini(req *model.ChatRequest) ([]*genai.Tool, *genai.To
 			continue
 		}
 
-		inputSchema := convertJSONSchemaToGemini(toolSpec.Spec.InputSchema.Json)
+		// Gemini rejects an object schema without properties; a tool with no inputs declares none.
+		var inputSchema *genai.Schema
+		if schema := toolSpec.Spec.InputSchema.Json; schema != nil && len(schema.Properties) > 0 {
+			inputSchema = convertJSONSchemaToGemini(schema)
+		}
 
 		funcDecl := &genai.FunctionDeclaration{
 			Name:        toolSpec.Spec.Name,

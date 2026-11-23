@@ -1176,14 +1176,14 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			want:   nil,
 		},
 		{
-			// Strict mode always emits required + additionalProperties, even with
-			// no properties (required is then the empty set).
+			// Strict mode always emits properties, required, and additionalProperties.
 			name: "simple schema with type only",
 			schema: &model.ToolSchema{
 				Type: "object",
 			},
 			want: map[string]any{
 				"type":                 "object",
+				"properties":           map[string]any{},
 				"required":             []string{},
 				"additionalProperties": false,
 			},
@@ -1219,6 +1219,7 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			},
 			want: map[string]any{
 				"type":                 "object",
+				"properties":           map[string]any{},
 				"required":             []string{},
 				"additionalProperties": false,
 			},
@@ -1253,6 +1254,7 @@ func TestConvertJSONSchemaToOpenAI(t *testing.T) {
 			},
 			want: map[string]any{
 				"type":                 "object",
+				"properties":           map[string]any{},
 				"required":             []string{},
 				"additionalProperties": false,
 			},
@@ -2311,4 +2313,18 @@ func TestOpenAIResponsesAdapter_SendMessage_MaxTokens(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConvertToolConfigToOpenAI_NoInputTool(t *testing.T) {
+	tools := convertToolConfigToOpenAI(&model.ChatRequest{ToolConfig: toolConfigFor(&ListDestinationsTool{})})
+
+	require.Len(t, tools, 1)
+	require.NotNil(t, tools[0].OfFunction)
+	assert.Equal(t, "list_destinations", tools[0].OfFunction.Name)
+	assert.Equal(t, map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"required":             []string{},
+		"additionalProperties": false,
+	}, tools[0].OfFunction.Parameters)
 }

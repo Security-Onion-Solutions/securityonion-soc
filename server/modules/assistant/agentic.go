@@ -402,7 +402,7 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 		},
 		"Notify": {
 			Name:             "Notify",
-			Tools:            []string{"send_notification", "query_notifications"},
+			Tools:            []string{"send_notification", "list_destinations", "query_notifications"},
 			AdditionalPrompt: prompts["prompt_skill_notify"],
 		},
 		// The alert triage prompt says when to call it.

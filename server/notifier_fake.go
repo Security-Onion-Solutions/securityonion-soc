@@ -24,6 +24,13 @@ type FakeNotifier struct {
 	Err                error
 	Destinations       map[string]model.DestinationConfig
 	SendCount          int
+	// Per-destination outcome of a Send to that one id; takes precedence over Err and SendCount.
+	Results map[string]FakeSendResult
+}
+
+type FakeSendResult struct {
+	Count int
+	Err   error
 }
 
 func NewFakeNotifier() *FakeNotifier {
@@ -43,6 +50,11 @@ func (notifier *FakeNotifier) Send(ctx context.Context, payload *model.Notificat
 	notifier.InputContexts = append(notifier.InputContexts, ctx)
 	notifier.InputPayloads = append(notifier.InputPayloads, payload)
 	notifier.InputDestinations = append(notifier.InputDestinations, destinations)
+	if len(destinations) == 1 {
+		if result, ok := notifier.Results[destinations[0]]; ok {
+			return result.Count, result.Err
+		}
+	}
 	if notifier.Err != nil {
 		return 0, notifier.Err
 	}

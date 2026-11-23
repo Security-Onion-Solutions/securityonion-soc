@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,8 +18,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/apex/log"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -112,9 +115,10 @@ func (c *WebhookChannel) ValidateConfig(params map[string]interface{}) error {
 		return errors.New("webhook url is required")
 	}
 
+	// The URL is the credential, so it never goes in the error, which is logged.
 	parsed, err := url.ParseRequestURI(targetURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return fmt.Errorf("invalid webhook url: %s (must be a valid http or https URL)", targetURL)
+		return errors.New("invalid webhook url (must be a valid http or https URL)")
 	}
 
 	format := c.resolveFormat(params)
@@ -161,28 +165,18 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 		method = strings.ToUpper(strings.TrimSpace(m))
 	}
 
+	headers := webhookHeaders(params)
+	redactor := newWebhookRedactor(targetURL, headers)
+
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("failed to create http request: %w", err)
+		return redactor.wrap("failed to create http request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "SecurityOnion-Notifier/1.0")
-
-	// Apply custom headers
-	if headersVal, ok := params["headers"]; ok && headersVal != nil {
-		switch h := headersVal.(type) {
-		case map[string]string:
-			for k, v := range h {
-				req.Header.Set(k, v)
-			}
-		case map[string]interface{}:
-			for k, v := range h {
-				if strVal, ok := v.(string); ok {
-					req.Header.Set(k, strVal)
-				}
-			}
-		}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	client := c.client
@@ -192,16 +186,120 @@ func (c *WebhookChannel) Send(ctx context.Context, params map[string]interface{}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("webhook request failed: %w", err)
+		return redactor.wrap("webhook request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodySnippet, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("webhook returned non-2xx status code %d: %s", resp.StatusCode, strings.TrimSpace(string(bodySnippet)))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, webhookErrorBodyReadMax))
+		return errors.New(fmt.Sprintf("webhook returned non-2xx status code %d: ", resp.StatusCode) + redactor.body(body))
 	}
 
 	return nil
+}
+
+func webhookHeaders(params map[string]interface{}) map[string]string {
+	headers := map[string]string{}
+	switch h := params["headers"].(type) {
+	case map[string]string:
+		for k, v := range h {
+			headers[k] = v
+		}
+	case map[string]interface{}:
+		for k, v := range h {
+			if strVal, ok := v.(string); ok {
+				headers[k] = strVal
+			}
+		}
+	}
+	return headers
+}
+
+const (
+	webhookErrorBodyReadMax = 2048
+	webhookErrorBodyMax     = 1024
+	// Shorter values are too likely to be ordinary text in an error.
+	webhookRedactMinLength = 4
+)
+
+// webhookRedactor removes a webhook's credentials, its URL and header values, from error text.
+type webhookRedactor struct {
+	terms  []string
+	maxLen int
+}
+
+func newWebhookRedactor(targetURL string, headers map[string]string) *webhookRedactor {
+	values := []string{targetURL}
+	if parsed, err := url.Parse(targetURL); err == nil {
+		values = append(values, parsed.Path, parsed.EscapedPath(), parsed.RawQuery)
+		if parsed.RawQuery != "" {
+			values = append(values, parsed.Path+"?"+parsed.RawQuery, parsed.EscapedPath()+"?"+parsed.RawQuery)
+		}
+		values = append(values, strings.Split(parsed.Path, "/")...)
+		for _, queryValues := range parsed.Query() {
+			values = append(values, queryValues...)
+		}
+		if parsed.User != nil {
+			if password, ok := parsed.User.Password(); ok {
+				values = append(values, password, base64.StdEncoding.EncodeToString([]byte(parsed.User.Username()+":"+password)))
+			}
+		}
+	}
+	for _, value := range headers {
+		values = append(values, value)
+		values = append(values, strings.Fields(value)...)
+	}
+
+	r := &webhookRedactor{}
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "/" || utf8.RuneCountInString(value) < webhookRedactMinLength {
+			continue
+		}
+		quoted, _ := json.Marshal(value)
+		forms := []string{value, string(quoted[1 : len(quoted)-1]), strings.ReplaceAll(value, "/", `\/`), url.QueryEscape(value), url.PathEscape(value)}
+		for _, form := range forms {
+			if !seen[form] {
+				seen[form] = true
+				r.terms = append(r.terms, form)
+				r.maxLen = max(r.maxLen, len(form))
+			}
+		}
+	}
+	// Longest first, so a term inside a longer one never leaves the rest of it behind.
+	slices.SortFunc(r.terms, func(a, b string) int { return len(b) - len(a) })
+
+	return r
+}
+
+func (r *webhookRedactor) redact(text string) string {
+	for _, term := range r.terms {
+		text = strings.ReplaceAll(text, term, "[redacted]")
+	}
+	return text
+}
+
+// wrap drops a *url.Error's URL, then redacts what remains.
+func (r *webhookRedactor) wrap(msg string, err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = fmt.Errorf("%s: %w", urlErr.Op, urlErr.Err)
+	}
+	return errors.New(msg + ": " + r.redact(err.Error()))
+}
+
+// body redacts before cutting, so a secret across the cut can't leave a prefix behind.
+func (r *webhookRedactor) body(body []byte) string {
+	if len(body) >= webhookErrorBodyReadMax && r.maxLen > 1 {
+		// Only the tail can hold a copy cut off by the read.
+		body = body[:max(0, len(body)-(r.maxLen-1))]
+	}
+	text := r.redact(string(body))
+	if len(text) > webhookErrorBodyMax {
+		text = text[:webhookErrorBodyMax]
+	}
+	return strings.TrimSpace(strings.ToValidUTF8(text, ""))
 }
 
 func (c *WebhookChannel) buildHTTPClient(params map[string]interface{}) *http.Client {

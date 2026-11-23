@@ -1523,3 +1523,32 @@ func TestOpenAIChatAdapter_SendMessage_MaxTokens(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertToolConfigToChatCompletions_NoInputTool(t *testing.T) {
+	tools := convertToolConfigToChatCompletions(&model.ChatRequest{ToolConfig: toolConfigFor(&ListDestinationsTool{})})
+
+	require.Len(t, tools, 1)
+	require.NotNil(t, tools[0].OfFunction)
+	assert.Equal(t, "list_destinations", tools[0].OfFunction.Function.Name)
+	assert.Equal(t, map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"required":             []string{},
+		"additionalProperties": false,
+	}, map[string]any(tools[0].OfFunction.Function.Parameters))
+}
+
+func TestConvertHistoryToChatCompletions_NoInputToolCall(t *testing.T) {
+	for _, input := range []json.RawMessage{nil, json.RawMessage(""), json.RawMessage("null")} {
+		req := &model.ChatRequest{Messages: []*model.Message{{
+			Role:          "assistant",
+			ContentBlocks: []model.ContentBlock{{Type: "tool_use", Id: "call_1", Name: "list_destinations", Input: input}},
+		}}}
+
+		result := convertHistoryToChatCompletions(log.Log, req)
+
+		require.Len(t, result, 1)
+		require.Len(t, result[0].OfAssistant.ToolCalls, 1)
+		assert.Equal(t, "{}", result[0].OfAssistant.ToolCalls[0].OfFunction.Function.Arguments, string(input))
+	}
+}

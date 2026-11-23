@@ -434,6 +434,35 @@ func TestNotifierImpl_UnmarshalDestinations_Formats(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestNotifierImpl_SaveDestination_InvalidWebhookUrlNotInError(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	dests := map[string]model.DestinationConfig{
+		"hook": {ID: "hook", Name: "Hook", Type: "generic_webhook", Params: map[string]interface{}{"webhookUrl": "https://example.com/hook"}},
+	}
+	destsJSON, _ := json.Marshal(dests)
+	srv := &server.Server{
+		Configstore: server.NewMemConfigStore([]*model.Setting{{Id: ConfigSettingNotificationDestinations, Value: string(destsJSON)}}),
+		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
+	}
+	registry := NewChannelRegistry()
+	_ = registry.Register(NewWebhookChannel(srv))
+	notifier := NewNotifier(srv, registry, model.NotificationConfig{})
+
+	invalid := func() *model.DestinationConfig {
+		return &model.DestinationConfig{Name: "Hook", Type: "generic_webhook", Params: map[string]interface{}{"webhookUrl": "hooks.example.com/services/SECRET"}}
+	}
+
+	_, err := notifier.CreateDestination(context.Background(), invalid())
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "SECRET")
+
+	_, err = notifier.UpdateDestination(context.Background(), "hook", invalid())
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "SECRET")
+}
+
 func TestNotifierImpl_CreateAndUpdateDestination_InvalidChannelType(t *testing.T) {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
