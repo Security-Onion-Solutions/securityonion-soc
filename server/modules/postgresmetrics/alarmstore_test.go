@@ -192,6 +192,33 @@ func TestAlarmstore_CreateAlarm(t *testing.T) {
 	}
 	_, err = alarmStore.CreateAlarm(ctx, duplicate)
 	assert.ErrorIs(t, err, postgresmetrics.ErrDuplicateAlarmID)
+
+	restart := &model.Alarm{
+		Name:      "Restart Needed",
+		Metric:    "os_needs_restart",
+		Operator:  "eq",
+		Threshold: "1",
+		Severity:  "low",
+	}
+	created, err = alarmStore.CreateAlarm(ctx, restart)
+	assert.NoError(t, err)
+	assert.Equal(t, "true", created.Threshold)
+	stored, err := alarmStore.GetAlarm(ctx, created.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, "true", stored.Threshold)
+
+	badOperator := &model.Alarm{
+		Name:      "Restart Greater",
+		Metric:    "os_needs_restart",
+		Operator:  "gt",
+		Threshold: "true",
+		Severity:  "low",
+	}
+	_, err = alarmStore.CreateAlarm(ctx, badOperator)
+	assert.Error(t, err)
+	alarms, err := alarmStore.GetAlarms(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, alarms, 2)
 }
 
 func TestAlarmstore_UpdateAlarm(t *testing.T) {
@@ -205,6 +232,15 @@ func TestAlarmstore_UpdateAlarm(t *testing.T) {
 			Threshold:       "80",
 			Severity:        "high",
 			DurationSeconds: 120,
+		},
+		{
+			ID:        "alarm-2",
+			Name:      "Restart Needed",
+			Enabled:   true,
+			Metric:    "os_needs_restart",
+			Operator:  "eq",
+			Threshold: "true",
+			Severity:  "low",
 		},
 	}
 	alarmsJSON, _ := json.Marshal(initialAlarms)
@@ -242,18 +278,57 @@ func TestAlarmstore_UpdateAlarm(t *testing.T) {
 	// Update non-existent
 	_, err = alarmStore.UpdateAlarm(ctx, "alarm-nonexistent", updated)
 	assert.ErrorIs(t, err, postgresmetrics.ErrAlarmNotFound)
+
+	_, err = alarmStore.UpdateAlarm(ctx, "alarm-2", &model.Alarm{
+		Name:      "Restart Needed",
+		Metric:    "os_needs_restart",
+		Operator:  "gt",
+		Threshold: "true",
+		Severity:  "low",
+	})
+	assert.Error(t, err)
+	stored, err := alarmStore.GetAlarm(ctx, "alarm-2")
+	assert.NoError(t, err)
+	assert.Equal(t, "eq", stored.Operator)
+	assert.Equal(t, "true", stored.Threshold)
+
+	res, err = alarmStore.UpdateAlarm(ctx, "alarm-2", &model.Alarm{
+		Name:      "Restart Needed",
+		Metric:    "os_needs_restart",
+		Operator:  "==",
+		Threshold: "0",
+		Severity:  "low",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "eq", res.Operator)
+	assert.Equal(t, "false", res.Threshold)
+	stored, err = alarmStore.GetAlarm(ctx, "alarm-2")
+	assert.NoError(t, err)
+	assert.Equal(t, "eq", stored.Operator)
+	assert.Equal(t, "false", stored.Threshold)
+
+	res, err = alarmStore.UpdateAlarm(ctx, "alarm-1", &model.Alarm{
+		Name:      "High CPU",
+		Metric:    "cpu",
+		Operator:  "gt",
+		Threshold: "1",
+		Severity:  "high",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "gt", res.Operator)
+	assert.Equal(t, "1", res.Threshold)
 }
 
 func TestAlarmstore_DeleteAlarm(t *testing.T) {
 	initialAlarms := []model.Alarm{
 		{
-			ID:              "alarm-1",
-			Name:            "High CPU",
-			Enabled:         true,
-			Metric:          "cpu",
-			Operator:        "gt",
-			Threshold:       "80",
-			Severity:        "high",
+			ID:        "alarm-1",
+			Name:      "High CPU",
+			Enabled:   true,
+			Metric:    "cpu",
+			Operator:  "gt",
+			Threshold: "80",
+			Severity:  "high",
 		},
 	}
 	alarmsJSON, _ := json.Marshal(initialAlarms)
@@ -396,6 +471,28 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 			Severity:        "high",
 			ClearedSeverity: "info",
 		},
+		{
+			ID:              "alarm-2",
+			Name:            "Restart Needed",
+			Enabled:         true,
+			Metric:          "os_needs_restart",
+			Operator:        "eq",
+			Threshold:       "1",
+			DurationSeconds: 0,
+			Severity:        "low",
+			ClearedSeverity: "info",
+		},
+		{
+			ID:              "alarm-3",
+			Name:            "GMD Enabled",
+			Enabled:         true,
+			Metric:          "gmd_enabled",
+			Operator:        "ne",
+			Threshold:       "0",
+			DurationSeconds: 0,
+			Severity:        "medium",
+			ClearedSeverity: "info",
+		},
 	}
 	alarmsJSON, _ := json.Marshal(initialAlarms)
 	cfgStore := server.NewMemConfigStore([]*model.Setting{
@@ -410,7 +507,7 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 		Configstore: cfgStore,
 		Authorizer:  &rbac.FakeAuthorizer{Authorized: true},
 		Notifier:    fakeNotifier,
-		Datastore:   &fakeDatastore{nodes: []*model.Node{{Id: "node-1", CpuUsedPct: 85.4351}}},
+		Datastore:   &fakeDatastore{nodes: []*model.Node{{Id: "node-1", CpuUsedPct: 85.4351, OsNeedsRestart: 1, GmdEnabled: 1}}},
 	}
 	alarmStore := postgresmetrics.NewAlarmstore(srv, nil)
 
@@ -419,12 +516,17 @@ func TestAlarmstore_EvaluateAlarms_Breach(t *testing.T) {
 	err := alarmStore.EvaluateAlarms(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, fakeNotifier.InputPayloads, 1)
+	assert.Len(t, fakeNotifier.InputPayloads, 3)
+	assert.Contains(t, fakeNotifier.InputPayloads[1].Title, "Restart Needed")
+	assert.Equal(t, "low", fakeNotifier.InputPayloads[1].Severity)
 	assert.Contains(t, fakeNotifier.InputPayloads[0].Title, "High CPU")
 	assert.Equal(t, "high", fakeNotifier.InputPayloads[0].Severity)
 	assert.Equal(t, "85.44", fakeNotifier.InputPayloads[0].Fields["Value"])
 	assert.Equal(t, "true", fakeNotifier.InputPayloads[0].Fields["Triggered"])
 	assert.NotContains(t, fakeNotifier.InputPayloads[0].Fields, "Status")
+	assert.Contains(t, fakeNotifier.InputPayloads[2].Title, "GMD Enabled")
+	assert.Equal(t, "medium", fakeNotifier.InputPayloads[2].Severity)
+	assert.Equal(t, "true", fakeNotifier.InputPayloads[2].Fields["Value"])
 }
 
 func TestAlarmstore_EvaluateAlarms_Breach_Unlicensed(t *testing.T) {
@@ -631,4 +733,3 @@ type fakeDatastore struct {
 func (f *fakeDatastore) GetNodes(ctx context.Context) []*model.Node {
 	return f.nodes
 }
-

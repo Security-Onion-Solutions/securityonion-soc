@@ -233,6 +233,35 @@ func TestPostAlarm_InvalidThreshold(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestPostAlarm_InvalidOperator(t *testing.T) {
+	fakeStore := NewFakeAlarmstore()
+	fakeStore.Err = errors.New("alarm operator must be equals or not equals for a boolean metric")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Alarmstore = fakeStore
+
+	h := NewAlarmHandler(srv)
+
+	newAlarm := model.Alarm{
+		Name:      "Bad Boolean Operator",
+		Metric:    "os_needs_restart",
+		Operator:  "gt",
+		Threshold: "true",
+		Severity:  "high",
+	}
+	body, _ := json.Marshal(newAlarm)
+
+	r := httptest.NewRequest("POST", "/api/alarms/", bytes.NewReader(body))
+	ctx := context.WithValue(context.Background(), web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+	r = r.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	h.PostAlarm(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestPutAlarm(t *testing.T) {
 	fakeStore := NewFakeAlarmstore()
 	fakeStore.Alarms = []model.Alarm{
@@ -278,6 +307,37 @@ func TestPutAlarm(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "High CPU Modified", resp.Name)
 	assert.False(t, resp.Enabled)
+}
+
+func TestPutAlarm_InvalidOperator(t *testing.T) {
+	fakeStore := NewFakeAlarmstore()
+	fakeStore.Err = errors.New("alarm operator must be equals or not equals for a boolean metric")
+
+	srv := NewFakeAuthorizedServer(nil)
+	srv.Alarmstore = fakeStore
+
+	h := NewAlarmHandler(srv)
+
+	updatedAlarm := model.Alarm{
+		Name:      "Bad Boolean Operator",
+		Metric:    "os_needs_restart",
+		Operator:  "gt",
+		Threshold: "true",
+		Severity:  "high",
+	}
+	body, _ := json.Marshal(updatedAlarm)
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "alarm-1")
+	ctx := context.WithValue(context.Background(), chi.RouteCtxKey, rctx)
+	ctx = context.WithValue(ctx, web.ContextKeyRunAsUsername, "admin")
+	ctx = context.WithValue(ctx, web.ContextKeyRequestStart, time.Now())
+
+	r := httptest.NewRequest("PUT", "/api/alarms/alarm-1", bytes.NewReader(body)).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.PutAlarm(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestDeleteAlarm(t *testing.T) {

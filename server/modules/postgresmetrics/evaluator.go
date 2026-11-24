@@ -109,6 +109,64 @@ func ValidateAlarmThreshold(metric, threshold string) error {
 	return nil
 }
 
+// ValidateAlarmOperator checks that the operator is valid for the given metric type.
+func ValidateAlarmOperator(metric, operator string) error {
+	info, found := GetAlarmMetricInfo(metric)
+	if !found || info.Type != model.AlarmMetricTypeBool {
+		return nil
+	}
+	switch model.NormalizeOperator(operator) {
+	case model.AlarmOperatorEQ, model.AlarmOperatorNEQ:
+		return nil
+	}
+	return errors.New("alarm operator must be equals or not equals for a boolean metric")
+}
+
+// NormalizeAlarmThreshold returns the canonical form of a threshold for the given metric,
+// storing a boolean threshold of 1 or 0 as true or false.
+func NormalizeAlarmThreshold(metric, threshold string) string {
+	info, found := GetAlarmMetricInfo(metric)
+	if !found || info.Type != model.AlarmMetricTypeBool {
+		return threshold
+	}
+	trimmed := strings.TrimSpace(threshold)
+	switch trimmed {
+	case "1":
+		return "true"
+	case "0":
+		return "false"
+	}
+	return trimmed
+}
+
+// PrepareAlarm normalizes and validates an alarm before it is saved.
+func PrepareAlarm(alarm *model.Alarm) error {
+	alarm.Operator = model.NormalizeOperator(alarm.Operator)
+	if err := model.ValidateAlarm(alarm); err != nil {
+		return err
+	}
+	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
+		return err
+	}
+	if err := ValidateAlarmOperator(alarm.Metric, alarm.Operator); err != nil {
+		return err
+	}
+	alarm.Threshold = NormalizeAlarmThreshold(alarm.Metric, alarm.Threshold)
+	return nil
+}
+
+// parseBoolThreshold reads a boolean threshold. strconv.ParseBool is not used because
+// it accepts spellings such as t and f that threshold validation rejects.
+func parseBoolThreshold(threshold string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(threshold)) {
+	case "true", "1":
+		return true, true
+	case "false", "0":
+		return false, true
+	}
+	return false, false
+}
+
 // ALARM_VALUE_DECIMAL_PLACES is the minimum number of decimal places kept when a
 // numeric metric value is rendered for alarm states and notifications.
 const ALARM_VALUE_DECIMAL_PLACES = 2
@@ -157,6 +215,18 @@ func formatFloat(f float64, places int) string {
 // EvaluateCondition evaluates whether an actual metric value breaches the configured threshold.
 func EvaluateCondition(op string, thresholdStr string, actualVal any) bool {
 	normOp := model.NormalizeOperator(op)
+
+	if actualBool, isBool := actualVal.(bool); isBool {
+		if thresholdBool, ok := parseBoolThreshold(thresholdStr); ok {
+			switch normOp {
+			case model.AlarmOperatorEQ:
+				return actualBool == thresholdBool
+			case model.AlarmOperatorNEQ:
+				return actualBool != thresholdBool
+			}
+		}
+	}
+
 	actualStr := fmt.Sprintf("%v", actualVal)
 
 	// Try numeric comparison first
