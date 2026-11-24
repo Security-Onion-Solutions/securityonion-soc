@@ -471,6 +471,7 @@ func targetingDestinations() map[string]model.DestinationConfig {
 	return map[string]model.DestinationConfig{
 		"ir-slack":  {Name: "IR Slack", Type: "slack_webhook", Enabled: true},
 		"uuid-1111": {Name: "IR Slack", Type: "slack_webhook", Enabled: true},
+		"uuid-2222": {Name: "Pager Duty", Type: "generic_webhook", Enabled: true},
 		"soc-bell":  {Type: "soc", Enabled: true},
 		"off":       {Name: "Off", Enabled: false},
 		"crit":      {Name: "Crit", Enabled: true, Severities: []string{"critical"}},
@@ -518,6 +519,14 @@ func TestSendNotificationTool_Execute_InvalidDestinations(t *testing.T) {
 	}
 }
 
+func TestSendNotificationTool_Execute_AmbiguousName(t *testing.T) {
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+	_, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S", "share_chat": true, "destinations": ["ir slack"]}`, nil, nil)
+
+	assert.EqualError(t, err, `ERROR_DESTINATION_NOT_FOUND: more than one destination is named "ir slack"`)
+	assert.Empty(t, fakeNotifier.InputDestinations)
+}
+
 func TestSendNotificationTool_Execute_DestinationInputs(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 	testCases := []struct {
@@ -532,6 +541,9 @@ func TestSendNotificationTool_Execute_DestinationInputs(t *testing.T) {
 		{"trimmed, de-duplicated, in id order", `, "destinations": [" soc-bell ", "ir-slack", "ir-slack"]`, [][]string{{"ir-slack"}, {"soc-bell"}}, "Sent to 2 of 2: IR Slack (ir-slack), soc-bell."},
 		{"duplicate counts once", `, "destinations": ["ir-slack", "ir-slack"]`, [][]string{{"ir-slack"}}, "Sent to 1 of 1"},
 		{"uuid-keyed destination", `, "destinations": ["uuid-1111"]`, [][]string{{"uuid-1111"}}, "Sent to 1 of 1: IR Slack (uuid-1111)."},
+		{"by name, ignoring case", `, "destinations": [" pager duty "]`, [][]string{{"uuid-2222"}}, "Sent to 1 of 1: Pager Duty (uuid-2222)."},
+		{"name and id of the same destination", `, "destinations": ["Pager Duty", "uuid-2222"]`, [][]string{{"uuid-2222"}}, "Sent to 1 of 1"},
+		{"id and name together", `, "destinations": ["soc-bell", "Pager Duty"]`, [][]string{{"soc-bell"}, {"uuid-2222"}}, "Sent to 2 of 2: soc-bell, Pager Duty (uuid-2222)."},
 	}
 
 	for _, tc := range testCases {

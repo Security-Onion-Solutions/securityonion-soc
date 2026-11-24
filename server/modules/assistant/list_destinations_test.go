@@ -70,6 +70,36 @@ func TestListDestinationsTool_Failures(t *testing.T) {
 	assert.EqualError(t, err, "ERROR_ASSISTANT_NOTIFIER_UNAVAILABLE")
 }
 
+// permissionAuthorizer grants only the listed operation/target pairs.
+type permissionAuthorizer map[string]bool
+
+func (a permissionAuthorizer) CheckContextOperationAuthorized(ctx context.Context, operation string, target string) error {
+	if a[target+"/"+operation] {
+		return nil
+	}
+	return model.NewUnauthorized("test-user-id", operation, target)
+}
+
+func (a permissionAuthorizer) CheckUserOperationAuthorized(userId string, operation string, target string) error {
+	return a.CheckContextOperationAuthorized(context.Background(), operation, target)
+}
+
+func TestListDestinationsTool_RequiresConfigRead(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+	tool := &ListDestinationsTool{}
+	req := &model.ToolRequest{Params: json.RawMessage(`{}`)}
+
+	sender := &server.Server{Authorizer: permissionAuthorizer{"notifications/write": true}, Notifier: server.NewFakeNotifier()}
+	_, err := tool.Execute(ctx, sender, req)
+	assert.EqualError(t, err, "ERROR_PERMISSION_DENIED")
+
+	admin := &server.Server{Authorizer: permissionAuthorizer{"config/read": true}, Notifier: server.NewFakeNotifier()}
+	_, err = tool.Execute(ctx, admin, req)
+	assert.NoError(t, err)
+}
+
 func TestListDestinationsTool_Result(t *testing.T) {
 	notifier := server.NewFakeNotifier()
 	notifier.Destinations = map[string]model.DestinationConfig{

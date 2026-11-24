@@ -33,7 +33,8 @@ func (t *ListDestinationsTool) GetName() string {
 
 func (t *ListDestinationsTool) GetDescription() string {
 	return `List the configured notification destinations, for choosing destinations on send_notification.
-	A destination silently skips notifications outside its severities or active schedules, and a disabled
+	Only administrators may list destinations; for anyone else this fails, and send_notification still
+	accepts the destination names the user gives. A destination silently skips notifications outside its severities or active schedules, and a disabled
 	destination sends nothing. Empty severities means every severity, and empty scheduleIds means always
 	active. Type "soc" is the SOC notification bell. Any destination's name may be empty. Nothing is sent
 	while notifications are turned off for the grid.`
@@ -67,8 +68,8 @@ func (t *ListDestinationsTool) Execute(ctx context.Context, srv *server.Server, 
 		"toolUseId": req.ToolUseId,
 	})
 
-	// Listing needs the permission to send, not config/read, which also guards secrets.
-	err = srv.CheckAuthorized(ctx, "write", "notifications")
+	// Only those who manage destinations can list them; others send by naming one.
+	err = srv.CheckAuthorized(ctx, "read", "config")
 	if err != nil {
 		logger.WithError(err).Error("user is not authorized to list notification destinations")
 		return nil, errors.New("ERROR_PERMISSION_DENIED")
