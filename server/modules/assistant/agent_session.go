@@ -401,12 +401,7 @@ func (ac *AssistantCoordinator) runAgentTool(ctx context.Context, sess *model.As
 
 	ac.setAgentPhase(sess.SessionId, rootSessionId, sess.Model, model.AgentPhaseInvokingToolPrefix+cb.Name)
 
-	params := cb.Input
-	if len(bytes.TrimSpace(params)) == 0 {
-		params = json.RawMessage("{}")
-	}
-
-	toolReq := &model.ToolRequest{SessionId: sess.SessionId, ToolUseId: cb.Id, Params: params, Model: sess.Model}
+	toolReq := &model.ToolRequest{SessionId: sess.SessionId, ToolUseId: cb.Id, Params: cb.Input, Model: sess.Model}
 
 	// The tool gets its own idle window; the next model turn starts a fresh one.
 	toolCtx, cancelTool := ac.agentToolContext(ctx)

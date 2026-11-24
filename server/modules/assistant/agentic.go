@@ -339,11 +339,12 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 		},
 		"Investigator": {
 			Name:          "Investigator",
-			AllowedSkills: []string{"Hunt", "Playbooks", "Respond"},
+			AllowedSkills: []string{"Hunt", "Playbooks", "Respond", "Notify"},
 			CanDelegateTo: []string{"DetectionEngineer"},
 			Prompt:        prompts["prompt_agent_investigator"],
 			Description: "Investigates alerts, explains events and records, and answers open questions about activity in event data. " +
 				"Also acknowledges alerts, escalates to cases, and looks up cases. " +
+				"Sends or reads notifications when the analyst asks; objectives must relay that request verbatim. " +
 				"Objectives must include all identifiers verbatim.",
 		},
 		"AlertTriage": {
@@ -401,7 +402,7 @@ func (ac *AssistantCoordinator) setupAgentic(prompts map[string]string) {
 		},
 		"Notify": {
 			Name:             "Notify",
-			Tools:            []string{"send_notification"},
+			Tools:            []string{"send_notification", "list_destinations", "query_notifications"},
 			AdditionalPrompt: prompts["prompt_skill_notify"],
 		},
 		// The alert triage prompt says when to call it.

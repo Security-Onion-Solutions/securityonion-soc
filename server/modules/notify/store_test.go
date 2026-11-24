@@ -241,6 +241,21 @@ func TestStoreGetNotifications_MissingUser(t *testing.T) {
 	assert.Nil(t, res)
 }
 
+func TestStoreGetNotifications_SystemIdRefused(t *testing.T) {
+	mDB := new(mockdb.MockDB)
+	srv := newTestServerWithReadAll(true, true, mDB)
+	mockUserstore := servermock.NewMockUserstore(gomock.NewController(t))
+	mockUserstore.EXPECT().GetUserById(gomock.Any(), server.SYSTEM_ID).Return(nil, errors.New("not found")).AnyTimes()
+	srv.Userstore = mockUserstore
+	store := NewNotificationstore(srv, nil)
+
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, server.SYSTEM_ID)
+	res, err := store.GetNotifications(ctx, "")
+	assert.EqualError(t, err, "unauthorized: missing user in context")
+	assert.Nil(t, res)
+	mDB.AssertNumberOfCalls(t, "Query", 0)
+}
+
 func TestStoreGetNotifications_CustomLimit(t *testing.T) {
 	mDB := new(mockdb.MockDB)
 	srv := newTestServer(true, mDB)

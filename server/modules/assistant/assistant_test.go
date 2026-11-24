@@ -258,6 +258,40 @@ func TestAssistantCoordinator_ExecuteTool(t *testing.T) {
 	}
 }
 
+func TestAssistantCoordinator_ExecuteTool_EmptyParams(t *testing.T) {
+	schemas := map[string]struct {
+		schema   model.JSONSchema
+		expected string
+	}{
+		"no schema":       {model.JSONSchema{}, "{}"},
+		"no required":     {model.JSONSchema{Json: &model.ToolSchema{Type: "object"}}, "{}"},
+		"required inputs": {model.JSONSchema{Json: &model.ToolSchema{Type: "object", Required: []string{"search_filter"}}}, ""},
+	}
+
+	for name, tc := range schemas {
+		for _, params := range []json.RawMessage{nil, json.RawMessage(""), json.RawMessage(" \n ")} {
+			var received json.RawMessage
+			tool := &mockTool{
+				name:   "test_tool",
+				schema: tc.schema,
+				executeFunc: func(ctx context.Context, srv *server.Server, req *model.ToolRequest) (*model.ToolResponse, error) {
+					received = req.Params
+					return &model.ToolResponse{}, nil
+				},
+			}
+			ac := &AssistantCoordinator{
+				srv:             &server.Server{},
+				FunctionLibrary: map[string]Tool{"test_tool": tool},
+			}
+			ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user")
+
+			_, err := ac.ExecuteTool(ctx, "test_tool", &model.ToolRequest{Params: params})
+			assert.NoError(t, err, name)
+			assert.Equal(t, tc.expected, strings.TrimSpace(string(received)), name)
+		}
+	}
+}
+
 func TestAssistantCoordinator_Balance(t *testing.T) {
 	testCases := []struct {
 		name           string

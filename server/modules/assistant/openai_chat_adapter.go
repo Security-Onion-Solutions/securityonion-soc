@@ -307,12 +307,18 @@ func convertHistoryToChatCompletions(logger log.Interface, req *model.ChatReques
 					}
 				}
 
+				// A call with no inputs may stream no arguments; providers reject an empty string.
+				arguments := string(block.Input)
+				if len(args) == 0 {
+					arguments = "{}"
+				}
+
 				toolCall := openai.ChatCompletionMessageToolCallUnionParam{
 					OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
 						ID: block.Id,
 						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
 							Name:      block.Name,
-							Arguments: string(block.Input),
+							Arguments: arguments,
 						},
 					},
 				}

@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -20,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
@@ -151,10 +153,10 @@ func TestSendNotificationTool_Execute(t *testing.T) {
 			expectedError: "ERROR_ASSISTANT_NOTIFIER_UNAVAILABLE",
 		},
 		{
-			name:          "notifier error is surfaced",
+			name:          "notifier error is reported without driver text",
 			params:        `{"title": "T", "summary": "S"}`,
 			sendErr:       assert.AnError,
-			expectedError: assert.AnError.Error(),
+			expectedError: "ERROR_NOTIFICATION_SEND_FAILED",
 		},
 	}
 
@@ -404,6 +406,22 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			},
 		},
 		{
+			name:          "targeted send from alert triage still links the alert",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S", "destinations": ["ir-slack"]}`,
+			sessions:      triageTree,
+			expectedLinks: alertLink,
+		},
+		{
+			name:          "targeted send still shares the chat",
+			sessionId:     "root",
+			params:        `{"title": "T", "summary": "S", "share_chat": true, "destinations": ["ir-slack"]}`,
+			sessions:      tree(),
+			expectToggle:  []string{"root", "child", "grand"},
+			expectedLinks: map[string]string{chatLinkLabel: "/#/assistant/root"},
+			sharedNote:    true,
+		},
+		{
 			name:   "no session means no share and no link",
 			params: `{"title": "T", "summary": "S", "share_chat": true}`,
 		},
@@ -416,6 +434,7 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 			fakeNotifier := server.NewFakeNotifier()
+			fakeNotifier.Destinations = map[string]model.DestinationConfig{"ir-slack": {Name: "IR Slack", Enabled: true}}
 			mockServer := &server.Server{
 				Notifier: fakeNotifier,
 				Config:   &config.ServerConfig{DeveloperEnabled: true},
@@ -446,6 +465,272 @@ func TestSendNotificationTool_Execute_SharesAndLinksChat(t *testing.T) {
 			}
 		})
 	}
+}
+
+func targetingDestinations() map[string]model.DestinationConfig {
+	return map[string]model.DestinationConfig{
+		"ir-slack":  {Name: "IR Slack", Type: "slack_webhook", Enabled: true},
+		"uuid-1111": {Name: "IR Slack", Type: "slack_webhook", Enabled: true},
+		"uuid-2222": {Name: "Pager Duty", Type: "generic_webhook", Enabled: true},
+		"soc-bell":  {Type: "soc", Enabled: true},
+		"off":       {Name: "Off", Enabled: false},
+		"crit":      {Name: "Crit", Enabled: true, Severities: []string{"critical"}},
+		"high":      {Name: "High", Enabled: true, Severities: []string{"High"}},
+		"night":     {Name: "Night", Enabled: true, ScheduleIDs: []string{"after-hours"}},
+	}
+}
+
+func runTargetedSend(t *testing.T, ctx context.Context, params string, results map[string]server.FakeSendResult, sendErr error) (*model.ToolResponse, error, *server.FakeNotifier) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	fakeNotifier := server.NewFakeNotifier()
+	fakeNotifier.Destinations = targetingDestinations()
+	fakeNotifier.Results = results
+	fakeNotifier.Err = sendErr
+
+	// No expectations: a call that shares the chat or resolves the session fails the test.
+	mockServer := &server.Server{
+		Notifier:       fakeNotifier,
+		Assistantstore: servermock.NewMockAssistantstore(gomock.NewController(t)),
+		Config:         &config.ServerConfig{DeveloperEnabled: true},
+	}
+	sessionId := ""
+	if strings.Contains(params, `"share_chat": true`) {
+		sessionId = "root"
+	}
+
+	result, err := (&SendNotificationTool{}).Execute(ctx, mockServer, &model.ToolRequest{SessionId: sessionId, Params: json.RawMessage(params)})
+	for _, payload := range fakeNotifier.InputPayloads {
+		assert.Empty(t, payload.Recipients)
+		assert.False(t, payload.BypassSchedules)
+	}
+	return result, err, fakeNotifier
+}
+
+func TestSendNotificationTool_Execute_InvalidDestinations(t *testing.T) {
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+	for _, destinations := range []string{`[]`, `[""]`, `["  "]`, `["ir-slack", 1]`, `["ir-slack", ""]`, `[null]`, `[["a"]]`, `""`, `{"id": "ir-slack"}`, `5`, `true`, `["pager"]`, `["ir-slack", "pager"]`} {
+		params := `{"title": "T", "summary": "S", "share_chat": true, "destinations": ` + destinations + `}`
+		_, err, fakeNotifier := runTargetedSend(t, ctx, params, nil, nil)
+
+		assert.EqualError(t, err, "ERROR_DESTINATION_NOT_FOUND", destinations)
+		assert.Empty(t, fakeNotifier.InputDestinations, destinations)
+	}
+}
+
+func TestSendNotificationTool_Execute_AmbiguousName(t *testing.T) {
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+	_, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S", "share_chat": true, "destinations": ["ir slack"]}`, nil, nil)
+
+	assert.EqualError(t, err, "ERROR_DESTINATION_NOT_FOUND")
+	assert.Empty(t, fakeNotifier.InputDestinations)
+}
+
+func TestResolveDestinationRef(t *testing.T) {
+	dests := map[string]model.DestinationConfig{
+		"pager":     {Name: "Old Pager"},
+		"uuid-3333": {Name: "pager"},
+		"uuid-1111": {Name: "IR Slack"},
+		"uuid-2222": {Name: " ir slack "},
+		"uuid-4444": {Name: " Duty "},
+		"soc-bell":  {Name: ""},
+		"blank":     {Name: "   "},
+	}
+
+	testCases := []struct {
+		name            string
+		ref             string
+		expectedId      string
+		expectedMatches int
+	}{
+		{"exact id wins over another destination's name", "pager", "pager", 1},
+		{"name ignoring case", "OLD PAGER", "pager", 1},
+		{"name that only differs in case from an id", "PAGER", "uuid-3333", 1},
+		{"destination name is trimmed", "duty", "uuid-4444", 1},
+		{"two names match", "IR SLACK", "", 2},
+		{"no match", "nowhere", "", 0},
+		{"id is case-sensitive", "SOC-BELL", "", 0},
+		{"blank names never match", "soc bell", "", 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			id, matches := resolveDestinationRef(dests, tc.ref)
+			assert.Equal(t, tc.expectedMatches, matches)
+			if tc.expectedMatches == 1 {
+				assert.Equal(t, tc.expectedId, id)
+			}
+		})
+	}
+}
+
+func TestSendNotificationTool_Execute_DestinationInputs(t *testing.T) {
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+	testCases := []struct {
+		name         string
+		destinations string
+		expectedIds  [][]string
+		result       string
+	}{
+		{"omitted", ``, [][]string{nil}, "submitted"},
+		{"null", `, "destinations": null`, [][]string{nil}, "submitted"},
+		{"bare string", `, "destinations": "ir-slack"`, [][]string{{"ir-slack"}}, "Sent to 1 of 1: IR Slack (ir-slack)."},
+		{"trimmed, de-duplicated, in id order", `, "destinations": [" soc-bell ", "ir-slack", "ir-slack"]`, [][]string{{"ir-slack"}, {"soc-bell"}}, "Sent to 2 of 2: IR Slack (ir-slack), soc-bell."},
+		{"duplicate counts once", `, "destinations": ["ir-slack", "ir-slack"]`, [][]string{{"ir-slack"}}, "Sent to 1 of 1"},
+		{"uuid-keyed destination", `, "destinations": ["uuid-1111"]`, [][]string{{"uuid-1111"}}, "Sent to 1 of 1: IR Slack (uuid-1111)."},
+		{"by name, ignoring case", `, "destinations": [" pager duty "]`, [][]string{{"uuid-2222"}}, "Sent to 1 of 1: Pager Duty (uuid-2222)."},
+		{"name and id of the same destination", `, "destinations": ["Pager Duty", "uuid-2222"]`, [][]string{{"uuid-2222"}}, "Sent to 1 of 1"},
+		{"id and name together", `, "destinations": ["soc-bell", "Pager Duty"]`, [][]string{{"soc-bell"}, {"uuid-2222"}}, "Sent to 2 of 2: soc-bell, Pager Duty (uuid-2222)."},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S"`+tc.destinations+`}`, nil, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedIds, fakeNotifier.InputDestinations)
+			assert.Contains(t, result.Result, tc.result)
+			assert.NotContains(t, result.Result, "Skipped")
+			assert.NotContains(t, result.Result, "()")
+		})
+	}
+}
+
+func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
+	failure := errors.New("webhook request failed: Post \"https://hooks.slack.com/services/SECRET\": dial tcp: refused")
+	testCases := []struct {
+		name           string
+		destinations   string
+		results        map[string]server.FakeSendResult
+		resultHas      []string
+		resultExcludes []string
+		expectedError  string
+	}{
+		{
+			name:         "disabled destination is skipped and counted",
+			destinations: `["off"]`,
+			results:      map[string]server.FakeSendResult{"off": {}},
+			resultHas:    []string{"Sent to 0 of 1.", "Skipped: Off (off) (disabled)."},
+		},
+		{
+			name:         "each skip names its reason",
+			destinations: `["crit", "high", "night", "off"]`,
+			results:      map[string]server.FakeSendResult{"crit": {}, "high": {}, "night": {}, "off": {}},
+			resultHas: []string{
+				"Sent to 0 of 4.",
+				"Crit (crit) (severity high not in its severities)",
+				"High (high) (outside its active schedules, or notifications are turned off)",
+				"Night (night) (outside its active schedules, or notifications are turned off)",
+				"Off (off) (disabled)",
+			},
+		},
+		{
+			name:           "a partial failure names what was sent and what failed",
+			destinations:   `["ir-slack", "soc-bell"]`,
+			results:        map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "soc-bell": {Err: failure}},
+			resultHas:      []string{"Sent to 1 of 2: IR Slack (ir-slack).", "Failed: soc-bell; resend only to those, and only if the user asks."},
+			resultExcludes: []string{"SECRET", "hooks.slack.com", "Skipped", "ERROR_"},
+		},
+		{
+			name:         "a partial failure also lists skips",
+			destinations: `["ir-slack", "off", "soc-bell"]`,
+			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "off": {}, "soc-bell": {Err: failure}},
+			resultHas:    []string{"Sent to 1 of 3: IR Slack (ir-slack).", "Failed: soc-bell;", "Skipped: Off (off) (disabled)."},
+		},
+		{
+			name:         "destinations with the same name are told apart by id",
+			destinations: `["ir-slack", "uuid-1111"]`,
+			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "uuid-1111": {Err: failure}},
+			resultHas:    []string{"Sent to 1 of 2: IR Slack (ir-slack).", "Failed: IR Slack (uuid-1111);"},
+		},
+		{
+			name:          "nothing sent",
+			destinations:  `["soc-bell"]`,
+			results:       map[string]server.FakeSendResult{"soc-bell": {Err: failure}},
+			expectedError: "ERROR_NOTIFICATION_TARGETED_SEND_FAILED",
+		},
+		{
+			name:          "nothing sent, with a skip",
+			destinations:  `["off", "soc-bell"]`,
+			results:       map[string]server.FakeSendResult{"off": {}, "soc-bell": {Err: failure}},
+			expectedError: "ERROR_NOTIFICATION_TARGETED_SEND_FAILED",
+		},
+	}
+
+	for _, tc := range testCases {
+		for _, requestor := range []string{"test-user-id", server.SYSTEM_ID} {
+			t.Run(tc.name+" as "+requestor, func(t *testing.T) {
+				ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, requestor)
+				result, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S", "severity": "high", "destinations": `+tc.destinations+`}`, tc.results, nil)
+
+				assert.Len(t, fakeNotifier.InputDestinations, len(tc.results))
+				if tc.expectedError != "" {
+					assert.EqualError(t, err, tc.expectedError)
+					return
+				}
+
+				require.NoError(t, err)
+				for _, expected := range tc.resultHas {
+					assert.Contains(t, result.Result, expected)
+				}
+				for _, excluded := range tc.resultExcludes {
+					assert.NotContains(t, result.Result, excluded)
+				}
+			})
+		}
+	}
+}
+
+func TestSendNotificationTool_Execute_BroadcastFailureHidesDriverText(t *testing.T) {
+	failure := errors.New("webhook request failed: Post \"https://hooks.slack.com/services/SECRET\": dial tcp: refused")
+	for _, requestor := range []string{"test-user-id", server.SYSTEM_ID} {
+		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, requestor)
+		_, err, _ := runTargetedSend(t, ctx, `{"title": "T", "summary": "S"}`, nil, failure)
+
+		assert.EqualError(t, err, "ERROR_NOTIFICATION_SEND_FAILED")
+	}
+}
+
+func TestSendNotificationTool_Execute_BroadcastPartialFailure(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	fakeNotifier := server.NewFakeNotifier()
+	fakeNotifier.SendCount = 2
+	fakeNotifier.Err = errors.New("webhook request failed: Post \"https://hooks.slack.com/services/SECRET\": dial tcp: refused")
+	mockServer := &server.Server{
+		Notifier:       fakeNotifier,
+		Assistantstore: servermock.NewMockAssistantstore(gomock.NewController(t)),
+		Config:         &config.ServerConfig{DeveloperEnabled: true},
+	}
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+
+	result, err := (&SendNotificationTool{}).Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"title": "T", "summary": "S"}`)})
+
+	require.NoError(t, err)
+	text := result.Result.(string)
+	assert.Contains(t, text, "Delivered to 2 destination(s), but delivery to some others failed")
+	assert.NotContains(t, text, "SECRET")
+	require.Len(t, fakeNotifier.InputDestinations, 1)
+	assert.Empty(t, fakeNotifier.InputDestinations[0])
+}
+
+func TestSendNotificationTool_DestinationsSchema(t *testing.T) {
+	tool := &SendNotificationTool{}
+	schema := tool.GetSchema().Json
+
+	destinations, ok := schema.Properties["destinations"]
+	require.True(t, ok)
+	assert.Equal(t, "array", destinations.Type)
+	require.Len(t, destinations.Items, 1)
+	for _, item := range destinations.Items {
+		assert.Equal(t, "string", item.Type)
+	}
+	assert.NotContains(t, schema.Required, "destinations")
+	assert.NotContains(t, schema.Properties, "recipients")
+
+	assert.Contains(t, tool.GetDescription(), "destinations the user named")
+	assert.Contains(t, schema.Properties["approvalMessage"].Description, "name every destination")
 }
 
 func TestTriageAlertLink(t *testing.T) {

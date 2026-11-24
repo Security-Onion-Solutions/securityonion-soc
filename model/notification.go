@@ -51,6 +51,15 @@ const (
 	AttachmentModeBoth   = "both"
 
 	DefaultDestinationSOCBell = "soc-bell"
+
+	NotificationAudienceEveryone = "everyone"
+	NotificationAudienceYou      = "you"
+	NotificationAudienceOthers   = "others"
+
+	// Any other filter, including empty, means active: read or unread, but not dismissed.
+	NotificationFilterUnread    = "unread"
+	NotificationFilterDismissed = "dismissed"
+	NotificationFilterAll       = "all"
 )
 
 // DefaultDestinationSOCBellConfig returns the default DestinationConfig for the built-in SOC Notification Bell.
@@ -235,6 +244,8 @@ type NotificationRecord struct {
 	DismissedAt *time.Time `json:"dismissedAt,omitempty" example:"2026-08-17T12:10:00Z"`
 	// Optional recipient user IDs targeted to receive this notification.
 	Recipients []string `json:"recipients,omitempty" example:"user-1,user-2"`
+	// Who the notification was sent to, relative to the requestor: everyone, you, or others.
+	Audience string `json:"-"`
 }
 
 // @Description NotificationAuditEntry represents a user view or dismissal audit state record.

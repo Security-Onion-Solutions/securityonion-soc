@@ -9,10 +9,12 @@ package notify
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -344,6 +346,111 @@ func TestWebhookChannelSendErrors(t *testing.T) {
 	err = ch.Send(context.Background(), params, payload)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "webhook request failed")
+}
+
+const redactTestUrl = "https://user:pass9@hooks.example.com/services/SECRET?token=Q4x9k2"
+
+func sendWithRedaction(t *testing.T, params map[string]interface{}, mock *mockHTTPClient) error {
+	ch := NewWebhookChannel(nil)
+	ch.client = mock
+	err := ch.Send(context.Background(), params, &model.NotificationPayload{Title: "Test"})
+	require.Error(t, err)
+	return err
+}
+
+func assertNoSecrets(t *testing.T, err error, secrets ...string) {
+	for _, secret := range secrets {
+		assert.NotContains(t, err.Error(), secret)
+	}
+}
+
+func TestWebhookChannelSend_RequestErrorsCarryNoUrl(t *testing.T) {
+	params := map[string]interface{}{"webhookUrl": redactTestUrl}
+	urlErr := &url.Error{Op: "Post", URL: redactTestUrl, Err: errors.New("dial tcp: lookup " + redactTestUrl + ": no such host")}
+
+	err := sendWithRedaction(t, params, &mockHTTPClient{err: urlErr})
+	assert.Contains(t, err.Error(), "webhook request failed")
+	assertNoSecrets(t, err, "pass9", "SECRET", "Q4x9k2")
+
+	params["method"] = "PO ST"
+	err = sendWithRedaction(t, params, &mockHTTPClient{})
+	assert.Contains(t, err.Error(), "failed to create http request")
+	assertNoSecrets(t, err, "pass9", "SECRET", "Q4x9k2", "hooks.example.com")
+}
+
+func TestWebhookChannelValidateConfig_InvalidUrlNotInError(t *testing.T) {
+	err := NewWebhookChannel(nil).ValidateConfig(map[string]interface{}{"webhookUrl": "hooks.example.com/services/SECRET"})
+	require.Error(t, err)
+	assertNoSecrets(t, err, "SECRET", "hooks.example.com")
+}
+
+func TestWebhookChannelSend_ResponseBodyIsRedacted(t *testing.T) {
+	basic := base64.StdEncoding.EncodeToString([]byte("user:pass9"))
+	params := map[string]interface{}{
+		"webhookUrl": redactTestUrl,
+		"headers":    map[string]interface{}{"Authorization": "Bearer tok_abc123", "X-Empty": ""},
+	}
+
+	testCases := []struct {
+		name    string
+		body    string
+		keeps   []string
+		secrets []string
+	}{
+		{"url and header value", `{"error":"bad token Bearer tok_abc123 for ` + redactTestUrl + `"}`, []string{"status code 401", `{"error":"bad token`}, []string{"tok_abc123", "SECRET", "pass9", "Q4x9k2"}},
+		{"query value alone", "invalid api key Q4x9k2", []string{"invalid api key"}, []string{"Q4x9k2"}},
+		{"path segment alone", "unknown hook SECRET", []string{"unknown hook"}, []string{"SECRET"}},
+		{"bearer token alone", "token tok_abc123 revoked", []string{"revoked"}, []string{"tok_abc123"}},
+		{"basic credential", "Authorization: Basic " + basic, []string{"Authorization: Basic"}, []string{basic}},
+		{"escaped slashes", strings.ReplaceAll(redactTestUrl, "/", `\/`), nil, []string{"SECRET"}},
+		{"percent-encoded", url.QueryEscape(redactTestUrl), nil, []string{"SECRET"}},
+		{"secret across the 1 KB cut", strings.Repeat("x", 1000) + redactTestUrl + strings.Repeat("y", 400), nil, []string{"SECR", "SECRET"}},
+		{"secret across the 2 KB read", strings.Repeat(redactTestUrl+" ", 20) + strings.Repeat("z", 1998-20*len(redactTestUrl+" ")) + redactTestUrl + " tail", nil, []string{"SECR", "SECRET", "Q4x9"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := sendWithRedaction(t, params, &mockHTTPClient{respStatus: 401, respBody: tc.body})
+			assert.Contains(t, err.Error(), "status code 401")
+			for _, kept := range tc.keeps {
+				assert.Contains(t, err.Error(), kept)
+			}
+			assertNoSecrets(t, err, tc.secrets...)
+		})
+	}
+}
+
+func TestWebhookChannelSend_LongSecretIsRedacted(t *testing.T) {
+	token := "LONGTOKEN" + strings.Repeat("k", 1491)
+	params := map[string]interface{}{
+		"webhookUrl": "https://example.com/hook",
+		"headers":    map[string]interface{}{"Authorization": "Bearer " + token},
+	}
+
+	testCases := []struct {
+		name string
+		body string
+	}{
+		{"whole secret before the 1 KB cut", token + " " + strings.Repeat("z", 600)},
+		{"secret cut off by the 2 KB read", strings.Repeat("z", 700) + " " + token},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := sendWithRedaction(t, params, &mockHTTPClient{respStatus: 401, respBody: tc.body})
+			assert.Contains(t, err.Error(), "status code 401")
+			assertNoSecrets(t, err, "LONGTOKEN", "kkkk")
+		})
+	}
+}
+
+func TestWebhookChannelSend_PlainBodyIsUnchanged(t *testing.T) {
+	params := map[string]interface{}{
+		"webhookUrl": "https://example.com",
+		"headers":    map[string]interface{}{"X-Empty": "", "X-Short": "abc"},
+	}
+	err := sendWithRedaction(t, params, &mockHTTPClient{respStatus: 400, respBody: "bad request abc"})
+	assert.Equal(t, "webhook returned non-2xx status code 400: bad request abc", err.Error())
 }
 
 func TestWebhookChannelSendSlack_WithBaseUrl_PrefixesRelativeLink(t *testing.T) {

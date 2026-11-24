@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -473,7 +474,11 @@ func (ac *AssistantCoordinator) PrerequisiteModules() []string {
 
 func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 	ac.srv.AssistantManager = ac
-	ac.FunctionLibrary = knownTools
+	toolsCfg, _ := config["tools"].(map[string]any)
+	queryNotificationsCfg, _ := toolsCfg["queryNotifications"].(map[string]any)
+	queryNotifications := newQueryNotificationsTool(queryNotificationsCfg)
+	ac.FunctionLibrary = maps.Clone(knownTools)
+	ac.FunctionLibrary[queryNotifications.GetName()] = queryNotifications
 	ac.AutomationKindLibrary = knownAutomationKinds
 	ac.DelegationLibrary = map[string]Tool{}
 
@@ -600,8 +605,7 @@ func (ac *AssistantCoordinator) Init(config module.ModuleConfig) (err error) {
 
 	ac.getPrompt()
 
-	toolsCfg, ok := config["tools"].(map[string]any)
-	if ok {
+	if toolsCfg != nil {
 		ac.filterEventFields = module.GetStringArrayDefault(toolsCfg, "filterEventFields", DEFAULT_FILTER_EVENT_FIELDS)
 	}
 
@@ -1532,6 +1536,12 @@ func (ac *AssistantCoordinator) ExecuteTool(ctx context.Context, toolName string
 			logger.Error("tool not found")
 			return nil, ErrToolNotFound
 		}
+	}
+
+	// A tool with no required inputs may be called with none.
+	schema := tool.GetSchema().Json
+	if len(bytes.TrimSpace(toolReq.Params)) == 0 && (schema == nil || len(schema.Required) == 0) {
+		toolReq.Params = json.RawMessage("{}")
 	}
 
 	assistantCtx := modcontext.WriteIsAssistant(ctx, true)

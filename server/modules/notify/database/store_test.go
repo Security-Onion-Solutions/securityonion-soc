@@ -138,6 +138,114 @@ func TestStore_GetNotifications_EmptyUserIdentifiersNotReadAll(t *testing.T) {
 	mDB.AssertExpectations(t)
 }
 
+func expectNotificationQuery(mDB *mockdb.MockDB, rows *mockdb.MockRows, username string, identifiers []string, readAll bool, sqlCheck func(string) bool) {
+	args := []any{mock.Anything, mock.MatchedBy(sqlCheck), username}
+	if !readAll {
+		for _, id := range identifiers {
+			args = append(args, id)
+		}
+	}
+	args = append(args, 11)
+	mDB.On("Query", args...).Return(rows, nil).Once()
+}
+
+func oneNotificationRow(recipientsJSON []byte) *mockdb.MockRows {
+	rows := new(mockdb.MockRows)
+	rows.On("Close").Return()
+	rows.On("Next").Return(true).Once()
+	rows.On("Next").Return(false).Once()
+	rows.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		*(args[0].(*string)) = "notif-1"
+		*(args[1].(*string)) = "detection"
+		*(args[9].(*time.Time)) = time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+		*(args[10].(*[]byte)) = recipientsJSON
+	}).Return(nil).Once()
+	return rows
+}
+
+func TestStore_GetNotifications_Audience(t *testing.T) {
+	tests := []struct {
+		name        string
+		recipients  []byte
+		identifiers []string
+		readAll     bool
+		expected    string
+	}{
+		{"empty recipients", []byte(`[]`), []string{"u1"}, false, model.NotificationAudienceEveryone},
+		{"null recipients", nil, []string{"u1"}, false, model.NotificationAudienceEveryone},
+		{"requestor id", []byte(`["u1"]`), []string{"u1", "client-1"}, false, model.NotificationAudienceYou},
+		{"api client id", []byte(`["client-1"]`), []string{"u1", "client-1"}, false, model.NotificationAudienceYou},
+		{"read_all sole recipient", []byte(`["u1"]`), []string{"u1"}, true, model.NotificationAudienceYou},
+		{"one of several", []byte(`["other", "u1"]`), []string{"u1"}, false, model.NotificationAudienceYou},
+		{"read_all one of several", []byte(`["other", "u1"]`), []string{"u1"}, true, model.NotificationAudienceYou},
+		{"read_all another user", []byte(`["other"]`), []string{"u1"}, true, model.NotificationAudienceOthers},
+		{"read_all own email", []byte(`["u1@example.com"]`), []string{"u1", "kratos-1"}, true, model.NotificationAudienceOthers},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mDB := new(mockdb.MockDB)
+			s := &Store{db: mDB}
+			expectNotificationQuery(mDB, oneNotificationRow(tt.recipients), "user1", tt.identifiers, tt.readAll, func(string) bool { return true })
+
+			res, err := s.GetNotifications(context.Background(), "user1", tt.identifiers, tt.readAll, "", time.Time{}, 10)
+			assert.NoError(t, err)
+			assert.Len(t, res.Notifications, 1)
+			assert.Equal(t, tt.expected, res.Notifications[0].Audience)
+			mDB.AssertExpectations(t)
+		})
+	}
+}
+
+func TestStore_GetNotifications_Filters(t *testing.T) {
+	assert.Equal(t, "unread", model.NotificationFilterUnread)
+	assert.Equal(t, "dismissed", model.NotificationFilterDismissed)
+	assert.Equal(t, "all", model.NotificationFilterAll)
+	assert.Equal(t, "everyone", model.NotificationAudienceEveryone)
+	assert.Equal(t, "you", model.NotificationAudienceYou)
+	assert.Equal(t, "others", model.NotificationAudienceOthers)
+
+	const unreadClause = "COALESCE(us.is_read, FALSE) = FALSE"
+	const notDismissedClause = "COALESCE(us.is_dismissed, FALSE) = FALSE"
+	const dismissedClause = "COALESCE(us.is_dismissed, FALSE) = TRUE"
+
+	tests := []struct {
+		filter string
+		check  func(string) bool
+	}{
+		{model.NotificationFilterUnread, func(sql string) bool {
+			return strings.Contains(sql, unreadClause) && strings.Contains(sql, notDismissedClause)
+		}},
+		{model.NotificationFilterDismissed, func(sql string) bool {
+			return strings.Contains(sql, dismissedClause) && !strings.Contains(sql, unreadClause)
+		}},
+		{model.NotificationFilterAll, func(sql string) bool {
+			return !strings.Contains(sql, "us.is_dismissed, FALSE) =") && !strings.Contains(sql, unreadClause)
+		}},
+		{"", func(sql string) bool {
+			return strings.Contains(sql, notDismissedClause) && !strings.Contains(sql, unreadClause)
+		}},
+		{"bogus", func(sql string) bool {
+			return strings.Contains(sql, notDismissedClause) && !strings.Contains(sql, unreadClause)
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run("filter "+tt.filter, func(t *testing.T) {
+			mDB := new(mockdb.MockDB)
+			s := &Store{db: mDB}
+			rows := new(mockdb.MockRows)
+			rows.On("Close").Return()
+			rows.On("Next").Return(false).Once()
+			expectNotificationQuery(mDB, rows, "user1", []string{"u1"}, false, tt.check)
+
+			_, err := s.GetNotifications(context.Background(), "user1", []string{"u1"}, false, tt.filter, time.Time{}, 10)
+			assert.NoError(t, err)
+			mDB.AssertExpectations(t)
+		})
+	}
+}
+
 func TestStore_SetAllRead_EmptyUserIdentifiersNotReadAll(t *testing.T) {
 	mDB := new(mockdb.MockDB)
 	s := &Store{db: mDB}

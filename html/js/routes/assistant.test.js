@@ -5699,6 +5699,17 @@ test('shouldAutoApproveTool returns true for query_reports when setting enabled'
   expect(result).toBe(true);
 });
 
+test('shouldAutoApproveTool auto-approves the notification reads only when setting enabled', () => {
+  comp.alwaysApproveReadRequests = true;
+  expect(comp.shouldAutoApproveTool('query_notifications')).toBe(true);
+  expect(comp.shouldAutoApproveTool('list_destinations')).toBe(true);
+  expect(comp.shouldAutoApproveTool('send_notification')).toBe(false);
+
+  comp.alwaysApproveReadRequests = false;
+  expect(comp.shouldAutoApproveTool('query_notifications')).toBe(false);
+  expect(comp.shouldAutoApproveTool('list_destinations')).toBe(false);
+});
+
 test('shouldAutoApproveTool returns false for other tools when setting enabled', () => {
   comp.alwaysApproveReadRequests = true;
   

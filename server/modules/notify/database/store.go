@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -182,11 +183,11 @@ func (s *Store) GetNotifications(ctx context.Context, username string, userIdent
 		query += fmt.Sprintf(" AND n.created_at >= $%d", len(args))
 	}
 
-	if filter == "unread" {
+	if filter == model.NotificationFilterUnread {
 		query += " AND COALESCE(us.is_read, FALSE) = FALSE AND COALESCE(us.is_dismissed, FALSE) = FALSE"
-	} else if filter == "dismissed" {
+	} else if filter == model.NotificationFilterDismissed {
 		query += " AND COALESCE(us.is_dismissed, FALSE) = TRUE"
-	} else if filter == "all" {
+	} else if filter == model.NotificationFilterAll {
 		// all includes all active and dismissed notifications
 	} else {
 		// default / "active": show active notifications (both read and unread, but not dismissed)
@@ -251,6 +252,7 @@ func (s *Store) GetNotifications(ctx context.Context, username string, userIdent
 			ReadAt:      readAt,
 			IsDismissed: isDismissed,
 			DismissedAt: dismissedAt,
+			Audience:    notificationAudience(recipients, userIdentifiers),
 		})
 	}
 
@@ -269,6 +271,19 @@ func (s *Store) GetNotifications(ctx context.Context, username string, userIdent
 		Truncated:     truncated,
 		Count:         len(notifications),
 	}, nil
+}
+
+// notificationAudience mirrors the query's recipient match.
+func notificationAudience(recipients []string, userIdentifiers []string) string {
+	if len(recipients) == 0 {
+		return model.NotificationAudienceEveryone
+	}
+	for _, recipient := range recipients {
+		if slices.Contains(userIdentifiers, recipient) {
+			return model.NotificationAudienceYou
+		}
+	}
+	return model.NotificationAudienceOthers
 }
 
 // GetLastUnreadTime returns the created_at timestamp of the newest unread/undismissed notification.

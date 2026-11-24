@@ -557,18 +557,17 @@ func convertJSONSchemaToOpenAI(schema *model.ToolSchema) map[string]any {
 
 	allPropNames := make([]string, 0, len(schema.Properties))
 
-	if len(schema.Properties) > 0 {
-		properties := make(map[string]any)
-		for propName, propSchema := range schema.Properties {
-			allPropNames = append(allPropNames, propName)
-			prop := convertPropertyToOpenAI(&propSchema)
-			if !slices.Contains(schema.Required, propName) {
-				prop["type"] = append(prop["type"].([]string), "null")
-			}
-			properties[propName] = prop
+	// Strict mode rejects an object schema without properties, even for a tool with no inputs.
+	properties := make(map[string]any, len(schema.Properties))
+	for propName, propSchema := range schema.Properties {
+		allPropNames = append(allPropNames, propName)
+		prop := convertPropertyToOpenAI(&propSchema)
+		if !slices.Contains(schema.Required, propName) {
+			prop["type"] = append(prop["type"].([]string), "null")
 		}
-		result["properties"] = properties
+		properties[propName] = prop
 	}
+	result["properties"] = properties
 
 	slices.Sort(allPropNames)
 	result["required"] = allPropNames
