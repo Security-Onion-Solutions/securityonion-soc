@@ -80,11 +80,13 @@ func (t *SendNotificationTool) GetDescription() string {
 	Leave it false for a notification that stands on its own. A notification from an alert triage
 	automation always links to the triaged alert instead of the chat; do not add that link yourself.
 	Sending cannot be undone and a notification cannot be recalled, so send at most one per finding.
-	If it fails with ERROR_DESTINATION_NOT_FOUND, nothing was sent. If the user named destinations,
-	correct them once, with list_destinations if it is available, or ask the user; never drop destinations
-	to send to every destination instead. If the user named none, send once more without destinations. After
-	ERROR_NOTIFICATION_TARGETED_SEND_FAILED, tell the user which destinations failed; resend only to those,
-	and only if the user asks. After any other error, don't resend; tell the user what failed.`
+	If it fails with ERROR_DESTINATION_NOT_FOUND, nothing was sent: a destination matched nothing, or a
+	name matched more than one. If the user named destinations, correct them once, with list_destinations
+	if it is available, or ask the user; never drop destinations to send to every destination instead. If
+	the user named none, send once more without destinations. A result that lists failed destinations
+	was delivered to the others; tell the user which failed, and resend only to those, only if the user
+	asks. ERROR_NOTIFICATION_TARGETED_SEND_FAILED means no named destination received it. After any error
+	other than ERROR_DESTINATION_NOT_FOUND, don't resend; tell the user what failed.`
 }
 
 func (t *SendNotificationTool) GetSchema() model.JSONSchema {
@@ -259,7 +261,7 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 		_, err = srv.Notifier.Send(ctx, payload)
 		if err != nil {
 			logger.WithError(err).Error("error sending notification")
-			return nil, errors.New("ERROR_NOTIFICATION_SEND_FAILED: at least one destination failed; others may already have received it; do not resend.")
+			return nil, errors.New("ERROR_NOTIFICATION_SEND_FAILED")
 		}
 		result.Result = submitted + severityNote + sharedNote
 		return result, nil
@@ -317,7 +319,7 @@ func resolveDestinationIds(logger *log.Entry, dests map[string]model.Destination
 			return nil, notFound
 		case matches > 1:
 			logger.WithField("notifyDestinationIds", strings.Join(refs, ",")).Info("notification destinations include an ambiguous name")
-			return nil, fmt.Errorf("ERROR_DESTINATION_NOT_FOUND: more than one destination is named %q", ref)
+			return nil, notFound
 		}
 		if !slices.Contains(ids, id) {
 			ids = append(ids, id)
@@ -344,7 +346,7 @@ func resolveDestinationRef(dests map[string]model.DestinationConfig, ref string)
 }
 
 // sendToDestinations sends to each destination on its own, so each one's outcome is known.
-// The text after an error code is for the model and the analyst alike.
+// A partial failure is reported in the result, since error codes carry no detail.
 func sendToDestinations(ctx context.Context, logger *log.Entry, notifier server.Notifier, payload *model.NotificationPayload, ids []string, dests map[string]model.DestinationConfig) (string, error) {
 	var sent, failed, skipped []string
 	for _, id := range ids {
@@ -367,20 +369,19 @@ func sendToDestinations(ctx context.Context, logger *log.Entry, notifier server.
 		skippedText = " Skipped: " + strings.Join(skipped, "; ") + "."
 	}
 
-	if len(failed) > 0 {
-		sentText := "none"
-		if len(sent) > 0 {
-			sentText = strings.Join(sent, ", ")
-		}
-		return "", fmt.Errorf("ERROR_NOTIFICATION_TARGETED_SEND_FAILED: %d of %d sent; resend only to the failed destinations, and only if the user asks. Sent: %s. Failed: %s.%s",
-			len(sent), len(ids), sentText, strings.Join(failed, ", "), skippedText)
+	if len(failed) > 0 && len(sent) == 0 {
+		return "", errors.New("ERROR_NOTIFICATION_TARGETED_SEND_FAILED")
 	}
 
 	report := fmt.Sprintf("Sent to %d of %d", len(sent), len(ids))
 	if len(sent) > 0 {
 		report += ": " + strings.Join(sent, ", ")
 	}
-	return report + "." + skippedText, nil
+	report += "."
+	if len(failed) > 0 {
+		report += " Failed: " + strings.Join(failed, ", ") + "; resend only to those, and only if the user asks."
+	}
+	return report + skippedText, nil
 }
 
 func destinationLabel(id string, dest model.DestinationConfig) string {

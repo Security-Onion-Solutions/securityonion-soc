@@ -156,7 +156,7 @@ func TestSendNotificationTool_Execute(t *testing.T) {
 			name:          "notifier error is reported without driver text",
 			params:        `{"title": "T", "summary": "S"}`,
 			sendErr:       assert.AnError,
-			expectedError: "ERROR_NOTIFICATION_SEND_FAILED: at least one destination failed; others may already have received it; do not resend.",
+			expectedError: "ERROR_NOTIFICATION_SEND_FAILED",
 		},
 	}
 
@@ -523,7 +523,7 @@ func TestSendNotificationTool_Execute_AmbiguousName(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 	_, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S", "share_chat": true, "destinations": ["ir slack"]}`, nil, nil)
 
-	assert.EqualError(t, err, `ERROR_DESTINATION_NOT_FOUND: more than one destination is named "ir slack"`)
+	assert.EqualError(t, err, "ERROR_DESTINATION_NOT_FOUND")
 	assert.Empty(t, fakeNotifier.InputDestinations)
 }
 
@@ -599,13 +599,12 @@ func TestSendNotificationTool_Execute_DestinationInputs(t *testing.T) {
 func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 	failure := errors.New("webhook request failed: Post \"https://hooks.slack.com/services/SECRET\": dial tcp: refused")
 	testCases := []struct {
-		name          string
-		destinations  string
-		results       map[string]server.FakeSendResult
-		resultHas     []string
-		errorPrefix   string
-		errorHas      []string
-		errorExcludes []string
+		name           string
+		destinations   string
+		results        map[string]server.FakeSendResult
+		resultHas      []string
+		resultExcludes []string
+		expectedError  string
 	}{
 		{
 			name:         "disabled destination is skipped and counted",
@@ -626,34 +625,35 @@ func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 			},
 		},
 		{
-			name:         "a failure names what was sent and what failed",
-			destinations: `["ir-slack", "soc-bell"]`,
-			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "soc-bell": {Err: failure}},
-			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 2 sent; resend only to the failed destinations, and only if the user asks.",
-			errorHas:     []string{"Sent: IR Slack (ir-slack).", "Failed: soc-bell."},
-			errorExcludes: []string{
-				"SECRET", "hooks.slack.com", "Skipped",
-			},
+			name:           "a partial failure names what was sent and what failed",
+			destinations:   `["ir-slack", "soc-bell"]`,
+			results:        map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "soc-bell": {Err: failure}},
+			resultHas:      []string{"Sent to 1 of 2: IR Slack (ir-slack).", "Failed: soc-bell; resend only to those, and only if the user asks."},
+			resultExcludes: []string{"SECRET", "hooks.slack.com", "Skipped", "ERROR_"},
 		},
 		{
-			name:         "a failure also lists skips",
+			name:         "a partial failure also lists skips",
 			destinations: `["ir-slack", "off", "soc-bell"]`,
 			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "off": {}, "soc-bell": {Err: failure}},
-			errorPrefix:  "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 1 of 3 sent;",
-			errorHas:     []string{"Sent: IR Slack (ir-slack).", "Failed: soc-bell.", "Skipped: Off (off) (disabled)."},
+			resultHas:    []string{"Sent to 1 of 3: IR Slack (ir-slack).", "Failed: soc-bell;", "Skipped: Off (off) (disabled)."},
 		},
 		{
 			name:         "destinations with the same name are told apart by id",
 			destinations: `["ir-slack", "uuid-1111"]`,
 			results:      map[string]server.FakeSendResult{"ir-slack": {Count: 1}, "uuid-1111": {Err: failure}},
-			errorHas:     []string{"Sent: IR Slack (ir-slack).", "Failed: IR Slack (uuid-1111)."},
+			resultHas:    []string{"Sent to 1 of 2: IR Slack (ir-slack).", "Failed: IR Slack (uuid-1111);"},
 		},
 		{
 			name:          "nothing sent",
 			destinations:  `["soc-bell"]`,
 			results:       map[string]server.FakeSendResult{"soc-bell": {Err: failure}},
-			errorPrefix:   "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 0 of 1 sent; resend only to the failed destinations, and only if the user asks. Sent: none. Failed: soc-bell.",
-			errorExcludes: []string{"SECRET", "hooks.slack.com"},
+			expectedError: "ERROR_NOTIFICATION_TARGETED_SEND_FAILED",
+		},
+		{
+			name:          "nothing sent, with a skip",
+			destinations:  `["off", "soc-bell"]`,
+			results:       map[string]server.FakeSendResult{"off": {}, "soc-bell": {Err: failure}},
+			expectedError: "ERROR_NOTIFICATION_TARGETED_SEND_FAILED",
 		},
 	}
 
@@ -664,22 +664,17 @@ func TestSendNotificationTool_Execute_TargetedResults(t *testing.T) {
 				result, err, fakeNotifier := runTargetedSend(t, ctx, `{"title": "T", "summary": "S", "severity": "high", "destinations": `+tc.destinations+`}`, tc.results, nil)
 
 				assert.Len(t, fakeNotifier.InputDestinations, len(tc.results))
-				if len(tc.errorHas) == 0 && tc.errorPrefix == "" {
-					require.NoError(t, err)
-					for _, expected := range tc.resultHas {
-						assert.Contains(t, result.Result, expected)
-					}
+				if tc.expectedError != "" {
+					assert.EqualError(t, err, tc.expectedError)
 					return
 				}
 
-				require.Error(t, err)
-				assert.True(t, strings.HasPrefix(err.Error(), "ERROR_NOTIFICATION_TARGETED_SEND_FAILED: "), err.Error())
-				assert.True(t, strings.HasPrefix(err.Error(), tc.errorPrefix), err.Error())
-				for _, expected := range tc.errorHas {
-					assert.Contains(t, err.Error(), expected)
+				require.NoError(t, err)
+				for _, expected := range tc.resultHas {
+					assert.Contains(t, result.Result, expected)
 				}
-				for _, excluded := range tc.errorExcludes {
-					assert.NotContains(t, err.Error(), excluded)
+				for _, excluded := range tc.resultExcludes {
+					assert.NotContains(t, result.Result, excluded)
 				}
 			})
 		}
@@ -692,10 +687,7 @@ func TestSendNotificationTool_Execute_BroadcastFailureHidesDriverText(t *testing
 		ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, requestor)
 		_, err, _ := runTargetedSend(t, ctx, `{"title": "T", "summary": "S"}`, nil, failure)
 
-		require.Error(t, err)
-		assert.True(t, strings.HasPrefix(err.Error(), "ERROR_NOTIFICATION_SEND_FAILED"))
-		assert.NotContains(t, err.Error(), "SECRET")
-		assert.NotContains(t, err.Error(), "hooks.slack.com")
+		assert.EqualError(t, err, "ERROR_NOTIFICATION_SEND_FAILED")
 	}
 }
 

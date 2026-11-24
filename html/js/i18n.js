@@ -2136,7 +2136,7 @@ const i18n = {
       ERROR_CORRELATION_REQUIRES_ESQL: 'Correlation rules require ES|QL, which is turned off. An administrator can turn it on with the useEsql setting.',
       ERROR_DESTINATION_NOT_FOUND: 'The specified notification destination was not found.',
       ERROR_NOTIFICATION_SEND_FAILED: 'Failed to send notification. Check destination settings and SOC logs for details.',
-      ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 'The notification was not delivered to every destination: {detail}',
+      ERROR_NOTIFICATION_TARGETED_SEND_FAILED: 'The notification was not delivered to any of the specified destinations. Check destination settings and SOC logs for details.',
       ERROR_JINJA_NOT_SUPPORTED: 'For security reasons Jinja syntax cannot be specified in configuration values.',
       ERROR_LICENSE_INVALID: 'Security Onion Pro license is required for this operation',
       ERROR_QUERY_INVALID__GROUP_EMPTY: 'The search query has an empty group.',
