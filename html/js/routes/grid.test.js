@@ -657,3 +657,26 @@ test('loadUrlParameters parses tab=alarms and tab=metrics with nodeId', () => {
 
 
 
+
+test('mon drops header, cell and card bind trafficMonInDropsPps', () => {
+	const fs = require('fs');
+	const path = require('path');
+
+	const header = comp.headers.find(h => h.title == comp.i18n.trafficMonInDropsAbbr);
+	expect(header.value).toBe('trafficMonInDropsPps');
+
+	const html = fs.readFileSync(path.join(__dirname, '../../pages/grid.html'), 'utf8');
+	const lines = html.split('\n');
+	const cell = lines.find(line => line.includes("'nodeTrafficMonInDrops_' + item.id"));
+	const card = lines.find(line => line.includes('id="node_trafficMonInDrops"'));
+	expect(cell).toContain('formatDecimal1(item.' + header.value + ') }} {{ i18n.pps }}');
+	expect(card).toContain('formatDecimal1(item.' + header.value + ') }} {{ i18n.pps }}');
+	expect(html).not.toContain('trafficMonDropsMbs');
+	expect(html).not.toContain('trafficMonInDropsMbs');
+});
+
+test('packets per second i18n keys', () => {
+	const en = global.i18n.getLocalizedTranslations('en-US');
+	expect(en.pps).toBe('packets/s');
+	expect(en.unitPps).toBe('Unit: packets/s');
+});

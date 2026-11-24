@@ -177,6 +177,9 @@ func (mod *PostgresMetricsModule) evaluationLoop() {
 			return
 		case <-ticker.C:
 			if mod.alarmStore != nil {
+				// Converted thresholds must be saved before evaluation; a failed save is logged
+				// by the store and retried next tick, and evaluation still uses converted values.
+				_ = mod.alarmStore.SaveConvertedThresholds(ctx)
 				if err := mod.alarmStore.EvaluateAlarms(ctx); err != nil {
 					log.WithError(err).Warn("Failed to evaluate alarms in background loop")
 				}

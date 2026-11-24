@@ -9,6 +9,7 @@ package influxdb
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -132,6 +133,53 @@ type recordingQueryApi struct {
 func (q *recordingQueryApi) Query(ctx context.Context, query string) (*api.QueryTableResult, error) {
 	q.queries = append(q.queries, query)
 	return nil, errors.New("recorded query")
+}
+
+type valueQueryApi struct {
+	api.QueryAPI
+	values map[string]string
+}
+
+func (q *valueQueryApi) Query(ctx context.Context, query string) (*api.QueryTableResult, error) {
+	for marker, value := range q.values {
+		if strings.Contains(query, marker) {
+			csv := "#datatype,string,long,dateTime:RFC3339,double,string\n" +
+				"#group,false,false,false,false,true\n" +
+				"#default,_result,,,,\n" +
+				",result,table,_time,_value,host\n" +
+				",,0,2026-01-01T00:00:00Z," + value + ",sensor1\n\n"
+			return api.NewQueryTableResult(io.NopCloser(strings.NewReader(csv))), nil
+		}
+	}
+	return nil, errors.New("no value")
+}
+
+func TestUpdateOsStatusMonitorDropsInPacketsPerSecond(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.client = &fakeInfluxClient{}
+	metrics.queryApi = &valueQueryApi{values: map[string]string{
+		`r["_field"] == "drop_in"`:    "10000",
+		`r["_field"] == "bytes_recv"`: "1000000",
+	}}
+
+	metrics.updateOsStatus()
+
+	assert.Equal(tester, 10000.0, metrics.trafficMonInDropsPps["sensor1"])
+	assert.Equal(tester, 8.0, metrics.trafficMonInMbs["sensor1"])
+}
+
+func TestUpdateNodeMetricsTrafficMonInDropsPps(tester *testing.T) {
+	metrics := NewInfluxDBMetrics(server.NewFakeAuthorizedServer(nil))
+	metrics.cacheExpirationMs = 99999
+	metrics.lastOsUpdateTime = time.Now()
+	metrics.lastProcessUpdateTime = time.Now()
+	metrics.lastEpsUpdateTime = time.Now()
+	metrics.lastEventstoreUpdateTime = time.Now()
+	metrics.trafficMonInDropsPps = map[string]float64{"id1": 5}
+
+	node := model.NewNode("id1")
+	metrics.UpdateNodeMetrics(context.Background(), node)
+	assert.Equal(tester, 5.0, node.TrafficMonInDropsPps)
 }
 
 func TestUpdateEpsQueriesSearchStage(tester *testing.T) {

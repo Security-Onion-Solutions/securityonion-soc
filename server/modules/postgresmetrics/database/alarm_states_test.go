@@ -7,6 +7,8 @@ package database_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,4 +168,36 @@ func TestStore_DeleteAlarmStatesForAlarm(t *testing.T) {
 	err := s.DeleteAlarmStatesForAlarm(context.Background(), "alarm-1")
 	assert.NoError(t, err)
 	mDB.AssertExpectations(t)
+}
+
+func TestStore_UpdateAlarmStateThreshold(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		mDB := new(mockdb.MockDB)
+		s := database.New(mDB)
+
+		mDB.On("Exec", mock.Anything, mock.MatchedBy(func(sql string) bool {
+			return strings.Contains(sql, "UPDATE alarm_states SET threshold = $1") && strings.Contains(sql, "WHERE alarm_id = $2")
+		}), "62500", "alarm-1").Return(nil).Once()
+
+		err := s.UpdateAlarmStateThreshold(context.Background(), "alarm-1", "62500")
+		assert.NoError(t, err)
+		mDB.AssertExpectations(t)
+		mDB.AssertNumberOfCalls(t, "Exec", 1)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		mDB := new(mockdb.MockDB)
+		s := database.New(mDB)
+
+		mDB.On("Exec", mock.Anything, mock.Anything, "62500", "alarm-1").Return(errors.New("db error")).Once()
+
+		err := s.UpdateAlarmStateThreshold(context.Background(), "alarm-1", "62500")
+		assert.Error(t, err)
+		mDB.AssertExpectations(t)
+	})
+
+	t.Run("nil database", func(t *testing.T) {
+		s := database.New(nil)
+		assert.NoError(t, s.UpdateAlarmStateThreshold(context.Background(), "alarm-1", "62500"))
+	})
 }

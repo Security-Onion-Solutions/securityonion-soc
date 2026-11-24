@@ -6,6 +6,7 @@
 package model
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -187,4 +188,15 @@ func TestUnmarshalAlarms(t *testing.T) {
 
 	_, err = UnmarshalAlarms("invalid json")
 	assert.Error(t, err)
+}
+
+func TestAlarmThresholdUnitsJSON(t *testing.T) {
+	alarms, err := UnmarshalAlarms(`[{"id":"1","name":"Alarm 1","metric":"net_drops","operator":"gt","threshold":"62500","severity":"high","thresholdUnits":"pps"}]`)
+	assert.NoError(t, err)
+	assert.Len(t, alarms, 1)
+	assert.Equal(t, "pps", alarms[0].ThresholdUnits)
+
+	data, err := json.Marshal(alarms[0])
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"thresholdUnits":"pps"`)
 }

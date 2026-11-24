@@ -8,14 +8,42 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/apex/log"
 )
 
+// Telegraf writes node_config every 5 minutes, so the lookback must exceed that interval.
+const nodeConfigLookback = "20 minutes"
+
+// nodeInterfacesCTE resolves each host's latest non-empty manint and monint separately, so a
+// host that reports no monitor interface still resolves its management interface. Its one
+// verb is the lower time bound on node_config rows.
+const nodeInterfacesCTE = `node_interfaces AS (
+			SELECT
+				COALESCE(man.host, mon.host) AS host,
+				COALESCE(man.manint, '') AS manint,
+				COALESCE(mon.monint, '') AS monint
+			FROM (
+				SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host' AS host, m.fields->>'manint' AS manint
+				FROM telegraf.node_config m
+				JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id
+				WHERE m.time >= %[1]s AND m.fields->>'manint' IS NOT NULL AND m.fields->>'manint' <> ''
+				ORDER BY tag.tags->>'host', m.time DESC
+			) man
+			FULL OUTER JOIN (
+				SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host' AS host, m.fields->>'monint' AS monint
+				FROM telegraf.node_config m
+				JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id
+				WHERE m.time >= %[1]s AND m.fields->>'monint' IS NOT NULL AND m.fields->>'monint' <> ''
+				ORDER BY tag.tags->>'host', m.time DESC
+			) mon ON man.host = mon.host
+		)`
+
 type NetworkRates struct {
 	TrafficMonInMbs      map[string]float64
-	TrafficMonInDropsMbs map[string]float64
+	TrafficMonInDropsPps map[string]float64
 	TrafficManInMbs      map[string]float64
 	TrafficManOutMbs     map[string]float64
 }
@@ -23,7 +51,7 @@ type NetworkRates struct {
 func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*NetworkRates, error) {
 	rates := &NetworkRates{
 		TrafficMonInMbs:      make(map[string]float64),
-		TrafficMonInDropsMbs: make(map[string]float64),
+		TrafficMonInDropsPps: make(map[string]float64),
 		TrafficManInMbs:      make(map[string]float64),
 		TrafficManOutMbs:     make(map[string]float64),
 	}
@@ -31,24 +59,31 @@ func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*Ne
 	manint := make(map[string]string)
 	monint := make(map[string]string)
 
-	qConf := `
-		SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'manint', m.fields->>'monint' 
-		FROM telegraf.node_config m 
-		JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
-		WHERE m.time >= $1 AND m.fields->>'manint' IS NOT NULL AND m.fields->>'monint' IS NOT NULL 
-		ORDER BY tag.tags->>'host', m.time DESC`
+	qConf := "WITH " + fmt.Sprintf(nodeInterfacesCTE, "$1") + `
+		SELECT host, manint, monint FROM node_interfaces`
 
-	if rows, err := s.db.Query(ctx, qConf, startTime); err == nil {
-		for rows.Next() {
-			var host, man, mon string
-			if err := rows.Scan(&host, &man, &mon); err == nil {
-				manint[host] = man
-				monint[host] = mon
-			}
-		}
-		rows.Close()
-	} else {
+	confRows, err := s.db.Query(ctx, qConf, startTime)
+	if err != nil {
 		s.handleQueryError(err, "FetchNetworkRates config")
+		if !s.isMissingRelationError(err) {
+			return nil, err
+		}
+	} else {
+		for confRows.Next() {
+			var host, man, mon string
+			if err := confRows.Scan(&host, &man, &mon); err != nil {
+				log.WithError(err).Warn("Postgres metrics: skipping unreadable node interface row")
+				continue
+			}
+			manint[host] = man
+			monint[host] = mon
+		}
+		confErr := confRows.Err()
+		confRows.Close()
+		if confErr != nil {
+			s.handleQueryError(confErr, "FetchNetworkRates config")
+			return nil, confErr
+		}
 	}
 
 	qRates := `
@@ -120,17 +155,17 @@ func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*Ne
 				manIface = "eth0"
 			}
 			monIface := monint[host]
-			if monIface == "" {
-				monIface = "eth1"
-			}
 
 			if iface == manIface {
 				rates.TrafficManInMbs[host] = recv * bytesToMb
 				rates.TrafficManOutMbs[host] = sent * bytesToMb
 			}
-			if iface == monIface {
+			if monIface == "" {
+				rates.TrafficMonInMbs[host] = 0
+				rates.TrafficMonInDropsPps[host] = 0
+			} else if iface == monIface {
 				rates.TrafficMonInMbs[host] = recv * bytesToMb
-				rates.TrafficMonInDropsMbs[host] = drop * bytesToMb
+				rates.TrafficMonInDropsPps[host] = drop
 			}
 		}
 	}

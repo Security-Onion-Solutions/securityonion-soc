@@ -190,3 +190,12 @@ func (s *Store) DeleteAlarmStatesForAlarm(ctx context.Context, alarmID string) e
 	query := `DELETE FROM alarm_states WHERE alarm_id = $1;`
 	return s.db.Exec(ctx, query, alarmID)
 }
+
+// UpdateAlarmStateThreshold sets the threshold recorded on every state record of an alarm.
+func (s *Store) UpdateAlarmStateThreshold(ctx context.Context, alarmID, threshold string) error {
+	if s.db == nil {
+		return nil
+	}
+	query := `UPDATE alarm_states SET threshold = $1 WHERE alarm_id = $2;`
+	return s.db.Exec(ctx, query, threshold, alarmID)
+}

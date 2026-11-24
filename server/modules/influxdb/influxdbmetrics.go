@@ -70,7 +70,7 @@ type InfluxDBMetrics struct {
 	trafficMonInMbs          map[string]float64
 	trafficManInMbs          map[string]float64
 	trafficManOutMbs         map[string]float64
-	trafficMonInDropsMbs     map[string]float64
+	trafficMonInDropsPps     map[string]float64
 	redisQueueSize           map[string]int
 	ioWaitPct                map[string]float64
 	load1m                   map[string]float64
@@ -343,7 +343,7 @@ func (metrics *InfluxDBMetrics) updateOsStatus() {
 		metrics.zeekLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekdrop", "drop", "", ""), toPercent)
 		metrics.captureLossPct = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHost("zeekcaptureloss", "loss", "", ""), identity)
 		metrics.trafficMonInMbs = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("monint", "bytes_recv"), ""), bytesToMb)
-		metrics.trafficMonInDropsMbs = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("monint", "drop_in"), ""), bytesToMb)
+		metrics.trafficMonInDropsPps = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("monint", "drop_in"), ""), identity)
 		metrics.trafficManInMbs = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("manint", "bytes_recv"), ""), bytesToMb)
 		metrics.trafficManOutMbs = metrics.convertValuesToFloat64(metrics.fetchLatestValuesByHostDirect(metrics.generateNetFilter("manint", "bytes_sent"), ""), bytesToMb)
 		metrics.redisQueueSize = metrics.convertValuesToInt(metrics.fetchLatestValuesByHost("redisqueue", "unparsed", "", ""))
@@ -509,7 +509,7 @@ func (metrics *InfluxDBMetrics) UpdateNodeMetrics(ctx context.Context, node *mod
 		node.ZeekLossPct = metrics.zeekLossPct[node.Id]
 		node.CaptureLossPct = metrics.captureLossPct[node.Id]
 		node.TrafficMonInMbs = metrics.trafficMonInMbs[node.Id]
-		node.TrafficMonInDropsMbs = metrics.trafficMonInDropsMbs[node.Id]
+		node.TrafficMonInDropsPps = metrics.trafficMonInDropsPps[node.Id]
 		node.TrafficManInMbs = metrics.trafficManInMbs[node.Id]
 		node.TrafficManOutMbs = metrics.trafficManOutMbs[node.Id]
 		node.RedisQueueSize = metrics.redisQueueSize[node.Id]
