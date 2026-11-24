@@ -691,6 +691,30 @@ func TestSendNotificationTool_Execute_BroadcastFailureHidesDriverText(t *testing
 	}
 }
 
+func TestSendNotificationTool_Execute_BroadcastPartialFailure(t *testing.T) {
+	defer licensing.Shutdown()
+	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
+
+	fakeNotifier := server.NewFakeNotifier()
+	fakeNotifier.SendCount = 2
+	fakeNotifier.Err = errors.New("webhook request failed: Post \"https://hooks.slack.com/services/SECRET\": dial tcp: refused")
+	mockServer := &server.Server{
+		Notifier:       fakeNotifier,
+		Assistantstore: servermock.NewMockAssistantstore(gomock.NewController(t)),
+		Config:         &config.ServerConfig{DeveloperEnabled: true},
+	}
+	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
+
+	result, err := (&SendNotificationTool{}).Execute(ctx, mockServer, &model.ToolRequest{Params: json.RawMessage(`{"title": "T", "summary": "S"}`)})
+
+	require.NoError(t, err)
+	text := result.Result.(string)
+	assert.Contains(t, text, "Delivered to 2 destination(s), but delivery to some others failed")
+	assert.NotContains(t, text, "SECRET")
+	require.Len(t, fakeNotifier.InputDestinations, 1)
+	assert.Empty(t, fakeNotifier.InputDestinations[0])
+}
+
 func TestSendNotificationTool_DestinationsSchema(t *testing.T) {
 	tool := &SendNotificationTool{}
 	schema := tool.GetSchema().Json

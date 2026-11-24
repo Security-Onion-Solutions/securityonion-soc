@@ -8,6 +8,7 @@ package assistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -225,12 +226,12 @@ func TestQueryNotificationsTool_Execute_StoreError(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	store := servermock.NewMockNotificationstore(gomock.NewController(t))
-	store.EXPECT().GetNotifications(gomock.Any(), "", DEFAULT_QUERY_NOTIFICATIONS_LIMIT).Return(nil, assert.AnError)
+	store.EXPECT().GetNotifications(gomock.Any(), "", DEFAULT_QUERY_NOTIFICATIONS_LIMIT).Return(nil, errors.New("dial tcp db.internal:5432: connection refused"))
 
 	tool := &QueryNotificationsTool{}
 	result, err := tool.Execute(queryNotificationsContext(), newQueryNotificationsServer(true, store), &model.ToolRequest{Params: json.RawMessage(`{}`)})
 
-	assert.Equal(t, assert.AnError, err)
+	assert.EqualError(t, err, "ERROR_NOTIFICATION_QUERY_FAILED")
 	assert.Nil(t, result)
 }
 

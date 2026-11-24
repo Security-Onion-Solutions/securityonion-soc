@@ -61,7 +61,7 @@ func newQueryNotificationsTool(cfg map[string]any) *QueryNotificationsTool {
 	setting := func(key string, dflt int) int {
 		value := module.GetIntDefault(cfg, key, dflt)
 		if value < 1 {
-			log.WithFields(log.Fields{"setting": key, "value": value, "default": dflt}).Warn("ignoring queryNotifications setting below 1")
+			log.WithFields(log.Fields{"queryNotificationsSetting": key, "queryNotificationsValue": value, "queryNotificationsDefault": dflt}).Warn("ignoring queryNotifications setting below 1")
 			return dflt
 		}
 		return value
@@ -207,7 +207,7 @@ func (t *QueryNotificationsTool) Execute(ctx context.Context, srv *server.Server
 	list, err := srv.Notificationstore.GetNotifications(ctx, filter, limit)
 	if err != nil {
 		logger.WithError(err).Error("unable to read notifications")
-		return nil, err
+		return nil, errors.New("ERROR_NOTIFICATION_QUERY_FAILED")
 	}
 
 	entries := make([]*queryNotificationEntry, 0, len(list.Notifications))

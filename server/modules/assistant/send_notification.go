@@ -85,8 +85,10 @@ func (t *SendNotificationTool) GetDescription() string {
 	if it is available, or ask the user; never drop destinations to send to every destination instead. If
 	the user named none, send once more without destinations. A result that lists failed destinations
 	was delivered to the others; tell the user which failed, and resend only to those, only if the user
-	asks. ERROR_NOTIFICATION_TARGETED_SEND_FAILED means no named destination received it. After any error
-	other than ERROR_DESTINATION_NOT_FOUND, don't resend; tell the user what failed.`
+	asks. A result without destinations that says some deliveries failed reached the others; tell the user,
+	and don't resend. ERROR_NOTIFICATION_SEND_FAILED and ERROR_NOTIFICATION_TARGETED_SEND_FAILED mean
+	nothing was delivered. After any error other than ERROR_DESTINATION_NOT_FOUND, don't resend; tell the
+	user what failed.`
 }
 
 func (t *SendNotificationTool) GetSchema() model.JSONSchema {
@@ -258,12 +260,16 @@ func (t *SendNotificationTool) Execute(ctx context.Context, srv *server.Server, 
 
 	if len(destinationIds) == 0 {
 		// The driver's error can carry a destination's credentials, so it is only logged.
-		_, err = srv.Notifier.Send(ctx, payload)
+		sentCount, err := srv.Notifier.Send(ctx, payload)
+		failedNote := ""
 		if err != nil {
-			logger.WithError(err).Error("error sending notification")
-			return nil, errors.New("ERROR_NOTIFICATION_SEND_FAILED")
+			logger.WithError(err).WithField("notificationSentCount", sentCount).Error("error sending notification")
+			if sentCount == 0 {
+				return nil, errors.New("ERROR_NOTIFICATION_SEND_FAILED")
+			}
+			failedNote = fmt.Sprintf(" Delivered to %d destination(s), but delivery to some others failed; tell the user, and don't resend.", sentCount)
 		}
-		result.Result = submitted + severityNote + sharedNote
+		result.Result = submitted + failedNote + severityNote + sharedNote
 		return result, nil
 	}
 

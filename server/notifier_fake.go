@@ -56,7 +56,7 @@ func (notifier *FakeNotifier) Send(ctx context.Context, payload *model.Notificat
 		}
 	}
 	if notifier.Err != nil {
-		return 0, notifier.Err
+		return notifier.SendCount, notifier.Err
 	}
 	if payload == nil {
 		return 0, nil

@@ -1402,7 +1402,8 @@ func TestRunAgentSession_HeadlessNotificationReadIsRefused(t *testing.T) {
 	results := toolResults(f.store.messages(res.SessionId))
 	require.Len(t, results, 1)
 	assert.True(t, results[0].IsError)
-	assert.Contains(t, results[0].Content[0].Text, missingUser.Error())
+	assert.Contains(t, results[0].Content[0].Text, "ERROR_NOTIFICATION_QUERY_FAILED")
+	assert.NotContains(t, results[0].Content[0].Text, missingUser.Error())
 }
 
 // --- AutomationRun wrapper --------------------------------------------------
