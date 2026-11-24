@@ -154,9 +154,9 @@ type Alarm struct {
 	Metric string `json:"metric" example:"cpu"`
 	// Optional sub-key or field name within the metric (e.g. cpu_used, disk_used_root).
 	MetricKey string `json:"metricKey,omitempty" example:"cpu_used"`
-	// Comparison operator (gt, gte, lt, lte, eq, ne, contains).
+	// Comparison operator (gt, gte, lt, lte, eq, ne, contains). Boolean metrics accept only eq and ne.
 	Operator string `json:"operator" example:"gt"`
-	// Threshold value for comparison (numeric, string, or boolean).
+	// Threshold value for comparison (numeric, string, or boolean). A boolean threshold of 1 or 0 is stored as true or false.
 	Threshold string `json:"threshold" example:"80"`
 	// Duration in seconds the condition must persist before triggering an alarm.
 	DurationSeconds int `json:"durationSeconds" example:"120"`

@@ -172,13 +172,7 @@ func (s *AlarmstoreImpl) CreateAlarm(ctx context.Context, alarm *model.Alarm) (*
 		return nil, ErrInvalidAlarmID
 	}
 
-	alarm.Operator = model.NormalizeOperator(alarm.Operator)
-
-	if err := model.ValidateAlarm(alarm); err != nil {
-		return nil, err
-	}
-
-	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
+	if err := PrepareAlarm(alarm); err != nil {
 		return nil, err
 	}
 
@@ -218,13 +212,7 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 	}
 
 	alarm.ID = id
-	alarm.Operator = model.NormalizeOperator(alarm.Operator)
-
-	if err := model.ValidateAlarm(alarm); err != nil {
-		return nil, err
-	}
-
-	if err := ValidateAlarmThreshold(alarm.Metric, alarm.Threshold); err != nil {
+	if err := PrepareAlarm(alarm); err != nil {
 		return nil, err
 	}
 

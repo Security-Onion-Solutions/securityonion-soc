@@ -35,6 +35,44 @@ func TestEvaluateCondition(t *testing.T) {
 	// Boolean comparisons
 	assert.True(t, postgresmetrics.EvaluateCondition("eq", "true", true))
 	assert.False(t, postgresmetrics.EvaluateCondition("eq", "false", true))
+
+	boolCases := []struct {
+		op        string
+		threshold string
+		actual    bool
+		expected  bool
+	}{
+		{"eq", "1", true, true},
+		{"eq", "1", false, false},
+		{"eq", "0", true, false},
+		{"eq", "0", false, true},
+		{"eq", "true", true, true},
+		{"eq", "true", false, false},
+		{"eq", "false", true, false},
+		{"eq", "false", false, true},
+		{"ne", "1", true, false},
+		{"ne", "1", false, true},
+		{"ne", "0", true, true},
+		{"ne", "0", false, false},
+		{"ne", "true", true, false},
+		{"ne", "true", false, true},
+		{"ne", "false", true, true},
+		{"ne", "false", false, false},
+		{"eq", "TRUE", true, true},
+		{"ne", "TRUE", true, false},
+		{"eq", "yes", true, false},
+		{"ne", "yes", true, true},
+		{"eq", "t", true, false},
+		{"eq", "f", false, false},
+		{"ne", "t", true, true},
+		{"gt", "false", true, true},
+		{"==", "1", true, true},
+		{"!=", "0", false, false},
+		{"<>", "1", false, true},
+	}
+	for _, tc := range boolCases {
+		assert.Equal(t, tc.expected, postgresmetrics.EvaluateCondition(tc.op, tc.threshold, tc.actual), "%s %s against %v", tc.op, tc.threshold, tc.actual)
+	}
 }
 
 func TestFormatMetricValue(t *testing.T) {
@@ -228,4 +266,52 @@ func TestValidateAlarmThreshold(t *testing.T) {
 	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("node_status", "fault"))
 	assert.NoError(t, postgresmetrics.ValidateAlarmThreshold("node_status", "OK"))
 	assert.Error(t, postgresmetrics.ValidateAlarmThreshold("node_status", ""))
+}
+
+func TestValidateAlarmOperator(t *testing.T) {
+	for _, metric := range []string{"os_needs_restart", "gmd_enabled", "lks_enabled", "fps_enabled"} {
+		for _, op := range []string{"eq", "ne", "==", "!="} {
+			assert.NoError(t, postgresmetrics.ValidateAlarmOperator(metric, op), "%s %s", metric, op)
+		}
+		for _, op := range []string{"gt", "gte", "lt", "lte", "contains"} {
+			assert.Error(t, postgresmetrics.ValidateAlarmOperator(metric, op), "%s %s", metric, op)
+		}
+	}
+
+	assert.NoError(t, postgresmetrics.ValidateAlarmOperator("cpu", "gt"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmOperator("non_existent_metric", "gt"))
+
+	assert.Error(t, postgresmetrics.ValidateAlarmOperator("OS_NEEDS_RESTART", "gt"))
+	assert.NoError(t, postgresmetrics.ValidateAlarmOperator(" GMD_ENABLED ", "eq"))
+}
+
+func TestNormalizeAlarmThreshold(t *testing.T) {
+	assert.Equal(t, "true", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", "1"))
+	assert.Equal(t, "true", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", " 1 "))
+	assert.Equal(t, "false", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", "0"))
+	assert.Equal(t, "true", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", "true"))
+	assert.Equal(t, "true", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", " true "))
+	assert.Equal(t, "false", postgresmetrics.NormalizeAlarmThreshold("os_needs_restart", "false\n"))
+
+	assert.Equal(t, "1", postgresmetrics.NormalizeAlarmThreshold("cpu", "1"))
+	assert.Equal(t, " 5 ", postgresmetrics.NormalizeAlarmThreshold("cpu", " 5 "))
+}
+
+func TestPrepareAlarm(t *testing.T) {
+	alarm := &model.Alarm{Name: "Restart", Metric: "os_needs_restart", Operator: "==", Threshold: "1", Severity: "high"}
+	assert.NoError(t, postgresmetrics.PrepareAlarm(alarm))
+	assert.Equal(t, "eq", alarm.Operator)
+	assert.Equal(t, "true", alarm.Threshold)
+
+	alarm = &model.Alarm{Name: "Restart", Metric: "os_needs_restart", Operator: "gt", Threshold: "1", Severity: "high"}
+	assert.EqualError(t, postgresmetrics.PrepareAlarm(alarm), "alarm operator must be equals or not equals for a boolean metric")
+
+	alarm = &model.Alarm{Name: "CPU", Metric: "cpu", Operator: "gt", Threshold: "high", Severity: "high"}
+	assert.EqualError(t, postgresmetrics.PrepareAlarm(alarm), "alarm threshold must be a valid number")
+
+	alarm = &model.Alarm{Name: "Restart", Metric: "os_needs_restart", Operator: "gt", Threshold: "maybe", Severity: "high"}
+	assert.EqualError(t, postgresmetrics.PrepareAlarm(alarm), "alarm threshold must be a boolean value (true/false)")
+
+	alarm = &model.Alarm{Name: "Restart", Metric: "os_needs_restart", Operator: "eq", Threshold: "TRUE", Severity: "high"}
+	assert.EqualError(t, postgresmetrics.PrepareAlarm(alarm), "alarm threshold must be a boolean value (true/false)")
 }
