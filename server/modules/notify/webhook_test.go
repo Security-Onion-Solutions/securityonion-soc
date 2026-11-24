@@ -420,6 +420,30 @@ func TestWebhookChannelSend_ResponseBodyIsRedacted(t *testing.T) {
 	}
 }
 
+func TestWebhookChannelSend_LongSecretIsRedacted(t *testing.T) {
+	token := "LONGTOKEN" + strings.Repeat("k", 1491)
+	params := map[string]interface{}{
+		"webhookUrl": "https://example.com/hook",
+		"headers":    map[string]interface{}{"Authorization": "Bearer " + token},
+	}
+
+	testCases := []struct {
+		name string
+		body string
+	}{
+		{"whole secret before the 1 KB cut", token + " " + strings.Repeat("z", 600)},
+		{"secret cut off by the 2 KB read", strings.Repeat("z", 700) + " " + token},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := sendWithRedaction(t, params, &mockHTTPClient{respStatus: 401, respBody: tc.body})
+			assert.Contains(t, err.Error(), "status code 401")
+			assertNoSecrets(t, err, "LONGTOKEN", "kkkk")
+		})
+	}
+}
+
 func TestWebhookChannelSend_PlainBodyIsUnchanged(t *testing.T) {
 	params := map[string]interface{}{
 		"webhookUrl": "https://example.com",

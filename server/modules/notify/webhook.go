@@ -224,8 +224,7 @@ const (
 
 // webhookRedactor removes a webhook's credentials, its URL and header values, from error text.
 type webhookRedactor struct {
-	terms  []string
-	maxLen int
+	terms []string
 }
 
 func newWebhookRedactor(targetURL string, headers map[string]string) *webhookRedactor {
@@ -263,7 +262,6 @@ func newWebhookRedactor(targetURL string, headers map[string]string) *webhookRed
 			if !seen[form] {
 				seen[form] = true
 				r.terms = append(r.terms, form)
-				r.maxLen = max(r.maxLen, len(form))
 			}
 		}
 	}
@@ -291,15 +289,29 @@ func (r *webhookRedactor) wrap(msg string, err error) error {
 
 // body redacts before cutting, so a secret across the cut can't leave a prefix behind.
 func (r *webhookRedactor) body(body []byte) string {
-	if len(body) >= webhookErrorBodyReadMax && r.maxLen > 1 {
-		// Only the tail can hold a copy cut off by the read.
-		body = body[:max(0, len(body)-(r.maxLen-1))]
-	}
 	text := r.redact(string(body))
+	if len(body) >= webhookErrorBodyReadMax {
+		// Only the tail can hold a copy cut off by the read.
+		text = r.trimPartialTerm(text)
+	}
 	if len(text) > webhookErrorBodyMax {
 		text = text[:webhookErrorBodyMax]
 	}
 	return strings.TrimSpace(strings.ToValidUTF8(text, ""))
+}
+
+// trimPartialTerm drops the longest end of text that is the start of a term.
+func (r *webhookRedactor) trimPartialTerm(text string) string {
+	cut := 0
+	for _, term := range r.terms {
+		for n := min(len(term)-1, len(text)); n > cut; n-- {
+			if strings.HasSuffix(text, term[:n]) {
+				cut = n
+				break
+			}
+		}
+	}
+	return text[:len(text)-cut]
 }
 
 func (c *WebhookChannel) buildHTTPClient(params map[string]interface{}) *http.Client {
