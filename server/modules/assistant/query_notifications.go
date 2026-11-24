@@ -17,21 +17,24 @@ import (
 
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
 )
 
-// These bound only the model's context; notification text comes from any REST sender.
+// Defaults for the tools.queryNotifications settings, which bound the model's context.
 const (
-	queryNotificationsDefaultLimit = 10
-	queryNotificationsMaxLimit     = 50
-	queryNotificationsSummaryMax   = 1000
-	queryNotificationsValueMax     = 200
-	queryNotificationsKeyMax       = 100
-	queryNotificationsEntryMax     = 25
+	DEFAULT_QUERY_NOTIFICATIONS_LIMIT          = 10
+	DEFAULT_QUERY_NOTIFICATIONS_MAX_LIMIT      = 50
+	DEFAULT_QUERY_NOTIFICATIONS_SUMMARY_LENGTH = 1000
+	DEFAULT_QUERY_NOTIFICATIONS_VALUE_LENGTH   = 200
+	DEFAULT_QUERY_NOTIFICATIONS_MAX_ENTRIES    = 25
 )
+
+// Keys and file names are cut here; longer ones are never useful to the model.
+const queryNotificationsKeyMax = 100
 
 const queryNotificationsFilterActive = "active"
 
@@ -40,7 +43,48 @@ func init() {
 	knownTools[t.GetName()] = t
 }
 
-type QueryNotificationsTool struct{}
+type queryNotificationsLimits struct {
+	defaultLimit  int
+	maxLimit      int
+	summaryLength int
+	valueLength   int
+	maxEntries    int
+}
+
+type QueryNotificationsTool struct {
+	// Nil means the defaults.
+	limits *queryNotificationsLimits
+}
+
+// newQueryNotificationsTool reads the tools.queryNotifications settings; values below 1 use the default.
+func newQueryNotificationsTool(cfg map[string]any) *QueryNotificationsTool {
+	setting := func(key string, dflt int) int {
+		value := module.GetIntDefault(cfg, key, dflt)
+		if value < 1 {
+			log.WithFields(log.Fields{"setting": key, "value": value, "default": dflt}).Warn("ignoring queryNotifications setting below 1")
+			return dflt
+		}
+		return value
+	}
+
+	limits := &queryNotificationsLimits{
+		defaultLimit:  setting("defaultLimit", DEFAULT_QUERY_NOTIFICATIONS_LIMIT),
+		maxLimit:      setting("maxLimit", DEFAULT_QUERY_NOTIFICATIONS_MAX_LIMIT),
+		summaryLength: setting("summaryMaxLength", DEFAULT_QUERY_NOTIFICATIONS_SUMMARY_LENGTH),
+		valueLength:   setting("fieldValueMaxLength", DEFAULT_QUERY_NOTIFICATIONS_VALUE_LENGTH),
+		maxEntries:    setting("maxEntries", DEFAULT_QUERY_NOTIFICATIONS_MAX_ENTRIES),
+	}
+	limits.defaultLimit = min(limits.defaultLimit, limits.maxLimit)
+
+	return &QueryNotificationsTool{limits: limits}
+}
+
+func (t *QueryNotificationsTool) getLimits() *queryNotificationsLimits {
+	if t.limits == nil {
+		return newQueryNotificationsTool(nil).limits
+	}
+	return t.limits
+}
 
 func (t *QueryNotificationsTool) GetName() string {
 	return "query_notifications"
@@ -59,6 +103,7 @@ func (t *QueryNotificationsTool) GetDescription() string {
 }
 
 func (t *QueryNotificationsTool) GetSchema() model.JSONSchema {
+	limits := t.getLimits()
 	return model.JSONSchema{
 		Json: &model.ToolSchema{
 			Type: "object",
@@ -70,8 +115,8 @@ func (t *QueryNotificationsTool) GetSchema() model.JSONSchema {
 				},
 				"limit": {
 					Type:        "integer",
-					Description: fmt.Sprintf("Number of newest notifications to return, at most %d.", queryNotificationsMaxLimit),
-					Default:     queryNotificationsDefaultLimit,
+					Description: fmt.Sprintf("Number of newest notifications to return, at most %d.", limits.maxLimit),
+					Default:     limits.defaultLimit,
 				},
 			},
 		},
@@ -155,8 +200,9 @@ func (t *QueryNotificationsTool) Execute(ctx context.Context, srv *server.Server
 
 	result.Parameters = args
 
+	limits := t.getLimits()
 	filter, filterNote := normalizeNotificationFilter(args.Filter)
-	limit, limitNote := normalizeNotificationLimit(args.Limit)
+	limit, limitNote := limits.normalizeLimit(args.Limit)
 
 	list, err := srv.Notificationstore.GetNotifications(ctx, filter, limit)
 	if err != nil {
@@ -166,7 +212,7 @@ func (t *QueryNotificationsTool) Execute(ctx context.Context, srv *server.Server
 
 	entries := make([]*queryNotificationEntry, 0, len(list.Notifications))
 	for _, record := range list.Notifications {
-		entries = append(entries, notificationEntry(record))
+		entries = append(entries, limits.entry(record))
 	}
 
 	result.Result = &queryNotificationsResult{
@@ -196,35 +242,35 @@ func normalizeNotificationFilter(filter string) (string, string) {
 	return "", fmt.Sprintf(` The filter %q was not recognized, so %q was used instead.`, filter, queryNotificationsFilterActive)
 }
 
-func normalizeNotificationLimit(limit int) (int, string) {
+func (limits *queryNotificationsLimits) normalizeLimit(limit int) (int, string) {
 	if limit <= 0 {
-		return queryNotificationsDefaultLimit, ""
+		return limits.defaultLimit, ""
 	}
-	if limit > queryNotificationsMaxLimit {
-		return queryNotificationsMaxLimit, fmt.Sprintf(` The limit %d is above the maximum, so %d was used instead.`, limit, queryNotificationsMaxLimit)
+	if limit > limits.maxLimit {
+		return limits.maxLimit, fmt.Sprintf(` The limit %d is above the maximum, so %d was used instead.`, limit, limits.maxLimit)
 	}
 	return limit, ""
 }
 
-func notificationEntry(record *model.NotificationRecord) *queryNotificationEntry {
+func (limits *queryNotificationsLimits) entry(record *model.NotificationRecord) *queryNotificationEntry {
 	entry := &queryNotificationEntry{
 		Id:        record.ID,
 		Created:   record.CreatedAt.UTC().Format(time.RFC3339),
 		Source:    record.Source,
 		Severity:  record.Severity,
 		Title:     record.Title,
-		Summary:   cutRunes(record.Summary, queryNotificationsSummaryMax),
+		Summary:   cutRunes(record.Summary, limits.summaryLength),
 		Read:      record.IsRead,
 		Dismissed: record.IsDismissed,
 		To:        record.Audience,
 	}
 
-	entry.Fields, entry.FieldsOmitted = boundedEntries(record.Fields, queryNotificationsValueMax)
+	entry.Fields, entry.FieldsOmitted = limits.boundedEntries(record.Fields, limits.valueLength)
 	// A cut URL is a broken link, so link values are kept whole.
-	entry.Links, entry.LinksOmitted = boundedEntries(record.Links, 0)
+	entry.Links, entry.LinksOmitted = limits.boundedEntries(record.Links, 0)
 
 	for i, attachment := range record.Attachments {
-		if i == queryNotificationsEntryMax {
+		if i == limits.maxEntries {
 			entry.AttachmentsOmitted = len(record.Attachments) - i
 			break
 		}
@@ -235,16 +281,16 @@ func notificationEntry(record *model.NotificationRecord) *queryNotificationEntry
 }
 
 // boundedEntries keeps the first entries by key and returns how many were left out.
-func boundedEntries(values map[string]string, valueMax int) (map[string]string, int) {
+func (limits *queryNotificationsLimits) boundedEntries(values map[string]string, valueMax int) (map[string]string, int) {
 	if len(values) == 0 {
 		return nil, 0
 	}
 
 	keys := slices.Sorted(maps.Keys(values))
 	omitted := 0
-	if len(keys) > queryNotificationsEntryMax {
-		omitted = len(keys) - queryNotificationsEntryMax
-		keys = keys[:queryNotificationsEntryMax]
+	if len(keys) > limits.maxEntries {
+		omitted = len(keys) - limits.maxEntries
+		keys = keys[:limits.maxEntries]
 	}
 
 	bounded := make(map[string]string, len(keys))

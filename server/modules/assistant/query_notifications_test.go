@@ -16,6 +16,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/config"
 	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
+	"github.com/security-onion-solutions/securityonion-soc/module"
 	"github.com/security-onion-solutions/securityonion-soc/server"
 	servermock "github.com/security-onion-solutions/securityonion-soc/server/mock"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -47,6 +48,99 @@ func TestQueryNotificationsTool_GetSchema(t *testing.T) {
 	for _, filter := range []string{"active", model.NotificationFilterUnread, model.NotificationFilterDismissed, model.NotificationFilterAll} {
 		assert.Contains(t, schema.Json.Properties["filter"].Description, filter)
 	}
+
+	assert.Equal(t, 10, schema.Json.Properties["limit"].Default)
+	assert.Contains(t, schema.Json.Properties["limit"].Description, "at most 50.")
+
+	configured := newQueryNotificationsTool(map[string]any{"defaultLimit": float64(3), "maxLimit": float64(5)}).GetSchema()
+	assert.Equal(t, 3, configured.Json.Properties["limit"].Default)
+	assert.Contains(t, configured.Json.Properties["limit"].Description, "at most 5.")
+}
+
+func TestNewQueryNotificationsTool_Settings(t *testing.T) {
+	defaults := &queryNotificationsLimits{defaultLimit: 10, maxLimit: 50, summaryLength: 1000, valueLength: 200, maxEntries: 25}
+
+	testCases := []struct {
+		name     string
+		cfg      map[string]any
+		expected *queryNotificationsLimits
+	}{
+		{"nil", nil, defaults},
+		{"empty", map[string]any{}, defaults},
+		{
+			"all set",
+			map[string]any{"defaultLimit": float64(20), "maxLimit": float64(100), "summaryMaxLength": float64(2000), "fieldValueMaxLength": float64(300), "maxEntries": float64(40)},
+			&queryNotificationsLimits{defaultLimit: 20, maxLimit: 100, summaryLength: 2000, valueLength: 300, maxEntries: 40},
+		},
+		{
+			"below 1 uses the default",
+			map[string]any{"defaultLimit": float64(0), "maxLimit": float64(-1), "summaryMaxLength": float64(0), "fieldValueMaxLength": float64(-5), "maxEntries": float64(0)},
+			defaults,
+		},
+		{
+			"default above max is capped",
+			map[string]any{"defaultLimit": float64(80), "maxLimit": float64(30)},
+			&queryNotificationsLimits{defaultLimit: 30, maxLimit: 30, summaryLength: 1000, valueLength: 200, maxEntries: 25},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, newQueryNotificationsTool(tc.cfg).limits)
+		})
+	}
+
+	assert.Equal(t, defaults, (&QueryNotificationsTool{}).getLimits())
+}
+
+func TestAssistantCoordinator_InitQueryNotificationsSettings(t *testing.T) {
+	stubEmbeddedSystemPrompt(t)
+	ac, _ := newAgenticTestCoordinator()
+
+	require.NoError(t, ac.Init(module.ModuleConfig{
+		"tools": map[string]any{"queryNotifications": map[string]any{"maxLimit": float64(20)}},
+	}))
+
+	tool, ok := ac.FunctionLibrary["query_notifications"].(*QueryNotificationsTool)
+	require.True(t, ok)
+	assert.Equal(t, 20, tool.getLimits().maxLimit)
+	assert.Equal(t, 10, tool.getLimits().defaultLimit)
+	assert.Same(t, knownTools["send_notification"], ac.FunctionLibrary["send_notification"])
+	// The shared registry keeps its unconfigured instance.
+	assert.Nil(t, knownTools["query_notifications"].(*QueryNotificationsTool).limits)
+}
+
+func TestQueryNotificationsTool_Execute_ConfiguredLimits(t *testing.T) {
+	tool := newQueryNotificationsTool(map[string]any{
+		"defaultLimit":        float64(3),
+		"maxLimit":            float64(5),
+		"summaryMaxLength":    float64(4),
+		"fieldValueMaxLength": float64(2),
+		"maxEntries":          float64(2),
+	})
+
+	runQueryNotificationsWith(t, tool, `{}`, "", 3, nil)
+	res := runQueryNotificationsWith(t, tool, `{"limit": 6}`, "", 5, nil)
+	assert.Contains(t, res.Note, "6 is above the maximum, so 5 was used")
+
+	record := &model.NotificationRecord{
+		ID:          "n1",
+		Summary:     "abcdef",
+		Fields:      map[string]string{"a": "xyz", "b": "ok", "c": "dropped"},
+		Links:       map[string]string{"a": "/#/one", "b": "/#/two", "c": "/#/three"},
+		Attachments: []model.Attachment{{Filename: "1.pdf"}, {Filename: "2.pdf"}, {Filename: "3.pdf"}},
+	}
+	res = runQueryNotificationsWith(t, tool, `{}`, "", 3, &model.NotificationListResponse{Notifications: []*model.NotificationRecord{record}, Count: 1})
+	require.Len(t, res.Notifications, 1)
+
+	entry := res.Notifications[0]
+	assert.Equal(t, "abcd…", entry.Summary)
+	assert.Equal(t, map[string]string{"a": "xy…", "b": "ok"}, entry.Fields)
+	assert.Equal(t, 1, entry.FieldsOmitted)
+	assert.Equal(t, map[string]string{"a": "/#/one", "b": "/#/two"}, entry.Links)
+	assert.Equal(t, 1, entry.LinksOmitted)
+	assert.Equal(t, []string{"1.pdf", "2.pdf"}, entry.Attachments)
+	assert.Equal(t, 1, entry.AttachmentsOmitted)
 }
 
 func newQueryNotificationsServer(authorized bool, store server.Notificationstore) *server.Server {
@@ -131,7 +225,7 @@ func TestQueryNotificationsTool_Execute_StoreError(t *testing.T) {
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
 	store := servermock.NewMockNotificationstore(gomock.NewController(t))
-	store.EXPECT().GetNotifications(gomock.Any(), "", queryNotificationsDefaultLimit).Return(nil, assert.AnError)
+	store.EXPECT().GetNotifications(gomock.Any(), "", DEFAULT_QUERY_NOTIFICATIONS_LIMIT).Return(nil, assert.AnError)
 
 	tool := &QueryNotificationsTool{}
 	result, err := tool.Execute(queryNotificationsContext(), newQueryNotificationsServer(true, store), &model.ToolRequest{Params: json.RawMessage(`{}`)})
@@ -141,6 +235,10 @@ func TestQueryNotificationsTool_Execute_StoreError(t *testing.T) {
 }
 
 func runQueryNotifications(t *testing.T, params string, expectedFilter string, expectedLimit int, list *model.NotificationListResponse) *queryNotificationsResult {
+	return runQueryNotificationsWith(t, &QueryNotificationsTool{}, params, expectedFilter, expectedLimit, list)
+}
+
+func runQueryNotificationsWith(t *testing.T, tool *QueryNotificationsTool, params string, expectedFilter string, expectedLimit int, list *model.NotificationListResponse) *queryNotificationsResult {
 	defer licensing.Shutdown()
 	licensing.Test(licensing.FEAT_NTF, 0, 0, "", "")
 
@@ -151,7 +249,6 @@ func runQueryNotifications(t *testing.T, params string, expectedFilter string, e
 	store := servermock.NewMockNotificationstore(gomock.NewController(t))
 	store.EXPECT().GetNotifications(gomock.Any(), expectedFilter, expectedLimit).Return(list, nil)
 
-	tool := &QueryNotificationsTool{}
 	result, err := tool.Execute(queryNotificationsContext(), newQueryNotificationsServer(true, store), &model.ToolRequest{Params: json.RawMessage(params)})
 	require.NoError(t, err)
 	require.NotNil(t, result)

@@ -1387,7 +1387,7 @@ func TestRunAgentSession_HeadlessNotificationReadIsRefused(t *testing.T) {
 
 	missingUser := errors.New("unauthorized: missing user in context")
 	store := servermock.NewMockNotificationstore(ctrl)
-	store.EXPECT().GetNotifications(gomock.Any(), "", queryNotificationsDefaultLimit).DoAndReturn(
+	store.EXPECT().GetNotifications(gomock.Any(), "", DEFAULT_QUERY_NOTIFICATIONS_LIMIT).DoAndReturn(
 		func(ctx context.Context, _ string, _ ...int) (*model.NotificationListResponse, error) {
 			assert.Equal(t, server.SYSTEM_ID, ctx.Value(web.ContextKeyRequestorId))
 			assert.Nil(t, ctx.Value(web.ContextKeyRunAsUsername))
