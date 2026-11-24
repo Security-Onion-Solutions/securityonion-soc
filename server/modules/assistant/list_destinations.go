@@ -34,10 +34,10 @@ func (t *ListDestinationsTool) GetName() string {
 func (t *ListDestinationsTool) GetDescription() string {
 	return `List the configured notification destinations, for choosing destinations on send_notification.
 	Only administrators may list destinations; for anyone else this fails, and send_notification still
-	accepts the destination names the user gives. A destination silently skips notifications outside its severities or active schedules, and a disabled
-	destination sends nothing. Empty severities means every severity, and empty scheduleIds means always
-	active. Type "soc" is the SOC notification bell. Any destination's name may be empty. Nothing is sent
-	while notifications are turned off for the grid.`
+	accepts the destination names the user gives. A destination silently skips notifications outside its
+	severities or active schedules, and a disabled destination sends nothing. Empty severities means every
+	severity, and empty scheduleIds means always active. Type "soc" is the SOC notification bell. Any
+	destination's name may be empty. Nothing is sent while notifications are turned off for the grid.`
 }
 
 func (t *ListDestinationsTool) GetSchema() model.JSONSchema {

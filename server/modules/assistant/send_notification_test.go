@@ -527,6 +527,44 @@ func TestSendNotificationTool_Execute_AmbiguousName(t *testing.T) {
 	assert.Empty(t, fakeNotifier.InputDestinations)
 }
 
+func TestResolveDestinationRef(t *testing.T) {
+	dests := map[string]model.DestinationConfig{
+		"pager":     {Name: "Old Pager"},
+		"uuid-3333": {Name: "pager"},
+		"uuid-1111": {Name: "IR Slack"},
+		"uuid-2222": {Name: " ir slack "},
+		"uuid-4444": {Name: " Duty "},
+		"soc-bell":  {Name: ""},
+		"blank":     {Name: "   "},
+	}
+
+	testCases := []struct {
+		name            string
+		ref             string
+		expectedId      string
+		expectedMatches int
+	}{
+		{"exact id wins over another destination's name", "pager", "pager", 1},
+		{"name ignoring case", "OLD PAGER", "pager", 1},
+		{"name that only differs in case from an id", "PAGER", "uuid-3333", 1},
+		{"destination name is trimmed", "duty", "uuid-4444", 1},
+		{"two names match", "IR SLACK", "", 2},
+		{"no match", "nowhere", "", 0},
+		{"id is case-sensitive", "SOC-BELL", "", 0},
+		{"blank names never match", "soc bell", "", 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			id, matches := resolveDestinationRef(dests, tc.ref)
+			assert.Equal(t, tc.expectedMatches, matches)
+			if tc.expectedMatches == 1 {
+				assert.Equal(t, tc.expectedId, id)
+			}
+		})
+	}
+}
+
 func TestSendNotificationTool_Execute_DestinationInputs(t *testing.T) {
 	ctx := context.WithValue(context.Background(), web.ContextKeyRequestorId, "test-user-id")
 	testCases := []struct {
