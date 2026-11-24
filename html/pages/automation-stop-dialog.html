@@ -1,0 +1,21 @@
+<v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="520"
+  aria-labelledby="automation-stop-dialog-title" aria-describedby="automation-stop-dialog-text" data-aid="automation_stop_dialog">
+  <v-card>
+    <v-card-title id="automation-stop-dialog-title" class="headline text-wrap" role="heading" aria-level="2" v-text="title()"></v-card-title>
+    <v-card-text id="automation-stop-dialog-text">
+      <p class="mb-2" v-text="i18n.automationStopDialogIntro"></p>
+      <p class="mb-2" v-text="i18n.automationStopDialogRequeue"></p>
+      <template v-if="canTurnOff()">
+        <p class="mb-2" v-text="i18n.automationStopDialogNextRun"></p>
+        <p v-text="i18n.automationStopDialogTurnOffHint"></p>
+      </template>
+    </v-card-text>
+    <v-card-actions>
+      <v-spacer></v-spacer>
+      <v-btn variant="text" autofocus @click.stop="cancel()" data-aid="automation_stop_dialog_cancel">{{ i18n.cancel }}</v-btn>
+      <v-btn v-if="canTurnOff()" variant="text" color="primary" @click.stop="stop(false)" data-aid="automation_stop_dialog_stop">{{ i18n.automationStopDialogStop }}</v-btn>
+      <v-btn v-else variant="flat" color="error" @click.stop="stop(false)" data-aid="automation_stop_dialog_stop">{{ i18n.automationStopDialogStop }}</v-btn>
+      <v-btn v-if="canTurnOff()" variant="flat" color="error" @click.stop="stop(true)" data-aid="automation_stop_dialog_stop_disable">{{ i18n.automationStopDialogStopDisable }}</v-btn>
+    </v-card-actions>
+  </v-card>
+</v-dialog>

@@ -53,11 +53,12 @@ const (
 	AutomationRunRunning   AutomationRunState = "running"
 	AutomationRunSucceeded AutomationRunState = "succeeded"
 	AutomationRunFailed    AutomationRunState = "failed"
+	AutomationRunStopped   AutomationRunState = "stopped"
 )
 
 // IsTerminal reports whether this state indicates the automation has completed.
 func (s AutomationRunState) IsTerminal() bool {
-	return s == AutomationRunSucceeded || s == AutomationRunFailed
+	return s == AutomationRunSucceeded || s == AutomationRunFailed || s == AutomationRunStopped
 }
 
 // AutomationWorkItemState is the lifecycle of one unit of automation work.
@@ -86,10 +87,16 @@ type AutomationRunRecord struct {
 	State AutomationRunState `json:"state" example:"running"`
 	// The time this run started.
 	StartTime *time.Time `json:"startTime,omitempty" example:"2026-09-15T16:00:02Z"`
-	// The time this run stopped; absent while it is in flight.
+	// The time this run stopped; absent while it is in flight. For a stopped run it equals stopTime.
 	EndTime *time.Time `json:"endTime,omitempty" example:"2026-09-15T16:03:02Z"`
 	// Why this run failed; absent unless it did.
 	Error string `json:"error,omitempty"`
+	// The user who started this run by hand; absent for a scheduled run.
+	StartedBy string `json:"startedBy,omitempty" example:"83656890-2acd-4c0b-8ab9-ae2f4b4d9b5a"`
+	// The user who stopped this run. It is set from the moment Stop is pressed, so an in-flight run with it set is stopping.
+	StoppedBy string `json:"stoppedBy,omitempty" example:"83656890-2acd-4c0b-8ab9-ae2f4b4d9b5a"`
+	// When this run was stopped, which is when Stop was pressed. It is set together with stoppedBy and isn't changed afterwards.
+	StopTime *time.Time `json:"stopTime,omitempty" example:"2026-09-15T16:02:40Z"`
 }
 
 // @Description One unit of work inside an automation: what a kind enqueues, claims, runs a session for, and applies the outcome of.
@@ -115,6 +122,10 @@ type AutomationWorkItem struct {
 	// One root session per attempt, in attempt order. Each root reaches its own delegated
 	// children.
 	SessionIds []string `json:"sessionIds,omitempty"`
+	// The run that started each entry of SessionIds, in the same order; empty for items
+	// written before 3.5.0. Storage for the history rules only: the API returns each
+	// session's resolved run and outcome instead.
+	SessionRunIds []string `json:"-"`
 	// Every run that failed this item, in failure order. A run never claims an item it
 	// failed, and the kind gives the item up once this reaches its budget.
 	FailedRunIds []string `json:"failedRunIds,omitempty"`
@@ -197,6 +208,8 @@ const (
 	AutomationRunOutcomeFailed = "failed"
 	// A session still being driven.
 	AutomationRunOutcomeRunning = "running"
+	// A session a user's stop ended, or an earlier attempt returned to the queue without a failure.
+	AutomationRunOutcomeStopped = "stopped"
 
 	AutomationRunStepThought = "thought"
 	AutomationRunStepTool    = "tool"
@@ -226,9 +239,9 @@ type AutomationRunSession struct {
 	SessionId string `json:"sessionId" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d"`
 	// The work item this session was an attempt at.
 	ItemId string `json:"itemId" example:"8c2e5b91-4a03-47f6-9d18-6b0e2c7d4a15"`
-	// The run that made this attempt, best effort: a run that failed before opening a session shifts the mapping.
+	// The run that made this attempt. Exact for sessions recorded from 3.5.0; for earlier ones a best effort, as a run that failed before opening a session shifts the mapping.
 	RunId string `json:"runId,omitempty" example:"3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934"`
-	// report, failed or running, derived from the item's state, the attempt's position and whether its session is live.
+	// report, failed, running or stopped, derived from the item's state, the attempt's run and whether its session is live.
 	Outcome string `json:"outcome" example:"report"`
 	// The agent that drove this session.
 	Agent string `json:"agent,omitempty" example:"Investigator"`
@@ -269,7 +282,7 @@ type AutomationRunDetails struct {
 
 // @Description What agents are doing right now: every automation run in flight with its automation's open work, what each live session is doing, and the load on the pool that runs agent work.
 type AutomationActivity struct {
-	// Indicates the automation scheduler is running; it stays stopped when agents are off, on airgapped grids and without a database.
+	// Indicates the automation scheduler is running; it stays stopped when agents are off or without a database.
 	SchedulerRunning bool `json:"schedulerRunning" example:"true"`
 	// The pool that runs agent work, interactive turns included.
 	Pool AgentPoolActivity `json:"pool"`
@@ -331,4 +344,12 @@ type AutomationWorkItemActivity struct {
 	Queued bool `json:"queued" example:"false"`
 	// The item's live session first, then each child it delegated to; empty while no session runs for it.
 	Phases []AgentSessionPhase `json:"phases"`
+	// Each recorded session's outcome, keyed by session id: report, failed, running or stopped.
+	SessionOutcomes map[string]string `json:"sessionOutcomes" example:"9b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d:stopped"`
+}
+
+// @Description Options for stopping an automation's in-flight run.
+type AutomationStopRequest struct {
+	// Also turn the automation off, stopping whatever run it has in flight.
+	Disable bool `json:"disable" example:"true"`
 }

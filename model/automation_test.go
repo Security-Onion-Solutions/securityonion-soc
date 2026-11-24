@@ -117,3 +117,28 @@ func TestAutomationRunSummaryMarshalsFlat(t *testing.T) {
 	assert.JSONEq(t, `{"done":2}`, string(flat["itemCounts"]))
 	assert.NotContains(t, flat, "AutomationRunRecord")
 }
+
+func TestAutomationRunStateIsTerminal(t *testing.T) {
+	assert.False(t, AutomationRunQueued.IsTerminal())
+	assert.False(t, AutomationRunRunning.IsTerminal())
+	assert.True(t, AutomationRunSucceeded.IsTerminal())
+	assert.True(t, AutomationRunFailed.IsTerminal())
+	assert.True(t, AutomationRunStopped.IsTerminal())
+}
+
+// SessionRunIds is storage for the history rules; the API resolves each session's run instead.
+func TestAutomationWorkItemOmitsSessionRunIds(t *testing.T) {
+	raw, err := json.Marshal(&AutomationWorkItem{SessionIds: []string{"s1"}, SessionRunIds: []string{"run-1"}})
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(raw), "run-1")
+}
+
+func TestAutomationStopRequestDefaultsToKeepingTheAutomationOn(t *testing.T) {
+	var request AutomationStopRequest
+	require.NoError(t, json.Unmarshal([]byte(`{}`), &request))
+	assert.False(t, request.Disable)
+
+	require.NoError(t, json.Unmarshal([]byte(`{"disable":true}`), &request))
+	assert.True(t, request.Disable)
+}

@@ -60,6 +60,14 @@ var (
 	// The reason recorded on work whose run stopped without settling it; also what reconcile
 	// writes at startup.
 	ErrAutomationWorkItemInterrupted = errors.New("ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED")
+
+	// The cancel cause a user's Stop gives a run, and the reason recorded on the items it
+	// returned to the queue. The database package writes the same string on the paths that
+	// close a stopping row without the engine.
+	ErrAutomationRunStopped = errors.New("ERROR_AUTOMATION_RUN_STOPPED")
+
+	// A Stop named a run that is no longer the automation's run in flight.
+	ErrAutomationRunNotInFlight = errors.New("ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT")
 )
 
 type AutomationKind interface {
@@ -125,10 +133,19 @@ func (run *AutomationRun) RunAgentSession(ctx context.Context, itemId string, re
 	return run.Srv.AssistantManager.RunAgentSession(ctx, &started)
 }
 
-// automationWriteContext detaches from a params-change cancel, so a finished session is still
+// deliberateAutomationCancel reports whether the run was cancelled on purpose, by a params change
+// or a Stop, rather than by a shutdown. A new cancel cause a run should treat as deliberate goes
+// here.
+func deliberateAutomationCancel(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+
+	return errors.Is(cause, ErrAutomationParamsChanged) || errors.Is(cause, ErrAutomationRunStopped)
+}
+
+// automationWriteContext detaches from a deliberate cancel, so a finished session is still
 // recorded, but never from a shutdown.
 func automationWriteContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if !errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
+	if !deliberateAutomationCancel(ctx) {
 		return ctx, func() {}
 	}
 
@@ -324,10 +341,14 @@ func unmarshalAutomation(raw json.RawMessage) (*model.Automation, error) {
 	}
 
 	// A hand-edited entry can name anything; only a UUID survives the store's uuid columns,
-	// so reject it here rather than at the first query.
-	if !isAutomationId(automation.Id) {
+	// so reject it here rather than at the first query. Postgres matches those columns in any
+	// case but the run registry compares strings, so the id is read in canonical form.
+	parsed, err := uuid.Parse(automation.Id)
+	if err != nil {
 		return nil, fmt.Errorf("automation id %q is not a UUID", automation.Id)
 	}
+
+	automation.Id = parsed.String()
 
 	automation.Kind = "automation"
 	// Only the overlay may claim this.
@@ -480,6 +501,12 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	return ac.loadAutomation(ctx, id)
+}
+
+// loadAutomation reads one automation as the scheduler runs it: the stored copy, with the
+// builtin overlay for a builtin, which is listed as shipped until its first save.
+func (ac *AssistantCoordinator) loadAutomation(ctx context.Context, id string) (*model.Automation, error) {
 	stored, err := ac.getStoredAutomation(ctx, id)
 
 	if !ac.isBuiltinAutomation(id) {
@@ -574,17 +601,8 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		return err
 	}
 
-	existing, err := ac.stampAutomation(ctx, automation, stored)
+	existing, err := ac.writeAutomationLocked(ctx, automation, stored)
 	if err != nil {
-		return err
-	}
-
-	encoded, err := json.Marshal(automation)
-	if err != nil {
-		return err
-	}
-
-	if err := ac.writeStoredAutomations(ctx, replaceStoredAutomation(stored, automation.Id, encoded)); err != nil {
 		return err
 	}
 
@@ -604,9 +622,37 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 		}
 	}
 
+	// Turning an automation off stops its run, inside this lock so no scheduled run opens in
+	// between. A params change above already cancelled the run, and its cause wins. A builtin
+	// never saved ships off, so its first save has nothing to stop.
+	if existing != nil && existing.Enabled && !automation.Enabled {
+		requestor, _ := ctx.Value(web.ContextKeyRequestorId).(string)
+		ac.stopRegisteredAutomationRun(ctx, automation.Id, "", requestor)
+	}
+
 	ac.invalidateAutomations()
 
 	return nil
+}
+
+// writeAutomationLocked stamps and stores one automation in place of its stored copy, which it
+// returns. The caller holds configWriteMu and read stored under it.
+func (ac *AssistantCoordinator) writeAutomationLocked(ctx context.Context, automation *model.Automation, stored []json.RawMessage) (*model.Automation, error) {
+	existing, err := ac.stampAutomation(ctx, automation, stored)
+	if err != nil {
+		return nil, err
+	}
+
+	encoded, err := json.Marshal(automation)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ac.writeStoredAutomations(ctx, replaceStoredAutomation(stored, automation.Id, encoded)); err != nil {
+		return nil, err
+	}
+
+	return existing, nil
 }
 
 // validateAutomation checks what the kind cannot: what an automation is called and how
@@ -695,17 +741,24 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 	return existing, nil
 }
 
-// registerAutomationRun records a run's cancel so a params change can reach it, returning the
-// release the engine defers.
-func (ac *AssistantCoordinator) registerAutomationRun(id string, cancel context.CancelCauseFunc) func() {
+// registeredAutomationRun is the run executing one automation, as a params change or a Stop
+// reaches it.
+type registeredAutomationRun struct {
+	runId  string
+	cancel context.CancelCauseFunc
+}
+
+// registerAutomationRun records a run's cancel so a params change or a Stop can reach it,
+// returning the release the engine defers.
+func (ac *AssistantCoordinator) registerAutomationRun(id, runId string, cancel context.CancelCauseFunc) func() {
 	ac.automationRunMu.Lock()
 	defer ac.automationRunMu.Unlock()
 
 	if ac.automationRuns == nil {
-		ac.automationRuns = map[string]context.CancelCauseFunc{}
+		ac.automationRuns = map[string]*registeredAutomationRun{}
 	}
 
-	ac.automationRuns[id] = cancel
+	ac.automationRuns[id] = &registeredAutomationRun{runId: runId, cancel: cancel}
 
 	return func() {
 		ac.automationRunMu.Lock()
@@ -722,8 +775,8 @@ func (ac *AssistantCoordinator) interruptAutomationRun(id string) {
 	ac.automationRunMu.Lock()
 	defer ac.automationRunMu.Unlock()
 
-	if cancel := ac.automationRuns[id]; cancel != nil {
-		cancel(ErrAutomationParamsChanged)
+	if run := ac.automationRuns[id]; run != nil {
+		run.cancel(ErrAutomationParamsChanged)
 	}
 }
 
@@ -862,12 +915,13 @@ func (ac *AssistantCoordinator) reconcileAutomationRuns(ctx context.Context) {
 		return
 	}
 
-	if result.FailedRuns == 0 && result.ResetItems == 0 {
+	if result.FailedRuns == 0 && result.StoppedRuns == 0 && result.ResetItems == 0 {
 		return
 	}
 
 	logger.WithFields(log.Fields{
-		"failedRuns": result.FailedRuns,
-		"resetItems": result.ResetItems,
+		"failedRuns":  result.FailedRuns,
+		"stoppedRuns": result.StoppedRuns,
+		"resetItems":  result.ResetItems,
 	}).Info("assistant: recovered automation runs left open by a previous process")
 }

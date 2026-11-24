@@ -31,7 +31,7 @@ const staleWorkItemStates = `('pending', 'running')`
 // a run already under way is allowed to finish.
 const pendingWorkItemStates = `('pending')`
 
-const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, failed_run_ids, result, error, created_at, updated_at`
+const automationWorkItemColumns = `id, automation_id, run_id, group_key, payload, state, attempts, session_ids, failed_run_ids, result, error, created_at, updated_at, session_run_ids`
 
 func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
 	item := &model.AutomationWorkItem{}
@@ -41,7 +41,8 @@ func scanAutomationWorkItemRow(row db.Row) (*model.AutomationWorkItem, error) {
 	var payload, result []byte
 
 	err := row.Scan(&item.Id, &item.AutomationId, &runId, &item.GroupKey, &payload, &state,
-		&item.Attempts, &item.SessionIds, &item.FailedRunIds, &result, &failure, &item.CreateTime, &item.UpdateTime)
+		&item.Attempts, &item.SessionIds, &item.FailedRunIds, &result, &failure, &item.CreateTime, &item.UpdateTime,
+		&item.SessionRunIds)
 	if err != nil {
 		return nil, err
 	}
@@ -159,14 +160,20 @@ func (s *Store) ClaimNextAutomationWorkItem(ctx context.Context, automationId, r
 }
 
 // EnsureAutomationWorkItemSession appends the session analyzing a claimed item rather than
-// overwriting, so each attempt's root stays reachable. Idempotent, so a replayed write does
-// not double-add.
+// overwriting, so each attempt's root stays reachable, and the claiming run beside it so
+// history can tell which run made the attempt. Idempotent, so a replayed write does not
+// double-add.
 func (s *Store) EnsureAutomationWorkItemSession(ctx context.Context, itemId, sessionId string) error {
+	// Both arrays read their pre-update values, so the guard is the same on each and they
+	// stay in step.
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
 		SET session_ids = CASE WHEN $2 = ANY(session_ids)
 		                       THEN session_ids
 		                       ELSE array_append(session_ids, $2) END,
+		    session_run_ids = CASE WHEN $2 = ANY(session_ids)
+		                           THEN session_run_ids
+		                           ELSE array_append(session_run_ids, COALESCE(run_id::text, '')) END,
 		    updated_at = now()
 		WHERE id = $1 AND state IN `+openWorkItemStates+`
 		RETURNING id`, itemId, sessionId)
@@ -213,6 +220,10 @@ func (s *Store) CompleteAutomationWorkItem(ctx context.Context, itemId string) e
 // RequeueAutomationWorkItem returns a running item to the queue after a failure it may
 // recover from. An applying item keeps its state and result, so only its update replays.
 // attempts is deliberately left alone: the claim already counted this try.
+//
+// Call it only before a session starts. Run history reads a session whose item went back to
+// the queue uncharged as stopped, which holds only while a user's stop is the one thing that
+// returns an item uncharged after a session has run.
 func (s *Store) RequeueAutomationWorkItem(ctx context.Context, itemId, cause string) error {
 	return s.transitionWorkItem(ctx, `
 		UPDATE automation_work_items
@@ -396,7 +407,8 @@ func (s *Store) ListOpenAutomationWorkItems(ctx context.Context, automationId st
 	return collectWorkItems(rows)
 }
 
-// ListAutomationWorkItems returns the items one run last worked or failed; a claim re-points run_id.
+// ListAutomationWorkItems returns the items one run last worked, failed or ran a session for; a
+// claim re-points run_id.
 func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*model.AutomationWorkItem, error) {
 	if runId == "" {
 		return nil, fmt.Errorf("cannot list work items without a run id")
@@ -405,7 +417,7 @@ func (s *Store) ListAutomationWorkItems(ctx context.Context, runId string) ([]*m
 	rows, err := s.db.Query(ctx, `
 		SELECT `+automationWorkItemColumns+`
 		FROM automation_work_items
-		WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text]
+		WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text] OR session_run_ids @> ARRAY[$1::text]
 		ORDER BY created_at`, runId)
 	if err != nil {
 		return nil, err
@@ -449,7 +461,9 @@ func (s *Store) CountOpenAutomationWorkItems(ctx context.Context, automationId s
 	return counts, rows.Err()
 }
 
-// CountAutomationWorkItemsByRun counts ListAutomationWorkItems by state per run; an item a run failed stays failed for it.
+// CountAutomationWorkItemsByRun counts ListAutomationWorkItems by state per run. An item a run
+// failed stays failed for it, and one it neither failed nor still holds, because it stopped,
+// counts as pending for it.
 func (s *Store) CountAutomationWorkItemsByRun(ctx context.Context, runIds []string) (map[string]map[model.AutomationWorkItemState]int, error) {
 	counts := map[string]map[model.AutomationWorkItemState]int{}
 	if len(runIds) == 0 {
@@ -458,10 +472,13 @@ func (s *Store) CountAutomationWorkItemsByRun(ctx context.Context, runIds []stri
 
 	rows, err := s.db.Query(ctx, `
 		SELECT r.id::text,
-		       CASE WHEN w.failed_run_ids @> ARRAY[r.id::text] THEN 'failed' ELSE w.state END,
+		       CASE WHEN w.failed_run_ids @> ARRAY[r.id::text] THEN 'failed'
+		            WHEN w.run_id IS DISTINCT FROM r.id THEN 'pending'
+		            ELSE w.state END,
 		       count(*)
 		FROM unnest($1::uuid[]) AS r(id)
 		JOIN automation_work_items w ON w.run_id = r.id OR w.failed_run_ids @> ARRAY[r.id::text]
+		                             OR w.session_run_ids @> ARRAY[r.id::text]
 		GROUP BY 1, 2`, runIds)
 	if err != nil {
 		return nil, err

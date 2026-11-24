@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -232,4 +233,66 @@ func TestAutomationActivityReportsStoreErrors(t *testing.T) {
 			assert.ErrorIs(t, err, failure)
 		})
 	}
+}
+
+func TestAutomationActivityShowsStoppingRunsAndSessionOutcomes(t *testing.T) {
+	ac := newActivityCoordinator(t)
+	ac.setAgentPhase("s-live", "s-live", automationTestAgent, model.AgentPhaseWaitingLLM)
+
+	stopTime := time.Date(2026, 9, 15, 16, 2, 40, 0, time.UTC)
+	stopping := historyRun(historyRunId, model.AutomationRunRunning)
+	stopping.StoppedBy = "user-1"
+	stopping.StopTime = &stopTime
+
+	store := &fakeActivityStore{
+		runs: []*model.AutomationRunRecord{stopping},
+		items: map[string][]*model.AutomationWorkItem{
+			automationTestId: {
+				{Id: "live", RunId: historyRunId, State: model.AutomationWorkItemRunning,
+					SessionIds: []string{"s-old", "s-live"}, SessionRunIds: []string{historyOtherRunId, historyRunId}},
+				{Id: "ending", RunId: historyRunId, State: model.AutomationWorkItemRunning,
+					SessionIds: []string{"s-done"}, SessionRunIds: []string{historyRunId}},
+			},
+		},
+	}
+
+	activity, err := ac.automationActivity(context.Background(), store)
+	require.NoError(t, err)
+	require.Len(t, activity.Runs, 1)
+
+	run := activity.Runs[0]
+	assert.Equal(t, "user-1", run.StoppedBy)
+	assert.Equal(t, &stopTime, run.StopTime)
+	assert.Nil(t, run.EndTime)
+
+	items := activityItems(run)
+	assert.Equal(t, map[string]string{
+		"s-old":  model.AutomationRunOutcomeStopped,
+		"s-live": model.AutomationRunOutcomeRunning,
+	}, items["live"].SessionOutcomes)
+	assert.Equal(t, map[string]string{"s-done": model.AutomationRunOutcomeStopped}, items["ending"].SessionOutcomes,
+		"a run that is stopping won't start a session that isn't live")
+}
+
+func TestAutomationActivitySessionOutcomesWithoutAStop(t *testing.T) {
+	ac := newActivityCoordinator(t)
+
+	store := &fakeActivityStore{
+		runs: []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunRunning)},
+		items: map[string][]*model.AutomationWorkItem{
+			automationTestId: {
+				{Id: "starting", RunId: historyRunId, State: model.AutomationWorkItemRunning,
+					SessionIds: []string{"s1"}, SessionRunIds: []string{historyRunId}},
+				{Id: "pending", State: model.AutomationWorkItemPending},
+			},
+		},
+	}
+
+	activity, err := ac.automationActivity(context.Background(), store)
+	require.NoError(t, err)
+
+	items := activityItems(activity.Runs[0])
+	assert.Equal(t, map[string]string{"s1": model.AutomationRunOutcomeRunning}, items["starting"].SessionOutcomes)
+	assert.NotNil(t, items["pending"].SessionOutcomes)
+	assert.Empty(t, items["pending"].SessionOutcomes)
 }

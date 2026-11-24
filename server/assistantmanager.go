@@ -98,6 +98,12 @@ type AssistantManager interface {
 	ListAutomationRuns(ctx context.Context, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error)
 	GetAutomationRunDetails(ctx context.Context, automationId, runId string, alertLimit int) (*model.AutomationRunDetails, error)
 	GetAutomationActivity(ctx context.Context) (*model.AutomationActivity, error)
+	// RunAutomationNow starts one run of the automation immediately, whether or not it is
+	// enabled or due, and returns the opened run.
+	RunAutomationNow(ctx context.Context, id string) (*model.AutomationRunRecord, error)
+	// StopAutomationRun stops the automation's in-flight run, if it is runId, without waiting
+	// for it to end; with disable, it stops whatever run is in flight and turns the automation off.
+	StopAutomationRun(ctx context.Context, id, runId string, disable bool) error
 	Embed(ctx context.Context, aiModel string, input []string) (*model.EmbeddingResponse, error)
 	ListMemories(ctx context.Context, filter *model.MemoryFilter) (*model.MemoryResults, error)
 	SaveMemory(ctx context.Context, mem *model.Memory) error

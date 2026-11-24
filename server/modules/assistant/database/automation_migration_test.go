@@ -7,6 +7,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -130,4 +131,61 @@ func TestMigrationIndexesRunsByStartTime(t *testing.T) {
 
 	assert.Contains(t, string(sql), "CREATE INDEX IF NOT EXISTS idx_automation_runs_started_at")
 	assert.Contains(t, string(sql), "ON automation_runs (started_at DESC, id)")
+}
+
+func runStopMigration(t *testing.T) string {
+	t.Helper()
+
+	sql, err := migrationFS.ReadFile("migrations/4_automation_run_stop.sql")
+	require.NoError(t, err)
+
+	return string(sql)
+}
+
+// The CHECK is replaced by name; a name that doesn't match migration 2's inline constraint
+// would leave both in place, and the old one would still refuse stopped.
+func TestRunStopMigrationReplacesTheStateCheck(t *testing.T) {
+	sql := runStopMigration(t)
+
+	assert.Contains(t, sql, "DROP CONSTRAINT IF EXISTS automation_runs_state_check")
+	assert.Equal(t, 1, strings.Count(sql, "ADD CONSTRAINT automation_runs_state_check"))
+
+	runStates := []model.AutomationRunState{
+		model.AutomationRunQueued,
+		model.AutomationRunRunning,
+		model.AutomationRunSucceeded,
+		model.AutomationRunFailed,
+		model.AutomationRunStopped,
+	}
+
+	for _, state := range runStates {
+		assert.Contains(t, sql, fmt.Sprintf("'%s'", state), "automation_runs CHECK must accept %q", state)
+	}
+}
+
+// stopped is terminal, so the in-flight index must be left exactly as migration 2 built it.
+func TestRunStopMigrationLeavesTheInFlightIndexAlone(t *testing.T) {
+	sql := runStopMigration(t)
+
+	assert.NotContains(t, sql, "INDEX IF NOT EXISTS "+idxRunsOneInFlight)
+	assert.NotContains(t, sql, "DROP INDEX")
+	assert.True(t, model.AutomationRunStopped.IsTerminal())
+}
+
+// Rows from 3.4.0 must read as scheduled and not stopped, so every new column is nullable or
+// defaults to empty.
+func TestRunStopMigrationAddsNullableColumns(t *testing.T) {
+	sql := runStopMigration(t)
+
+	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS started_by text;")
+	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS stopped_by text;")
+	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS stopped_at timestamptz;")
+	assert.Regexp(t, `session_run_ids\s+text\[\]\s+NOT NULL DEFAULT '\{\}'`, sql)
+}
+
+func TestRunStopMigrationIndexesSessionRuns(t *testing.T) {
+	sql := runStopMigration(t)
+
+	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_run_ids")
+	assert.Contains(t, sql, "USING GIN (session_run_ids)")
 }

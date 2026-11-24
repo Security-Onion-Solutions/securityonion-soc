@@ -16,6 +16,8 @@ type AutomationRunReconcileResult struct {
 	// Runs a previous process left in flight, now failed so their automations can run
 	// again.
 	FailedRuns int
+	// Runs a user had stopped that a previous process left in flight, now closed as stopped.
+	StoppedRuns int
 	// Items a previous process was running, now back in the queue to be redone.
 	ResetItems int
 }
@@ -32,6 +34,13 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 	}
 
 	defer tx.Rollback(ctx)
+
+	// A Stop already recorded on the row is honored: the run ends stopped at its stop time and
+	// its items go back uncharged. These rows close first so the sweeps below miss them.
+	stoppedRuns, stoppedItems, err := closeStoppingRuns(ctx, tx, "", "", automationRunStoppedCause, "")
+	if err != nil {
+		return nil, err
+	}
 
 	// An open run belongs to a process that is gone; this one has opened none yet.
 	failedRuns, err := countAffected(ctx, tx, `
@@ -68,9 +77,15 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 		return nil, err
 	}
 
-	if failedRuns > 0 || resetItems > 0 {
+	result := &AutomationRunReconcileResult{
+		FailedRuns:  failedRuns,
+		StoppedRuns: stoppedRuns,
+		ResetItems:  stoppedItems + resetItems,
+	}
+
+	if result.FailedRuns > 0 || result.StoppedRuns > 0 || result.ResetItems > 0 {
 		s.automationChanged()
 	}
 
-	return &AutomationRunReconcileResult{FailedRuns: failedRuns, ResetItems: resetItems}, nil
+	return result, nil
 }

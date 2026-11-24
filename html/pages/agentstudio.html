@@ -315,6 +315,10 @@
   </v-dialog>
 
 
+  <automation-stop-dialog v-model="showStopDialog" :automation-name="stopAutomationTarget ? stopAutomationTarget.name : ''"
+    :automation-enabled="stopAutomationTarget ? stopAutomationTarget.enabled : null" @stop="stopAutomation($event.disable)"></automation-stop-dialog>
+  <div class="d-sr-only" role="status" aria-live="polite" aria-atomic="true" data-aid="agentstudio_automation_announcement">{{ automationAnnouncement }}</div>
+
   <v-dialog v-model="scanHistoricalDialog" persistent width="500px" scrollable data-aid="agentstudio_memoryscan_history_dialog">
     <v-card>
       <v-card-title class="py-4" role="heading" aria-level="2">
@@ -781,6 +785,13 @@
                           :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled" :data-aid="'agentstudio_automation_enabled_' + item.id"></v-switch>
                       </div>
                     </td>
+                    <td v-if="canEditConfig()">
+                      <v-btn icon variant="text" size="small" @click.stop="onAutomationAction(item, $event)" :aria-disabled="actionPending[item.id] ? 'true' : 'false'"
+                        :title="automationInFlight(item) ? i18n.automationStop : i18n.automationRunNow" :aria-label="automationActionLabel(item)"
+                        :data-aid="(automationInFlight(item) ? 'agentstudio_automation_stop_' : 'agentstudio_automation_run_') + item.id">
+                        <v-icon>{{ automationInFlight(item) ? 'fa-stop' : 'fa-play' }}</v-icon>
+                      </v-btn>
+                    </td>
                   </tr>
                 </template>
                 <template #expanded-row="{ item }">
@@ -814,7 +825,7 @@
                                   </v-col>
                                   <!-- A built-in's userId is its first saver, not a creator. -->
                                   <v-col v-if="!item.isSystem && item.userId" cols="12" md="6">
-                                    <v-text-field :model-value="automationCreatorLabel(item)" :label="i18n.agentStudioAutomationCreatedBy" variant="outlined" density="comfortable" prepend-inner-icon="fa-user" readonly persistent-hint
+                                    <v-text-field :model-value="userLabel(item.userId)" :label="i18n.agentStudioAutomationCreatedBy" variant="outlined" density="comfortable" prepend-inner-icon="fa-user" readonly persistent-hint
                                       :hint="i18n.agentStudioAutomationCreatedByHelp" :data-aid="'agentstudio_automation_creator_' + item.id"></v-text-field>
                                   </v-col>
                                 </v-row>
@@ -844,10 +855,11 @@
                                 <!-- Slots, not raw <tr>/<td>, which would close the enclosing expanded-row cell. -->
                                 <v-data-table v-if="automationHistory(item).runs.length" :headers="runHeaders" :items="automationHistory(item).runs" item-value="id" density="compact" :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="runItemsPerPage" class="agentstudio-runs" :data-aid="'agentstudio_automation_runs_' + item.id">
                                   <template #item.starttime="{ value }">{{ value ? $root.formatDateTime(value) : '' }}</template>
+                                  <template #item.startedby="{ item: run }">{{ runStartedByLabel(run) }}</template>
                                   <template #item.done="{ item: run }">{{ runItemCount(run, 'done') }}</template>
                                   <template #item.failed="{ item: run }">{{ runItemCount(run, 'failed') }}</template>
                                   <template #item.state="{ item: run }">
-                                    <v-chip size="x-small" :color="automationStatusColor(run.state)" :variant="automationStatusColor(run.state) ? 'flat' : 'tonal'" :title="run.error || ''">{{ automationStatusLabel(run.state) }}</v-chip>
+                                    <v-chip size="x-small" :color="automationStatusColor(run.state)" :variant="automationStatusColor(run.state) ? 'flat' : 'tonal'" :title="run.error || ''">{{ runOutcomeLabel(run) }}</v-chip>
                                   </template>
                                   <template #item.actions="{ item: run }">
                                     <v-btn icon variant="text" size="small" class="no-print" :to="runMonitorLink(run)" :title="i18n.agentStudioViewInAgentMonitor" :aria-label="i18n.agentStudioViewInAgentMonitor" :data-aid="'agentstudio_automation_run_monitor_' + run.id">
