@@ -7,10 +7,28 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNodeTrafficMonInDropsPpsJSON(t *testing.T) {
+	node := NewNode("id1")
+	node.TrafficMonInDropsPps = 5
+	data, err := json.Marshal(node)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"trafficMonInDropsPps":5`)
+	assert.NotContains(t, string(data), "trafficMonInDropsMbs")
+
+	decoded := NewNode("id1")
+	assert.NoError(t, json.Unmarshal([]byte(`{"trafficMonInDropsPps":7.5}`), decoded))
+	assert.Equal(t, 7.5, decoded.TrafficMonInDropsPps)
+
+	legacy := NewNode("id1")
+	assert.NoError(t, json.Unmarshal([]byte(`{"trafficMonInDropsMbs":7.5}`), legacy))
+	assert.Equal(t, 0.0, legacy.TrafficMonInDropsPps)
+}
 
 func testModel(tester *testing.T, newModel string, model string, front string, back string) {
 	node := NewNode("")

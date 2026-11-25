@@ -568,3 +568,19 @@ func TestPostgresMetricsModule_Start_Stop_EvaluationLoop(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, mod.IsRunning())
 }
+
+func TestPostgresMetrics_UpdateNodeMetrics_TrafficMonInDropsPps(t *testing.T) {
+	srv := server.NewFakeAuthorizedServer(make(map[string][]string))
+	pm := NewPostgresMetrics(srv)
+	pm.Init(600000, 600)
+	pm.lastUpdate = time.Now()
+	pm.trafficMonInDropsPps = map[string]float64{"host1": 5}
+
+	node := &model.Node{Id: "host1"}
+	pm.UpdateNodeMetrics(context.Background(), node)
+	assert.Equal(t, 5.0, node.TrafficMonInDropsPps)
+
+	other := &model.Node{Id: "host2", TrafficMonInDropsPps: 7}
+	pm.UpdateNodeMetrics(context.Background(), other)
+	assert.Equal(t, 7.0, other.TrafficMonInDropsPps)
+}

@@ -220,8 +220,10 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId, container string
 	}
 
 	timeWindow := "2 minutes"
+	interfacesBound := fmt.Sprintf("(%s AT TIME ZONE 'UTC') - INTERVAL '%s'", startPlaceholder, nodeConfigLookback)
 	qNet := fmt.Sprintf(`
-		WITH traffic_diff AS (
+		WITH %s,
+		traffic_diff AS (
 			SELECT 
 				tag.tags->>'host' as host,
 				tag.tags->>'interface' as interface,
@@ -247,33 +249,14 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId, container string
 			WHERE time >= (%s AT TIME ZONE 'UTC')
 		)
 		SELECT 
-			to_timestamp(floor(extract(epoch from time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
-			host,
-			interface,
-			AVG(drop_rate) as drop_avg
-		FROM rates
-		GROUP BY bucket, host, interface
-		ORDER BY bucket ASC`, hostFilter, startPlaceholder, timeWindow, endPlaceholder, startPlaceholder)
-
-	monint := make(map[string]string)
-	qConf := `
-		SELECT DISTINCT ON (tag.tags->>'host') tag.tags->>'host', m.fields->>'monint' 
-		FROM telegraf.node_config m 
-		JOIN telegraf.node_config_tag tag ON m.tag_id = tag.tag_id 
-		WHERE m.fields->>'monint' IS NOT NULL
-		ORDER BY tag.tags->>'host', m.time DESC`
-	if rowsConf, errConf := s.db.Query(ctx, qConf); errConf == nil {
-		for rowsConf.Next() {
-			var host string
-			var mon *string
-			if err := rowsConf.Scan(&host, &mon); err == nil {
-				if mon != nil {
-					monint[host] = *mon
-				}
-			}
-		}
-		rowsConf.Close()
-	}
+			to_timestamp(floor(extract(epoch from r.time AT TIME ZONE 'UTC') / $1) * $1) AS bucket,
+			r.host,
+			r.interface,
+			AVG(r.drop_rate) as drop_avg
+		FROM rates r
+		JOIN node_interfaces ni ON ni.host = r.host AND r.interface = ni.monint
+		GROUP BY bucket, r.host, r.interface
+		ORDER BY bucket ASC`, fmt.Sprintf(nodeInterfacesCTE, interfacesBound), hostFilter, startPlaceholder, timeWindow, endPlaceholder, startPlaceholder)
 
 	rows, err := s.db.Query(ctx, qNet, args...)
 	if err != nil {
@@ -294,17 +277,7 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId, container string
 			var iface string
 			var drop float64
 			if err := rows.Scan(&bucket, &host, &iface, &drop); err == nil {
-				mon := monint[nodeId]
-				isMon := false
-				if mon != "" {
-					isMon = (iface == mon)
-				} else {
-					isMon = (iface == "eth1" || iface == "ens19" || strings.Contains(iface, "mon"))
-				}
-
-				if isMon {
-					trafficMonDrops[bucket] += drop
-				}
+				trafficMonDrops[bucket] += drop
 			}
 		}
 		res["traffic_mon_drops"] = mapToSamples(trafficMonDrops)
@@ -317,25 +290,10 @@ func queryNetDropsMetric(ctx context.Context, s *Store, nodeId, container string
 			var iface string
 			var drop float64
 			if err := rows.Scan(&bucket, &host, &iface, &drop); err == nil {
-				mon := monint[host]
-
-				isMon := false
-				if mon != "" {
-					if iface == mon {
-						isMon = true
-					}
-				} else {
-					if iface == "eth1" || iface == "ens19" || strings.Contains(iface, "mon") {
-						isMon = true
-					}
+				if _, ok := trafficMonDrops[host]; !ok {
+					trafficMonDrops[host] = make(map[time.Time]float64)
 				}
-
-				if isMon {
-					if _, ok := trafficMonDrops[host]; !ok {
-						trafficMonDrops[host] = make(map[time.Time]float64)
-					}
-					trafficMonDrops[host][bucket] += drop
-				}
+				trafficMonDrops[host][bucket] += drop
 			}
 		}
 

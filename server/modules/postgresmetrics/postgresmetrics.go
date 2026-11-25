@@ -57,7 +57,7 @@ type PostgresMetrics struct {
 	zeekLossPct          map[string]float64
 	captureLossPct       map[string]float64
 	trafficMonInMbs      map[string]float64
-	trafficMonInDropsMbs map[string]float64
+	trafficMonInDropsPps map[string]float64
 	trafficManInMbs      map[string]float64
 	trafficManOutMbs     map[string]float64
 	redisQueueSize       map[string]int
@@ -108,7 +108,7 @@ func NewPostgresMetrics(srv *server.Server) *PostgresMetrics {
 		zeekLossPct:          make(map[string]float64),
 		captureLossPct:       make(map[string]float64),
 		trafficMonInMbs:      make(map[string]float64),
-		trafficMonInDropsMbs: make(map[string]float64),
+		trafficMonInDropsPps: make(map[string]float64),
 		trafficManInMbs:      make(map[string]float64),
 		trafficManOutMbs:     make(map[string]float64),
 		redisQueueSize:       make(map[string]int),
@@ -249,8 +249,8 @@ func (pm *PostgresMetrics) UpdateNodeMetrics(ctx context.Context, node *model.No
 	if val, exists := pm.trafficMonInMbs[host]; exists {
 		node.TrafficMonInMbs = val
 	}
-	if val, exists := pm.trafficMonInDropsMbs[host]; exists {
-		node.TrafficMonInDropsMbs = val
+	if val, exists := pm.trafficMonInDropsPps[host]; exists {
+		node.TrafficMonInDropsPps = val
 	}
 	if val, exists := pm.trafficManInMbs[host]; exists {
 		node.TrafficManInMbs = val
@@ -361,7 +361,7 @@ func (pm *PostgresMetrics) updateCache(ctx context.Context) {
 
 	if rates, err := pm.dbStore.FetchNetworkRates(ctx, startTime); err == nil {
 		pm.trafficMonInMbs = rates.TrafficMonInMbs
-		pm.trafficMonInDropsMbs = rates.TrafficMonInDropsMbs
+		pm.trafficMonInDropsPps = rates.TrafficMonInDropsPps
 		pm.trafficManInMbs = rates.TrafficManInMbs
 		pm.trafficManOutMbs = rates.TrafficManOutMbs
 	}

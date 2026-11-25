@@ -315,3 +315,13 @@ func TestPrepareAlarm(t *testing.T) {
 	alarm = &model.Alarm{Name: "Restart", Metric: "os_needs_restart", Operator: "eq", Threshold: "TRUE", Severity: "high"}
 	assert.EqualError(t, postgresmetrics.PrepareAlarm(alarm), "alarm threshold must be a boolean value (true/false)")
 }
+
+func TestNetDropsMetric(t *testing.T) {
+	info, found := postgresmetrics.GetAlarmMetricInfo("net_drops")
+	assert.True(t, found)
+	assert.Equal(t, "pps", info.Units)
+
+	val, found := postgresmetrics.ExtractMetricValue(&model.Node{TrafficMonInDropsPps: 12.5, TrafficMonInMbs: 3}, "net_drops", "traffic_mon_drops")
+	assert.True(t, found)
+	assert.Equal(t, 12.5, val)
+}

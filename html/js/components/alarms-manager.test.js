@@ -424,6 +424,7 @@ test('thresholdHint and booleanThresholdOptions computed properties', () => {
   comp.i18n = {
     unitPercent: 'Unit: percent',
     unitSeconds: 'Unit: seconds',
+    unitPps: 'Unit: packets/s',
     alarmThresholdStringHint: 'Varies per metric. Ex: fault',
     trueLabel: 'True',
     falseLabel: 'False',
@@ -432,6 +433,7 @@ test('thresholdHint and booleanThresholdOptions computed properties', () => {
   comp.metrics = [
     { metric: 'cpu', type: 'numeric', units: 'percent' },
     { metric: 'system_uptime', type: 'numeric', units: 'seconds' },
+    { metric: 'net_drops', type: 'numeric', units: 'pps' },
     { metric: 'os_needs_restart', type: 'bool' },
     { metric: 'node_status', type: 'string' },
   ];
@@ -442,6 +444,9 @@ test('thresholdHint and booleanThresholdOptions computed properties', () => {
 
   comp.form.metric = 'system_uptime';
   expect(comp.thresholdHint).toBe('Unit: seconds');
+
+  comp.form.metric = 'net_drops';
+  expect(comp.thresholdHint).toBe('Unit: packets/s');
 
   comp.form.metric = 'os_needs_restart';
   expect(comp.thresholdHint).toBe('');
