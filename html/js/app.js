@@ -1377,7 +1377,7 @@ $(document).ready(function () {
             if (msg.length > 200) {
               msg = msg.substring(0, 200) + "...";
             }
-            
+
             localized = msg;
           }
 
@@ -1411,8 +1411,10 @@ $(document).ready(function () {
             this.showTip(this.i18n.requestCanceled);
             return;
           }
+
           this.error = true;
           this.errorMessage = this.localizeMessage(msg);
+          
           if (this.debug && msg && msg.stack) {
             console.log(msg.stack);
           }
