@@ -9,9 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,14 +25,6 @@ import (
 const (
 	ConfigSettingPostgresMetricsAlarms    = "soc.config.server.modules.postgresmetrics.alarms"
 	MAX_CONTAINER_METRIC_LOOKBACK_SECONDS = 300
-
-	NET_DROPS_METRIC = "net_drops"
-	NET_DROPS_UNITS  = "pps"
-	// The inverse of the bytes-to-megabits factor (8 / 1,000,000) that 3.4.0 applied to the
-	// packet drop rate before comparing it with a net_drops threshold.
-	NET_DROPS_MBS_TO_PPS = 125000
-	// Keeps every digit an admin typed while removing the float error of the multiplication.
-	NET_DROPS_THRESHOLD_SIGNIFICANT_DIGITS = 12
 )
 
 var (
@@ -106,10 +96,10 @@ func (s *AlarmstoreImpl) checkWriteAuth(ctx context.Context) error {
 	return nil
 }
 
-func (s *AlarmstoreImpl) loadAlarmsRaw(ctx context.Context) (alarms []model.Alarm, convertedIds []string, unparsableIds []string, err error) {
+func (s *AlarmstoreImpl) loadAlarmsRaw(ctx context.Context) ([]model.Alarm, error) {
 	store := s.getConfigstore()
 	if store == nil {
-		return []model.Alarm{}, nil, nil, nil
+		return []model.Alarm{}, nil
 	}
 	readCtx := ctx
 	if s.server != nil && s.server.Context != nil {
@@ -117,109 +107,12 @@ func (s *AlarmstoreImpl) loadAlarmsRaw(ctx context.Context) (alarms []model.Alar
 	}
 	setting, err := store.GetSetting(readCtx, ConfigSettingPostgresMetricsAlarms)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if setting == nil || strings.TrimSpace(setting.Value) == "" {
-		return []model.Alarm{}, nil, nil, nil
+		return []model.Alarm{}, nil
 	}
-	alarms, err = model.UnmarshalAlarms(setting.Value)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	convertedIds, unparsableIds = normalizeAlarmThresholds(alarms)
-	return alarms, convertedIds, unparsableIds, nil
-}
-
-// normalizeAlarmThresholds converts net_drops thresholds saved before they were expressed in
-// packets per second, and stamps their units so they are converted only once.
-func normalizeAlarmThresholds(alarms []model.Alarm) (convertedIds []string, unparsableIds []string) {
-	for idx := range alarms {
-		alarm := &alarms[idx]
-		if alarm.Metric != NET_DROPS_METRIC || alarm.ThresholdUnits != "" {
-			continue
-		}
-		alarm.ThresholdUnits = NET_DROPS_UNITS
-		value, err := strconv.ParseFloat(strings.TrimSpace(alarm.Threshold), 64)
-		converted := value * NET_DROPS_MBS_TO_PPS
-		if err != nil || math.IsNaN(converted) || math.IsInf(converted, 0) {
-			unparsableIds = append(unparsableIds, alarm.ID)
-			continue
-		}
-		alarm.Threshold = formatConvertedThreshold(converted)
-		convertedIds = append(convertedIds, alarm.ID)
-	}
-	return convertedIds, unparsableIds
-}
-
-func formatConvertedThreshold(value float64) string {
-	rounded, err := strconv.ParseFloat(strconv.FormatFloat(value, 'g', NET_DROPS_THRESHOLD_SIGNIFICANT_DIGITS, 64), 64)
-	if err != nil {
-		rounded = value
-	}
-	formatted := strconv.FormatFloat(rounded, 'f', -1, 64)
-	if len(formatted) > model.MAX_ALARM_THRESHOLD_LEN {
-		formatted = strconv.FormatFloat(rounded, 'g', -1, 64)
-	}
-	return formatted
-}
-
-// afterAlarmsSaved logs the threshold conversion that a save persisted and moves the converted
-// alarms' states to their new thresholds. skipId is the alarm the caller is replacing or removing.
-func (s *AlarmstoreImpl) afterAlarmsSaved(ctx context.Context, alarms []model.Alarm, convertedIds []string, unparsableIds []string, skipId string) {
-	if len(convertedIds) > 0 {
-		log.WithField("netDropsConvertedAlarmIds", convertedIds).Info("converted net_drops alarm thresholds to packets per second")
-	}
-	if len(unparsableIds) > 0 {
-		log.WithField("netDropsUnparsableAlarmIds", unparsableIds).Warn("left unparsable net_drops alarm thresholds unconverted")
-	}
-	if len(convertedIds) == 0 {
-		return
-	}
-	dbStore := s.getDBStore(ctx)
-	if dbStore == nil {
-		return
-	}
-	thresholds := make(map[string]string, len(alarms))
-	for _, alarm := range alarms {
-		thresholds[alarm.ID] = alarm.Threshold
-	}
-	for _, id := range convertedIds {
-		if id == skipId {
-			continue
-		}
-		if err := dbStore.UpdateAlarmStateThreshold(ctx, id, thresholds[id]); err != nil {
-			log.WithError(err).WithField("alarmId", id).Error("failed to update alarm state threshold after net_drops conversion")
-		}
-	}
-}
-
-// SaveConvertedThresholds persists any net_drops threshold conversion done on load. It writes
-// nothing when there is nothing to convert.
-func (s *AlarmstoreImpl) SaveConvertedThresholds(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	alarms, convertedIds, unparsableIds, err := s.loadAlarmsRaw(ctx)
-	if err != nil {
-		log.WithError(err).Warn("failed to load alarms to save converted net_drops thresholds")
-		return err
-	}
-	if len(convertedIds) == 0 && len(unparsableIds) == 0 {
-		return nil
-	}
-	if err := s.saveAlarms(ctx, alarms); err != nil {
-		log.WithError(err).WithField("netDropsConvertedAlarmIds", convertedIds).Error("failed to save converted net_drops alarm thresholds")
-		return err
-	}
-	s.afterAlarmsSaved(ctx, alarms, convertedIds, unparsableIds, "")
-	return nil
-}
-
-func stampThresholdUnits(alarm *model.Alarm) {
-	alarm.ThresholdUnits = ""
-	if info, found := GetAlarmMetricInfo(alarm.Metric); found {
-		alarm.ThresholdUnits = info.Units
-	}
+	return model.UnmarshalAlarms(setting.Value)
 }
 
 func (s *AlarmstoreImpl) saveAlarms(ctx context.Context, alarms []model.Alarm) error {
@@ -242,8 +135,7 @@ func (s *AlarmstoreImpl) GetAlarms(ctx context.Context) ([]model.Alarm, error) {
 	if err := s.checkReadAuth(ctx); err != nil {
 		return nil, err
 	}
-	alarms, _, _, err := s.loadAlarmsRaw(ctx)
-	return alarms, err
+	return s.loadAlarmsRaw(ctx)
 }
 
 func (s *AlarmstoreImpl) GetAlarm(ctx context.Context, id string) (*model.Alarm, error) {
@@ -284,12 +176,10 @@ func (s *AlarmstoreImpl) CreateAlarm(ctx context.Context, alarm *model.Alarm) (*
 		return nil, err
 	}
 
-	stampThresholdUnits(alarm)
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	alarms, convertedIds, unparsableIds, err := s.loadAlarmsRaw(ctx)
+	alarms, err := s.loadAlarmsRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +194,6 @@ func (s *AlarmstoreImpl) CreateAlarm(ctx context.Context, alarm *model.Alarm) (*
 	if err := s.saveAlarms(ctx, alarms); err != nil {
 		return nil, err
 	}
-	s.afterAlarmsSaved(ctx, alarms, convertedIds, unparsableIds, "")
 
 	return alarm, nil
 }
@@ -327,12 +216,10 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 		return nil, err
 	}
 
-	stampThresholdUnits(alarm)
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	alarms, convertedIds, unparsableIds, err := s.loadAlarmsRaw(ctx)
+	alarms, err := s.loadAlarmsRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +240,6 @@ func (s *AlarmstoreImpl) UpdateAlarm(ctx context.Context, id string, alarm *mode
 	if err := s.saveAlarms(ctx, alarms); err != nil {
 		return nil, err
 	}
-	s.afterAlarmsSaved(ctx, alarms, convertedIds, unparsableIds, id)
 
 	if !alarm.Enabled {
 		if dbStore := s.getDBStore(ctx); dbStore != nil {
@@ -377,7 +263,7 @@ func (s *AlarmstoreImpl) DeleteAlarm(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	alarms, convertedIds, unparsableIds, err := s.loadAlarmsRaw(ctx)
+	alarms, err := s.loadAlarmsRaw(ctx)
 	if err != nil {
 		return err
 	}
@@ -398,7 +284,6 @@ func (s *AlarmstoreImpl) DeleteAlarm(ctx context.Context, id string) error {
 	if err := s.saveAlarms(ctx, alarms); err != nil {
 		return err
 	}
-	s.afterAlarmsSaved(ctx, alarms, convertedIds, unparsableIds, id)
 
 	if dbStore := s.getDBStore(ctx); dbStore != nil {
 		_ = dbStore.DeleteAlarmStatesForAlarm(ctx, id)
@@ -448,7 +333,7 @@ func (s *AlarmstoreImpl) EvaluateAlarms(ctx context.Context) error {
 	s.evalMu.Lock()
 	defer s.evalMu.Unlock()
 
-	alarms, _, _, err := s.loadAlarmsRaw(ctx)
+	alarms, err := s.loadAlarmsRaw(ctx)
 	if err != nil {
 		return err
 	}

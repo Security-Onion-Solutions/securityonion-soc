@@ -158,8 +158,6 @@ type Alarm struct {
 	Operator string `json:"operator" example:"gt"`
 	// Threshold value for comparison (numeric, string, or boolean). A boolean threshold of 1 or 0 is stored as true or false.
 	Threshold string `json:"threshold" example:"80"`
-	// Unit the threshold is expressed in. Set by the server from the metric's units; ignored on input.
-	ThresholdUnits string `json:"thresholdUnits" example:"pps"`
 	// Duration in seconds the condition must persist before triggering an alarm.
 	DurationSeconds int `json:"durationSeconds" example:"120"`
 	// Severity level when the alarm triggers (info, low, medium, high, critical).
