@@ -274,7 +274,9 @@ func (r *alertTriageRun) reclaim(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
 	for _, item := range r.run.OpenItems {
-		if shuttingDown(ctx) {
+		// Any cancel, not only shutdown: a Stop must not replay the rest, and charge the stopped
+		// run for their failures. An apply already started keeps its detached write.
+		if ctx.Err() != nil {
 			return
 		}
 

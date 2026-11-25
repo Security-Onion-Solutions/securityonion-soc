@@ -21,10 +21,6 @@ const idxRunsOneInFlight = "idx_automation_runs_one_in_flight"
 
 const automationRunColumns = `id, automation_id, state, started_at, ended_at, error, started_by, stopped_by, stopped_at`
 
-// The error a stopped run leaves on the items it requeued, matching the assistant's
-// ErrAutomationRunStopped, for the paths that close a stopping row without the engine.
-const automationRunStoppedCause = "ERROR_AUTOMATION_RUN_STOPPED"
-
 // The states idx_automation_runs_one_in_flight covers.
 const inFlightRunStates = `('queued', 'running')`
 
@@ -156,7 +152,7 @@ func (s *Store) MarkAutomationRunStopping(ctx context.Context, runId, stoppedBy 
 // CloseStoppedAutomationRun closes one open run as stopped and returns the items it still
 // held running to the queue without charging it. It returns ErrAutomationRunNotOpen when that
 // automation has no open row with that id. stoppedBy only attributes a row no Stop marked.
-func (s *Store) CloseStoppedAutomationRun(ctx context.Context, automationId, runId, cause, stoppedBy string) (int, error) {
+func (s *Store) CloseStoppedAutomationRun(ctx context.Context, automationId, runId, stoppedBy string) (int, error) {
 	if automationId == "" || runId == "" {
 		return 0, fmt.Errorf("cannot close a stopped run without an automation id and a run id")
 	}
@@ -168,7 +164,7 @@ func (s *Store) CloseStoppedAutomationRun(ctx context.Context, automationId, run
 
 	defer tx.Rollback(ctx)
 
-	runs, requeued, err := closeStoppingRuns(ctx, tx, automationId, runId, cause, stoppedBy)
+	runs, requeued, err := closeStoppingRuns(ctx, tx, automationId, runId, stoppedBy)
 	if err != nil {
 		return 0, err
 	}
@@ -191,9 +187,10 @@ func (s *Store) CloseStoppedAutomationRun(ctx context.Context, automationId, run
 // automation. A runId closes that run whether or not a Stop marked it; without one, only rows a
 // Stop marked close. stoppedBy attributes a row no Stop marked.
 //
-// ended_at reads stopped_at as it was before this UPDATE, and now() is fixed for the whole
-// transaction, so ended_at always equals the stopped_at the row ends with.
-func closeStoppingRuns(ctx context.Context, q rowQuerier, automationId, runId, cause, stoppedBy string) (int, int, error) {
+// ended_at is when the run finished ending, later than stopped_at, which is when Stop was
+// pressed. Only a row still open matches, so a second Stop sets ended_at only when the first
+// close never landed.
+func closeStoppingRuns(ctx context.Context, q rowQuerier, automationId, runId, stoppedBy string) (int, int, error) {
 	args := []any{stoppedBy}
 	where := []string{`ended_at IS NULL`}
 
@@ -214,7 +211,7 @@ func closeStoppingRuns(ctx context.Context, q rowQuerier, automationId, runId, c
 		SET state = 'stopped',
 		    stopped_by = COALESCE(stopped_by, NULLIF($1, '')),
 		    stopped_at = COALESCE(stopped_at, now()),
-		    ended_at = COALESCE(stopped_at, now())
+		    ended_at = now()
 		WHERE `+strings.Join(where, ` AND `)+`
 		RETURNING id::text`, args...)
 	if err != nil {
@@ -252,7 +249,7 @@ func closeStoppingRuns(ctx context.Context, q rowQuerier, automationId, runId, c
 		UPDATE automation_work_items
 		SET state = 'pending', run_id = NULL, result = NULL, error = NULLIF($1, ''), updated_at = now()
 		WHERE state = 'running' AND run_id::text = ANY($2::text[])
-		RETURNING id`, cause, runIds)
+		RETURNING id`, ErrAutomationRunStopped.Error(), runIds)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -260,41 +257,46 @@ func closeStoppingRuns(ctx context.Context, q rowQuerier, automationId, runId, c
 	return len(runIds), requeued, nil
 }
 
-// FailAbandonedAutomationRun closes the open run of an automation, if there is one. Only the
+// CloseAbandonedAutomationRun closes the open run of an automation, if there is one. Only the
 // caller knows nothing owns it; the scheduler calls this when the in-flight index refuses an
 // open for an automation it has no run registered for. A row a Stop marked closes as stopped,
-// its running items uncharged; any other row fails. It returns the number of runs it closed.
-func (s *Store) FailAbandonedAutomationRun(ctx context.Context, automationId, cause string) (int, error) {
+// its running items uncharged; any other row fails with cause. It returns how many runs it
+// closed each way.
+func (s *Store) CloseAbandonedAutomationRun(ctx context.Context, automationId, cause string) (stopped int, failed int, err error) {
 	if automationId == "" {
-		return 0, fmt.Errorf("cannot fail a run without an automation id")
+		return 0, 0, fmt.Errorf("cannot close an abandoned run without an automation id")
 	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("database: begin transaction: %w", err)
+		return 0, 0, fmt.Errorf("database: begin transaction: %w", err)
 	}
 
 	defer tx.Rollback(ctx)
 
-	stopped, _, err := closeStoppingRuns(ctx, tx, automationId, "", automationRunStoppedCause, "")
+	stopped, _, err = closeStoppingRuns(ctx, tx, automationId, "", "")
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	failed, err := countAffected(ctx, tx, `
+	failed, err = countAffected(ctx, tx, `
 		UPDATE automation_runs
 		SET state = 'failed', ended_at = now(), error = NULLIF($2, '')
 		WHERE automation_id = $1 AND ended_at IS NULL
 		RETURNING id`, automationId, cause)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
-	return s.countAutomationChanges(stopped+failed, nil)
+	if stopped+failed > 0 {
+		s.automationChanged()
+	}
+
+	return stopped, failed, nil
 }
 
 func (s *Store) GetAutomationRun(ctx context.Context, runId string) (*model.AutomationRunRecord, error) {
@@ -328,7 +330,7 @@ type AutomationRunQuery struct {
 	InFlight bool
 	// Only runs that have ended.
 	Finished bool
-	// Drops succeeded runs that worked no item and that no user started.
+	// Drops succeeded runs that worked no item.
 	HideEmpty bool
 	// Matched case-insensitively against the run's error and its items' group keys and errors.
 	Search string
@@ -367,8 +369,8 @@ func (query AutomationRunQuery) where(args []any) (string, []any) {
 	}
 
 	if query.HideEmpty {
-		// A user acted on a stopped run or one they started, so it shows even when it worked nothing.
-		kept := `state IN ('failed', 'stopped') OR started_by IS NOT NULL`
+		// A user acted on a stopped run, so it shows even when it worked nothing.
+		kept := `state IN ('failed', 'stopped')`
 
 		// A run asked for by id shows even when it worked nothing.
 		if query.SearchRunId != "" {

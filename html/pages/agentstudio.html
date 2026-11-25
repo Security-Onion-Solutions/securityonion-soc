@@ -782,15 +782,12 @@
                     <td>
                       <div class="d-flex align-center">
                         <v-switch :model-value="item.enabled" @update:model-value="toggleAutomationEnabled(item)" :disabled="!canEditConfig() || !automationKind(item.automationKind)" color="primary" density="compact" hide-details inset
-                          :aria-label="i18n.agentStudioEnabled" :title="i18n.agentStudioEnabled" :data-aid="'agentstudio_automation_enabled_' + item.id"></v-switch>
+                          :aria-label="i18n.agentStudioAutomationAutoStart" :title="i18n.agentStudioAutomationAutoStart" :data-aid="'agentstudio_automation_enabled_' + item.id"></v-switch>
                       </div>
                     </td>
                     <td v-if="canEditConfig()">
-                      <v-btn icon variant="text" size="small" @click.stop="onAutomationAction(item, $event)" :aria-disabled="actionPending[item.id] ? 'true' : 'false'"
-                        :title="automationInFlight(item) ? i18n.automationStop : i18n.automationRunNow" :aria-label="automationActionLabel(item)"
-                        :data-aid="(automationInFlight(item) ? 'agentstudio_automation_stop_' : 'agentstudio_automation_run_') + item.id">
-                        <v-icon>{{ automationInFlight(item) ? 'fa-stop' : 'fa-play' }}</v-icon>
-                      </v-btn>
+                      <v-btn variant="text" size="small" v-bind="automationActionProps(item)" @click.stop="onAutomationAction(item, $event)"
+                        :aria-disabled="actionPending[item.id] ? 'true' : 'false'" :aria-label="automationActionLabel(item)"></v-btn>
                     </td>
                   </tr>
                 </template>

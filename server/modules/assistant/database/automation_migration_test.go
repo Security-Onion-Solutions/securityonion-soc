@@ -133,59 +133,57 @@ func TestMigrationIndexesRunsByStartTime(t *testing.T) {
 	assert.Contains(t, string(sql), "ON automation_runs (started_at DESC, id)")
 }
 
-func runStopMigration(t *testing.T) string {
-	t.Helper()
-
-	sql, err := migrationFS.ReadFile("migrations/4_automation_run_stop.sql")
+func TestRunStopMigration(t *testing.T) {
+	raw, err := migrationFS.ReadFile("migrations/4_automation_run_stop.sql")
 	require.NoError(t, err)
 
-	return string(sql)
-}
+	sql := string(raw)
 
-// The CHECK is replaced by name; a name that doesn't match migration 2's inline constraint
-// would leave both in place, and the old one would still refuse stopped.
-func TestRunStopMigrationReplacesTheStateCheck(t *testing.T) {
-	sql := runStopMigration(t)
-
-	assert.Contains(t, sql, "DROP CONSTRAINT IF EXISTS automation_runs_state_check")
-	assert.Equal(t, 1, strings.Count(sql, "ADD CONSTRAINT automation_runs_state_check"))
-
-	runStates := []model.AutomationRunState{
-		model.AutomationRunQueued,
-		model.AutomationRunRunning,
-		model.AutomationRunSucceeded,
-		model.AutomationRunFailed,
-		model.AutomationRunStopped,
+	runStates := []string{}
+	for _, state := range []model.AutomationRunState{model.AutomationRunQueued, model.AutomationRunRunning,
+		model.AutomationRunSucceeded, model.AutomationRunFailed, model.AutomationRunStopped} {
+		runStates = append(runStates, fmt.Sprintf("'%s'", state))
 	}
 
-	for _, state := range runStates {
-		assert.Contains(t, sql, fmt.Sprintf("'%s'", state), "automation_runs CHECK must accept %q", state)
+	cases := []struct {
+		name     string
+		contains []string
+		absent   []string
+		once     string
+		pattern  string
+	}{
+		// The CHECK is replaced by name; a name that doesn't match migration 2's inline constraint
+		// would leave both in place, and the old one would still refuse stopped.
+		{name: "replaces the state check", contains: append(runStates, "DROP CONSTRAINT IF EXISTS automation_runs_state_check"),
+			once: "ADD CONSTRAINT automation_runs_state_check"},
+		// stopped is terminal, so the in-flight index must be left exactly as migration 2 built it.
+		{name: "leaves the in-flight index alone", absent: []string{"INDEX IF NOT EXISTS " + idxRunsOneInFlight, "DROP INDEX"}},
+		// Rows from 3.4.0 must read as scheduled and not stopped, so every new column is nullable or
+		// defaults to empty.
+		{name: "adds nullable columns", contains: []string{"ADD COLUMN IF NOT EXISTS started_by text;", "ADD COLUMN IF NOT EXISTS stopped_by text;",
+			"ADD COLUMN IF NOT EXISTS stopped_at timestamptz;"}, pattern: `session_run_ids\s+text\[\]\s+NOT NULL DEFAULT '\{\}'`},
+		{name: "indexes session runs", contains: []string{"CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_run_ids", "USING GIN (session_run_ids)"}},
 	}
-}
 
-// stopped is terminal, so the in-flight index must be left exactly as migration 2 built it.
-func TestRunStopMigrationLeavesTheInFlightIndexAlone(t *testing.T) {
-	sql := runStopMigration(t)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, want := range tc.contains {
+				assert.Contains(t, sql, want)
+			}
 
-	assert.NotContains(t, sql, "INDEX IF NOT EXISTS "+idxRunsOneInFlight)
-	assert.NotContains(t, sql, "DROP INDEX")
+			for _, unwanted := range tc.absent {
+				assert.NotContains(t, sql, unwanted)
+			}
+
+			if tc.once != "" {
+				assert.Equal(t, 1, strings.Count(sql, tc.once))
+			}
+
+			if tc.pattern != "" {
+				assert.Regexp(t, tc.pattern, sql)
+			}
+		})
+	}
+
 	assert.True(t, model.AutomationRunStopped.IsTerminal())
-}
-
-// Rows from 3.4.0 must read as scheduled and not stopped, so every new column is nullable or
-// defaults to empty.
-func TestRunStopMigrationAddsNullableColumns(t *testing.T) {
-	sql := runStopMigration(t)
-
-	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS started_by text;")
-	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS stopped_by text;")
-	assert.Contains(t, sql, "ADD COLUMN IF NOT EXISTS stopped_at timestamptz;")
-	assert.Regexp(t, `session_run_ids\s+text\[\]\s+NOT NULL DEFAULT '\{\}'`, sql)
-}
-
-func TestRunStopMigrationIndexesSessionRuns(t *testing.T) {
-	sql := runStopMigration(t)
-
-	assert.Contains(t, sql, "CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_run_ids")
-	assert.Contains(t, sql, "USING GIN (session_run_ids)")
 }

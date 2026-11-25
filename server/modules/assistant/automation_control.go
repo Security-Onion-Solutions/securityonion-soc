@@ -8,27 +8,13 @@ package assistant
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
-	"github.com/google/uuid"
 )
-
-// canonicalAutomationId returns id in the form the registry and the stored definitions compare
-// as a string. Postgres matches its uuid columns in any case, so an uppercase or braced id would
-// reach a row while missing the run registered for it.
-func canonicalAutomationId(id string) (string, error) {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
-		return "", fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
-	}
-
-	return parsed.String(), nil
-}
 
 // RunAutomationNow starts one run of the automation immediately, whether or not it is enabled or
 // due, and returns the opened run. On a disabled automation the run is a one-off.
@@ -155,7 +141,7 @@ func (ac *AssistantCoordinator) closeOwnerlessAutomationRun(ctx context.Context,
 		return ErrAutomationRunNotInFlight
 	}
 
-	_, err := ac.store.CloseStoppedAutomationRun(ctx, id, runId, ErrAutomationRunStopped.Error(), userId)
+	_, err := ac.store.CloseStoppedAutomationRun(ctx, id, runId, userId)
 	if errors.Is(err, database.ErrAutomationRunNotOpen) {
 		return ErrAutomationRunNotInFlight
 	}

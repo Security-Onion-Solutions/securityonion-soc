@@ -54,7 +54,8 @@ func (ac *AssistantCoordinator) GetAutomationRunHistory(ctx context.Context, aut
 		return nil, ErrNoDatabase
 	}
 
-	if !isAutomationId(automationId) {
+	automationId, err := canonicalAutomationId(automationId)
+	if err != nil {
 		return nil, ErrAutomationNotFound
 	}
 
@@ -70,11 +71,13 @@ func (ac *AssistantCoordinator) GetAutomationRunDetails(ctx context.Context, aut
 		return nil, ErrNoDatabase
 	}
 
-	if !isAutomationId(automationId) {
+	automationId, err := canonicalAutomationId(automationId)
+	if err != nil {
 		return nil, ErrAutomationNotFound
 	}
 
-	if !isAutomationId(runId) {
+	runId, err = canonicalAutomationId(runId)
+	if err != nil {
 		return nil, ErrAutomationRunNotFound
 	}
 
@@ -95,8 +98,12 @@ func (ac *AssistantCoordinator) ListAutomationRuns(ctx context.Context, filter *
 }
 
 func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store automationHistoryStore, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
-	if filter.AutomationId != "" && !isAutomationId(filter.AutomationId) {
-		return nil, ErrAutomationNotFound
+	automationId := filter.AutomationId
+	if automationId != "" {
+		var err error
+		if automationId, err = canonicalAutomationId(automationId); err != nil {
+			return nil, ErrAutomationNotFound
+		}
 	}
 
 	search := strings.TrimSpace(filter.Search)
@@ -130,7 +137,7 @@ func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store aut
 	limit := clampAutomationLimit(filter.Limit, defaultAutomationRunPageSize, maxAutomationRunPageSize)
 
 	query := database.AutomationRunQuery{
-		AutomationId:        filter.AutomationId,
+		AutomationId:        automationId,
 		Finished:            true,
 		HideEmpty:           filter.HideEmpty,
 		Search:              search,

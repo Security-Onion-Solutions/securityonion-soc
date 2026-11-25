@@ -493,9 +493,12 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 	}
 
 	record, err := ac.store.OpenAutomationRun(tickCtx, automation.Id, startedBy)
-	if errors.Is(err, database.ErrAutomationRunInFlight) {
-		ac.failAbandonedAutomationRun(tickCtx, logger, automation.Id)
+	if errors.Is(err, database.ErrAutomationRunInFlight) && ac.closeAbandonedAutomationRun(tickCtx, logger, automation.Id) > 0 {
+		// The row in the way had no owner and is closed, so the open needn't wait for another tick or press.
+		record, err = ac.store.OpenAutomationRun(tickCtx, automation.Id, startedBy)
+	}
 
+	if errors.Is(err, database.ErrAutomationRunInFlight) {
 		return nil, database.ErrAutomationRunInFlight
 	}
 
@@ -531,19 +534,24 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 	return record, nil
 }
 
-// failAbandonedAutomationRun closes the open row nothing owns. Runs open and register on the
+// closeAbandonedAutomationRun closes the open row nothing owns. Runs open and register on the
 // worker goroutine and close their row before releasing, so an in-flight row with no run
 // registered here is one an open lost the result of or a close could not end. A failed write
-// is retried by the next tick, which meets the same row.
-func (ac *AssistantCoordinator) failAbandonedAutomationRun(ctx context.Context, logger *log.Entry, automationId string) {
-	failed, err := ac.store.FailAbandonedAutomationRun(ctx, automationId, ErrAutomationRunAbandoned.Error())
+// is retried by the next tick, which meets the same row. It returns the number of rows closed.
+func (ac *AssistantCoordinator) closeAbandonedAutomationRun(ctx context.Context, logger *log.Entry, automationId string) int {
+	stopped, failed, err := ac.store.CloseAbandonedAutomationRun(ctx, automationId, ErrAutomationRunAbandoned.Error())
 	if err != nil {
-		logger.WithError(err).Warn("unable to fail abandoned automation run; retrying next tick")
+		logger.WithError(err).Warn("unable to close abandoned automation run; retrying next tick")
 
-		return
+		return 0
 	}
 
-	logger.WithField("failedRuns", failed).Warn("automation run in flight with no owner; failed it so the next tick can open one")
+	logger.WithFields(log.Fields{
+		"abandonedRunsStopped": stopped,
+		"abandonedRunsFailed":  failed,
+	}).Warn("automation run in flight with no owner; closed it so a run can open")
+
+	return stopped + failed
 }
 
 func (ac *AssistantCoordinator) executeAutomationRun(ctx context.Context, kind AutomationKind, run *AutomationRun) {
@@ -599,7 +607,7 @@ func (ac *AssistantCoordinator) closeAutomationRun(ctx context.Context, logger *
 	cancelCause := context.Cause(ctx)
 
 	if errors.Is(cancelCause, ErrAutomationRunStopped) {
-		requeued, err := ac.store.CloseStoppedAutomationRun(closeCtx, automationId, runId, ErrAutomationRunStopped.Error(), "")
+		requeued, err := ac.store.CloseStoppedAutomationRun(closeCtx, automationId, runId, "")
 		if err != nil {
 			logger.WithError(err).Error("unable to close stopped automation run; a second Stop or the next due run closes it")
 

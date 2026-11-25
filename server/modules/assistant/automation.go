@@ -62,9 +62,8 @@ var (
 	ErrAutomationWorkItemInterrupted = errors.New("ERROR_AUTOMATION_WORK_ITEM_INTERRUPTED")
 
 	// The cancel cause a user's Stop gives a run, and the reason recorded on the items it
-	// returned to the queue. The database package writes the same string on the paths that
-	// close a stopping row without the engine.
-	ErrAutomationRunStopped = errors.New("ERROR_AUTOMATION_RUN_STOPPED")
+	// returned to the queue; the store writes it on every path that closes a stopped run.
+	ErrAutomationRunStopped = database.ErrAutomationRunStopped
 
 	// A Stop named a run that is no longer the automation's run in flight.
 	ErrAutomationRunNotInFlight = errors.New("ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT")
@@ -326,11 +325,16 @@ func (ac *AssistantCoordinator) lookupAutomationKind(name string) (AutomationKin
 	return kind, nil
 }
 
-// isAutomationId reports whether id can address an automation.
-func isAutomationId(id string) bool {
-	_, err := uuid.Parse(id)
+// canonicalAutomationId returns id in the form the registry and the stored definitions compare
+// as a string. Postgres matches its uuid columns in any case, so an uppercase or braced id would
+// reach a row while missing the run registered for it.
+func canonicalAutomationId(id string) (string, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
+	}
 
-	return err == nil
+	return parsed.String(), nil
 }
 
 // unmarshalAutomation decodes one element of the stored list.
@@ -341,14 +345,13 @@ func unmarshalAutomation(raw json.RawMessage) (*model.Automation, error) {
 	}
 
 	// A hand-edited entry can name anything; only a UUID survives the store's uuid columns,
-	// so reject it here rather than at the first query. Postgres matches those columns in any
-	// case but the run registry compares strings, so the id is read in canonical form.
-	parsed, err := uuid.Parse(automation.Id)
+	// so reject it here rather than at the first query.
+	id, err := canonicalAutomationId(automation.Id)
 	if err != nil {
-		return nil, fmt.Errorf("automation id %q is not a UUID", automation.Id)
+		return nil, fmt.Errorf("stored automation id %q: %w", automation.Id, err)
 	}
 
-	automation.Id = parsed.String()
+	automation.Id = id
 
 	automation.Kind = "automation"
 	// Only the overlay may claim this.
@@ -501,6 +504,11 @@ func (ac *AssistantCoordinator) GetAutomation(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	id, err := canonicalAutomationId(id)
+	if err != nil {
+		return nil, ErrAutomationNotFound
+	}
+
 	return ac.loadAutomation(ctx, id)
 }
 
@@ -530,10 +538,6 @@ func (ac *AssistantCoordinator) getStoredAutomation(ctx context.Context, id stri
 		return nil, ErrConfigstoreUnavailable
 	}
 
-	if !isAutomationId(id) {
-		return nil, ErrAutomationNotFound
-	}
-
 	stored, err := ac.readStoredAutomations(ctx)
 	if err != nil {
 		return nil, err
@@ -558,6 +562,16 @@ func (ac *AssistantCoordinator) SaveAutomation(ctx context.Context, automation *
 
 	if err := ac.srv.CheckAuthorized(ctx, "write", "config"); err != nil {
 		return err
+	}
+
+	// The handler puts the path id here; an absent one means create.
+	if automation.Id != "" {
+		id, err := canonicalAutomationId(automation.Id)
+		if err != nil {
+			return err
+		}
+
+		automation.Id = id
 	}
 
 	builtin := ac.isBuiltinAutomation(automation.Id)
@@ -693,8 +707,6 @@ func (ac *AssistantCoordinator) stampAutomation(ctx context.Context, automation 
 
 	if create {
 		id = uuid.NewString()
-	} else if !isAutomationId(id) {
-		return nil, fmt.Errorf("%w: id must be a UUID", ErrInvalidAutomationParams)
 	}
 
 	// The stored copy, not the overlay: only it says whether a builtin was ever saved.
@@ -806,7 +818,8 @@ func (ac *AssistantCoordinator) DeleteAutomation(ctx context.Context, id string)
 		return ErrConfigstoreUnavailable
 	}
 
-	if !isAutomationId(id) {
+	id, err := canonicalAutomationId(id)
+	if err != nil {
 		return ErrAutomationNotFound
 	}
 

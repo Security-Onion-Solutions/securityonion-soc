@@ -23,6 +23,8 @@ var (
 	ErrAutomationRunInFlight      = errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT")
 	ErrAutomationRunNotOpen       = errors.New("ERROR_AUTOMATION_RUN_NOT_OPEN")
 	ErrAutomationWorkItemNotFound = errors.New("ERROR_AUTOMATION_WORK_ITEM_NOT_FOUND")
+	// The cause a Stop cancels a run with, and the error its requeued items are left with.
+	ErrAutomationRunStopped = errors.New("ERROR_AUTOMATION_RUN_STOPPED")
 )
 
 // isUniqueViolation reports whether err is Postgres refusing a duplicate against the

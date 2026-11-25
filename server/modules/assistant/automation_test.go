@@ -25,6 +25,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1510,29 +1511,77 @@ func TestUnmarshalAutomationIgnoresAStoredIsSystem(t *testing.T) {
 
 func TestUnmarshalAutomationCanonicalizesTheId(t *testing.T) {
 	cases := []struct {
-		name string
-		id   string
+		name    string
+		id      string
+		wantErr bool
 	}{
 		{name: "canonical", id: automationTestId},
 		{name: "uppercase", id: strings.ToUpper(automationTestId)},
 		{name: "braced", id: "{" + automationTestId + "}"},
 		{name: "urn", id: "urn:uuid:" + automationTestId},
+		{name: "not a uuid", id: "nightly", wantErr: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			automation, err := unmarshalAutomation(json.RawMessage(`{"id":"` + tc.id + `","displayName":"Nightly"}`))
 
+			if tc.wantErr {
+				assert.ErrorIs(t, err, ErrInvalidAutomationParams)
+				assert.ErrorContains(t, err, `"`+tc.id+`"`, "the error names the stored id")
+				return
+			}
 			require.NoError(t, err)
 			assert.Equal(t, automationTestId, automation.Id)
 		})
 	}
 }
 
-func TestUnmarshalAutomationRejectsANonUuidId(t *testing.T) {
-	_, err := unmarshalAutomation(json.RawMessage(`{"id":"nightly","displayName":"Nightly"}`))
+// Stored ids are read canonically, so a request naming one in another form must be read the same way.
+func TestAutomationCrudAcceptsANonCanonicalId(t *testing.T) {
+	upper := strings.ToUpper(automationTestId)
 
-	assert.Error(t, err)
+	cases := []struct {
+		name string
+		call func(t *testing.T, ac *AssistantCoordinator, cfg *automationConfigstore)
+	}{
+		{name: "get", call: func(t *testing.T, ac *AssistantCoordinator, cfg *automationConfigstore) {
+			automation, err := ac.GetAutomation(context.Background(), upper)
+			require.NoError(t, err)
+			assert.Equal(t, automationTestId, automation.Id)
+		}},
+		{name: "get the builtin", call: func(t *testing.T, ac *AssistantCoordinator, cfg *automationConfigstore) {
+			seedBuiltinAutomation(ac)
+			automation, err := ac.GetAutomation(context.Background(), strings.ToUpper(BuiltinAlertTriageAutomationId))
+			require.NoError(t, err)
+			assert.True(t, automation.IsSystem)
+		}},
+		{name: "save", call: func(t *testing.T, ac *AssistantCoordinator, cfg *automationConfigstore) {
+			automation := validAutomation()
+			automation.Id = upper
+			automation.DisplayName = "Renamed"
+			require.NoError(t, ac.SaveAutomation(automationSaveCtx(), automation))
+			require.Len(t, cfg.updates, 1)
+			written := writtenAutomations(t, cfg.updates[0])
+			require.Len(t, written, 1, "the stored entry is replaced, not duplicated")
+			assert.Equal(t, automationTestId, written[0].Id)
+			assert.Equal(t, "Renamed", written[0].DisplayName)
+		}},
+		{name: "delete", call: func(t *testing.T, ac *AssistantCoordinator, cfg *automationConfigstore) {
+			require.NoError(t, ac.DeleteAutomation(context.Background(), upper))
+			require.Len(t, cfg.updates, 1)
+			assert.Empty(t, writtenAutomations(t, cfg.updates[0]))
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			cfg.settings = []*model.Setting{automationsSetting(t, storedAutomation(automationTestId, "Nightly"))}
+
+			tc.call(t, automationCoordinator(cfg), cfg)
+		})
+	}
 }
 
 func TestGetAutomationReturnsTheBuiltinAsShippedWithoutAStoredCopy(t *testing.T) {
@@ -1965,44 +2014,52 @@ func stopTestCoordinator(t *testing.T, markErr error) (*AssistantCoordinator, *m
 	return ac, mDB, &order
 }
 
-func TestStopRegisteredAutomationRunStopsNothingUnregistered(t *testing.T) {
-	ac, mDB, order := stopTestCoordinator(t, nil)
+func TestStopRegisteredAutomationRun(t *testing.T) {
+	cases := []struct {
+		name    string
+		markErr error
+		id      string
+		runId   string
+		// The run stopped; empty when nothing was.
+		wantRun string
+		check   func(t *testing.T, mDB *mockdb.MockDB, h *memory.Handler)
+	}{
+		{name: "an unregistered automation", id: otherAutomationTestId},
+		{name: "a Stop meant for an earlier run must not stop a newer one", id: automationTestId, runId: "run-2"},
+		// The mark lands before the cancel, because a run with no jobs can close as soon as it sees
+		// the cancel and the mark only writes an open row.
+		{name: "marks then cancels", id: automationTestId, runId: "run-1", wantRun: "run-1"},
+		{name: "without a run id, the registered run's row is marked", id: automationTestId, wantRun: "run-1",
+			check: func(t *testing.T, mDB *mockdb.MockDB, _ *memory.Handler) {
+				mDB.AssertCalled(t, "Query", mock.Anything, mock.Anything, "run-1", "user-1")
+			}},
+		{name: "a failed mark still stops", markErr: errors.New("postgres is down"), id: automationTestId, runId: "run-1", wantRun: "run-1",
+			check: func(t *testing.T, _ *mockdb.MockDB, h *memory.Handler) {
+				require.Len(t, h.Entries, 1)
+				assert.Equal(t, log.WarnLevel, h.Entries[0].Level)
+				assert.Equal(t, "run-1", h.Entries[0].Fields["automationRunId"])
+			}},
+	}
 
-	assert.Empty(t, ac.stopRegisteredAutomationRun(context.Background(), otherAutomationTestId, "", "user-1"))
-	assert.Empty(t, ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-2", "user-1"),
-		"a Stop meant for an earlier run must not stop a newer one")
-	assert.Empty(t, *order)
-	mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ac, mDB, order := stopTestCoordinator(t, tc.markErr)
+			ctx, h := capturedLogger()
 
-// The mark lands before the cancel, because a run with no jobs can close as soon as it sees the
-// cancel and the mark only writes an open row.
-func TestStopRegisteredAutomationRunMarksThenCancels(t *testing.T) {
-	ac, _, order := stopTestCoordinator(t, nil)
+			assert.Equal(t, tc.wantRun, ac.stopRegisteredAutomationRun(ctx, tc.id, tc.runId, "user-1"))
 
-	assert.Equal(t, "run-1", ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-1"))
-	assert.Equal(t, []string{"mark:user-1", "cancel:" + ErrAutomationRunStopped.Error()}, *order)
-}
+			if tc.wantRun != "" {
+				assert.Equal(t, []string{"mark:user-1", "cancel:" + ErrAutomationRunStopped.Error()}, *order)
+			} else {
+				assert.Empty(t, *order)
+				mDB.AssertNotCalled(t, "Query", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			}
 
-// An empty run id stops whichever run is registered, and marks that run's row rather than the argument.
-func TestStopRegisteredAutomationRunWithoutARunIdStopsTheRegisteredRun(t *testing.T) {
-	ac, mDB, order := stopTestCoordinator(t, nil)
-
-	assert.Equal(t, "run-1", ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "", "user-1"))
-	assert.Equal(t, []string{"mark:user-1", "cancel:" + ErrAutomationRunStopped.Error()}, *order)
-	mDB.AssertCalled(t, "Query", mock.Anything, mock.Anything, "run-1", "user-1")
-}
-
-func TestStopRegisteredAutomationRunStopsEvenWhenTheMarkFails(t *testing.T) {
-	ac, _, order := stopTestCoordinator(t, errors.New("postgres is down"))
-	ctx, h := capturedLogger()
-
-	assert.Equal(t, "run-1", ac.stopRegisteredAutomationRun(ctx, automationTestId, "run-1", "user-1"))
-	assert.Equal(t, []string{"mark:user-1", "cancel:" + ErrAutomationRunStopped.Error()}, *order)
-
-	require.Len(t, h.Entries, 1)
-	assert.Equal(t, log.WarnLevel, h.Entries[0].Level)
-	assert.Equal(t, "run-1", h.Entries[0].Fields["automationRunId"])
+			if tc.check != nil {
+				tc.check(t, mDB, h)
+			}
+		})
+	}
 }
 
 // Every stop path pushes the Stopping state, even when no session phase changes.
@@ -2020,24 +2077,7 @@ func TestStopRegisteredAutomationRunPushesActivity(t *testing.T) {
 	})
 }
 
-func TestAutomationWriteContextDetachesFromAStop(t *testing.T) {
-	for _, cause := range []error{ErrAutomationParamsChanged, ErrAutomationRunStopped} {
-		ctx, cancel := context.WithCancelCause(context.Background())
-		cancel(cause)
-
-		writeCtx, done := automationWriteContext(ctx)
-		assert.NoError(t, writeCtx.Err(), cause.Error())
-		done()
-	}
-
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cancel(ErrAutomationSchedulerStopped)
-
-	writeCtx, done := automationWriteContext(ctx)
-	defer done()
-	assert.ErrorIs(t, context.Cause(writeCtx), ErrAutomationSchedulerStopped, "a shutdown is never detached from")
-}
-
+// A deliberate cancel is one a run's writes detach from; a shutdown is never detached from.
 func TestDeliberateAutomationCancel(t *testing.T) {
 	cases := []struct {
 		cause error
@@ -2051,44 +2091,76 @@ func TestDeliberateAutomationCancel(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		ctx, cancel := context.WithCancelCause(context.Background())
-		cancel(tc.cause)
+		t.Run(tc.cause.Error(), func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(tc.cause)
 
-		assert.Equal(t, tc.want, deliberateAutomationCancel(ctx), tc.cause.Error())
+			assert.Equal(t, tc.want, deliberateAutomationCancel(ctx))
+
+			writeCtx, done := automationWriteContext(ctx)
+			defer done()
+			if tc.want {
+				assert.NoError(t, writeCtx.Err())
+			} else {
+				assert.ErrorIs(t, context.Cause(writeCtx), tc.cause)
+			}
+		})
 	}
 
 	assert.False(t, deliberateAutomationCancel(context.Background()), "a live context")
 }
 
 func TestSaveAutomationTurningOffStopsTheRun(t *testing.T) {
+	saved := func(params string, enabled bool) *model.Automation {
+		automation := automationWithParams(params)
+		automation.Enabled = enabled
+
+		return automation
+	}
+	interval := saved(`null`, true)
+	interval.IntervalSeconds = 600
+	builtinOff := func() *model.Automation {
+		return &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true, Agent: automationTestAgent}
+	}
+	limited := storedEnabledAutomation(automationTestId, `{"limit":10}`)
+
 	cases := []struct {
-		name        string
-		storedOn    bool
-		savedOn     bool
-		mutate      func(*model.Automation)
+		name   string
+		stored []*model.Automation
+		// The builtin is seeded and its run is the one registered.
+		builtin     bool
+		saved       *model.Automation
+		paramsSweep bool
 		wantCauses  []error
 		wantStopper bool
 	}{
-		{name: "on to off", storedOn: true, wantCauses: []error{ErrAutomationRunStopped}, wantStopper: true},
-		{name: "off to off"},
-		{name: "off to on", savedOn: true},
-		{name: "only the interval", storedOn: true, savedOn: true, mutate: func(a *model.Automation) { a.IntervalSeconds = 600 }},
+		{name: "on to off", stored: []*model.Automation{storedEnabled(automationTestId)}, saved: saved(`null`, false),
+			wantCauses: []error{ErrAutomationRunStopped}, wantStopper: true},
+		{name: "off to off", stored: []*model.Automation{storedAutomation(automationTestId, "Nightly")}, saved: saved(`null`, false)},
+		{name: "off to on", stored: []*model.Automation{storedAutomation(automationTestId, "Nightly")}, saved: saved(`null`, true)},
+		{name: "only the interval", stored: []*model.Automation{storedEnabled(automationTestId)}, saved: interval},
+		// The params cause is set first and wins; the Stop still marks the row, which the failed close clears.
+		{name: "with a params change", stored: []*model.Automation{limited}, saved: saved(`{"limit":25}`, false), paramsSweep: true,
+			wantCauses: []error{ErrAutomationParamsChanged, ErrAutomationRunStopped}, wantStopper: true},
+		{name: "the builtin's stored copy going off", stored: []*model.Automation{storedBuiltinAutomation(true, automationTestAgent)}, builtin: true,
+			saved: builtinOff(), wantCauses: []error{ErrAutomationRunStopped}, wantStopper: true},
+		{name: "the builtin's first save", builtin: true, saved: builtinOff()},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stored := storedAutomation(automationTestId, "Nightly")
-			stored.Enabled = tc.storedOn
-			f := newStopFixture(t, stored)
-			f.register(t, automationTestId, stopTestRunId)
-
-			saved := automationWithParams(`null`)
-			saved.Enabled = tc.savedOn
-			if tc.mutate != nil {
-				tc.mutate(saved)
+			f := newStopFixture(t, tc.stored...)
+			registered := automationTestId
+			if tc.builtin {
+				seedBuiltinAutomation(f.ac)
+				registered = BuiltinAlertTriageAutomationId
+			}
+			f.register(t, registered, stopTestRunId)
+			if tc.paramsSweep {
+				expectSweep(f.mDB, ErrAutomationParamsChanged, 0)
 			}
 
-			require.NoError(t, f.ac.SaveAutomation(automationSaveCtx(), saved))
+			require.NoError(t, f.ac.SaveAutomation(automationSaveCtx(), tc.saved))
 
 			assert.Equal(t, tc.wantCauses, f.causes)
 			if tc.wantStopper {
@@ -2098,44 +2170,4 @@ func TestSaveAutomationTurningOffStopsTheRun(t *testing.T) {
 			}
 		})
 	}
-}
-
-// The params cause is set first and wins; the Stop still marks the row, which the failed close clears.
-func TestSaveAutomationTurningOffWithAParamsChangeFailsTheRun(t *testing.T) {
-	stored := storedAutomationWithParams(automationTestId, `{"limit":10}`)
-	stored.Enabled = true
-	f := newStopFixture(t, stored)
-	f.register(t, automationTestId, stopTestRunId)
-	expectSweep(f.mDB, ErrAutomationParamsChanged, 0)
-
-	saved := automationWithParams(`{"limit":25}`)
-
-	require.NoError(t, f.ac.SaveAutomation(automationSaveCtx(), saved))
-
-	require.NotEmpty(t, f.causes)
-	assert.ErrorIs(t, f.causes[0], ErrAutomationParamsChanged)
-}
-
-func TestSaveAutomationTurningOffTheBuiltin(t *testing.T) {
-	t.Run("its stored copy going off stops the run", func(t *testing.T) {
-		f := newStopFixture(t, storedBuiltinAutomation(true, automationTestAgent))
-		seedBuiltinAutomation(f.ac)
-		f.register(t, BuiltinAlertTriageAutomationId, stopTestRunId)
-
-		off := &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true, Agent: automationTestAgent}
-		require.NoError(t, f.ac.SaveAutomation(automationSaveCtx(), off))
-
-		assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	})
-
-	t.Run("its first save stops nothing", func(t *testing.T) {
-		f := newStopFixture(t)
-		seedBuiltinAutomation(f.ac)
-		f.register(t, BuiltinAlertTriageAutomationId, stopTestRunId)
-
-		off := &model.Automation{Auditable: model.Auditable{Id: BuiltinAlertTriageAutomationId}, IsSystem: true, Agent: automationTestAgent}
-		require.NoError(t, f.ac.SaveAutomation(automationSaveCtx(), off))
-
-		assert.Empty(t, f.causes)
-	})
 }

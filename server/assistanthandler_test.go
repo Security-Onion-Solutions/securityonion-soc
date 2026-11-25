@@ -4261,171 +4261,115 @@ func TestUpdateSession_InvalidAction(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Equal(t, "ERROR_SESSION_TAG_ACTION_INVALID", w.Body.String())
 }
+func TestAutomationControlRoutes(t *testing.T) {
+	runs := "/assistant/automations/" + automationHandlerTestId + "/runs"
+	stop := runs + "/" + automationHandlerTestRunId + "/stop"
 
-func automationStopRequest(body string) *http.Request {
-	req := httptest.NewRequest(http.MethodPost,
-		"/assistant/automations/"+automationHandlerTestId+"/runs/"+automationHandlerTestRunId+"/stop", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	return req.WithContext(agentConfigContext(req.Context()))
-}
-
-func TestRunAutomationNowAnswersTheRun(t *testing.T) {
-	r, manager, auth := automationRouter(t, true)
-
-	manager.EXPECT().RunAutomationNow(gomock.Any(), automationHandlerTestId).
-		Return(&model.AutomationRunRecord{Id: automationHandlerTestRunId, StartedBy: "test-user"}, nil)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/runs", nil))
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), automationHandlerTestRunId)
-	assert.Contains(t, w.Body.String(), `"startedBy":"test-user"`)
-	assert.Equal(t, []string{"config/write"}, auth.asked)
-}
-
-func TestRunAutomationNowMapsErrors(t *testing.T) {
 	cases := []struct {
 		name       string
+		path       string
+		body       string
+		denied     bool
+		called     bool
+		disable    bool
 		err        error
 		wantStatus int
+		wantBody   []string
+		wantEmpty  bool
 	}{
-		{name: "malformed id", err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
-		{name: "unknown kind", err: errAutomationKindNotFoundStub, wantStatus: http.StatusBadRequest},
-		{name: "unlicensed", err: errors.New("ERROR_LICENSE_INVALID"), wantStatus: http.StatusBadRequest},
-		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
-		{name: "in flight", err: errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT"), wantStatus: http.StatusConflict},
-		{name: "agent unavailable", err: errors.New("ERROR_AUTOMATION_AGENT_UNAVAILABLE"), wantStatus: http.StatusConflict},
-		{name: "scheduler off", err: errors.New("ERROR_AUTOMATION_SCHEDULER_UNAVAILABLE"), wantStatus: http.StatusServiceUnavailable},
-		{name: "broken", err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
+		{name: "run now answers the run", path: runs, called: true, wantStatus: http.StatusOK,
+			wantBody: []string{automationHandlerTestRunId, `"startedBy":"test-user"`}},
+		{name: "run now: malformed id", path: runs, called: true, err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
+		{name: "run now: unknown kind", path: runs, called: true, err: errAutomationKindNotFoundStub, wantStatus: http.StatusBadRequest},
+		{name: "run now: unlicensed", path: runs, called: true, err: errors.New("ERROR_LICENSE_INVALID"), wantStatus: http.StatusBadRequest},
+		{name: "run now: missing", path: runs, called: true, err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "run now: in flight", path: runs, called: true, err: errors.New("ERROR_AUTOMATION_RUN_IN_FLIGHT"), wantStatus: http.StatusConflict},
+		{name: "run now: agent unavailable", path: runs, called: true, err: errors.New("ERROR_AUTOMATION_AGENT_UNAVAILABLE"), wantStatus: http.StatusConflict},
+		{name: "run now: scheduler off", path: runs, called: true, err: errors.New("ERROR_AUTOMATION_SCHEDULER_UNAVAILABLE"), wantStatus: http.StatusServiceUnavailable},
+		{name: "run now: broken", path: runs, called: true, err: errors.New("postgres is down"), wantStatus: http.StatusInternalServerError},
+		{name: "stop with no body", path: stop, called: true, wantStatus: http.StatusAccepted, wantEmpty: true},
+		{name: "stop with an empty body", path: stop, body: "{}", called: true, wantStatus: http.StatusAccepted, wantEmpty: true},
+		{name: "stop without disable", path: stop, body: `{"disable":false}`, called: true, wantStatus: http.StatusAccepted, wantEmpty: true},
+		{name: "stop and disable", path: stop, body: `{"disable":true}`, called: true, disable: true, wantStatus: http.StatusAccepted, wantEmpty: true},
+		// The strict mock fails if a body that doesn't decode still reaches the manager.
+		{name: "stop: malformed body", path: stop, body: `{"disable":"yes"}`, wantStatus: http.StatusBadRequest},
+		// Permission is checked before the body is read.
+		{name: "stop: refused before decoding", path: stop, body: `{"disable":"yes"}`, denied: true, wantStatus: http.StatusForbidden},
+		{name: "stop: malformed id", path: stop, called: true, err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
+		{name: "stop: missing", path: stop, called: true, err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
+		{name: "stop: not in flight", path: stop, called: true, err: errors.New("ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT"), wantStatus: http.StatusConflict},
+		{name: "stop: broken", path: stop, called: true, err: errors.New("salt is down"), wantStatus: http.StatusInternalServerError},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r, manager, _ := automationRouter(t, true)
-			manager.EXPECT().RunAutomationNow(gomock.Any(), automationHandlerTestId).Return(nil, c.err)
+			r, manager, auth := automationRouter(t, !c.denied)
+
+			switch {
+			case !c.called:
+			case c.path == runs && c.err == nil:
+				manager.EXPECT().RunAutomationNow(gomock.Any(), automationHandlerTestId).
+					Return(&model.AutomationRunRecord{Id: automationHandlerTestRunId, StartedBy: "test-user"}, nil)
+			case c.path == runs:
+				manager.EXPECT().RunAutomationNow(gomock.Any(), automationHandlerTestId).Return(nil, c.err)
+			default:
+				manager.EXPECT().StopAutomationRun(gomock.Any(), automationHandlerTestId, automationHandlerTestRunId, c.disable).Return(c.err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, c.path, strings.NewReader(c.body))
+			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
-			r.ServeHTTP(w, agentConfigRequest(http.MethodPost, "/assistant/automations/"+automationHandlerTestId+"/runs", nil))
+			r.ServeHTTP(w, req.WithContext(agentConfigContext(req.Context())))
 
 			assert.Equal(t, c.wantStatus, w.Code)
+			assert.Equal(t, []string{"config/write"}, auth.asked)
+
+			for _, want := range c.wantBody {
+				assert.Contains(t, w.Body.String(), want)
+			}
+
+			if c.wantEmpty {
+				assert.Empty(t, strings.TrimSpace(w.Body.String()))
+			}
 		})
 	}
 }
 
-func automationControlHandlerRequest(id string, runId string) *http.Request {
-	req := httptest.NewRequest(http.MethodPost, "/assistant/automations/runs", strings.NewReader(""))
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", id)
-	rctx.URLParams.Add("runId", runId)
-
-	return req.WithContext(context.WithValue(agentConfigContext(req.Context()), chi.RouteCtxKey, rctx))
-}
-
-func automationControlHandler(t *testing.T) *AssistantHandler {
-	t.Helper()
-
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	// No expectations: a missing id must be refused before the manager is called.
-	return NewAssistantHandler(&Server{
-		Authorizer:       &recordingAuthorizer{authorized: true},
-		AssistantManager: mock.NewMockAssistantManager(ctrl),
-	})
-}
-
-func TestRunAutomationNowRequiresAnId(t *testing.T) {
-	w := httptest.NewRecorder()
-	automationControlHandler(t).RunAutomationNow(w, automationControlHandlerRequest("", ""))
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "id is required")
-}
-
-func TestStopAutomationRunRequiresBothIds(t *testing.T) {
+// The manager mock has no expectations: a missing id must be refused before it is called.
+func TestAutomationControlHandlersRequireIds(t *testing.T) {
 	cases := []struct {
 		name  string
+		serve func(*AssistantHandler, http.ResponseWriter, *http.Request)
 		id    string
 		runId string
 		want  string
 	}{
-		{name: "no automation id", id: "", runId: automationHandlerTestRunId, want: "id is required"},
-		{name: "no run id", id: automationHandlerTestId, runId: "", want: "runId is required"},
+		{name: "run now without an automation id", serve: (*AssistantHandler).RunAutomationNow, want: "id is required"},
+		{name: "stop without an automation id", serve: (*AssistantHandler).StopAutomationRun, runId: automationHandlerTestRunId, want: "id is required"},
+		{name: "stop without a run id", serve: (*AssistantHandler).StopAutomationRun, id: automationHandlerTestId, want: "runId is required"},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			h := NewAssistantHandler(&Server{
+				Authorizer:       &recordingAuthorizer{authorized: true},
+				AssistantManager: mock.NewMockAssistantManager(ctrl),
+			})
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", c.id)
+			rctx.URLParams.Add("runId", c.runId)
+			req := httptest.NewRequest(http.MethodPost, "/assistant/automations/runs", strings.NewReader(""))
+
 			w := httptest.NewRecorder()
-			automationControlHandler(t).StopAutomationRun(w, automationControlHandlerRequest(c.id, c.runId))
+			c.serve(h, w, req.WithContext(context.WithValue(agentConfigContext(req.Context()), chi.RouteCtxKey, rctx)))
 
 			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.Contains(t, w.Body.String(), c.want)
-		})
-	}
-}
-
-func TestStopAutomationRunAnswersAcceptedWithNoBody(t *testing.T) {
-	cases := map[string]bool{"": false, "{}": false, `{"disable":false}`: false, `{"disable":true}`: true}
-
-	for body, disable := range cases {
-		t.Run(body, func(t *testing.T) {
-			r, manager, auth := automationRouter(t, true)
-			manager.EXPECT().StopAutomationRun(gomock.Any(), automationHandlerTestId, automationHandlerTestRunId, disable).Return(nil)
-
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, automationStopRequest(body))
-
-			assert.Equal(t, http.StatusAccepted, w.Code)
-			assert.Empty(t, strings.TrimSpace(w.Body.String()))
-			assert.Equal(t, []string{"config/write"}, auth.asked)
-		})
-	}
-}
-
-// The strict mock fails if a body that doesn't decode still reaches the manager.
-func TestStopAutomationRunRejectsAMalformedBody(t *testing.T) {
-	r, _, _ := automationRouter(t, true)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, automationStopRequest(`{"disable":"yes"}`))
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-// Permission is checked before the body is read.
-func TestStopAutomationRunRefusesBeforeDecoding(t *testing.T) {
-	r, _, auth := automationRouter(t, false)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, automationStopRequest(`{"disable":"yes"}`))
-
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Equal(t, []string{"config/write"}, auth.asked)
-}
-
-func TestStopAutomationRunMapsErrors(t *testing.T) {
-	cases := []struct {
-		name       string
-		err        error
-		wantStatus int
-	}{
-		{name: "malformed id", err: errAutomationParamsStub, wantStatus: http.StatusBadRequest},
-		{name: "missing", err: errAutomationNotFoundStub, wantStatus: http.StatusNotFound},
-		{name: "not in flight", err: errors.New("ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT"), wantStatus: http.StatusConflict},
-		{name: "broken", err: errors.New("salt is down"), wantStatus: http.StatusInternalServerError},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r, manager, _ := automationRouter(t, true)
-			manager.EXPECT().StopAutomationRun(gomock.Any(), automationHandlerTestId, automationHandlerTestRunId, false).Return(c.err)
-
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, automationStopRequest(""))
-
-			assert.Equal(t, c.wantStatus, w.Code)
 		})
 	}
 }

@@ -6,6 +6,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
 	"github.com/apex/log"
+	"github.com/apex/log/handlers/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -103,36 +105,54 @@ func storedEnabled(id string) *model.Automation {
 	return automation
 }
 
-func TestRunAutomationNowRequiresConfigWrite(t *testing.T) {
-	cfg := &automationConfigstore{}
-	ac := automationCoordinatorAs(cfg, false)
-
-	run, err := ac.RunAutomationNow(automationSaveCtx(), automationTestId)
-
-	assert.Nil(t, run)
-	var unauthorized *model.Unauthorized
-	require.ErrorAs(t, err, &unauthorized)
-	assert.Equal(t, "write", unauthorized.Operation)
-	assert.Equal(t, "config", unauthorized.Target)
-}
-
-func TestRunAutomationNowRejectsAMalformedId(t *testing.T) {
-	ac := automationCoordinator(&automationConfigstore{})
-	ac.automationScheduler = &automationScheduler{ctx: context.Background(), runNow: make(chan *automationRunNowRequest)}
-
-	_, err := ac.RunAutomationNow(automationSaveCtx(), "not-a-uuid")
-
-	assert.ErrorIs(t, err, ErrInvalidAutomationParams)
-}
-
-func TestRunAutomationNowRefusesWithoutAScheduler(t *testing.T) {
+func TestAutomationControlRequiresConfigWrite(t *testing.T) {
 	cases := []struct {
-		name     string
-		agentic  bool
-		database bool
+		name string
+		call func(t *testing.T, ac *AssistantCoordinator) error
 	}{
-		{name: "agents off", database: true},
-		{name: "no database", agentic: true},
+		{name: "run now", call: func(t *testing.T, ac *AssistantCoordinator) error {
+			run, err := ac.RunAutomationNow(automationSaveCtx(), automationTestId)
+			assert.Nil(t, run)
+
+			return err
+		}},
+		{name: "stop", call: func(t *testing.T, ac *AssistantCoordinator) error {
+			return ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true)
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &automationConfigstore{}
+			ac := automationCoordinatorAs(cfg, false)
+			cancelled := false
+			release := ac.registerAutomationRun(automationTestId, stopTestRunId, func(error) { cancelled = true })
+			defer release()
+
+			err := tc.call(t, ac)
+
+			var unauthorized *model.Unauthorized
+			require.ErrorAs(t, err, &unauthorized)
+			assert.Equal(t, "write", unauthorized.Operation)
+			assert.Equal(t, "config", unauthorized.Target)
+			assert.False(t, cancelled)
+			assert.Empty(t, cfg.updates)
+		})
+	}
+}
+
+func TestRunAutomationNowRefusesBeforeTheWorker(t *testing.T) {
+	cases := []struct {
+		name      string
+		id        string
+		agentic   bool
+		database  bool
+		scheduler bool
+		wantErr   error
+	}{
+		{name: "a malformed id", id: "not-a-uuid", scheduler: true, wantErr: ErrInvalidAutomationParams},
+		{name: "agents off", id: automationTestId, database: true, wantErr: ErrAutomationSchedulerUnavailable},
+		{name: "no database", id: automationTestId, agentic: true, wantErr: ErrAutomationSchedulerUnavailable},
 	}
 
 	for _, tc := range cases {
@@ -142,68 +162,69 @@ func TestRunAutomationNowRefusesWithoutAScheduler(t *testing.T) {
 			if tc.database {
 				ac.store = automationTestStore(&mockdb.MockDB{})
 			}
+			if tc.scheduler {
+				ac.automationScheduler = &automationScheduler{ctx: context.Background(), runNow: make(chan *automationRunNowRequest)}
+			}
 
 			logCtx, h := capturedLogger()
 			ctx := context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1")
 
-			_, err := ac.RunAutomationNow(ctx, automationTestId)
+			_, err := ac.RunAutomationNow(ctx, tc.id)
 
-			assert.ErrorIs(t, err, ErrAutomationSchedulerUnavailable)
-			require.Len(t, h.Entries, 1)
-			assert.Equal(t, log.InfoLevel, h.Entries[0].Level)
-			assert.Equal(t, tc.agentic, h.Entries[0].Fields["automationAgentsEnabled"])
-			assert.Equal(t, tc.database, h.Entries[0].Fields["automationDatabaseConnected"])
+			assert.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr == ErrAutomationSchedulerUnavailable {
+				require.Len(t, h.Entries, 1)
+				assert.Equal(t, log.InfoLevel, h.Entries[0].Level)
+				assert.Equal(t, tc.agentic, h.Entries[0].Fields["automationAgentsEnabled"])
+				assert.Equal(t, tc.database, h.Entries[0].Fields["automationDatabaseConnected"])
+			}
 		})
 	}
 }
 
-// The registry compares ids as strings, so an uppercase id must still find the registered run.
-func TestRunAutomationNowCanonicalizesTheId(t *testing.T) {
+func TestRunAutomationNowThroughTheWorker(t *testing.T) {
 	licenseOAI(t)
 
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.ac.startAutomationScheduler()
+	upper := strings.ToUpper(automationTestId)
 
-		release := f.ac.registerAutomationRun(automationTestId, "run-0", func(error) {})
-		defer release()
+	cases := []struct {
+		name       string
+		storedId   string
+		callId     string
+		registered bool
+		wantErr    error
+		wantOpened []string
+	}{
+		{name: "returns the opened run", storedId: automationTestId, callId: automationTestId, wantOpened: []string{automationTestId + ":user-1"}},
+		// The registry compares ids as strings, so an uppercase id must still find the registered run.
+		{name: "canonicalizes the id", storedId: automationTestId, callId: upper, registered: true, wantErr: database.ErrAutomationRunInFlight},
+		// A hand-edited stored id in another form is read canonically, so Run now finds it.
+		{name: "finds a stored non-canonical id", storedId: upper, callId: upper, wantOpened: []string{automationTestId + ":user-1"}},
+	}
 
-		_, err := f.ac.RunAutomationNow(automationSaveCtx(), strings.ToUpper(automationTestId))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newEngineFixture(t, storedAutomationWithParams(tc.storedId, `{}`))
+				f.ac.startAutomationScheduler()
 
-		assert.ErrorIs(t, err, database.ErrAutomationRunInFlight)
-		assert.Empty(t, f.openedSeen())
-	})
-}
+				if tc.registered {
+					release := f.ac.registerAutomationRun(automationTestId, "run-0", func(error) {})
+					defer release()
+				}
 
-// A hand-edited stored id in another form is read canonically, so Run now finds it.
-func TestRunAutomationNowFindsAStoredNonCanonicalId(t *testing.T) {
-	licenseOAI(t)
+				run, err := f.ac.RunAutomationNow(automationSaveCtx(), tc.callId)
 
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(strings.ToUpper(automationTestId), `{}`))
-		f.ac.startAutomationScheduler()
-
-		run, err := f.ac.RunAutomationNow(automationSaveCtx(), strings.ToUpper(automationTestId))
-
-		require.NoError(t, err)
-		assert.Equal(t, "run-1", run.Id)
-		assert.Equal(t, []string{automationTestId + ":user-1"}, f.openedSeen())
-	})
-}
-
-func TestRunAutomationNowReturnsTheOpenedRun(t *testing.T) {
-	licenseOAI(t)
-
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.ac.startAutomationScheduler()
-
-		run, err := f.ac.RunAutomationNow(automationSaveCtx(), automationTestId)
-
-		require.NoError(t, err)
-		assert.Equal(t, "run-1", run.Id)
-		assert.Equal(t, []string{automationTestId + ":user-1"}, f.openedSeen())
-	})
+				if tc.wantErr != nil {
+					assert.ErrorIs(t, err, tc.wantErr)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, "run-1", run.Id)
+				}
+				assert.ElementsMatch(t, tc.wantOpened, f.openedSeen())
+			})
+		})
+	}
 }
 
 // heldWorker starts the scheduler with every run open held until release. The worker serving a
@@ -346,251 +367,195 @@ func TestRunAutomationNowAndADisablingSaveBothReturn(t *testing.T) {
 	require.NoError(t, awaitResult(t, saved))
 }
 
-func TestStopAutomationRunRequiresConfigWrite(t *testing.T) {
-	cfg := &automationConfigstore{}
-	ac := automationCoordinatorAs(cfg, false)
-	cancelled := false
-	release := ac.registerAutomationRun(automationTestId, stopTestRunId, func(error) { cancelled = true })
-	defer release()
+func TestStopAutomationRun(t *testing.T) {
+	const otherRunId = "6d2b9e10-4c7f-4a3e-9b8d-1f0e2c3a4b5c"
 
-	err := ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true)
+	openRow := func(f *stopFixture) { f.scriptOwnerlessClose(true, nil) }
+	noRow := func(f *stopFixture) { f.scriptOwnerlessClose(false, nil) }
+	closeFails := func(f *stopFixture) { f.scriptOwnerlessClose(false, errors.New("postgres is down")) }
 
-	var unauthorized *model.Unauthorized
-	require.ErrorAs(t, err, &unauthorized)
-	assert.False(t, cancelled)
-	assert.Empty(t, cfg.updates)
-}
+	// Would fail validation; the turn-off doesn't validate.
+	unnamed := storedEnabled(automationTestId)
+	unnamed.DisplayName = ""
 
-func TestStopAutomationRunRejectsMalformedIds(t *testing.T) {
-	f := newStopFixture(t, storedEnabled(automationTestId))
-	f.register(t, automationTestId, stopTestRunId)
+	cases := []struct {
+		name string
+		// Defaults to automationTestId stored enabled; deleted stores nothing.
+		stored  []*model.Automation
+		deleted bool
+		setup   func(f *stopFixture)
+		// The run in flight, registered under registeredFor (default automationTestId).
+		registered    string
+		registeredFor string
+		// The request is cancelled as soon as the run is.
+		cancelRequest bool
+		closes        func(f *stopFixture)
+		noStore       bool
+		updateErr     error
+		// Default to automationTestId and stopTestRunId.
+		id, runId   string
+		disable     bool
+		wantErr     error
+		wantErrText string
+		wantErrs    []string
+		// The registered run is marked by user-1 and cancelled as stopped.
+		wantStopped bool
+		// The automation is written once, turned off.
+		wantOff bool
+		check   func(t *testing.T, f *stopFixture, h *memory.Handler)
+	}{
+		{name: "a malformed automation id", registered: stopTestRunId, id: "nope", wantErr: ErrInvalidAutomationParams},
+		{name: "a malformed run id", registered: stopTestRunId, runId: "nope", wantErr: ErrInvalidAutomationParams},
+		{name: "stops the named run", registered: stopTestRunId, wantStopped: true,
+			check: func(t *testing.T, f *stopFixture, h *memory.Handler) {
+				assert.Equal(t, log.Fields{
+					"automationId":        automationTestId,
+					"automationRunId":     stopTestRunId,
+					"automationStoppedBy": "user-1",
+					"automationDisabled":  false,
+				}, lastLoggedFields(h))
+			}},
+		{name: "canonicalizes ids", registered: stopTestRunId, id: strings.ToUpper(automationTestId), runId: strings.ToUpper(stopTestRunId), wantStopped: true},
+		// The engine registers runs under the id as read, which is canonical, so a hand-edited
+		// uppercase stored id still reaches the live run and the stored automation.
+		{name: "a stored non-canonical id", stored: []*model.Automation{storedEnabled(strings.ToUpper(automationTestId))},
+			registered: stopTestRunId, id: strings.ToUpper(automationTestId), disable: true, wantStopped: true, wantOff: true,
+			check: func(t *testing.T, f *stopFixture, _ *memory.Handler) {
+				written := writtenAutomations(t, f.cfg.updates[0])
+				require.Len(t, written, 1, "the stored entry is replaced, not duplicated")
+				assert.Equal(t, automationTestId, written[0].Id)
+			}},
+		{name: "refuses another run", registered: otherRunId, wantErr: ErrAutomationRunNotInFlight},
+		{name: "a deleted automation's run", deleted: true, registered: stopTestRunId, wantStopped: true},
 
-	assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), "nope", stopTestRunId, false), ErrInvalidAutomationParams)
-	assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, "nope", false), ErrInvalidAutomationParams)
+		{name: "nothing registered, an open row is closed as stopped", closes: openRow,
+			check: func(t *testing.T, _ *stopFixture, h *memory.Handler) {
+				assert.Equal(t, stopTestRunId, lastLoggedFields(h)["automationRunId"])
+			}},
+		{name: "nothing registered, no open row", closes: noRow, wantErr: ErrAutomationRunNotInFlight},
+		{name: "nothing registered, no store", noStore: true, wantErr: ErrAutomationRunNotInFlight,
+			check: func(t *testing.T, f *stopFixture, _ *memory.Handler) {
+				f.mDB.AssertNotCalled(t, "Begin", mock.Anything)
+			}},
+		{name: "nothing registered, the close fails", closes: closeFails, wantErrText: "postgres is down",
+			check: func(t *testing.T, _ *stopFixture, h *memory.Handler) {
+				require.NotEmpty(t, h.Entries)
+				assert.Equal(t, log.WarnLevel, h.Entries[0].Level)
+				assert.Equal(t, stopTestRunId, h.Entries[0].Fields["automationRunId"])
+			}},
+		{name: "nothing registered, the close fails, the automation is still turned off, and the error is returned",
+			closes: closeFails, disable: true, wantErrText: "postgres is down", wantOff: true},
+		{name: "nothing registered, the close and the turn-off both fail", closes: closeFails, updateErr: errors.New("salt is down"),
+			disable: true, wantErrs: []string{"postgres is down", "salt is down"}},
 
-	assert.Empty(t, f.causes)
-	assert.Empty(t, f.marks)
-}
+		{name: "turn off stops the run, then writes only enabled", stored: []*model.Automation{unnamed}, registered: stopTestRunId,
+			disable: true, wantStopped: true, wantOff: true,
+			setup: func(f *stopFixture) {
+				f.cfg.onUpdate = func() {
+					assert.Len(t, f.causes, 1, "the run is stopped before the write")
+					assert.False(t, f.ac.configWriteMu.TryLock(), "written under configWriteMu")
+				}
+			},
+			check: func(t *testing.T, f *stopFixture, h *memory.Handler) {
+				written := writtenAutomations(t, f.cfg.updates[0])[0]
+				assert.Empty(t, written.DisplayName)
+				assert.Equal(t, unnamed.IntervalSeconds, written.IntervalSeconds)
+				assert.Equal(t, unnamed.Agent, written.Agent)
+				assert.True(t, f.ac.automationsDirty.Load())
+				assert.Equal(t, true, lastLoggedFields(h)["automationDisabled"])
+			}},
+		{name: "turn off fails to write, and the run is still stopped", registered: stopTestRunId, updateErr: errors.New("salt is down"),
+			disable: true, wantErrText: "salt is down", wantStopped: true},
+		{name: "turn off with the request cancelled after the stop", registered: stopTestRunId, cancelRequest: true,
+			disable: true, wantStopped: true, wantOff: true},
+		{name: "turn off naming a run that already ended", closes: noRow, disable: true, wantOff: true},
+		{name: "turn off stops a different registered run too", registered: otherRunId, disable: true, wantStopped: true, wantOff: true},
+		{name: "turn off leaves an automation already off unwritten", stored: []*model.Automation{storedAutomation(automationTestId, "Nightly")},
+			registered: stopTestRunId, disable: true, wantStopped: true,
+			check: func(t *testing.T, f *stopFixture, _ *memory.Handler) {
+				assert.False(t, f.ac.automationsDirty.Load())
+			}},
+		{name: "turn off on a never-saved builtin has no stored copy to write", deleted: true,
+			setup:      func(f *stopFixture) { seedBuiltinAutomation(f.ac) },
+			registered: stopTestRunId, registeredFor: BuiltinAlertTriageAutomationId, id: BuiltinAlertTriageAutomationId,
+			disable: true, wantStopped: true},
+		{name: "turn off stops a deleted automation's run, then it is not found", deleted: true, registered: stopTestRunId,
+			disable: true, wantErr: ErrAutomationNotFound, wantStopped: true},
+	}
 
-func TestStopAutomationRunStopsTheNamedRun(t *testing.T) {
-	f := newStopFixture(t, storedEnabled(automationTestId))
-	f.register(t, automationTestId, stopTestRunId)
-	logCtx, h := capturedLogger()
-	ctx := context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := tc.stored
+			if stored == nil && !tc.deleted {
+				stored = []*model.Automation{storedEnabled(automationTestId)}
+			}
 
-	require.NoError(t, f.ac.StopAutomationRun(ctx, automationTestId, stopTestRunId, false))
+			f := newStopFixture(t, stored...)
+			f.cfg.updateErr = tc.updateErr
+			if tc.setup != nil {
+				tc.setup(f)
+			}
+			if tc.closes != nil {
+				tc.closes(f)
+			}
+			if tc.noStore {
+				f.ac.store = nil
+			}
 
-	assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	assert.Equal(t, []string{stopTestRunId + ":user-1"}, f.marks)
-	assert.Empty(t, f.cfg.updates, "the automation stays on")
-	assert.Equal(t, log.Fields{
-		"automationId":        automationTestId,
-		"automationRunId":     stopTestRunId,
-		"automationStoppedBy": "user-1",
-		"automationDisabled":  false,
-	}, lastLoggedFields(h))
-}
+			logCtx, h := capturedLogger()
+			ctx, cancel := context.WithCancel(context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1"))
+			defer cancel()
 
-func TestStopAutomationRunCanonicalizesIds(t *testing.T) {
-	f := newStopFixture(t, storedEnabled(automationTestId))
-	f.register(t, automationTestId, stopTestRunId)
+			if tc.registered != "" {
+				registeredFor := cmp.Or(tc.registeredFor, automationTestId)
+				release := f.ac.registerAutomationRun(registeredFor, tc.registered, func(cause error) {
+					f.causes = append(f.causes, cause)
+					if tc.cancelRequest {
+						cancel()
+					}
+				})
+				defer release()
+			}
 
-	require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), strings.ToUpper(automationTestId), strings.ToUpper(stopTestRunId), false))
+			err := f.ac.StopAutomationRun(ctx, cmp.Or(tc.id, automationTestId), cmp.Or(tc.runId, stopTestRunId), tc.disable)
 
-	assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	assert.Empty(t, f.ownerless, "the registered run was found, so no row is closed directly")
-}
+			switch {
+			case tc.wantErr != nil:
+				assert.ErrorIs(t, err, tc.wantErr)
+			case tc.wantErrText != "":
+				assert.EqualError(t, err, tc.wantErrText)
+			case tc.wantErrs != nil:
+				for _, want := range tc.wantErrs {
+					assert.ErrorContains(t, err, want)
+				}
+			default:
+				require.NoError(t, err)
+			}
 
-// The engine registers runs under the id as read, which is canonical, so a hand-edited uppercase
-// stored id still reaches the live run and the stored automation.
-func TestStopAutomationRunOnAStoredNonCanonicalId(t *testing.T) {
-	f := newStopFixture(t, storedEnabled(strings.ToUpper(automationTestId)))
-	f.register(t, automationTestId, stopTestRunId)
+			if tc.wantStopped {
+				assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
+				assert.Equal(t, []string{tc.registered + ":user-1"}, f.marks)
+			} else {
+				assert.Empty(t, f.causes)
+				assert.Empty(t, f.marks)
+			}
 
-	require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), strings.ToUpper(automationTestId), stopTestRunId, true))
+			if tc.closes != nil {
+				assert.Equal(t, []string{stopTestRunId + ":" + automationTestId + ":user-1"}, f.ownerless)
+			} else {
+				assert.Empty(t, f.ownerless, "a registered run's row is not closed out from under it")
+			}
 
-	assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	assert.Empty(t, f.ownerless, "the live run's row is not closed out from under it")
-	require.Len(t, f.cfg.updates, 1)
-	written := writtenAutomations(t, f.cfg.updates[0])
-	require.Len(t, written, 1, "the stored entry is replaced, not duplicated")
-	assert.Equal(t, automationTestId, written[0].Id)
-	assert.False(t, written[0].Enabled)
-}
+			if tc.wantOff {
+				require.Len(t, f.cfg.updates, 1)
+				assert.False(t, writtenAutomations(t, f.cfg.updates[0])[0].Enabled)
+			} else {
+				assert.Empty(t, f.cfg.updates, "the automation stays as it was")
+			}
 
-func TestStopAutomationRunRefusesAnotherRun(t *testing.T) {
-	f := newStopFixture(t, storedEnabled(automationTestId))
-	f.register(t, automationTestId, "6d2b9e10-4c7f-4a3e-9b8d-1f0e2c3a4b5c")
-
-	assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, false), ErrAutomationRunNotInFlight)
-	assert.Empty(t, f.causes)
-	assert.Empty(t, f.ownerless)
-}
-
-func TestStopAutomationRunWithNothingRegistered(t *testing.T) {
-	t.Run("an open row is closed as stopped", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(true, nil)
-		logCtx, h := capturedLogger()
-		ctx := context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1")
-
-		require.NoError(t, f.ac.StopAutomationRun(ctx, automationTestId, stopTestRunId, false))
-
-		assert.Equal(t, []string{stopTestRunId + ":" + automationTestId + ":user-1"}, f.ownerless)
-		assert.Equal(t, stopTestRunId, lastLoggedFields(h)["automationRunId"])
-	})
-
-	t.Run("no open row", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(false, nil)
-
-		assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, false), ErrAutomationRunNotInFlight)
-	})
-
-	t.Run("no store", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.ac.store = nil
-
-		assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, false), ErrAutomationRunNotInFlight)
-		f.mDB.AssertNotCalled(t, "Begin", mock.Anything)
-	})
-
-	t.Run("the close fails", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(false, errors.New("postgres is down"))
-		logCtx, h := capturedLogger()
-		ctx := context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1")
-
-		assert.EqualError(t, f.ac.StopAutomationRun(ctx, automationTestId, stopTestRunId, false), "postgres is down")
-
-		require.NotEmpty(t, h.Entries)
-		assert.Equal(t, log.WarnLevel, h.Entries[0].Level)
-		assert.Equal(t, stopTestRunId, h.Entries[0].Fields["automationRunId"])
-	})
-
-	t.Run("the close fails, the automation is still turned off, and the error is returned", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(false, errors.New("postgres is down"))
-
-		assert.EqualError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true), "postgres is down")
-
-		require.Len(t, f.cfg.updates, 1)
-		assert.False(t, writtenAutomations(t, f.cfg.updates[0])[0].Enabled)
-	})
-
-	t.Run("the close and the turn-off both fail", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(false, errors.New("postgres is down"))
-		f.cfg.updateErr = errors.New("salt is down")
-
-		err := f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true)
-
-		assert.ErrorContains(t, err, "postgres is down")
-		assert.ErrorContains(t, err, "salt is down")
-	})
-}
-
-func TestStopAndTurnOff(t *testing.T) {
-	t.Run("stops the run, then writes only enabled", func(t *testing.T) {
-		stored := storedEnabled(automationTestId)
-		// Would fail validation; the turn-off doesn't validate.
-		stored.DisplayName = ""
-		f := newStopFixture(t, stored)
-		f.register(t, automationTestId, stopTestRunId)
-
-		var causesAtWrite int
-		f.cfg.onUpdate = func() {
-			causesAtWrite = len(f.causes)
-			assert.False(t, f.ac.configWriteMu.TryLock(), "written under configWriteMu")
-		}
-		logCtx, h := capturedLogger()
-		ctx := context.WithValue(logCtx, web.ContextKeyRequestorId, "user-1")
-
-		require.NoError(t, f.ac.StopAutomationRun(ctx, automationTestId, stopTestRunId, true))
-
-		assert.Equal(t, 1, causesAtWrite, "the run is stopped before the write")
-		require.Len(t, f.cfg.updates, 1)
-
-		written := writtenAutomations(t, f.cfg.updates[0])[0]
-		assert.False(t, written.Enabled)
-		assert.Empty(t, written.DisplayName)
-		assert.Equal(t, stored.IntervalSeconds, written.IntervalSeconds)
-		assert.Equal(t, stored.Agent, written.Agent)
-		assert.True(t, f.ac.automationsDirty.Load())
-		assert.Equal(t, true, lastLoggedFields(h)["automationDisabled"])
-	})
-
-	t.Run("a write failure is returned, and the run is still stopped", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.register(t, automationTestId, stopTestRunId)
-		f.cfg.updateErr = errors.New("salt is down")
-
-		assert.EqualError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true), "salt is down")
-		assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	})
-
-	t.Run("a request cancelled after the stop still turns it off", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-
-		ctx, cancel := context.WithCancel(automationSaveCtx())
-		release := f.ac.registerAutomationRun(automationTestId, stopTestRunId, func(error) { cancel() })
-		defer release()
-
-		require.NoError(t, f.ac.StopAutomationRun(ctx, automationTestId, stopTestRunId, true))
-		require.Len(t, f.cfg.updates, 1)
-		assert.False(t, writtenAutomations(t, f.cfg.updates[0])[0].Enabled)
-	})
-
-	t.Run("naming a run that already ended", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.scriptOwnerlessClose(false, nil)
-
-		require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true))
-		require.Len(t, f.cfg.updates, 1)
-		assert.False(t, writtenAutomations(t, f.cfg.updates[0])[0].Enabled)
-	})
-
-	t.Run("a different run registered is stopped too", func(t *testing.T) {
-		f := newStopFixture(t, storedEnabled(automationTestId))
-		f.register(t, automationTestId, "6d2b9e10-4c7f-4a3e-9b8d-1f0e2c3a4b5c")
-
-		require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true))
-		assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-		assert.Len(t, f.cfg.updates, 1)
-	})
-
-	t.Run("an automation already off is not written", func(t *testing.T) {
-		f := newStopFixture(t, storedAutomation(automationTestId, "Nightly"))
-		f.register(t, automationTestId, stopTestRunId)
-
-		require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true))
-		assert.Empty(t, f.cfg.updates)
-		assert.False(t, f.ac.automationsDirty.Load())
-	})
-
-	t.Run("a never-saved builtin has no stored copy to write", func(t *testing.T) {
-		f := newStopFixture(t)
-		seedBuiltinAutomation(f.ac)
-		f.register(t, BuiltinAlertTriageAutomationId, stopTestRunId)
-
-		require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), BuiltinAlertTriageAutomationId, stopTestRunId, true))
-		assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-		assert.Empty(t, f.cfg.updates)
-	})
-
-	t.Run("a deleted automation's run is stopped, then not found", func(t *testing.T) {
-		f := newStopFixture(t)
-		f.register(t, automationTestId, stopTestRunId)
-
-		assert.ErrorIs(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, true), ErrAutomationNotFound)
-		assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
-	})
-}
-
-func TestStopAutomationRunOnADeletedAutomation(t *testing.T) {
-	f := newStopFixture(t)
-	f.register(t, automationTestId, stopTestRunId)
-
-	require.NoError(t, f.ac.StopAutomationRun(automationSaveCtx(), automationTestId, stopTestRunId, false))
-	assert.Equal(t, []error{ErrAutomationRunStopped}, f.causes)
+			if tc.check != nil {
+				tc.check(t, f, h)
+			}
+		})
+	}
 }

@@ -367,11 +367,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.runs.forEach(run => this.populateRunUsers(run));
 
       const runIds = (activity.runs || []).map(run => run.id);
-      for (const runId of Object.keys(this.stopRequested)) {
-        if (runIds.includes(runId)) continue;
-        this.announce('ariaAutomationStopped', this.stopRequested[runId]);
-        delete this.stopRequested[runId];
-      }
+      this.$root.takeClosedStopRequests(this.stopRequested, runIds).forEach(name => this.announce('ariaAutomationStopped', name));
       const finished = this.inFlightRunIds.some(id => !runIds.includes(id));
       this.inFlightRunIds = runIds;
       // A search holds still. No recount: that walks the whole history, per open tab, whenever a run ends.
@@ -698,11 +694,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.$root.populateUserDetails(run, 'startedBy', 'startedByName');
       this.$root.populateUserDetails(run, 'stoppedBy', 'stoppedByName');
     },
-    runStopping(run) {
-      return !!run.stoppedBy && !['succeeded', 'failed', 'stopped'].includes(run.state);
-    },
     runCardState(run) {
-      return this.runStopping(run) ? 'stopping' : run.state;
+      return this.$root.automationRunStopping(run) ? 'stopping' : run.state;
     },
     runStartedByLabel(run) {
       return run.startedBy ? run.startedByName || run.startedBy : this.i18n.schedule;
@@ -711,11 +704,10 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       return run.startTime ? Math.max(0, this.now - new Date(run.startTime).getTime()) : 0;
     },
     runCardSubtitle(run) {
-      if (this.runStopping(run)) {
+      if (this.$root.automationRunStopping(run)) {
         const ending = run.items.filter(item => item.state === 'running' && item.runId === run.id).length;
-        const user = run.stoppedByName || run.stoppedBy;
-        if (!ending) return this.$root.localizeMessage('automationStoppedBy', { user });
-        return this.$root.localizeMessage('agentMonitorRunStoppingWaiting', { user, count: ending });
+        if (!ending) return this.i18n.stateStopped;
+        return this.$root.localizeMessage('agentMonitorRunStoppingWaiting', { count: ending });
       }
       const card = { startedBy: this.runStartedByLabel(run), elapsed: this.formatElapsed(this.runElapsedMs(run)) };
       if (!run.items.length) return this.$root.localizeMessage('agentMonitorRunCardScanning', card);
@@ -728,11 +720,11 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     },
     runStopLabel(run) {
       let key = 'ariaAutomationStop';
-      if (this.runStopping(run)) key = this.runAutomationEnabled(run) ? 'ariaAutomationStopAgain' : 'ariaAutomationStopAgainOff';
+      if (this.$root.automationRunStopping(run)) key = this.runAutomationEnabled(run) ? 'ariaAutomationStopAgain' : 'ariaAutomationStopAgainOff';
       return this.$root.replaceActionVar(this.i18n[key], 'name', run.automationName);
     },
     runStoppedNote(run) {
-      const time = this.$root.formatDateTime(run.endTime);
+      const time = this.$root.formatDateTime(run.stopTime);
       if (!run.stoppedBy) return this.$root.localizeMessage('agentMonitorRunStoppedNoUser', { time });
       return this.$root.localizeMessage('agentMonitorRunStoppedBy', { user: run.stoppedByName || run.stoppedBy, time });
     },
@@ -743,7 +735,12 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     async openStopRun(run, event) {
       if (this.stopPending[run.id]) return;
       this.stopReturnFocus = event && event.currentTarget ? event.currentTarget : null;
-      await this.loadAutomations();
+      this.$root.startLoading();
+      try {
+        await this.loadAutomations();
+      } finally {
+        this.$root.stopLoading();
+      }
       this.stopRunTarget = { automationId: run.automationId, runId: run.id, name: run.automationName, enabled: this.runAutomationEnabled(run) };
       this.showStopDialog = true;
     },
@@ -752,14 +749,17 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.stopPending[target.runId] = true;
       this.$root.startLoading();
       try {
-        await this.$root.papi.post('assistant/automations/' + encodeURIComponent(target.automationId) + '/runs/' + encodeURIComponent(target.runId) + '/stop', { disable });
+        await this.$root.stopAutomationRun(target.automationId, target.runId, disable);
         this.stopRequested[target.runId] = target.name;
         this.announce('ariaAutomationStopping', target.name);
-        // Applies even while paused, so the card shows Stopping.
-        await this.loadActivity(true);
       } catch (error) {
         this.$root.showError(error);
       } finally {
+        // Also after an error: a Stop and turn off whose turn-off failed has still stopped the run.
+        // Applies even while paused, so the card shows Stopping.
+        await this.loadActivity(true);
+        // The card's Stop label depends on whether the automation is still on.
+        if (disable) await this.loadAutomations(true);
         delete this.stopPending[target.runId];
         this.$root.stopLoading();
       }

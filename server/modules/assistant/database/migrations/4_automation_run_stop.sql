@@ -6,7 +6,7 @@ ALTER TABLE automation_runs ADD CONSTRAINT automation_runs_state_check
     CHECK (state IN ('queued', 'running', 'succeeded', 'failed', 'stopped'));
 ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS started_by text;  -- NULL for scheduled runs
 ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS stopped_by text;  -- set when Stop is pressed; NULL unless the run is stopping or stopped
-ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS stopped_at timestamptz;  -- set with stopped_by; a stopped run's ended_at equals it
+ALTER TABLE automation_runs ADD COLUMN IF NOT EXISTS stopped_at timestamptz;  -- set with stopped_by, when Stop is pressed; ended_at is later, when the run finishes ending
 
 -- The run behind each session_ids entry, appended with it. Items written before this
 -- migration start empty, and their earlier sessions keep the positional attribution.

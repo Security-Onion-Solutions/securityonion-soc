@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -216,6 +218,48 @@ func TestAutomationRunHistoryRequiresAStoreAndAnId(t *testing.T) {
 
 	_, err = f.ac.GetAutomationRunDetails(context.Background(), automationTestId, "not-a-uuid", 0)
 	assert.ErrorIs(t, err, ErrAutomationRunNotFound)
+}
+
+// The store matches ids as given, so each history entry point passes them on canonically.
+func TestAutomationHistoryAcceptsANonCanonicalId(t *testing.T) {
+	reached := errors.New("reached the store")
+	upper := strings.ToUpper
+
+	cases := []struct {
+		name string
+		// The statement's arguments after the context and the SQL; a strict mock refuses others.
+		args []any
+		call func(ac *AssistantCoordinator) error
+	}{
+		{name: "run history", args: []any{automationTestId, mock.Anything}, call: func(ac *AssistantCoordinator) error {
+			_, err := ac.GetAutomationRunHistory(context.Background(), upper(automationTestId), 0, 0)
+			return err
+		}},
+		{name: "run details", args: []any{historyRunId}, call: func(ac *AssistantCoordinator) error {
+			_, err := ac.GetAutomationRunDetails(context.Background(), upper(automationTestId), upper(historyRunId), 0)
+			return err
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newHistoryFixture(t)
+			mDB := &mockdb.MockDB{}
+			mDB.On("Query", append([]any{mock.Anything, mock.Anything}, tc.args...)...).Return((*mockdb.MockRows)(nil), reached)
+			f.ac.store = automationTestStore(mDB)
+
+			assert.ErrorIs(t, tc.call(f.ac), reached)
+		})
+	}
+
+	t.Run("run page", func(t *testing.T) {
+		f := newHistoryFixture(t)
+
+		_, err := f.ac.automationRunPage(context.Background(), f.store, &model.AutomationRunFilter{AutomationId: upper(automationTestId)})
+
+		require.NoError(t, err)
+		assert.Equal(t, automationTestId, f.store.listQuery.AutomationId)
+	})
 }
 
 // A strict mock with no expectations: the refusal comes before any statement.
@@ -446,8 +490,9 @@ func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.
 	f.store.items = []*model.AutomationWorkItem{
 		{Id: "done", AutomationId: automationTestId, RunId: historyRunId, State: model.AutomationWorkItemDone, SessionIds: []string{"s1", "s2"}, FailedRunIds: []string{historyOtherRunId}},
 		historyItem("running", model.AutomationWorkItemRunning, "s3"),
-		// Back in the queue without a charge after a session, which only a Stop does.
-		historyItem("pending", model.AutomationWorkItemPending, "s4"),
+		// Back in the queue without a charge after a session, which only a Stop does. The Stop's close
+		// releases run_id and clears result; session_run_ids still ties the session to this run.
+		{Id: "pending", AutomationId: automationTestId, State: model.AutomationWorkItemPending, SessionIds: []string{"s4"}, SessionRunIds: []string{historyRunId}},
 		historyItem("failed", model.AutomationWorkItemFailed, "s5"),
 		historyItem("applying", model.AutomationWorkItemApplying, "s6"),
 		historyItem("queued", model.AutomationWorkItemPending),
@@ -494,6 +539,7 @@ func TestAutomationRunDetailsFlattensSessionsIncludingFailedAttempts(t *testing.
 	assert.Equal(t, historyOtherRunId, details.Sessions[0].RunId)
 	assert.Equal(t, historyRunId, details.Sessions[1].RunId)
 	assert.Equal(t, historyRunId, details.Sessions[2].RunId)
+	assert.Equal(t, historyRunId, details.Sessions[3].RunId, "the stopped item's session is still this run's")
 
 	assert.Equal(t, 1, f.chats.sessionCalls)
 	assert.Equal(t, []string{"s1", "s2", "s3", "s4", "s5", "s6", "s7"}, f.chats.sessionOpts.SessionIds())
@@ -582,23 +628,49 @@ func TestAutomationAttemptRun(t *testing.T) {
 }
 
 func TestAutomationAttemptRunReadsRecordedRuns(t *testing.T) {
-	item := &model.AutomationWorkItem{RunId: "C", SessionIds: []string{"s1", "s2"}, SessionRunIds: []string{"A", "B"}}
+	recorded := &model.AutomationWorkItem{RunId: "C", SessionIds: []string{"s1", "s2"}, SessionRunIds: []string{"A", "B"}}
+	// A 3.4.0 item's pre-upgrade sessions keep the positional mapping; sessions recorded since name their run.
+	mixed := &model.AutomationWorkItem{RunId: "C", SessionIds: []string{"s1", "s2", "s3"}, SessionRunIds: []string{"B", "C"}, FailedRunIds: []string{"A"}}
 
-	assert.Equal(t, "A", automationAttemptRun(item, 0))
-	assert.Equal(t, "B", automationAttemptRun(item, 1))
-}
+	cases := []struct {
+		name  string
+		item  *model.AutomationWorkItem
+		index int
+		want  string
+	}{
+		{name: "recorded first", item: recorded, index: 0, want: "A"},
+		{name: "recorded second", item: recorded, index: 1, want: "B"},
+		{name: "mixed pre-upgrade", item: mixed, index: 0, want: "A"},
+		{name: "mixed first recorded", item: mixed, index: 1, want: "B"},
+		{name: "mixed second recorded", item: mixed, index: 2, want: "C"},
+	}
 
-// A 3.4.0 item's pre-upgrade sessions keep the positional mapping; sessions recorded since name their run.
-func TestAutomationAttemptRunOnAMixedItem(t *testing.T) {
-	item := &model.AutomationWorkItem{RunId: "C", SessionIds: []string{"s1", "s2", "s3"}, SessionRunIds: []string{"B", "C"}, FailedRunIds: []string{"A"}}
-
-	assert.Equal(t, "A", automationAttemptRun(item, 0))
-	assert.Equal(t, "B", automationAttemptRun(item, 1))
-	assert.Equal(t, "C", automationAttemptRun(item, 2))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, automationAttemptRun(tc.item, tc.index))
+		})
+	}
 }
 
 func TestAutomationSessionOutcome(t *testing.T) {
-	none := map[string]bool{}
+	// item holds sessions s1..sN of a work item in state, held by runId.
+	item := func(runId string, state model.AutomationWorkItemState, sessions int, sessionRunIds []string, failedRunIds ...string) *model.AutomationWorkItem {
+		sessionIds := []string{}
+		for n := 1; n <= sessions; n++ {
+			sessionIds = append(sessionIds, fmt.Sprintf("s%d", n))
+		}
+
+		return &model.AutomationWorkItem{RunId: runId, State: state, SessionIds: sessionIds, SessionRunIds: sessionRunIds, FailedRunIds: failedRunIds}
+	}
+
+	const (
+		done    = model.AutomationWorkItemDone
+		pending = model.AutomationWorkItemPending
+		running = model.AutomationWorkItemRunning
+		failed  = model.AutomationWorkItemFailed
+	)
+
+	a, ab := []string{"A"}, []string{"A", "B"}
 
 	cases := []struct {
 		name    string
@@ -608,95 +680,29 @@ func TestAutomationSessionOutcome(t *testing.T) {
 		open    map[string]bool
 		want    string
 	}{
-		{
-			name:    "an earlier session of a stopped run",
-			item:    &model.AutomationWorkItem{RunId: "B", State: model.AutomationWorkItemDone, SessionIds: []string{"s1", "s2"}, SessionRunIds: []string{"A", "B"}},
-			earlier: true,
-			want:    model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "back in the queue uncharged",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemPending, SessionIds: []string{"s1"}},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name:    "a failed run's session",
-			item:    &model.AutomationWorkItem{RunId: "B", State: model.AutomationWorkItemDone, SessionIds: []string{"s1", "s2"}, SessionRunIds: []string{"A", "B"}, FailedRunIds: []string{"A"}},
-			earlier: true,
-			want:    model.AutomationRunOutcomeFailed,
-		},
-		{
-			name: "a replayed apply keeps its report",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemDone, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}, FailedRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeReport,
-		},
-		{
-			name: "a replayed apply on a 3.4.0 item keeps its report",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemDone, SessionIds: []string{"s1"}, FailedRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeReport,
-		},
-		{
-			name: "a stopped item claimed by a later run",
-			item: &model.AutomationWorkItem{RunId: "B", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "a stopped item a later run dropped uncharged",
-			item: &model.AutomationWorkItem{RunId: "B", State: model.AutomationWorkItemFailed, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "a stop released it back to the queue",
-			item: &model.AutomationWorkItem{State: model.AutomationWorkItemPending, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "a stop released it, then a params save or delete swept it",
-			item: &model.AutomationWorkItem{State: model.AutomationWorkItemFailed, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "the holding run failed it",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemFailed, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeFailed,
-		},
-		{
-			name: "a session not yet in its first phase",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			open: map[string]bool{"A": false},
-			want: model.AutomationRunOutcomeRunning,
-		},
-		{
-			name: "a live session of a stopping run is still ending",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			live: true,
-			open: map[string]bool{"A": true},
-			want: model.AutomationRunOutcomeRunning,
-		},
-		{
-			name: "a session a stopping run won't start",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			open: map[string]bool{"A": true},
-			want: model.AutomationRunOutcomeStopped,
-		},
-		{
-			name: "an item a closed run left held",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			want: model.AutomationRunOutcomeFailed,
-		},
-		{
-			name: "a live session outlasting its run's row",
-			item: &model.AutomationWorkItem{RunId: "A", State: model.AutomationWorkItemRunning, SessionIds: []string{"s1"}, SessionRunIds: []string{"A"}},
-			live: true,
-			want: model.AutomationRunOutcomeRunning,
-		},
+		{name: "an earlier session of a stopped run", item: item("B", done, 2, ab), earlier: true, want: model.AutomationRunOutcomeStopped},
+		{name: "back in the queue uncharged", item: item("A", pending, 1, nil), want: model.AutomationRunOutcomeStopped},
+		{name: "a failed run's session", item: item("B", done, 2, ab, "A"), earlier: true, want: model.AutomationRunOutcomeFailed},
+		{name: "a replayed apply keeps its report", item: item("A", done, 1, a, "A"), want: model.AutomationRunOutcomeReport},
+		{name: "a replayed apply on a 3.4.0 item keeps its report", item: item("A", done, 1, nil, "A"), want: model.AutomationRunOutcomeReport},
+		{name: "a stopped item claimed by a later run", item: item("B", running, 1, a), want: model.AutomationRunOutcomeStopped},
+		{name: "a stopped item a later run dropped uncharged", item: item("B", failed, 1, a), want: model.AutomationRunOutcomeStopped},
+		{name: "a stop released it back to the queue", item: item("", pending, 1, a), want: model.AutomationRunOutcomeStopped},
+		{name: "a stop released it, then a params save or delete swept it", item: item("", failed, 1, a), want: model.AutomationRunOutcomeStopped},
+		{name: "the holding run failed it", item: item("A", failed, 1, a), want: model.AutomationRunOutcomeFailed},
+		{name: "a session not yet in its first phase", item: item("A", running, 1, a), open: map[string]bool{"A": false}, want: model.AutomationRunOutcomeRunning},
+		{name: "a live session of a stopping run is still ending", item: item("A", running, 1, a), live: true, open: map[string]bool{"A": true},
+			want: model.AutomationRunOutcomeRunning},
+		{name: "a session a stopping run won't start", item: item("A", running, 1, a), open: map[string]bool{"A": true}, want: model.AutomationRunOutcomeStopped},
+		{name: "an item a closed run left held", item: item("A", running, 1, a), want: model.AutomationRunOutcomeFailed},
+		{name: "a live session outlasting its run's row", item: item("A", running, 1, a), live: true, want: model.AutomationRunOutcomeRunning},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			open := tc.open
 			if open == nil {
-				open = none
+				open = map[string]bool{}
 			}
 
 			index := len(tc.item.SessionIds) - 1

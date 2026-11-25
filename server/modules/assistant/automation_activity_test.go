@@ -235,64 +235,69 @@ func TestAutomationActivityReportsStoreErrors(t *testing.T) {
 	}
 }
 
-func TestAutomationActivityShowsStoppingRunsAndSessionOutcomes(t *testing.T) {
-	ac := newActivityCoordinator(t)
-	ac.setAgentPhase("s-live", "s-live", automationTestAgent, model.AgentPhaseWaitingLLM)
-
+func TestAutomationActivitySessionOutcomes(t *testing.T) {
 	stopTime := time.Date(2026, 9, 15, 16, 2, 40, 0, time.UTC)
 	stopping := historyRun(historyRunId, model.AutomationRunRunning)
 	stopping.StoppedBy = "user-1"
 	stopping.StopTime = &stopTime
 
-	store := &fakeActivityStore{
-		runs: []*model.AutomationRunRecord{stopping},
-		items: map[string][]*model.AutomationWorkItem{
-			automationTestId: {
-				{Id: "live", RunId: historyRunId, State: model.AutomationWorkItemRunning,
-					SessionIds: []string{"s-old", "s-live"}, SessionRunIds: []string{historyOtherRunId, historyRunId}},
-				{Id: "ending", RunId: historyRunId, State: model.AutomationWorkItemRunning,
-					SessionIds: []string{"s-done"}, SessionRunIds: []string{historyRunId}},
-			},
-		},
+	running := func(id string, sessionIds, sessionRunIds []string) *model.AutomationWorkItem {
+		return &model.AutomationWorkItem{Id: id, RunId: historyRunId, State: model.AutomationWorkItemRunning, SessionIds: sessionIds, SessionRunIds: sessionRunIds}
 	}
 
-	activity, err := ac.automationActivity(context.Background(), store)
-	require.NoError(t, err)
-	require.Len(t, activity.Runs, 1)
-
-	run := activity.Runs[0]
-	assert.Equal(t, "user-1", run.StoppedBy)
-	assert.Equal(t, &stopTime, run.StopTime)
-	assert.Nil(t, run.EndTime)
-
-	items := activityItems(run)
-	assert.Equal(t, map[string]string{
-		"s-old":  model.AutomationRunOutcomeStopped,
-		"s-live": model.AutomationRunOutcomeRunning,
-	}, items["live"].SessionOutcomes)
-	assert.Equal(t, map[string]string{"s-done": model.AutomationRunOutcomeStopped}, items["ending"].SessionOutcomes,
-		"a run that is stopping won't start a session that isn't live")
-}
-
-func TestAutomationActivitySessionOutcomesWithoutAStop(t *testing.T) {
-	ac := newActivityCoordinator(t)
-
-	store := &fakeActivityStore{
-		runs: []*model.AutomationRunRecord{historyRun(historyRunId, model.AutomationRunRunning)},
-		items: map[string][]*model.AutomationWorkItem{
-			automationTestId: {
-				{Id: "starting", RunId: historyRunId, State: model.AutomationWorkItemRunning,
-					SessionIds: []string{"s1"}, SessionRunIds: []string{historyRunId}},
+	cases := []struct {
+		name  string
+		run   *model.AutomationRunRecord
+		items []*model.AutomationWorkItem
+		// Outcomes by item id, then session id.
+		want  map[string]map[string]string
+		check func(t *testing.T, run *model.AutomationRunActivity, items map[string]*model.AutomationWorkItemActivity)
+	}{
+		{name: "a stopping run", run: stopping,
+			items: []*model.AutomationWorkItem{
+				running("live", []string{"s-old", "s-live"}, []string{historyOtherRunId, historyRunId}),
+				// A run that is stopping won't start a session that isn't live.
+				running("ending", []string{"s-done"}, []string{historyRunId}),
+			},
+			want: map[string]map[string]string{
+				"live":   {"s-old": model.AutomationRunOutcomeStopped, "s-live": model.AutomationRunOutcomeRunning},
+				"ending": {"s-done": model.AutomationRunOutcomeStopped},
+			},
+			check: func(t *testing.T, run *model.AutomationRunActivity, _ map[string]*model.AutomationWorkItemActivity) {
+				assert.Equal(t, "user-1", run.StoppedBy)
+				assert.Equal(t, &stopTime, run.StopTime)
+				assert.Nil(t, run.EndTime)
+			}},
+		{name: "without a stop", run: historyRun(historyRunId, model.AutomationRunRunning),
+			items: []*model.AutomationWorkItem{
+				running("starting", []string{"s1"}, []string{historyRunId}),
 				{Id: "pending", State: model.AutomationWorkItemPending},
 			},
-		},
+			want: map[string]map[string]string{"starting": {"s1": model.AutomationRunOutcomeRunning}},
+			check: func(t *testing.T, _ *model.AutomationRunActivity, items map[string]*model.AutomationWorkItemActivity) {
+				assert.NotNil(t, items["pending"].SessionOutcomes)
+				assert.Empty(t, items["pending"].SessionOutcomes)
+			}},
 	}
 
-	activity, err := ac.automationActivity(context.Background(), store)
-	require.NoError(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := newActivityCoordinator(t)
+			ac.setAgentPhase("s-live", "s-live", automationTestAgent, model.AgentPhaseWaitingLLM)
+			store := &fakeActivityStore{
+				runs:  []*model.AutomationRunRecord{tc.run},
+				items: map[string][]*model.AutomationWorkItem{automationTestId: tc.items},
+			}
 
-	items := activityItems(activity.Runs[0])
-	assert.Equal(t, map[string]string{"s1": model.AutomationRunOutcomeRunning}, items["starting"].SessionOutcomes)
-	assert.NotNil(t, items["pending"].SessionOutcomes)
-	assert.Empty(t, items["pending"].SessionOutcomes)
+			activity, err := ac.automationActivity(context.Background(), store)
+			require.NoError(t, err)
+			require.Len(t, activity.Runs, 1)
+
+			items := activityItems(activity.Runs[0])
+			for id, want := range tc.want {
+				assert.Equal(t, want, items[id].SessionOutcomes, id)
+			}
+			tc.check(t, activity.Runs[0], items)
+		})
+	}
 }

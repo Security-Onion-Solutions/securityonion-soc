@@ -30,16 +30,14 @@ test('names the automation in the title', () => {
   expect(comp.title()).toBe('Stop the current run of Alert Triage?');
 });
 
-test('offers turning off only while the automation is on', () => {
-  comp.automationEnabled = true;
-  expect(comp.canTurnOff()).toBe(true);
-
-  comp.automationEnabled = false;
-  expect(comp.canTurnOff()).toBe(false);
-
+test.each([
+  ['on', true, true],
+  ['off', false, false],
   // Deleted: nothing to turn off.
-  comp.automationEnabled = null;
-  expect(comp.canTurnOff()).toBe(false);
+  ['deleted', null, false],
+])('turning off is offered when the automation is %s: %s -> %s', (_, enabled, expected) => {
+  comp.automationEnabled = enabled;
+  expect(comp.canTurnOff()).toBe(expected);
 });
 
 test('the turn-off button and the next-run lines depend on the automation being on', () => {
@@ -52,19 +50,24 @@ test('the turn-off button and the next-run lines depend on the automation being 
   expect(turnOffLines[1]).not.toContain('automationStopDialogIntro');
   expect(turnOffLines[1]).not.toContain('automationStopDialogRequeue');
 
-  // Stop run is always offered, as the danger action when it's the only one.
-  expect(tag('automation_stop_dialog_stop')).toHaveLength(2);
+  expect(tag('automation_stop_dialog_stop')).toHaveLength(1);
+  expect(tag('automation_stop_dialog_stop')[0]).toContain('v-bind="stopButtonProps()"');
+  expect(tag('automation_stop_dialog_stop')[0]).not.toContain('v-if');
   expect(tag('automation_stop_dialog_cancel')[0]).not.toContain('v-if');
 });
 
-test('stop emits the turn-off choice and closes', () => {
-  comp.stop(false);
-  expect(comp.$emit).toHaveBeenNthCalledWith(1, 'stop', { disable: false });
-  expect(comp.$emit).toHaveBeenNthCalledWith(2, 'update:modelValue', false);
+test.each([
+  [true, { variant: 'text', color: 'primary' }],
+  [false, { variant: 'flat', color: 'error' }],
+  [null, { variant: 'flat', color: 'error' }],
+])('with the automation enabled %s, Stop run is styled %o', (enabled, expected) => {
+  comp.automationEnabled = enabled;
+  expect(comp.stopButtonProps()).toEqual(expected);
+});
 
-  comp.$emit.mockClear();
-  comp.stop(true);
-  expect(comp.$emit).toHaveBeenNthCalledWith(1, 'stop', { disable: true });
+test.each([false, true])('stop(%s) emits the turn-off choice and closes', (disable) => {
+  comp.stop(disable);
+  expect(comp.$emit).toHaveBeenNthCalledWith(1, 'stop', { disable });
   expect(comp.$emit).toHaveBeenNthCalledWith(2, 'update:modelValue', false);
 });
 

@@ -853,7 +853,7 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 // @Summary      Clone an Assistant Session
 // @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation.
 // @Tags         Assistant
-// @Security     bearer[assistant/write_authored, assistant/delete_authored]
+// @Security     bearer[assistant/write_authored, assistant/delete_authored, events/read, events/write]
 // @Param        sessionId   path   string  true   "Session ID to clone"
 // @Param        entityType  query  string  false  "alert_investigation, to record the copy on an alert" example(alert_investigation)
 // @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
@@ -2074,7 +2074,7 @@ func (h *AssistantHandler) RunAutomationNow(w http.ResponseWriter, r *http.Reque
 }
 
 // @Summary      Stop an Automation's Run
-// @Description  Signal the named in-flight run to stop, and return before it ends. Its unfinished work items return to the queue without counting as failures. With disable, the automation is also turned off, and whatever run it has in flight is stopped even if the named run already ended; if turning it off fails, the run is still stopped and an error is returned. The first caller to stop a run is recorded as its stoppedBy, with the time as its stopTime, and a later call changes neither. A stopped run's endTime equals its stopTime.
+// @Description  Signal the named in-flight run to stop, and return before it ends. Its unfinished work items return to the queue without counting as failures. With disable, the automation is also turned off, and whatever run it has in flight is stopped even if the named run already ended; if turning it off fails, the run is still stopped and an error is returned. The first caller to stop a run is recorded as its stoppedBy, with the time as its stopTime, and a later call changes neither. A stopped run's endTime is set when its sessions have finished ending, so it is later than its stopTime.
 // @Tags         Assistant
 // @Security     bearer[config/write]
 // @Param        id       path  string                       true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)

@@ -28,6 +28,10 @@ components.push({
       canTurnOff() {
         return this.automationEnabled === true;
       },
+      // Stop run is the danger action when it's the only one.
+      stopButtonProps() {
+        return this.canTurnOff() ? { variant: 'text', color: 'primary' } : { variant: 'flat', color: 'error' };
+      },
       cancel() {
         this.$emit('update:modelValue', false);
       },

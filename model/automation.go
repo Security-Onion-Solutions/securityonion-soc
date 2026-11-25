@@ -87,7 +87,7 @@ type AutomationRunRecord struct {
 	State AutomationRunState `json:"state" example:"running"`
 	// The time this run started.
 	StartTime *time.Time `json:"startTime,omitempty" example:"2026-09-15T16:00:02Z"`
-	// The time this run stopped; absent while it is in flight. For a stopped run it equals stopTime.
+	// The time this run ended; absent while it is in flight. For a stopped run it is when its sessions finished ending, after stopTime.
 	EndTime *time.Time `json:"endTime,omitempty" example:"2026-09-15T16:03:02Z"`
 	// Why this run failed; absent unless it did.
 	Error string `json:"error,omitempty"`

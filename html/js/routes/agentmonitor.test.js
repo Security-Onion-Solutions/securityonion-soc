@@ -1110,67 +1110,62 @@ describe('run strip and stop', () => {
     expect(comp.runs[0].stoppedByName).toBe('mom-client');
   });
 
-  test('a run is stopping while in flight with a stopper', () => {
-    expect(comp.runStopping(run())).toBe(false);
-    expect(comp.runStopping(run({ stoppedBy: 'admin-1' }))).toBe(true);
-    expect(comp.runStopping(run({ stoppedBy: 'admin-1', state: 'stopped' }))).toBe(false);
-    expect(comp.runCardState(run({ stoppedBy: 'admin-1' }))).toBe('stopping');
-    expect(comp.runCardState(run())).toBe('running');
+  test.each([
+    ['running', {}, false, 'running'],
+    ['stopping', { stoppedBy: 'admin-1' }, true, 'stopping'],
+    ['stopped', { stoppedBy: 'admin-1', state: 'stopped' }, false, 'stopped'],
+  ])('a %s run: stopping only while in flight with a stopper', (_, extra, stopping, cardState) => {
+    expect(comp.$root.automationRunStopping(run(extra))).toBe(stopping);
+    expect(comp.runCardState(run(extra))).toBe(cardState);
   });
 
-  test('a card says who started the run, how long it has run, and its open items', () => {
-    const items = [{ id: 'i1', state: 'running', runId: RUN_A }, { id: 'i2', state: 'pending' }];
-
-    expect(comp.runCardSubtitle(run({ items }))).toBe('Schedule · 5:00 · 2 open item(s)');
-    expect(comp.runCardSubtitle(run({ startedBy: 'admin-1', startedByName: 'Admin' }))).toBe('Admin · 5:00 · Scanning');
+  const ending = [
+    { id: 'i1', state: 'running', runId: RUN_A },
+    { id: 'i2', state: 'running', runId: RUN_A },
+    { id: 'i3', state: 'running', runId: 'another-run' },
+    { id: 'i4', state: 'pending', runId: RUN_A },
+  ];
+  test.each([
+    ['open items', { items: [{ id: 'i1', state: 'running', runId: RUN_A }, { id: 'i2', state: 'pending' }] }, 'Schedule · 5:00 · 2 open item(s)'],
+    ['scanning', { startedBy: 'admin-1', startedByName: 'Admin' }, 'Admin · 5:00 · Scanning'],
+    // Only this run's running items are sessions still ending.
+    ['stopping with sessions ending', { stoppedBy: 'admin-1', stoppedByName: 'Admin', items: ending }, 'Stopped - Waiting on 2 session(s)'],
+    ['stopping with none left', { stoppedBy: 'admin-1', stoppedByName: 'Admin' }, 'Stopped'],
+  ])('card subtitle, %s', (_, extra, expected) => {
+    expect(comp.runCardSubtitle(run(extra))).toBe(expected);
   });
 
-  test('a stopping card counts the sessions still ending', () => {
-    const ending = [
-      { id: 'i1', state: 'running', runId: RUN_A },
-      { id: 'i2', state: 'running', runId: RUN_A },
-      { id: 'i3', state: 'running', runId: 'another-run' },
-      { id: 'i4', state: 'pending', runId: RUN_A },
-    ];
-
-    expect(comp.runCardSubtitle(run({ stoppedBy: 'admin-1', stoppedByName: 'Admin', items: ending }))).toBe('Stopped by Admin. Waiting for 2 session(s) to end.');
-    expect(comp.runCardSubtitle(run({ stoppedBy: 'admin-1', stoppedByName: 'Admin' }))).toBe('Stopped by Admin');
-  });
-
-  test('Stop shows only for admins, and its label names the automation in each state', () => {
+  test('Stop shows only for admins, and is never disabled', () => {
     expect(tmpl).toMatch(/<v-btn v-if="\$root\.isUserAdmin\(\)"[^>]*data-aid="'agentmonitor_run_stop_' \+ run\.id"/);
     const button = tmpl.match(/<v-btn v-if="\$root\.isUserAdmin\(\)"[^>]*openStopRun[^>]*>/)[0];
     expect(button).toContain(':aria-disabled="stopPending[run.id]');
     expect(button).not.toMatch(/\s:disabled=/);
-
-    comp.automations = [{ id: TRIAGE_ID, enabled: true }];
-    const shown = Object.assign(run(), { automationName: 'Alert Triage' });
-    expect(comp.runStopLabel(shown)).toBe('Stop the current run of Alert Triage');
-    expect(comp.runStopLabel(Object.assign({}, shown, { stoppedBy: 'admin-1' }))).toBe('Stop Alert Triage again or turn it off');
-
-    comp.automations = [{ id: TRIAGE_ID, enabled: false }];
-    expect(comp.runStopLabel(Object.assign({}, shown, { stoppedBy: 'admin-1' }))).toBe('Stop Alert Triage again');
-
-    comp.automations = [];
-    expect(comp.runStopLabel(Object.assign({}, shown, { stoppedBy: 'admin-1' }))).toBe('Stop Alert Triage again', 'a deleted automation has nothing to turn off');
   });
 
-  test('opening Stop reloads automations first, so turning off is offered only for one that is on', async () => {
-    const shown = Object.assign(run(), { automationName: 'Alert Triage' });
+  test.each([
+    ['running', [{ id: TRIAGE_ID, enabled: true }], {}, 'Stop the current run of Alert Triage'],
+    ['stopping, automation on', [{ id: TRIAGE_ID, enabled: true }], { stoppedBy: 'admin-1' }, 'Stop Alert Triage again or turn it off'],
+    ['stopping, automation off', [{ id: TRIAGE_ID, enabled: false }], { stoppedBy: 'admin-1' }, 'Stop Alert Triage again'],
+    // A deleted automation has nothing to turn off.
+    ['stopping, automation deleted', [], { stoppedBy: 'admin-1' }, 'Stop Alert Triage again'],
+  ])('Stop\'s label names the automation, %s', (_, automations, extra, expected) => {
+    comp.automations = automations;
+    expect(comp.runStopLabel(Object.assign(run(extra), { automationName: 'Alert Triage' }))).toBe(expected);
+  });
 
-    serve({ 'assistant/automations': [{ id: TRIAGE_ID, enabled: true }] });
-    await comp.openStopRun(shown, {});
+  test.each([
+    ['on', [{ id: TRIAGE_ID, enabled: true }], true],
+    ['off', [{ id: TRIAGE_ID, enabled: false }], false],
+    ['deleted', [], null],
+  ])('opening Stop reloads automations first, so an automation %s is offered turning off only when on', async (_, automations, enabled) => {
+    serve({ 'assistant/automations': automations });
+    await comp.openStopRun(Object.assign(run(), { automationName: 'Alert Triage' }), {});
+
     expect(comp.$root.papi.get).toHaveBeenCalledWith('assistant/automations');
-    expect(comp.stopRunTarget).toEqual({ automationId: TRIAGE_ID, runId: RUN_A, name: 'Alert Triage', enabled: true });
+    expect(comp.$root.startLoading).toHaveBeenCalledTimes(1);
+    expect(comp.$root.stopLoading).toHaveBeenCalledTimes(1);
+    expect(comp.stopRunTarget).toEqual({ automationId: TRIAGE_ID, runId: RUN_A, name: 'Alert Triage', enabled });
     expect(comp.showStopDialog).toBe(true);
-
-    serve({ 'assistant/automations': [{ id: TRIAGE_ID, enabled: false }] });
-    await comp.openStopRun(shown, {});
-    expect(comp.stopRunTarget.enabled).toBe(false);
-
-    serve({ 'assistant/automations': [] });
-    await comp.openStopRun(shown, {});
-    expect(comp.stopRunTarget.enabled).toBeNull();
   });
 
   test('a stopping run\'s Stop still opens the dialog and posts its run', async () => {
@@ -1183,19 +1178,38 @@ describe('run strip and stop', () => {
     expect(post).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID + '/runs/' + RUN_A + '/stop', { disable: false });
   });
 
-  test('Stop and turn off posts disable, stops loading in finally, and loads activity even while paused', async () => {
+  test.each([
+    ['succeeds', null, false, 'Stop Alert Triage again'],
+    // The run is stopped even though the automation stays on.
+    ['stops the run but fails to turn it off', new Error('ERROR_UPSTREAM_SERVICE_ERROR'), true, 'Stop Alert Triage again or turn it off'],
+  ])('Stop and turn off that %s loads activity even while paused, and the automations', async (_, failure, enabled, label) => {
     comp.paused = true;
-    const post = mockPapi('post', {});
-    serve({ 'assistant/automations/activity': snapshot('2026-10-02T12:06:00Z', [run({ stoppedBy: 'admin-1' })]) });
+    comp.automations = [{ id: TRIAGE_ID, enabled: true }];
+    const post = mockPapi('post', {}, failure);
+    serve({
+      'assistant/automations/activity': snapshot('2026-10-02T12:06:00Z', [run({ stoppedBy: 'admin-1' })]),
+      'assistant/automations': [{ id: TRIAGE_ID, enabled }],
+    });
     const target = { automationId: TRIAGE_ID, runId: RUN_A, name: 'Alert Triage', enabled: true };
 
     await comp.stopRun(target, true);
 
     expect(post).toHaveBeenCalledWith('assistant/automations/' + TRIAGE_ID + '/runs/' + RUN_A + '/stop', { disable: true });
-    expect(comp.$root.startLoading).toHaveBeenCalled();
-    expect(comp.$root.stopLoading).toHaveBeenCalled();
+    expect(comp.$root.showError).toHaveBeenCalledTimes(failure ? 1 : 0);
+    expect(comp.$root.startLoading).toHaveBeenCalledTimes(1);
+    expect(comp.$root.stopLoading).toHaveBeenCalledTimes(1);
     expect(comp.runCardState(comp.runs[0])).toBe('stopping');
+    expect(comp.runStopLabel(Object.assign(comp.runs[0], { automationName: 'Alert Triage' }))).toBe(label);
     expect(comp.stopPending[RUN_A]).toBeUndefined();
+  });
+
+  test('a plain Stop doesn\'t reload the automations', async () => {
+    mockPapi('post', {});
+    serve();
+
+    await comp.stopRun({ automationId: TRIAGE_ID, runId: RUN_A, name: 'Alert Triage', enabled: true }, false);
+
+    expect(comp.$root.papi.get).not.toHaveBeenCalledWith('assistant/automations');
   });
 
   test('a refused Stop shows the error and stops loading', async () => {
@@ -1287,22 +1301,31 @@ describe('run strip and stop', () => {
     expect(comp.attemptsFor(itemById('item-x'))[0]).toEqual(expect.objectContaining({ state: 'stopped', live: false }));
   });
 
-  test('Run History lists who started each run and explains a stopped one', async () => {
+  test('Run History has a Started by column and a stopped-run note', () => {
     expect(comp.historyHeaders.map(h => h.value)).toEqual(['expand', 'automationName', 'startedByName', 'startTime', 'duration', 'done', 'failed', 'state']);
-    expect(comp.runStartedByLabel({ state: 'succeeded' })).toBe('Schedule');
-    expect(comp.runStartedByLabel({ startedBy: 'admin-1', startedByName: 'Admin' })).toBe('Admin');
-
-    expect(comp.runStoppedNote({ state: 'stopped', stoppedBy: 'admin-1', stoppedByName: 'Admin', endTime: '2026-10-02T12:03:00Z' }))
-      .toBe('Stopped by Admin at 2026-10-02T12:03:00Z. Unfinished items returned to the queue without counting as failures.');
-    expect(comp.runStoppedNote({ state: 'stopped', endTime: '2026-10-02T12:03:00Z' }))
-      .toBe('Stopped at 2026-10-02T12:03:00Z. Unfinished items returned to the queue without counting as failures.');
     expect(tmpl).toMatch(/<v-alert v-if="run\.state === 'stopped'" type="info" variant="tonal" density="compact" icon="fa-circle-info"[^>]*data-aid="'agentmonitor_history_run_stopped_' \+ run\.id"/);
   });
 
-  test('stopped and stopping have their own labels and colors', () => {
-    expect(comp.stateLabel('stopped')).toBe('Stopped');
-    expect(comp.stateLabel('stopping')).toBe('Stopping');
-    expect(comp.stateColor('stopped')).toBe('');
-    expect(comp.stateColor('stopping')).toBe('warning');
+  test.each([
+    ['scheduled', { state: 'succeeded' }, 'Schedule'],
+    ['manual', { startedBy: 'admin-1', startedByName: 'Admin' }, 'Admin'],
+  ])('Run History\'s Started by, %s', (_, shown, expected) => {
+    expect(comp.runStartedByLabel(shown)).toBe(expected);
+  });
+
+  test.each([
+    ['with a stopper', { stoppedBy: 'admin-1', stoppedByName: 'Admin' }, 'Stopped by Admin at 2026-10-02T12:03:00Z.'],
+    ['without a stopper', {}, 'Stopped at 2026-10-02T12:03:00Z.'],
+  ])('a stopped run\'s note gives its stop time, %s', (_, extra, expected) => {
+    const stopped = Object.assign({ state: 'stopped', stopTime: '2026-10-02T12:03:00Z', endTime: '2026-10-02T12:05:00Z' }, extra);
+    expect(comp.runStoppedNote(stopped)).toBe(expected + ' Unfinished items returned to the queue without counting as failures.');
+  });
+
+  test.each([
+    ['stopped', 'Stopped', ''],
+    ['stopping', 'Stopping', 'warning'],
+  ])('%s has its own label and color', (state, label, color) => {
+    expect(comp.stateLabel(state)).toBe(label);
+    expect(comp.stateColor(state)).toBe(color);
   });
 });

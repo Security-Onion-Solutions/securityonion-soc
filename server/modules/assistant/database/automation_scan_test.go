@@ -365,7 +365,7 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			name:  "finished without empty runs",
 			query: AutomationRunQuery{Finished: true, HideEmpty: true},
 			fragments: []string{
-				"WHERE state NOT IN ('queued', 'running') AND (state IN ('failed', 'stopped') OR started_by IS NOT NULL OR EXISTS (SELECT 1 FROM automation_work_items w",
+				"WHERE state NOT IN ('queued', 'running') AND (state IN ('failed', 'stopped') OR EXISTS (SELECT 1 FROM automation_work_items w",
 				"w.run_id = automation_runs.id OR w.failed_run_ids @> ARRAY[automation_runs.id::text]",
 				"OR w.session_run_ids @> ARRAY[automation_runs.id::text]",
 				"LIMIT $1",
@@ -399,7 +399,7 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			name:  "a run asked for by id survives hiding empty runs",
 			query: AutomationRunQuery{HideEmpty: true, Search: testRunId, SearchRunId: testRunId},
 			fragments: []string{
-				"WHERE (state IN ('failed', 'stopped') OR started_by IS NOT NULL OR id = $1::uuid OR EXISTS (SELECT 1",
+				"WHERE (state IN ('failed', 'stopped') OR id = $1::uuid OR EXISTS (SELECT 1",
 				"OR id = $3::uuid)",
 				"LIMIT $4",
 			},

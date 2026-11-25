@@ -6,6 +6,7 @@
 package assistant
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -214,9 +215,9 @@ func (f *engineFixture) scriptOpenRunInFlight() *mock.Call {
 var runRowScanArgs = []any{mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
 	mock.Anything, mock.Anything, mock.Anything, mock.Anything}
 
-// scriptFailAbandonedRun scripts the sweep of an unowned in-flight row, which no Stop marked,
+// scriptCloseAbandonedRun scripts the sweep of an unowned in-flight row, which no Stop marked,
 // and counts its calls.
-func (f *engineFixture) scriptFailAbandonedRun(failed int) *atomic.Int32 {
+func (f *engineFixture) scriptCloseAbandonedRun(failed int) *atomic.Int32 {
 	var calls atomic.Int32
 
 	mTx := &mockdb.MockTx{}
@@ -757,33 +758,75 @@ func TestASaveDuringTheTickReadDefersTheOpen(t *testing.T) {
 }
 
 // A row the in-flight index protects but no run here owns is one an open lost the result of or
-// a close could not end; failing it is what lets the automation run again before a restart.
-func TestAnAbandonedRunIsFailedSoTheNextTickCanOpen(t *testing.T) {
+// a close could not end; closing it lets the open go ahead at once, before a restart.
+func TestAnAbandonedRunIsClosedAndTheOpenRetried(t *testing.T) {
 	licenseOAI(t)
 
-	synctest.Test(t, func(t *testing.T) {
-		f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
-		f.scriptTicks()
-		f.scriptOpenRunInFlight().Once()
-		f.scriptOpenRun()
-		f.scriptOpenItems()
-		f.scriptCloseRun()
-		failed := f.scriptFailAbandonedRun(1)
+	cases := []struct {
+		name  string
+		start func(t *testing.T, f *engineFixture)
+	}{
+		{name: "a tick", start: func(t *testing.T, f *engineFixture) { f.startAndWake() }},
+		{name: "run now", start: func(t *testing.T, f *engineFixture) {
+			f.ac.startAutomationScheduler()
+			reply := f.runNow(automationTestId, "user-1")
+			require.NoError(t, reply.err)
+			assert.Equal(t, "run-1", reply.run.Id)
+		}},
+	}
 
-		f.startAndWake()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newBareEngineFixture(t, storedEnabledAutomation(automationTestId, `{}`))
+				f.scriptTicks()
+				f.scriptOpenRunInFlight().Once()
+				f.scriptOpenRun()
+				f.scriptOpenItems()
+				f.scriptCloseRun()
+				failed := f.scriptCloseAbandonedRun(1)
 
-		opens, _, _ := f.snapshot()
-		assert.Zero(t, opens)
-		assert.EqualValues(t, 1, failed.Load())
-		assert.False(t, f.ac.isAutomationRunning(automationTestId))
+				tc.start(t, f)
 
-		time.Sleep(time.Hour)
-		synctest.Wait()
+				opens, _, _ := f.snapshot()
+				assert.Equal(t, 1, opens)
+				assert.EqualValues(t, 1, failed.Load())
+			})
+		})
+	}
+}
 
-		opens, _, _ = f.snapshot()
-		assert.Equal(t, 1, opens, "the row is gone, so the next open succeeds")
-		assert.EqualValues(t, 1, failed.Load())
-	})
+func TestCloseAbandonedAutomationRunLogsEachKindOfClose(t *testing.T) {
+	cases := []struct {
+		name   string
+		script func(f *engineFixture)
+		want   int
+		level  log.Level
+		fields log.Fields
+	}{
+		{name: "closed", script: func(f *engineFixture) { f.scriptCloseAbandonedRun(2) }, want: 2, level: log.WarnLevel,
+			fields: log.Fields{"abandonedRunsStopped": 0, "abandonedRunsFailed": 2}},
+		{name: "the close fails", script: func(f *engineFixture) {
+			f.mDB.On("Begin", mock.Anything).Return((*mockdb.MockTx)(nil), errors.New("connection reset"))
+		}, want: 0, level: log.WarnLevel, fields: log.Fields{"error": "database: begin transaction: connection reset"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newBareEngineFixture(t)
+			tc.script(f)
+			ctx, h := capturedLogger()
+
+			logger := log.FromContext(ctx).WithField("automationId", automationTestId)
+			assert.Equal(t, tc.want, f.ac.closeAbandonedAutomationRun(ctx, logger, automationTestId))
+
+			require.Len(t, h.Entries, 1)
+			assert.Equal(t, tc.level, h.Entries[0].Level)
+			for key, value := range tc.fields {
+				assert.Equal(t, fmt.Sprint(value), fmt.Sprint(h.Entries[0].Fields[key]), key)
+			}
+		})
+	}
 }
 
 func TestAlertTriageEpochHotReload(t *testing.T) {
@@ -1800,117 +1843,116 @@ func TestRunNowStartsAnAutomationWhetherOrNotItIsEnabled(t *testing.T) {
 func TestRunNowRefusals(t *testing.T) {
 	licenseOAI(t)
 
-	t.Run("a run is registered", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-			f.ac.startAutomationScheduler()
+	unknownKind := storedAutomationWithParams(automationTestId, `{}`)
+	unknownKind.AutomationKind = "no_such_kind"
 
-			release := f.ac.registerAutomationRun(automationTestId, "run-0", func(error) {})
-			defer release()
+	cases := []struct {
+		name   string
+		stored *model.Automation
+		// The store is scripted by setup alone, on a fixture that only answers ticks.
+		bare bool
+		// The open finds an in-flight row nothing owns, which is failed as abandoned.
+		abandoned bool
+		setup     func(t *testing.T, f *engineFixture)
+		id        string
+		wantErr   error
+		wantText  string
+	}{
+		{name: "a run is registered", wantErr: database.ErrAutomationRunInFlight,
+			setup: func(t *testing.T, f *engineFixture) {
+				t.Cleanup(f.ac.registerAutomationRun(automationTestId, "run-0", func(error) {}))
+			}},
+		{name: "a row still in flight after the one nothing owns is closed", bare: true, abandoned: true, wantErr: database.ErrAutomationRunInFlight},
+		{name: "the automation doesn't exist", id: otherAutomationTestId, wantErr: ErrAutomationNotFound},
+		{name: "its kind doesn't resolve", stored: unknownKind, wantErr: ErrAutomationKindNotFound},
+		{name: "its agent doesn't resolve", wantErr: ErrAutomationAgentUnavailable,
+			setup: func(t *testing.T, f *engineFixture) {
+				f.ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
+			}},
+		{name: "the open fails", bare: true, wantText: "connection reset",
+			setup: func(t *testing.T, f *engineFixture) {
+				mRow := &mockdb.MockRow{}
+				mRow.On("Scan", runRowScanArgs...).Return(errors.New("connection reset"))
+				f.mDB.On("QueryRow", mock.Anything, sqlLike("INSERT INTO automation_runs"), mock.Anything, mock.Anything).Return(mRow)
+			}},
+	}
 
-			reply := f.runNow(automationTestId, "user-1")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stored := cmp.Or(tc.stored, storedAutomationWithParams(automationTestId, `{}`))
 
-			assert.ErrorIs(t, reply.err, database.ErrAutomationRunInFlight)
-			assert.Nil(t, reply.run)
-			assert.Empty(t, f.openedSeen())
+				var f *engineFixture
+				if tc.bare {
+					f = newBareEngineFixture(t, stored)
+					f.scriptTicks()
+				} else {
+					f = newEngineFixture(t, stored)
+				}
+
+				var failed *atomic.Int32
+				if tc.abandoned {
+					f.scriptOpenRunInFlight()
+					failed = f.scriptCloseAbandonedRun(1)
+				}
+				if tc.setup != nil {
+					tc.setup(t, f)
+				}
+				f.ac.startAutomationScheduler()
+
+				reply := f.runNow(cmp.Or(tc.id, automationTestId), "user-1")
+
+				switch {
+				case tc.wantText != "":
+					assert.EqualError(t, reply.err, tc.wantText)
+				case tc.wantErr == ErrAutomationAgentUnavailable:
+					// Bare, so the response body matches its i18n key.
+					assert.Equal(t, tc.wantErr, reply.err)
+				default:
+					assert.ErrorIs(t, reply.err, tc.wantErr)
+				}
+				assert.Nil(t, reply.run)
+				assert.Empty(t, f.openedSeen())
+				if failed != nil {
+					assert.EqualValues(t, 1, failed.Load())
+				}
+			})
 		})
-	})
-
-	t.Run("an open row nothing owns is failed as abandoned", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			f := newBareEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-			f.scriptTicks()
-			f.scriptOpenRunInFlight()
-			failed := f.scriptFailAbandonedRun(1)
-			f.ac.startAutomationScheduler()
-
-			reply := f.runNow(automationTestId, "user-1")
-
-			assert.ErrorIs(t, reply.err, database.ErrAutomationRunInFlight)
-			assert.EqualValues(t, 1, failed.Load())
-		})
-	})
-
-	t.Run("the automation doesn't exist", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-			f.ac.startAutomationScheduler()
-
-			assert.ErrorIs(t, f.runNow(otherAutomationTestId, "user-1").err, ErrAutomationNotFound)
-			assert.Empty(t, f.openedSeen())
-		})
-	})
-
-	t.Run("its kind doesn't resolve", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			automation := storedAutomationWithParams(automationTestId, `{}`)
-			automation.AutomationKind = "no_such_kind"
-			f := newEngineFixture(t, automation)
-			f.ac.startAutomationScheduler()
-
-			assert.ErrorIs(t, f.runNow(automationTestId, "user-1").err, ErrAutomationKindNotFound)
-			assert.Empty(t, f.openedSeen())
-		})
-	})
-
-	t.Run("its agent doesn't resolve", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-			f.ac.agents[automationTestAgent] = model.Agent{Name: automationTestAgent}
-			f.ac.startAutomationScheduler()
-
-			// Bare, so the response body matches its i18n key.
-			assert.Equal(t, ErrAutomationAgentUnavailable, f.runNow(automationTestId, "user-1").err)
-			assert.Empty(t, f.openedSeen())
-		})
-	})
-
-	t.Run("the open fails", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			f := newBareEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-			f.scriptTicks()
-
-			mRow := &mockdb.MockRow{}
-			mRow.On("Scan", runRowScanArgs...).Return(errors.New("connection reset"))
-			f.mDB.On("QueryRow", mock.Anything, sqlLike("INSERT INTO automation_runs"), mock.Anything, mock.Anything).Return(mRow)
-			f.ac.startAutomationScheduler()
-
-			reply := f.runNow(automationTestId, "user-1")
-
-			assert.EqualError(t, reply.err, "connection reset")
-			assert.Nil(t, reply.run)
-		})
-	})
+	}
 }
 
-func TestRunNowOnAWorkerShuttingDownRunsNothing(t *testing.T) {
-	f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-
-	ctx, cancel := context.WithCancelCause(context.Background())
+// An unlicensed worker, or one shutting down, answers a request without opening anything.
+func TestRunNowServedWithoutOpening(t *testing.T) {
+	stopped, cancel := context.WithCancelCause(context.Background())
 	cancel(ErrAutomationSchedulerStopped)
 
-	req := &automationRunNowRequest{automationId: automationTestId, reply: make(chan automationRunNowReply, 1)}
-	f.ac.serveAutomationRunNow(&automationScheduler{ctx: ctx}, req)
+	cases := []struct {
+		name    string
+		ctx     context.Context
+		wantErr error
+	}{
+		{name: "the worker is shutting down", ctx: stopped, wantErr: ErrAutomationSchedulerUnavailable},
+		{name: "no license", ctx: context.Background(), wantErr: ErrAutomationUnlicensed},
+	}
 
-	assert.ErrorIs(t, (<-req.reply).err, ErrAutomationSchedulerUnavailable)
-	assert.Empty(t, f.openedSeen())
-
-	_, ticks, _ := f.snapshot()
-	assert.Zero(t, ticks)
-}
-
-func TestRunNowWithoutALicenseRunsNothing(t *testing.T) {
 	licensing.Shutdown()
 
-	f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
 
-	req := &automationRunNowRequest{automationId: automationTestId, startedBy: "user-1", reply: make(chan automationRunNowReply, 1)}
-	f.ac.serveAutomationRunNow(&automationScheduler{ctx: context.Background()}, req)
+			req := &automationRunNowRequest{automationId: automationTestId, startedBy: "user-1", reply: make(chan automationRunNowReply, 1)}
+			f.ac.serveAutomationRunNow(&automationScheduler{ctx: tc.ctx}, req)
 
-	reply := <-req.reply
-	assert.ErrorIs(t, reply.err, ErrAutomationUnlicensed)
-	assert.Nil(t, reply.run)
-	assert.Empty(t, f.openedSeen())
+			reply := <-req.reply
+			assert.ErrorIs(t, reply.err, tc.wantErr)
+			assert.Nil(t, reply.run)
+			assert.Empty(t, f.openedSeen())
+
+			_, ticks, _ := f.snapshot()
+			assert.Zero(t, ticks)
+		})
+	}
 }
 
 // The worker reads the automation under configWriteMu, so a save that lands first is what runs.
@@ -2020,173 +2062,135 @@ func TestRunNowLeavesOtherDueAutomationsToTheTick(t *testing.T) {
 	})
 }
 
-func TestAStoppedRunClosesAsStopped(t *testing.T) {
+// A Run now run of automationTestId is stopped by user-2 at some point in its life; act stops it,
+// releasing a held run where the case needs it to finish only after other events.
+func TestStoppingARunningRun(t *testing.T) {
 	licenseOAI(t)
 
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.scriptMarkStopping()
-		f.scriptCloseStoppedRun(2, nil)
-		f.kind.executeFunc = waitForStop
-		ctx, h := capturedLogger()
-		f.ac.srv.Context = ctx
+	stop := func(f *engineFixture) string {
+		return f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2")
+	}
 
-		f.ac.startAutomationScheduler()
-		require.NoError(t, f.runNow(automationTestId, "user-1").err)
-		synctest.Wait()
+	cases := []struct {
+		name string
+		// The stopped close's answer; without it the store sees no stopped close at all.
+		scriptClose bool
+		requeued    int
+		closeErr    error
+		// The run ignores its cancel until released, instead of ending as soon as it is cancelled.
+		hold bool
+		act  func(t *testing.T, f *engineFixture, release func())
+		// The engine writes a stopped close, leaving the stopper to the mark.
+		wantStoppedClose bool
+		// The run closes failed with this cause instead.
+		wantFailed error
+		check      func(t *testing.T, f *engineFixture, h *memory.Handler)
+	}{
+		{name: "closes as stopped", scriptClose: true, requeued: 2, wantStoppedClose: true,
+			act: func(t *testing.T, f *engineFixture, _ func()) {
+				assert.Equal(t, "run-1", stop(f))
+				synctest.Wait()
+			},
+			check: func(t *testing.T, f *engineFixture, h *memory.Handler) {
+				assert.False(t, f.ac.isAutomationRunning(automationTestId))
 
-		assert.Equal(t, "run-1", f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2"))
-		synctest.Wait()
+				last := h.Entries[len(h.Entries)-1]
+				assert.Equal(t, "automation run stopped", last.Message)
+				assert.Equal(t, 2, last.Fields["requeuedWorkItems"])
+				assert.Equal(t, "run-1", last.Fields["automationRunId"])
+			}},
+		// A close that doesn't land leaves the row open and charges nothing; a second Stop or the
+		// next due run closes it.
+		{name: "a close that fails stays open", scriptClose: true, closeErr: errors.New("postgres is down"), wantStoppedClose: true,
+			act: func(t *testing.T, f *engineFixture, _ func()) {
+				stop(f)
+				synctest.Wait()
+			},
+			check: func(t *testing.T, f *engineFixture, h *memory.Handler) {
+				last := h.Entries[len(h.Entries)-1]
+				assert.Equal(t, log.ErrorLevel, last.Level)
+				assert.Equal(t, "run-1", last.Fields["automationRunId"])
+				assert.Equal(t, automationTestId, last.Fields["automationId"])
+			}},
+		// The first cause set wins: a Stop before a shutdown still closes the run as stopped.
+		{name: "stopped, then shut down", scriptClose: true, hold: true, wantStoppedClose: true,
+			act: func(t *testing.T, f *engineFixture, release func()) {
+				stop(f)
+				go f.ac.stopAutomationScheduler(context.Background())
+				synctest.Wait()
+				release()
+				synctest.Wait()
+			}},
+		// The Stop marks the row, but the params cause wins and the run fails; that close clears the mark.
+		{name: "a stop after a params change", hold: true, wantFailed: ErrAutomationParamsChanged,
+			act: func(t *testing.T, f *engineFixture, release func()) {
+				f.ac.interruptAutomationRun(automationTestId)
+				stop(f)
+				release()
+				synctest.Wait()
+			}},
+		// The Stop marks the row but writes no close; reconcile closes it as stopped from the mark at
+		// the next start.
+		{name: "a stop after a shutdown began", hold: true,
+			act: func(t *testing.T, f *engineFixture, release func()) {
+				go f.ac.stopAutomationScheduler(context.Background())
+				synctest.Wait()
+				stop(f)
+				release()
+				synctest.Wait()
+			}},
+	}
 
-		marks, stopped := f.stopsSeen()
-		assert.Equal(t, []string{"user-2"}, marks)
-		// The engine's close leaves the stopper to the mark.
-		assert.Equal(t, []string{"run-1:" + automationTestId + ":"}, stopped)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
+				f.scriptMarkStopping()
+				if tc.scriptClose {
+					f.scriptCloseStoppedRun(tc.requeued, tc.closeErr)
+				}
 
-		_, _, closes := f.snapshot()
-		assert.Empty(t, closes, "a stopped run never closes as failed")
-		assert.False(t, f.ac.isAutomationRunning(automationTestId))
+				released := make(chan struct{})
+				f.kind.executeFunc = waitForStop
+				if tc.hold {
+					f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
+						<-ctx.Done()
+						<-released
 
-		last := h.Entries[len(h.Entries)-1]
-		assert.Equal(t, "automation run stopped", last.Message)
-		assert.Equal(t, 2, last.Fields["requeuedWorkItems"])
-		assert.Equal(t, "run-1", last.Fields["automationRunId"])
-	})
-}
+						return nil
+					}
+				}
 
-// A close that doesn't land leaves the row open and charges nothing; a second Stop or the next
-// due run closes it.
-func TestAStoppedRunWhoseCloseFailsStaysOpen(t *testing.T) {
-	licenseOAI(t)
+				ctx, h := capturedLogger()
+				f.ac.srv.Context = ctx
 
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.scriptMarkStopping()
-		f.scriptCloseStoppedRun(0, errors.New("postgres is down"))
-		f.kind.executeFunc = waitForStop
-		ctx, h := capturedLogger()
-		f.ac.srv.Context = ctx
+				f.ac.startAutomationScheduler()
+				require.NoError(t, f.runNow(automationTestId, "user-1").err)
+				synctest.Wait()
 
-		f.ac.startAutomationScheduler()
-		require.NoError(t, f.runNow(automationTestId, "user-1").err)
-		synctest.Wait()
+				tc.act(t, f, func() { close(released) })
 
-		f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2")
-		synctest.Wait()
+				marks, stopped := f.stopsSeen()
+				assert.Equal(t, []string{"user-2"}, marks)
+				if tc.wantStoppedClose {
+					assert.Equal(t, []string{"run-1:" + automationTestId + ":"}, stopped)
+				} else {
+					assert.Empty(t, stopped)
+				}
 
-		_, _, closes := f.snapshot()
-		assert.Empty(t, closes)
+				_, _, closes := f.snapshot()
+				if tc.wantFailed != nil {
+					require.Len(t, closes, 1)
+					assert.Equal(t, string(model.AutomationRunFailed), closes[0].state)
+					assert.Equal(t, tc.wantFailed.Error(), closes[0].cause)
+				} else {
+					assert.Empty(t, closes, "a stopped run never closes as failed")
+				}
 
-		last := h.Entries[len(h.Entries)-1]
-		assert.Equal(t, log.ErrorLevel, last.Level)
-		assert.Equal(t, "run-1", last.Fields["automationRunId"])
-		assert.Equal(t, automationTestId, last.Fields["automationId"])
-	})
-}
-
-// The first cause set wins: a Stop before a shutdown still closes the run as stopped.
-func TestARunStoppedThenShutDownClosesAsStopped(t *testing.T) {
-	licenseOAI(t)
-
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.scriptMarkStopping()
-		f.scriptCloseStoppedRun(0, nil)
-
-		release := make(chan struct{})
-		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
-			<-ctx.Done()
-			<-release
-
-			return nil
-		}
-
-		f.ac.startAutomationScheduler()
-		require.NoError(t, f.runNow(automationTestId, "user-1").err)
-		synctest.Wait()
-
-		f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2")
-		go f.ac.stopAutomationScheduler(context.Background())
-		synctest.Wait()
-
-		close(release)
-		synctest.Wait()
-
-		_, stopped := f.stopsSeen()
-		assert.Len(t, stopped, 1)
-	})
-}
-
-// A Stop after a params change marks the row, but the params cause wins and the run fails;
-// that close clears the mark.
-func TestAStopAfterAParamsChangeLeavesTheRunFailing(t *testing.T) {
-	licenseOAI(t)
-
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.scriptMarkStopping()
-
-		release := make(chan struct{})
-		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
-			<-ctx.Done()
-			<-release
-
-			return nil
-		}
-
-		f.ac.startAutomationScheduler()
-		require.NoError(t, f.runNow(automationTestId, "user-1").err)
-		synctest.Wait()
-
-		f.ac.interruptAutomationRun(automationTestId)
-		f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2")
-		close(release)
-		synctest.Wait()
-
-		marks, stopped := f.stopsSeen()
-		assert.Equal(t, []string{"user-2"}, marks)
-		assert.Empty(t, stopped)
-
-		_, _, closes := f.snapshot()
-		require.Len(t, closes, 1)
-		assert.Equal(t, string(model.AutomationRunFailed), closes[0].state)
-		assert.Equal(t, ErrAutomationParamsChanged.Error(), closes[0].cause)
-	})
-}
-
-// A Stop after a shutdown began marks the row but writes no close; reconcile closes it as
-// stopped from the mark at the next start.
-func TestAStopAfterShutdownBeganLeavesTheRowForReconcile(t *testing.T) {
-	licenseOAI(t)
-
-	synctest.Test(t, func(t *testing.T) {
-		f := newEngineFixture(t, storedAutomationWithParams(automationTestId, `{}`))
-		f.scriptMarkStopping()
-
-		release := make(chan struct{})
-		f.kind.executeFunc = func(ctx context.Context, _ *AutomationRun) error {
-			<-ctx.Done()
-			<-release
-
-			return nil
-		}
-
-		f.ac.startAutomationScheduler()
-		require.NoError(t, f.runNow(automationTestId, "user-1").err)
-		synctest.Wait()
-
-		go f.ac.stopAutomationScheduler(context.Background())
-		synctest.Wait()
-
-		f.ac.stopRegisteredAutomationRun(context.Background(), automationTestId, "run-1", "user-2")
-		close(release)
-		synctest.Wait()
-
-		marks, stopped := f.stopsSeen()
-		assert.Equal(t, []string{"user-2"}, marks)
-		assert.Empty(t, stopped)
-
-		_, _, closes := f.snapshot()
-		assert.Empty(t, closes)
-	})
+				if tc.check != nil {
+					tc.check(t, f, h)
+				}
+			})
+		})
+	}
 }

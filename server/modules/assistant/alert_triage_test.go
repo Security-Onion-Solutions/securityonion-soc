@@ -41,9 +41,15 @@ type triageAssistantstore struct {
 	// Fails only the successful updates, so a failure can still be recorded.
 	applyErr error
 	updates  []*model.AlertTriageUpdate
+	// Runs before each update, outside the lock.
+	onUpdate func()
 }
 
 func (s *triageAssistantstore) AlertTriageUpdate(_ context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
+
 	s.work.mu.Lock()
 	defer s.work.mu.Unlock()
 
@@ -1704,6 +1710,30 @@ func TestAlertTriageStuckApplyPastTheCapDoesNotGrow(t *testing.T) {
 	assert.Equal(t, model.AutomationWorkItemApplying, checkpointed.State)
 	assert.Equal(t, []string{"run-a", "run-b", "run-c"}, checkpointed.FailedRunIds)
 	assert.Equal(t, alertTriageDefaultGroupCap+1, f.es.InputSearchCriterias[0].MetricLimit)
+}
+
+// A Stop is not a shutdown, but it must not replay the rest: each further apply that fails would
+// charge the stopped run.
+func TestAlertTriageReclaimStopsAtAStop(t *testing.T) {
+	first := &model.AutomationWorkItem{Id: "item-1", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-1","assessment":90}`)}
+	second := &model.AutomationWorkItem{Id: "item-2", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"B"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-2","assessment":90}`)}
+
+	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, first, second)
+	f.store.applying = map[string]*model.AutomationWorkItem{first.Id: first, second.Id: second}
+	f.alerts.updateErr = errors.New("elasticsearch is down")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	f.alerts.onUpdate = func() { cancel(ErrAutomationRunStopped) }
+
+	assert.ErrorIs(t, f.kind.Execute(ctx, f.run), ErrAutomationRunStopped)
+
+	// The first item's apply was under way when the Stop landed; the second is never tried.
+	assert.Equal(t, []string{"alerts:error", "failapply:item-1:cancelled", "alerts:error"}, f.store.log())
+	assert.Len(t, f.alerts.recorded(), 2, "only the first item's update and its failure")
+	assert.Empty(t, second.FailedRunIds)
 }
 
 func TestAlertTriageReclaimEndsUnusableCheckpoints(t *testing.T) {

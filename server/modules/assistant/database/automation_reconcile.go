@@ -35,9 +35,9 @@ func (s *Store) ReconcileAutomationRuns(ctx context.Context) (*AutomationRunReco
 
 	defer tx.Rollback(ctx)
 
-	// A Stop already recorded on the row is honored: the run ends stopped at its stop time and
-	// its items go back uncharged. These rows close first so the sweeps below miss them.
-	stoppedRuns, stoppedItems, err := closeStoppingRuns(ctx, tx, "", "", automationRunStoppedCause, "")
+	// A Stop already recorded on the row is honored: the run ends stopped, keeping its stopper
+	// and stop time, and its items go back uncharged. These rows close first so the sweeps below miss them.
+	stoppedRuns, stoppedItems, err := closeStoppingRuns(ctx, tx, "", "", "")
 	if err != nil {
 		return nil, err
 	}

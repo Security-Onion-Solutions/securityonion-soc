@@ -2401,96 +2401,104 @@ describe('run now and stop', () => {
     seedAutomations();
   });
 
-  test('a row\'s status shows stopping and stopped', () => {
-    comp.automationRuns[CRITICAL_ID] = { runs: [{ id: RUN_A, state: 'stopped' }] };
-    expect(comp.automationStatus(row())).toBe('stopped');
-
-    comp.activeRuns[CRITICAL_ID] = running(RUN_B, { stoppedBy: 'admin-1' });
-    expect(comp.automationStatus(row())).toBe('stopping');
-
-    expect(comp.automationStatusLabel('stopping')).toBe('Stopping');
-    expect(comp.automationStatusLabel('stopped')).toBe('Stopped');
-    expect(comp.automationStatusColor('stopping')).toBe('warning');
-    expect(comp.automationStatusColor('stopped')).toBe('', 'nothing failed');
+  test.each([
+    ['stopped, from history', [{ id: RUN_A, state: 'stopped' }], undefined, 'stopped'],
+    ['stopping, from activity', [{ id: RUN_A, state: 'stopped' }], running(RUN_B, { stoppedBy: 'admin-1' }), 'stopping'],
+  ])('a row\'s status shows %s', (_, runs, active, expected) => {
+    comp.automationRuns[CRITICAL_ID] = { runs };
+    if (active) comp.activeRuns[CRITICAL_ID] = active;
+    expect(comp.automationStatus(row())).toBe(expected);
   });
 
-  test('in flight and stopping come from activity first, else the latest run', () => {
-    comp.automationRuns[CRITICAL_ID] = { runs: [{ id: RUN_A, state: 'succeeded' }] };
-    expect(comp.automationInFlight(row())).toBe(false);
-    expect(comp.automationStopping(row())).toBe(false);
-
-    comp.automationRuns[CRITICAL_ID] = { runs: [{ id: RUN_A, state: 'running', stoppedBy: 'admin-1' }] };
-    expect(comp.automationInFlight(row())).toBe(true);
-    expect(comp.automationStopping(row())).toBe(true);
-
-    comp.activeRuns[CRITICAL_ID] = running(RUN_B);
-    expect(comp.inFlightAutomationRun(row()).id).toBe(RUN_B);
-    expect(comp.automationStopping(row())).toBe(false);
+  test.each([
+    ['stopping', 'Stopping', 'warning'],
+    // Nothing failed.
+    ['stopped', 'Stopped', ''],
+  ])('the %s status has its own label and color', (state, label, color) => {
+    expect(comp.automationStatusLabel(state)).toBe(label);
+    expect(comp.automationStatusColor(state)).toBe(color);
   });
 
-  test('the action button runs, stops, or reopens Stop while stopping', () => {
+  test.each([
+    ['nothing, the latest run finished', { id: RUN_A, state: 'succeeded' }, undefined, undefined, false],
+    ['the latest run, stopping', { id: RUN_A, state: 'running', stoppedBy: 'admin-1' }, undefined, RUN_A, true],
+    ['activity over the latest run', { id: RUN_A, state: 'running', stoppedBy: 'admin-1' }, running(RUN_B), RUN_B, false],
+  ])('in flight and stopping come from %s', (_, latest, active, runId, stopping) => {
+    comp.automationRuns[CRITICAL_ID] = { runs: [latest] };
+    if (active) comp.activeRuns[CRITICAL_ID] = active;
+    expect(comp.automationInFlight(row())).toBe(!!runId);
+    expect((comp.inFlightAutomationRun(row()) || {}).id).toBe(runId);
+    expect(comp.automationStopping(row())).toBe(stopping);
+  });
+
+  test.each([
+    ['nothing in flight starts a run', undefined, false, 'run'],
+    ['a run in flight opens Stop', running(RUN_A), false, 'stop'],
+    ['a stopping run reopens Stop', running(RUN_A, { stoppedBy: 'admin-1' }), false, 'stop'],
+    ['a pending request ignores the click', running(RUN_A, { stoppedBy: 'admin-1' }), true, 'none'],
+  ])('the action button: %s', (_, active, pending, action) => {
     comp.runAutomationNow = jest.fn();
     comp.openStopAutomation = jest.fn();
     comp.automationRuns[CRITICAL_ID] = { runs: [] };
+    if (active) comp.activeRuns[CRITICAL_ID] = active;
+    if (pending) comp.actionPending[CRITICAL_ID] = true;
 
     comp.onAutomationAction(row(), {});
-    expect(comp.runAutomationNow).toHaveBeenCalledWith(row());
 
-    comp.activeRuns[CRITICAL_ID] = running(RUN_A);
-    comp.onAutomationAction(row(), {});
-    expect(comp.openStopAutomation).toHaveBeenCalledTimes(1);
-
-    comp.activeRuns[CRITICAL_ID] = running(RUN_A, { stoppedBy: 'admin-1' });
-    comp.onAutomationAction(row(), {});
-    expect(comp.openStopAutomation).toHaveBeenCalledTimes(2);
-
-    comp.actionPending[CRITICAL_ID] = true;
-    comp.onAutomationAction(row(), {});
-    expect(comp.openStopAutomation).toHaveBeenCalledTimes(2, 'a pending request ignores the click');
+    expect(comp.runAutomationNow).toHaveBeenCalledTimes(action === 'run' ? 1 : 0);
+    if (action === 'run') expect(comp.runAutomationNow).toHaveBeenCalledWith(row());
+    expect(comp.openStopAutomation).toHaveBeenCalledTimes(action === 'stop' ? 1 : 0);
   });
 
-  test('the Actions column and button exist only for users who can change automations', () => {
-    expect(comp.automationHeaders().map(h => h.value)).toContain('actions');
+  // On a hard refresh, $root.user arrives after the page renders.
+  test.each([
+    ['a superuser', { id: 'admin-1', roles: ['superuser'] }, 8],
+    ['an analyst', { id: 'analyst-1', roles: ['analyst'] }, 7],
+    ['a user not loaded yet', null, 7],
+  ])('the Manual Control column shows only for users who can change automations: %s', (_, user, count) => {
+    comp.$root.user = user;
+    const headers = comp.automationHeaders();
+    expect(headers.length).toBe(count);
+    expect(headers[6]).toEqual(expect.objectContaining({ title: 'Auto Start', value: 'enabled' }));
+    if (count === 8) expect(headers[7]).toEqual(expect.objectContaining({ title: 'Manual Control', value: 'actions', sortable: false }));
+    else expect(headers.map(h => h.value)).not.toContain('actions');
+  });
 
-    comp.$root.user = { id: 'analyst-1', roles: ['analyst'] };
-    expect(comp.automationHeaders().map(h => h.value)).not.toContain('actions');
-
+  test('the Manual Control button is a row cell for users who can change automations', () => {
     const cell = tmpl.match(/<td v-if="canEditConfig\(\)">\s*<v-btn[^>]*onAutomationAction[^>]*>/);
     expect(cell).not.toBeNull();
+    expect(cell[0]).toContain('v-bind="automationActionProps(item)"');
     // aria-disabled, not disabled: a disabled button loses focus.
     expect(cell[0]).toContain(':aria-disabled="actionPending[item.id]');
     expect(cell[0]).not.toMatch(/\s:disabled=/);
     expect(tmpl).toContain(':colspan="automationHeaders.length"');
   });
 
-  // On a hard refresh, $root.user arrives after the page renders.
-  test('the Actions header appears once the user loads', () => {
-    comp.$root.user = null;
-    expect(comp.automationHeaders().length).toBe(7);
-
-    comp.$root.user = { id: 'admin-1', roles: ['superuser'] };
-    expect(comp.automationHeaders().length).toBe(8);
-    expect(comp.automationHeaders()[7]).toEqual(expect.objectContaining({ value: 'actions', sortable: false }));
+  test.each([
+    ['idle', undefined, { text: 'Start', title: 'Start', color: 'primary', prependIcon: 'fa-play', 'data-aid': 'agentstudio_automation_run_' + CRITICAL_ID }],
+    ['running', running(RUN_A), { text: 'Stop', title: 'Stop', color: 'error', prependIcon: 'fa-stop', 'data-aid': 'agentstudio_automation_stop_' + CRITICAL_ID }],
+  ])('the Manual Control button reads and looks right while %s', (_, active, expected) => {
+    comp.automationRuns[CRITICAL_ID] = { runs: [] };
+    if (active) comp.activeRuns[CRITICAL_ID] = active;
+    expect(comp.automationActionProps(row())).toEqual(expected);
   });
 
-  test('each row\'s button names its automation in every state', () => {
+  test.each([
+    ['idle', undefined, true, 'Start Critical Alert Investigation'],
+    ['running', running(RUN_A), true, 'Stop the current run of Critical Alert Investigation'],
+    ['stopping, on', running(RUN_A, { stoppedBy: 'admin-1' }), true, 'Stop Critical Alert Investigation again or turn it off'],
+    ['stopping, off', running(RUN_A, { stoppedBy: 'admin-1' }), false, 'Stop Critical Alert Investigation again'],
+  ])('each row\'s button names its automation when %s', (_, active, enabled, expected) => {
     comp.automationRuns[CRITICAL_ID] = { runs: [] };
-    expect(comp.automationActionLabel(row())).toBe('Run Critical Alert Investigation now');
-
-    comp.activeRuns[CRITICAL_ID] = running(RUN_A);
-    expect(comp.automationActionLabel(row())).toBe('Stop the current run of Critical Alert Investigation');
-
-    comp.activeRuns[CRITICAL_ID] = running(RUN_A, { stoppedBy: 'admin-1' });
-    expect(comp.automationActionLabel(row())).toBe('Stop Critical Alert Investigation again or turn it off');
-
-    const off = Object.assign({}, row(), { enabled: false });
-    expect(comp.automationActionLabel(off)).toBe('Stop Critical Alert Investigation again');
+    if (active) comp.activeRuns[CRITICAL_ID] = active;
+    expect(comp.automationActionLabel(Object.assign({}, row(), { enabled }))).toBe(expected);
   });
 
   test('opening the Automations tab loads activity and subscribes; leaving unsubscribes', async () => {
     comp.initAssistant(automationParams());
     mockReload(storedAutomations());
 
+    comp.tab = 'automations';
     studio.watch.tab.call(comp, 'automations');
     await Promise.resolve();
     await Promise.resolve();
@@ -2500,6 +2508,23 @@ describe('run now and stop', () => {
 
     studio.watch.tab.call(comp, 'agents');
     expect(comp.$root.unsubscribe).toHaveBeenCalledWith('assistant:automation', comp.onAutomationActivity);
+  });
+
+  test('leaving the tab while the list loads starts no live updates', async () => {
+    comp.initAssistant(automationParams());
+    const list = deferred();
+    comp.$root.papi.get = jest.fn(url => url === 'assistant/automations' ? list.promise : runHistory([]));
+
+    comp.tab = 'automations';
+    const loading = comp.loadAutomations();
+    comp.tab = 'agents';
+    studio.watch.tab.call(comp, 'agents');
+    list.resolve({ data: storedAutomations() });
+    await loading;
+
+    expect(comp.$root.subscribe).not.toHaveBeenCalledWith('assistant:automation', expect.anything());
+    expect(comp.automationLive).toBe(false);
+    expect(comp.$root.papi.get).not.toHaveBeenCalledWith('assistant/automations/activity');
   });
 
   test('another tab or a non-agentic grid starts no live updates', async () => {
@@ -2730,6 +2755,23 @@ describe('run now and stop', () => {
     expect(comp.automationAnnouncement).toBe('');
   });
 
+  // History read before the run closed, activity after: the row offers Stop for a run that has ended.
+  test('a refused Stop reloads activity, so a row whose run already ended stops offering Stop', async () => {
+    comp.automationRuns[CRITICAL_ID] = { runs: [running(RUN_A)] };
+    comp.openStopAutomation(row(), {});
+    mockPapi('post', null, new Error('ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT'));
+    comp.$root.papi.get = jest.fn(url => url === 'assistant/automations/activity'
+      ? { data: snapshot('2026-09-30T10:00:30Z', []) }
+      : runHistory([{ id: RUN_A, state: 'succeeded' }]));
+
+    await comp.stopAutomation(false);
+    await Promise.resolve();
+
+    expect(comp.$root.showError).toHaveBeenCalled();
+    expect(comp.$root.papi.get).toHaveBeenCalledWith('assistant/automations/activity');
+    expect(comp.automationInFlight(row())).toBe(false);
+  });
+
   test('turning off reloads the list even when it fails; a plain Stop doesn\'t reload it', async () => {
     comp.activeRuns[CRITICAL_ID] = running(RUN_A);
     comp.openStopAutomation(row(), {});
@@ -2827,16 +2869,19 @@ describe('run now and stop', () => {
     expect(button.focus).toHaveBeenCalledTimes(1);
   });
 
-  test('the Started by cell reads Schedule or the user, and a stopped run names who stopped it', () => {
-    comp.creatorNames['admin-1'] = 'Admin';
-
-    expect(comp.runStartedByLabel({ state: 'succeeded' })).toBe('Schedule');
-    expect(comp.runStartedByLabel({ state: 'succeeded', startedBy: 'admin-1' })).toBe('Admin');
-    expect(comp.runOutcomeLabel({ state: 'stopped', stoppedBy: 'admin-1' })).toBe('Stopped by Admin');
-    expect(comp.runOutcomeLabel({ state: 'stopped' })).toBe('Stopped');
-    expect(comp.runOutcomeLabel({ state: 'failed' })).toBe('Failed');
-
+  test('the run table has a Started by column', () => {
     expect(comp.runHeaders.map(h => h.key)).toEqual(['starttime', 'startedby', 'done', 'failed', 'state', 'actions']);
+  });
+
+  test.each([
+    ['runStartedByLabel', 'a scheduled run', { state: 'succeeded' }, 'Schedule'],
+    ['runStartedByLabel', 'a manual run', { state: 'succeeded', startedBy: 'admin-1' }, 'Admin'],
+    ['runOutcomeLabel', 'a stopped run with a stopper', { state: 'stopped', stoppedBy: 'admin-1' }, 'Stopped by Admin'],
+    ['runOutcomeLabel', 'a stopped run without one', { state: 'stopped' }, 'Stopped'],
+    ['runOutcomeLabel', 'a failed run', { state: 'failed' }, 'Failed'],
+  ])('%s for %s', (fn, _, run, expected) => {
+    comp.creatorNames['admin-1'] = 'Admin';
+    expect(comp[fn](run)).toBe(expected);
   });
 
   test('a stopped run opens in Agent Monitor\'s run history', () => {

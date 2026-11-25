@@ -209,7 +209,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   }},
   computed: {
     // Computed: on a hard refresh the page renders before $root.user loads, and the row's
-    // Actions cell would appear without its header.
+    // Manual Control cell would appear without its header.
     automationHeaders() {
       const headers = [
         { title: '', value: 'expand', sortable: false, width: '48px' },
@@ -218,9 +218,9 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         { title: this.i18n.agentStudioAutomationInterval, value: 'intervalSeconds', width: '130px' },
         { title: this.i18n.agentStudioAutomationAgent, value: 'agent' },
         { title: this.i18n.status, value: 'status', sortable: false, width: '200px' },
-        { title: this.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
+        { title: this.i18n.agentStudioAutomationAutoStart, value: 'enabled', sortable: false, width: '110px' },
       ];
-      if (this.canEditConfig()) headers.push({ title: this.i18n.actions, value: 'actions', sortable: false, width: '90px' });
+      if (this.canEditConfig()) headers.push({ title: this.i18n.agentStudioAutomationManualControl, value: 'actions', sortable: false, width: '150px' });
       return headers;
     },
     agentNames() {
@@ -987,7 +987,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
       this.automations.forEach(a => this.loadAutomationRuns(a));
-      this.startAutomationLive();
+      // The user may have left the tab while the list loaded.
+      if (this.tab === 'automations') this.startAutomationLive();
     },
     // force reloads even while a load is in flight; the older response is then dropped.
     async loadAutomationRuns(automation, more = false, force = false) {
@@ -1053,11 +1054,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       for (const run of snapshot.runs || []) next[run.automationId] = run;
 
       const runIds = (snapshot.runs || []).map(run => run.id);
-      for (const runId of Object.keys(this.stopRequested)) {
-        if (runIds.includes(runId)) continue;
-        this.announce('ariaAutomationStopped', this.stopRequested[runId]);
-        delete this.stopRequested[runId];
-      }
+      this.$root.takeClosedStopRequests(this.stopRequested, runIds).forEach(name => this.announce('ariaAutomationStopped', name));
 
       for (const automation of this.automations) {
         const was = this.inFlightAutomationRun(automation);
@@ -1070,17 +1067,27 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     inFlightAutomationRun(automation) {
       if (this.activeRuns[automation.id]) return this.activeRuns[automation.id];
       const run = this.latestAutomationRun(automation);
-      return run && ['queued', 'running'].includes(run.state) ? run : null;
+      return this.$root.automationRunInFlight(run) ? run : null;
     },
     automationInFlight(automation) {
       return !!this.inFlightAutomationRun(automation);
     },
     automationStopping(automation) {
-      const run = this.inFlightAutomationRun(automation);
-      return !!(run && run.stoppedBy);
+      return this.$root.automationRunStopping(this.inFlightAutomationRun(automation));
+    },
+    automationActionProps(automation) {
+      const inFlight = this.automationInFlight(automation);
+      const text = inFlight ? this.i18n.automationStop : this.i18n.automationStart;
+      return {
+        text,
+        title: text,
+        color: inFlight ? 'error' : 'primary',
+        prependIcon: inFlight ? 'fa-stop' : 'fa-play',
+        'data-aid': (inFlight ? 'agentstudio_automation_stop_' : 'agentstudio_automation_run_') + automation.id,
+      };
     },
     automationActionLabel(automation) {
-      let key = 'ariaAutomationRunNow';
+      let key = 'ariaAutomationStart';
       if (this.automationStopping(automation)) key = automation.enabled ? 'ariaAutomationStopAgain' : 'ariaAutomationStopAgainOff';
       else if (this.automationInFlight(automation)) key = 'ariaAutomationStop';
       return this.$root.replaceActionVar(this.i18n[key], 'name', automation.displayName);
@@ -1132,14 +1139,15 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       this.actionPending[target.id] = true;
       this.$root.startLoading();
       try {
-        await this.$root.papi.post('assistant/automations/' + encodeURIComponent(target.id) + '/runs/' + encodeURIComponent(target.runId) + '/stop', { disable });
+        await this.$root.stopAutomationRun(target.id, target.runId, disable);
         this.stopRequested[target.runId] = target.name;
         this.announce('ariaAutomationStopping', target.name);
-        // The push that closed the run can land before the POST answers, or the run had already ended.
-        await this.loadAutomationActivity();
       } catch (error) {
         this.$root.showError(error);
       } finally {
+        // Also after an error: a refused Stop can mean the run already ended, and the row must stop offering Stop.
+        // The push that closed the run can also land before the POST answers.
+        await this.loadAutomationActivity();
         delete this.actionPending[target.id];
         this.$root.stopLoading();
       }

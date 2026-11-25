@@ -13,8 +13,7 @@
     <v-card-actions>
       <v-spacer></v-spacer>
       <v-btn variant="text" autofocus @click.stop="cancel()" data-aid="automation_stop_dialog_cancel">{{ i18n.cancel }}</v-btn>
-      <v-btn v-if="canTurnOff()" variant="text" color="primary" @click.stop="stop(false)" data-aid="automation_stop_dialog_stop">{{ i18n.automationStopDialogStop }}</v-btn>
-      <v-btn v-else variant="flat" color="error" @click.stop="stop(false)" data-aid="automation_stop_dialog_stop">{{ i18n.automationStopDialogStop }}</v-btn>
+      <v-btn v-bind="stopButtonProps()" @click.stop="stop(false)" data-aid="automation_stop_dialog_stop">{{ i18n.automationStopDialogStop }}</v-btn>
       <v-btn v-if="canTurnOff()" variant="flat" color="error" @click.stop="stop(true)" data-aid="automation_stop_dialog_stop_disable">{{ i18n.automationStopDialogStopDisable }}</v-btn>
     </v-card-actions>
   </v-card>
