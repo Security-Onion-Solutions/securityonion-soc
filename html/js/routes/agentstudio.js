@@ -78,6 +78,22 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     creatorNames: {},
     // id -> { runs, backlog, hasMore, loading }
     automationRuns: {},
+    // automationId -> request counter, so an older history response can't overwrite a newer one.
+    automationRunRequests: {},
+    // automationId -> the run in flight, from the activity snapshot or a Run now response.
+    activeRuns: {},
+    // generatedAt of the activity applied, in ms; anything older is dropped.
+    automationActivityGeneratedAt: 0,
+    automationLive: false,
+    // automationId -> true while its Run now or Stop request is pending.
+    actionPending: {},
+    // runId -> automation name once this page stopped that run, so its close is announced.
+    stopRequested: {},
+    showStopDialog: false,
+    // { id, name, enabled, runId }
+    stopAutomationTarget: null,
+    stopReturnFocus: null,
+    automationAnnouncement: '',
     automationTabs: {},
     automationDrafts: {},
     sortByAutomations: [{ key: 'displayName', order: 'asc' }],
@@ -159,18 +175,10 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       { title: this.$root.i18n.dateModified, value: 'updateTime', sortable: false, width: '180px' },
     ],
 
-    automationHeaders: [
-      { title: '', value: 'expand', sortable: false, width: '48px' },
-      { title: this.$root.i18n.agentStudioName, value: 'displayName' },
-      { title: this.$root.i18n.kind, value: 'automationKind', width: '160px' },
-      { title: this.$root.i18n.agentStudioAutomationInterval, value: 'intervalSeconds', width: '130px' },
-      { title: this.$root.i18n.agentStudioAutomationAgent, value: 'agent' },
-      { title: this.$root.i18n.status, value: 'status', sortable: false, width: '200px' },
-      { title: this.$root.i18n.agentStudioEnabled, value: 'enabled', sortable: false, width: '110px' },
-    ],
     runHeaders: [
       // Lowercase key: the browser lowercases the template's #item.<key> slot name.
       { title: this.$root.i18n.startTime, value: 'startTime', key: 'starttime', sortable: false },
+      { title: this.$root.i18n.automationStartedBy, value: 'startedBy', key: 'startedby', sortable: false },
       { title: this.$root.i18n.stateDone, value: 'done', key: 'done', sortable: false },
       { title: this.$root.i18n.stateFailed, value: 'failed', key: 'failed', sortable: false },
       { title: this.$root.i18n.agentStudioAutomationOutcome, value: 'state', key: 'state', sortable: false },
@@ -200,6 +208,21 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     tools: [],
   }},
   computed: {
+    // Computed: on a hard refresh the page renders before $root.user loads, and the row's
+    // Manual Control cell would appear without its header.
+    automationHeaders() {
+      const headers = [
+        { title: '', value: 'expand', sortable: false, width: '48px' },
+        { title: this.i18n.agentStudioName, value: 'displayName' },
+        { title: this.i18n.kind, value: 'automationKind', width: '160px' },
+        { title: this.i18n.agentStudioAutomationInterval, value: 'intervalSeconds', width: '130px' },
+        { title: this.i18n.agentStudioAutomationAgent, value: 'agent' },
+        { title: this.i18n.status, value: 'status', sortable: false, width: '200px' },
+        { title: this.i18n.agentStudioAutomationAutoStart, value: 'enabled', sortable: false, width: '110px' },
+      ];
+      if (this.canEditConfig()) headers.push({ title: this.i18n.agentStudioAutomationManualControl, value: 'actions', sortable: false, width: '150px' });
+      return headers;
+    },
     agentNames() {
       return this.agents.map(a => a.name);
     },
@@ -212,6 +235,17 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     // Lazy: automations need config/read.
     tab(value) {
       if (value === 'automations') this.loadAutomations();
+      else this.stopAutomationLive();
+    },
+    // Changes pushed while disconnected were missed.
+    '$root.connected'(connected) {
+      if (connected && this.automationLive) this.loadAutomationActivity();
+    },
+    showStopDialog(open) {
+      if (open || !this.stopReturnFocus) return;
+      const button = this.stopReturnFocus;
+      this.stopReturnFocus = null;
+      this.$nextTick(() => button.focus());
     },
     'sortByAgents': 'saveLocalSettings',
     'sortBySkills': 'saveLocalSettings',
@@ -226,6 +260,7 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
   },
   beforeUnmount() {
     this.$root.unsubscribe('assistant:agentic', this.onAgenticUpdate);
+    this.stopAutomationLive();
   },
   methods: {
     reload() {
@@ -932,7 +967,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     },
     setAutomations(automations) {
       this.automations = automations.slice();
-      this.automations.forEach(a => { if (!this.automationTabs[a.id]) this.automationTabs[a.id] = 'general'; });
+      this.automations.forEach(a => {
+        if (!this.automationTabs[a.id]) this.automationTabs[a.id] = 'general';
+        // The editor never changes enabled, so a stale draft copy must not undo a turn-off on save.
+        const draft = this.automationDrafts[a.id];
+        if (draft) draft.enabled = a.enabled;
+      });
     },
     async loadAutomations() {
       if (!this.agentic) return;
@@ -947,16 +987,24 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         this.$root.stopLoading();
       }
       this.automations.forEach(a => this.loadAutomationRuns(a));
+      // The user may have left the tab while the list loaded.
+      if (this.tab === 'automations') this.startAutomationLive();
     },
-    async loadAutomationRuns(automation, more = false) {
+    // force reloads even while a load is in flight; the older response is then dropped.
+    async loadAutomationRuns(automation, more = false, force = false) {
       const current = this.automationRuns[automation.id];
-      if (current && current.loading) return;
+      if (current && current.loading && !force) return;
+      const request = (this.automationRunRequests[automation.id] || 0) + 1;
+      this.automationRunRequests[automation.id] = request;
       const loaded = current ? current.runs : [];
       this.automationRuns[automation.id] = Object.assign({ runs: [] }, current, { loading: true });
+      // A reload asks for as many as are loaded, so the older pages the user opened stay open.
+      const limit = more ? AUTOMATION_RUNS_PAGE : Math.max(loaded.length, AUTOMATION_RUNS_PAGE);
       try {
         const response = await this.$root.papi.get('assistant/automations/' + encodeURIComponent(automation.id) + '/runs', {
-          params: { limit: AUTOMATION_RUNS_PAGE, offset: more ? loaded.length : 0 },
+          params: { limit, offset: more ? loaded.length : 0 },
         });
+        if (request !== this.automationRunRequests[automation.id]) return;
         const history = response.data || {};
         this.automationRuns[automation.id] = {
           runs: (more ? loaded : []).concat(history.runs || []),
@@ -964,10 +1012,146 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
           hasMore: !!history.hasMore,
         };
       } catch (error) {
-        if (current) this.automationRuns[automation.id] = current;
+        if (request !== this.automationRunRequests[automation.id]) return;
+        if (current) this.automationRuns[automation.id] = Object.assign({}, current, { loading: false });
         else delete this.automationRuns[automation.id];
         this.$root.showError(error);
       }
+    },
+    startAutomationLive() {
+      if (!this.automationLive) {
+        this.$root.subscribe('assistant:automation', this.onAutomationActivity);
+        this.automationLive = true;
+      }
+      this.loadAutomationActivity();
+    },
+    stopAutomationLive() {
+      if (!this.automationLive) return;
+      this.$root.unsubscribe('assistant:automation', this.onAutomationActivity);
+      this.automationLive = false;
+    },
+    async loadAutomationActivity() {
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.get('assistant/automations/activity');
+        this.onAutomationActivity(response.data || {});
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        this.$root.stopLoading();
+      }
+    },
+    // A run that leaves the snapshot has closed, so its row reloads its history. That includes a
+    // run only the history knew of, such as one Run now opened between two pushes.
+    onAutomationActivity(snapshot) {
+      if (!snapshot) return;
+      // A slow fetch can land after a newer push.
+      const generatedAt = Date.parse(snapshot.generatedAt) || 0;
+      if (generatedAt && generatedAt < this.automationActivityGeneratedAt) return;
+      if (generatedAt) this.automationActivityGeneratedAt = generatedAt;
+
+      const next = {};
+      for (const run of snapshot.runs || []) next[run.automationId] = run;
+
+      const runIds = (snapshot.runs || []).map(run => run.id);
+      this.$root.takeClosedStopRequests(this.stopRequested, runIds).forEach(name => this.announce('ariaAutomationStopped', name));
+
+      for (const automation of this.automations) {
+        const was = this.inFlightAutomationRun(automation);
+        if (!was || (next[automation.id] && next[automation.id].id === was.id)) continue;
+        this.loadAutomationRuns(automation, false, true);
+      }
+      this.activeRuns = next;
+    },
+    // The run in flight, from activity first, else the history's latest run.
+    inFlightAutomationRun(automation) {
+      if (this.activeRuns[automation.id]) return this.activeRuns[automation.id];
+      const run = this.latestAutomationRun(automation);
+      return this.$root.automationRunInFlight(run) ? run : null;
+    },
+    automationInFlight(automation) {
+      return !!this.inFlightAutomationRun(automation);
+    },
+    automationStopping(automation) {
+      return this.$root.automationRunStopping(this.inFlightAutomationRun(automation));
+    },
+    automationActionProps(automation) {
+      const inFlight = this.automationInFlight(automation);
+      const text = inFlight ? this.i18n.automationStop : this.i18n.automationStart;
+      return {
+        text,
+        title: text,
+        color: inFlight ? 'error' : 'primary',
+        prependIcon: inFlight ? 'fa-stop' : 'fa-play',
+        'data-aid': (inFlight ? 'agentstudio_automation_stop_' : 'agentstudio_automation_run_') + automation.id,
+      };
+    },
+    automationActionLabel(automation) {
+      let key = 'ariaAutomationStart';
+      if (this.automationStopping(automation)) key = automation.enabled ? 'ariaAutomationStopAgain' : 'ariaAutomationStopAgainOff';
+      else if (this.automationInFlight(automation)) key = 'ariaAutomationStop';
+      return this.$root.replaceActionVar(this.i18n[key], 'name', automation.displayName);
+    },
+    announce(key, name) {
+      this.automationAnnouncement = this.$root.replaceActionVar(this.i18n[key], 'name', name);
+    },
+    // One button for both, so focus stays on it when it changes. A pending request leaves it
+    // aria-disabled rather than disabled, which would move focus off it.
+    onAutomationAction(automation, event) {
+      if (this.actionPending[automation.id]) return;
+      if (this.automationInFlight(automation)) this.openStopAutomation(automation, event);
+      else this.runAutomationNow(automation);
+    },
+    async runAutomationNow(automation) {
+      if (this.actionPending[automation.id]) return;
+      this.actionPending[automation.id] = true;
+      this.$root.startLoading();
+      try {
+        const response = await this.$root.papi.post('assistant/automations/' + encodeURIComponent(automation.id) + '/runs');
+        const run = response.data || {};
+        this.activeRuns[automation.id] = run;
+        this.announce('ariaAutomationRunStarted', automation.displayName);
+        // Pushes are batched, so a run that opens and closes inside one window never shows up in one.
+        await this.loadAutomationRuns(automation, false, true);
+        const listed = this.automationHistory(automation).runs.find(r => r.id === run.id);
+        const active = this.activeRuns[automation.id];
+        if (listed && !['queued', 'running'].includes(listed.state) && active && active.id === run.id) {
+          delete this.activeRuns[automation.id];
+        }
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        delete this.actionPending[automation.id];
+        this.$root.stopLoading();
+      }
+    },
+    openStopAutomation(automation, event) {
+      const run = this.inFlightAutomationRun(automation);
+      if (!run) return;
+      this.stopAutomationTarget = { id: automation.id, name: automation.displayName, enabled: !!automation.enabled, runId: run.id };
+      this.stopReturnFocus = event && event.currentTarget ? event.currentTarget : null;
+      this.showStopDialog = true;
+    },
+    // Posts the run the dialog opened for, so one that ended or was replaced meanwhile isn't stopped by mistake.
+    async stopAutomation(disable) {
+      const target = this.stopAutomationTarget;
+      if (!target || this.actionPending[target.id]) return;
+      this.actionPending[target.id] = true;
+      this.$root.startLoading();
+      try {
+        await this.$root.stopAutomationRun(target.id, target.runId, disable);
+        this.stopRequested[target.runId] = target.name;
+        this.announce('ariaAutomationStopping', target.name);
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        // Also after an error: a refused Stop can mean the run already ended, and the row must stop offering Stop.
+        // The push that closed the run can also land before the POST answers.
+        await this.loadAutomationActivity();
+        delete this.actionPending[target.id];
+        this.$root.stopLoading();
+      }
+      if (disable) await this.loadAutomations();
     },
     automationHistory(automation) {
       return this.automationRuns[automation.id] || { runs: [] };
@@ -980,14 +1164,26 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
     },
     // Run History only lists finished runs.
     runMonitorLink(run) {
-      if (['succeeded', 'failed'].includes(run.state)) return { name: 'agentmonitor', query: { run: run.id } };
+      if (['succeeded', 'failed', 'stopped'].includes(run.state)) return { name: 'agentmonitor', query: { run: run.id } };
       return { name: 'agentmonitor' };
     },
     automationStatus(automation) {
+      if (this.automationStopping(automation)) return 'stopping';
+      const active = this.activeRuns[automation.id];
+      if (active) return active.state;
       const history = this.automationRuns[automation.id];
       if (!history || (history.loading && !history.runs.length)) return '';
       const run = this.latestAutomationRun(automation);
-      return run && ['queued', 'running', 'failed'].includes(run.state) ? run.state : 'idle';
+      return run && ['queued', 'running', 'failed', 'stopped'].includes(run.state) ? run.state : 'idle';
+    },
+    runStartedByLabel(run) {
+      return run.startedBy ? this.userLabel(run.startedBy) : this.i18n.schedule;
+    },
+    runOutcomeLabel(run) {
+      if (run.state === 'stopped' && run.stoppedBy) {
+        return this.$root.replaceActionVar(this.i18n.automationStoppedBy, 'user', this.userLabel(run.stoppedBy));
+      }
+      return this.automationStatusLabel(run.state);
     },
     automationBacklog(automation) {
       const backlog = this.automationHistory(automation).backlog || {};
@@ -1002,8 +1198,8 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
       if (automation.agent && !items.includes(automation.agent)) items.push(automation.agent);
       return items;
     },
-    automationCreatorLabel(automation) {
-      const id = automation.userId;
+    // Falls back to the id: an API client, such as a Manager of Managers parent, isn't a user.
+    userLabel(id) {
       if (!id) return '';
       if (this.creatorNames[id] === undefined) {
         this.creatorNames[id] = id;
@@ -1108,10 +1304,12 @@ routes.push({ path: '/agentstudio', name: 'agentstudio', component: {
         applying: this.i18n.stateApplying,
         succeeded: this.i18n.completed,
         failed: this.i18n.stateFailed,
+        stopping: this.i18n.stateStopping,
+        stopped: this.i18n.stateStopped,
       })[status] || status;
     },
     automationStatusColor(status) {
-      return ({ queued: 'warning', running: 'primary', failed: 'error' })[status] || '';
+      return ({ queued: 'warning', running: 'primary', failed: 'error', stopping: 'warning' })[status] || '';
     },
     // isSystem must match the stored automation or the server refuses the save.
     automationPayload(a) {

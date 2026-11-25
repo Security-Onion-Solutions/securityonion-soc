@@ -54,7 +54,8 @@ func (ac *AssistantCoordinator) GetAutomationRunHistory(ctx context.Context, aut
 		return nil, ErrNoDatabase
 	}
 
-	if !isAutomationId(automationId) {
+	automationId, err := canonicalAutomationId(automationId)
+	if err != nil {
 		return nil, ErrAutomationNotFound
 	}
 
@@ -70,11 +71,13 @@ func (ac *AssistantCoordinator) GetAutomationRunDetails(ctx context.Context, aut
 		return nil, ErrNoDatabase
 	}
 
-	if !isAutomationId(automationId) {
+	automationId, err := canonicalAutomationId(automationId)
+	if err != nil {
 		return nil, ErrAutomationNotFound
 	}
 
-	if !isAutomationId(runId) {
+	runId, err = canonicalAutomationId(runId)
+	if err != nil {
 		return nil, ErrAutomationRunNotFound
 	}
 
@@ -95,8 +98,12 @@ func (ac *AssistantCoordinator) ListAutomationRuns(ctx context.Context, filter *
 }
 
 func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store automationHistoryStore, filter *model.AutomationRunFilter) (*model.AutomationRunPage, error) {
-	if filter.AutomationId != "" && !isAutomationId(filter.AutomationId) {
-		return nil, ErrAutomationNotFound
+	automationId := filter.AutomationId
+	if automationId != "" {
+		var err error
+		if automationId, err = canonicalAutomationId(automationId); err != nil {
+			return nil, ErrAutomationNotFound
+		}
 	}
 
 	search := strings.TrimSpace(filter.Search)
@@ -130,7 +137,7 @@ func (ac *AssistantCoordinator) automationRunPage(ctx context.Context, store aut
 	limit := clampAutomationLimit(filter.Limit, defaultAutomationRunPageSize, maxAutomationRunPageSize)
 
 	query := database.AutomationRunQuery{
-		AutomationId:        filter.AutomationId,
+		AutomationId:        automationId,
 		Finished:            true,
 		HideEmpty:           filter.HideEmpty,
 		Search:              search,
@@ -277,7 +284,7 @@ func (ac *AssistantCoordinator) automationRunDetails(ctx context.Context, store 
 		return nil, err
 	}
 
-	sessions, err := ac.automationRunSessions(ctx, items)
+	sessions, err := ac.automationRunSessions(ctx, store, items)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +346,7 @@ func clampAutomationLimit(value, fallback, ceiling int) int {
 }
 
 // automationRunSessions summarizes every attempt on the items from one session lookup and one history lookup.
-func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, items []*model.AutomationWorkItem) ([]*model.AutomationRunSession, error) {
+func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, store automationHistoryStore, items []*model.AutomationWorkItem) ([]*model.AutomationRunSession, error) {
 	sessions := make([]*model.AutomationRunSession, 0)
 
 	ids := make([]string, 0)
@@ -350,6 +357,14 @@ func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, items
 	if len(ids) == 0 {
 		return sessions, nil
 	}
+
+	// At most one row per automation, and an item can be held by a later run than this one.
+	inFlight, err := store.ListAutomationRuns(ctx, database.AutomationRunQuery{InFlight: true})
+	if err != nil {
+		return nil, err
+	}
+
+	open := openAutomationRuns(inFlight)
 
 	stored := map[string]*model.AssistantSession{}
 	histories := map[string][]*model.StoredMessage{}
@@ -387,7 +402,7 @@ func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, items
 				SessionId: id,
 				ItemId:    item.Id,
 				RunId:     automationAttemptRun(item, i),
-				Outcome:   automationSessionOutcome(item, i, live[id]),
+				Outcome:   automationSessionOutcome(item, i, live[id], open),
 				Steps:     []model.AutomationRunStep{},
 			}
 
@@ -417,8 +432,16 @@ func (ac *AssistantCoordinator) automationRunSessions(ctx context.Context, items
 	return sessions, nil
 }
 
-// automationAttemptRun names the run behind an attempt: the failed runs in order, then the run holding the item.
+// automationAttemptRun names the run behind an attempt. SessionRunIds lines up with the end of
+// SessionIds: the two are only appended together, so the newest sessions are the ones with a
+// recorded run. Older ones, from before runs were recorded, keep the positional mapping: the
+// failed runs in order, then the run holding the item.
 func automationAttemptRun(item *model.AutomationWorkItem, index int) string {
+	if recorded := index - (len(item.SessionIds) - len(item.SessionRunIds)); recorded >= 0 && recorded < len(item.SessionRunIds) &&
+		item.SessionRunIds[recorded] != "" {
+		return item.SessionRunIds[recorded]
+	}
+
 	if index < len(item.FailedRunIds) {
 		return item.FailedRunIds[index]
 	}
@@ -426,22 +449,63 @@ func automationAttemptRun(item *model.AutomationWorkItem, index int) string {
 	return item.RunId
 }
 
-// automationSessionOutcome reads an attempt's fate off its item: only the newest can be the report, and only a live one is running.
-func automationSessionOutcome(item *model.AutomationWorkItem, index int, live bool) string {
-	last := index == len(item.SessionIds)-1
+// openAutomationRuns maps each run still in flight to whether a Stop has marked it.
+func openAutomationRuns(runs []*model.AutomationRunRecord) map[string]bool {
+	open := map[string]bool{}
 
-	switch item.State {
-	case model.AutomationWorkItemDone, model.AutomationWorkItemApplying:
-		if last {
-			return model.AutomationRunOutcomeReport
+	for _, run := range runs {
+		if !run.State.IsTerminal() {
+			open[run.Id] = run.StoppedBy != ""
 		}
-	case model.AutomationWorkItemRunning:
-		if last && live {
+	}
+
+	return open
+}
+
+// automationSessionOutcome reads an attempt's fate off its item and the run behind it. open is
+// every run in flight, mapped to whether it is stopping.
+//
+// The last rule relies on only a user's Stop returning an item to the queue uncharged after a
+// session has run; RequeueAutomationWorkItem is only called before one starts. A kind that
+// requeues after a session breaks that and has to revisit this.
+func automationSessionOutcome(item *model.AutomationWorkItem, index int, live bool, open map[string]bool) string {
+	newest := index == len(item.SessionIds)-1
+	run := automationAttemptRun(item, index)
+
+	// An apply that failed and was replayed adds no session, so its report still counts.
+	if newest && (item.State == model.AutomationWorkItemDone || item.State == model.AutomationWorkItemApplying) {
+		return model.AutomationRunOutcomeReport
+	}
+
+	if slices.Contains(item.FailedRunIds, run) {
+		return model.AutomationRunOutcomeFailed
+	}
+
+	if newest && run == item.RunId {
+		switch item.State {
+		case model.AutomationWorkItemFailed:
+			return model.AutomationRunOutcomeFailed
+		case model.AutomationWorkItemRunning:
+			stopping, inFlight := open[run]
+
+			switch {
+			case live:
+				return model.AutomationRunOutcomeRunning
+			case !inFlight:
+				// A store error left the item held by a run that has since closed; the next run
+				// recovers it as interrupted.
+				return model.AutomationRunOutcomeFailed
+			case stopping:
+				// The stopping run won't start it.
+				return model.AutomationRunOutcomeStopped
+			}
+
+			// It hasn't reached its first phase yet.
 			return model.AutomationRunOutcomeRunning
 		}
 	}
 
-	return model.AutomationRunOutcomeFailed
+	return model.AutomationRunOutcomeStopped
 }
 
 // automationRunSteps walks a transcript into thought previews and tool calls, each call

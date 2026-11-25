@@ -47,21 +47,24 @@ func ptrTime(t time.Time) *time.Time { return &t }
 func ptrString(s string) *string { return &s }
 
 type automationRunRow struct {
-	id, automationId, state string
-	startTime, endTime      *time.Time
-	failure                 *string
+	id, automationId, state       string
+	startTime, endTime, stopTime  *time.Time
+	failure, startedBy, stoppedBy *string
 }
 
-// Fills the six destinations in automationRunColumns order, so a column added to the
+// Fills the nine destinations in automationRunColumns order, so a column added to the
 // projection without a matching destination fails here.
 func expectAutomationRunRow(mRows *mockdb.MockRows, row automationRunRow) {
-	mRows.On("Scan", anyArgs(6)...).Run(func(args mock.Arguments) {
+	mRows.On("Scan", anyArgs(9)...).Run(func(args mock.Arguments) {
 		*(args.Get(0).(*string)) = row.id
 		*(args.Get(1).(*string)) = row.automationId
 		*(args.Get(2).(*string)) = row.state
 		*(args.Get(3).(**time.Time)) = row.startTime
 		*(args.Get(4).(**time.Time)) = row.endTime
 		*(args.Get(5).(**string)) = row.failure
+		*(args.Get(6).(**string)) = row.startedBy
+		*(args.Get(7).(**string)) = row.stoppedBy
+		*(args.Get(8).(**time.Time)) = row.stopTime
 	}).Return(nil).Once()
 }
 
@@ -86,12 +89,13 @@ type automationWorkItemRow struct {
 	payload, result                   []byte
 	attempts                          int
 	sessionIds, failedRunIds          []string
+	sessionRunIds                     []string
 	createTime, updateTime            *time.Time
 }
 
-// Fills the thirteen destinations in automationWorkItemColumns order.
+// Fills the fourteen destinations in automationWorkItemColumns order.
 func expectAutomationWorkItemRow(mRows *mockdb.MockRows, row automationWorkItemRow) {
-	mRows.On("Scan", anyArgs(13)...).Run(func(args mock.Arguments) {
+	mRows.On("Scan", anyArgs(14)...).Run(func(args mock.Arguments) {
 		*(args.Get(0).(*string)) = row.id
 		*(args.Get(1).(*string)) = row.automationId
 		*(args.Get(2).(**string)) = row.runId
@@ -105,6 +109,7 @@ func expectAutomationWorkItemRow(mRows *mockdb.MockRows, row automationWorkItemR
 		*(args.Get(10).(**string)) = row.failure
 		*(args.Get(11).(**time.Time)) = row.createTime
 		*(args.Get(12).(**time.Time)) = row.updateTime
+		*(args.Get(13).(*[]string)) = row.sessionRunIds
 	}).Return(nil).Once()
 }
 
@@ -128,19 +133,20 @@ func fullWorkItemRow() automationWorkItemRow {
 	updated := time.Date(2026, 9, 15, 16, 2, 41, 0, time.UTC)
 
 	return automationWorkItemRow{
-		id:           "item-1",
-		automationId: testAutomationId,
-		runId:        ptrString("run-1"),
-		groupKey:     "rule.name:Suspicious PowerShell",
-		payload:      []byte(`{"ids":["1","2"]}`),
-		state:        string(model.AutomationWorkItemApplying),
-		attempts:     2,
-		sessionIds:   []string{"session-1", "session-2"},
-		failedRunIds: []string{"run-0"},
-		result:       []byte(`{"recommendation":"acknowledge"}`),
-		failure:      ptrString("truncated"),
-		createTime:   &created,
-		updateTime:   &updated,
+		id:            "item-1",
+		automationId:  testAutomationId,
+		runId:         ptrString("run-1"),
+		groupKey:      "rule.name:Suspicious PowerShell",
+		payload:       []byte(`{"ids":["1","2"]}`),
+		state:         string(model.AutomationWorkItemApplying),
+		attempts:      2,
+		sessionIds:    []string{"session-1", "session-2"},
+		failedRunIds:  []string{"run-0"},
+		sessionRunIds: []string{"run-0", "run-1"},
+		result:        []byte(`{"recommendation":"acknowledge"}`),
+		failure:       ptrString("truncated"),
+		createTime:    &created,
+		updateTime:    &updated,
 	}
 }
 
@@ -148,6 +154,7 @@ func fullWorkItemRow() automationWorkItemRow {
 func TestScanAutomationRunRowMapsEveryColumn(t *testing.T) {
 	started := time.Date(2026, 9, 15, 16, 0, 2, 0, time.UTC)
 	ended := time.Date(2026, 9, 15, 16, 3, 2, 0, time.UTC)
+	stopped := time.Date(2026, 9, 15, 16, 2, 40, 0, time.UTC)
 
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
@@ -160,6 +167,9 @@ func TestScanAutomationRunRowMapsEveryColumn(t *testing.T) {
 			startTime:    &started,
 			endTime:      &ended,
 			failure:      ptrString("boom"),
+			startedBy:    ptrString("user-1"),
+			stoppedBy:    ptrString("user-2"),
+			stopTime:     &stopped,
 		}), nil)
 
 	run, err := s.GetAutomationRun(context.Background(), "run-1")
@@ -171,6 +181,9 @@ func TestScanAutomationRunRowMapsEveryColumn(t *testing.T) {
 	assert.Equal(t, &started, run.StartTime)
 	assert.Equal(t, &ended, run.EndTime)
 	assert.Equal(t, "boom", run.Error)
+	assert.Equal(t, "user-1", run.StartedBy)
+	assert.Equal(t, "user-2", run.StoppedBy)
+	assert.Equal(t, &stopped, run.StopTime)
 	mDB.AssertExpectations(t)
 }
 
@@ -183,16 +196,18 @@ func TestOpenAutomationRunMapsEveryColumn(t *testing.T) {
 	s := &Store{db: mDB}
 
 	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", anyArgs(6)...).Run(func(args mock.Arguments) {
+	mRow.On("Scan", anyArgs(9)...).Run(func(args mock.Arguments) {
 		*(args.Get(0).(*string)) = "run-1"
 		*(args.Get(1).(*string)) = testAutomationId
 		*(args.Get(2).(*string)) = string(model.AutomationRunRunning)
 		*(args.Get(3).(**time.Time)) = &started
+		*(args.Get(6).(**string)) = ptrString("user-1")
 	}).Return(nil)
 
-	mDB.On("QueryRow", mock.Anything, sqlContains(automationRunColumns), testAutomationId).Return(mRow)
+	open := sqlContainsAll(automationRunColumns, "started_by)", "NULLIF($2, '')")
+	mDB.On("QueryRow", mock.Anything, open, testAutomationId, "user-1").Return(mRow)
 
-	run, err := s.OpenAutomationRun(context.Background(), testAutomationId)
+	run, err := s.OpenAutomationRun(context.Background(), testAutomationId, "user-1")
 
 	require.NoError(t, err)
 	assert.Equal(t, "run-1", run.Id)
@@ -201,6 +216,9 @@ func TestOpenAutomationRunMapsEveryColumn(t *testing.T) {
 	assert.Equal(t, &started, run.StartTime)
 	assert.Nil(t, run.EndTime)
 	assert.Empty(t, run.Error)
+	assert.Equal(t, "user-1", run.StartedBy)
+	assert.Empty(t, run.StoppedBy)
+	assert.Nil(t, run.StopTime)
 	mDB.AssertExpectations(t)
 }
 
@@ -222,6 +240,9 @@ func TestScanAutomationRunRowLeavesNullColumnsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, run.EndTime)
 	assert.Empty(t, run.Error)
+	assert.Empty(t, run.StartedBy)
+	assert.Empty(t, run.StoppedBy)
+	assert.Nil(t, run.StopTime)
 }
 
 func TestGetAutomationRunNotFound(t *testing.T) {
@@ -258,6 +279,7 @@ func TestScanAutomationWorkItemRowMapsEveryColumn(t *testing.T) {
 	assert.Equal(t, 2, item.Attempts)
 	assert.Equal(t, []string{"session-1", "session-2"}, item.SessionIds)
 	assert.Equal(t, []string{"run-0"}, item.FailedRunIds)
+	assert.Equal(t, []string{"run-0", "run-1"}, item.SessionRunIds)
 	assert.JSONEq(t, `{"recommendation":"acknowledge"}`, string(item.Result))
 	assert.Equal(t, "truncated", item.Error)
 	assert.Equal(t, row.createTime, item.CreateTime)
@@ -343,8 +365,9 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			name:  "finished without empty runs",
 			query: AutomationRunQuery{Finished: true, HideEmpty: true},
 			fragments: []string{
-				"WHERE state NOT IN ('queued', 'running') AND (state = 'failed' OR EXISTS (SELECT 1 FROM automation_work_items w",
+				"WHERE state NOT IN ('queued', 'running') AND (state IN ('failed', 'stopped') OR EXISTS (SELECT 1 FROM automation_work_items w",
 				"w.run_id = automation_runs.id OR w.failed_run_ids @> ARRAY[automation_runs.id::text]",
+				"OR w.session_run_ids @> ARRAY[automation_runs.id::text]",
 				"LIMIT $1",
 			},
 			args: []any{defaultAutomationRunLimit},
@@ -355,6 +378,7 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			fragments: []string{
 				"WHERE automation_id = $1 AND (error ILIKE $2 ESCAPE '\\'",
 				"w.group_key ILIKE $2 ESCAPE '\\' OR w.error ILIKE $2 ESCAPE '\\'",
+				"OR w.session_run_ids @> ARRAY[automation_runs.id::text]",
 				"LIMIT $3",
 			},
 			args: []any{testAutomationId, "%10.0.0.1%", defaultAutomationRunLimit},
@@ -375,7 +399,7 @@ func TestListAutomationRunsNumbersItsArguments(t *testing.T) {
 			name:  "a run asked for by id survives hiding empty runs",
 			query: AutomationRunQuery{HideEmpty: true, Search: testRunId, SearchRunId: testRunId},
 			fragments: []string{
-				"WHERE (state = 'failed' OR id = $1::uuid OR EXISTS (SELECT 1",
+				"WHERE (state IN ('failed', 'stopped') OR id = $1::uuid OR EXISTS (SELECT 1",
 				"OR id = $3::uuid)",
 				"LIMIT $4",
 			},
@@ -467,7 +491,7 @@ func TestListAutomationWorkItemsReadsOneRun(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, sqlContainsAll("WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text]", "ORDER BY created_at"), "run-1").
+	mDB.On("Query", mock.Anything, sqlContainsAll("WHERE run_id = $1::uuid OR failed_run_ids @> ARRAY[$1::text] OR session_run_ids @> ARRAY[$1::text]", "ORDER BY created_at"), "run-1").
 		Return(automationWorkItemRows(fullWorkItemRow()), nil)
 
 	items, err := s.ListAutomationWorkItems(context.Background(), "run-1")
@@ -653,7 +677,9 @@ func TestCountAutomationWorkItemsByRunGroupsByRunAndState(t *testing.T) {
 	mDB.On("Query", mock.Anything, sqlContainsAll(
 		"FROM unnest($1::uuid[]) AS r(id)",
 		"ON w.run_id = r.id OR w.failed_run_ids @> ARRAY[r.id::text]",
+		"OR w.session_run_ids @> ARRAY[r.id::text]",
 		"WHEN w.failed_run_ids @> ARRAY[r.id::text] THEN 'failed'",
+		"WHEN w.run_id IS DISTINCT FROM r.id THEN 'pending'",
 		"GROUP BY 1, 2"), ids).
 		Return(workItemCountRows(
 			[3]any{"run-1", model.AutomationWorkItemDone, 3},
@@ -697,4 +723,21 @@ func TestCountAutomationWorkItemsByRunReportsScanErrors(t *testing.T) {
 	_, err := s.CountAutomationWorkItemsByRun(context.Background(), []string{"run-1"})
 
 	assert.EqualError(t, err, "bad row")
+}
+
+// A manual run counts as the last start, so an enabled automation's next scheduled run comes
+// one interval after it; the due query must not tell the two apart.
+func TestLatestAutomationRunStartTimesCountsManualRuns(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	everyRun := mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "ORDER BY started_at DESC") && !strings.Contains(sql, "started_by")
+	})
+	mDB.On("Query", mock.Anything, everyRun, []string{testAutomationId}).Return(latestRunStartRows(), nil)
+
+	_, err := s.LatestAutomationRunStartTimes(context.Background(), []string{testAutomationId})
+
+	require.NoError(t, err)
+	mDB.AssertExpectations(t)
 }

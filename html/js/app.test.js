@@ -2395,3 +2395,28 @@ describe('onLocationUpdated gridId', () => {
     expect(app.selectedGridId).toBe('abc');
   });
 });
+
+test.each([
+  ['missing', undefined, false, false],
+  ['queued', { state: 'queued' }, true, false],
+  ['running', { state: 'running' }, true, false],
+  ['running with a stopper', { state: 'running', stoppedBy: 'admin-1' }, true, true],
+  ['stopped', { state: 'stopped', stoppedBy: 'admin-1' }, false, false],
+  ['succeeded', { state: 'succeeded' }, false, false],
+])('a %s automation run: in flight and stopping', (_, run, inFlight, stopping) => {
+  expect(app.automationRunInFlight(run)).toBe(inFlight);
+  expect(app.automationRunStopping(run)).toBe(stopping);
+});
+
+test('stopAutomationRun posts the named run with the turn-off choice', async () => {
+  const post = mockPapi('post', {});
+  await app.stopAutomationRun('a/1', 'r 2', true);
+  expect(post).toHaveBeenCalledWith('assistant/automations/a%2F1/runs/r%202/stop', { disable: true });
+});
+
+test('takeClosedStopRequests returns and removes only the runs no longer in flight', () => {
+  const requested = { r1: 'Alert Triage', r2: 'Nightly' };
+  expect(app.takeClosedStopRequests(requested, ['r2'])).toEqual(['Alert Triage']);
+  expect(requested).toEqual({ r2: 'Nightly' });
+  expect(app.takeClosedStopRequests(requested, ['r2'])).toEqual([]);
+});

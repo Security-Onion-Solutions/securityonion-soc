@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -230,6 +231,73 @@ func TestAutomationActivityReportsStoreErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := newActivityCoordinator(t).automationActivity(context.Background(), store)
 			assert.ErrorIs(t, err, failure)
+		})
+	}
+}
+
+func TestAutomationActivitySessionOutcomes(t *testing.T) {
+	stopTime := time.Date(2026, 9, 15, 16, 2, 40, 0, time.UTC)
+	stopping := historyRun(historyRunId, model.AutomationRunRunning)
+	stopping.StoppedBy = "user-1"
+	stopping.StopTime = &stopTime
+
+	running := func(id string, sessionIds, sessionRunIds []string) *model.AutomationWorkItem {
+		return &model.AutomationWorkItem{Id: id, RunId: historyRunId, State: model.AutomationWorkItemRunning, SessionIds: sessionIds, SessionRunIds: sessionRunIds}
+	}
+
+	cases := []struct {
+		name  string
+		run   *model.AutomationRunRecord
+		items []*model.AutomationWorkItem
+		// Outcomes by item id, then session id.
+		want  map[string]map[string]string
+		check func(t *testing.T, run *model.AutomationRunActivity, items map[string]*model.AutomationWorkItemActivity)
+	}{
+		{name: "a stopping run", run: stopping,
+			items: []*model.AutomationWorkItem{
+				running("live", []string{"s-old", "s-live"}, []string{historyOtherRunId, historyRunId}),
+				// A run that is stopping won't start a session that isn't live.
+				running("ending", []string{"s-done"}, []string{historyRunId}),
+			},
+			want: map[string]map[string]string{
+				"live":   {"s-old": model.AutomationRunOutcomeStopped, "s-live": model.AutomationRunOutcomeRunning},
+				"ending": {"s-done": model.AutomationRunOutcomeStopped},
+			},
+			check: func(t *testing.T, run *model.AutomationRunActivity, _ map[string]*model.AutomationWorkItemActivity) {
+				assert.Equal(t, "user-1", run.StoppedBy)
+				assert.Equal(t, &stopTime, run.StopTime)
+				assert.Nil(t, run.EndTime)
+			}},
+		{name: "without a stop", run: historyRun(historyRunId, model.AutomationRunRunning),
+			items: []*model.AutomationWorkItem{
+				running("starting", []string{"s1"}, []string{historyRunId}),
+				{Id: "pending", State: model.AutomationWorkItemPending},
+			},
+			want: map[string]map[string]string{"starting": {"s1": model.AutomationRunOutcomeRunning}},
+			check: func(t *testing.T, _ *model.AutomationRunActivity, items map[string]*model.AutomationWorkItemActivity) {
+				assert.NotNil(t, items["pending"].SessionOutcomes)
+				assert.Empty(t, items["pending"].SessionOutcomes)
+			}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ac := newActivityCoordinator(t)
+			ac.setAgentPhase("s-live", "s-live", automationTestAgent, model.AgentPhaseWaitingLLM)
+			store := &fakeActivityStore{
+				runs:  []*model.AutomationRunRecord{tc.run},
+				items: map[string][]*model.AutomationWorkItem{automationTestId: tc.items},
+			}
+
+			activity, err := ac.automationActivity(context.Background(), store)
+			require.NoError(t, err)
+			require.Len(t, activity.Runs, 1)
+
+			items := activityItems(activity.Runs[0])
+			for id, want := range tc.want {
+				assert.Equal(t, want, items[id].SessionOutcomes, id)
+			}
+			tc.check(t, activity.Runs[0], items)
 		})
 	}
 }

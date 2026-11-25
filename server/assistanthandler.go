@@ -68,7 +68,9 @@ func RegisterAssistantRoutes(srv *Server, r chi.Router, prefix string) {
 		r.Put("/automations/{id}", h.UpdateAutomation)
 		r.Delete("/automations/{id}", h.DeleteAutomation)
 		r.Get("/automations/{id}/runs", h.GetAutomationRuns)
+		r.Post("/automations/{id}/runs", h.RunAutomationNow)
 		r.Get("/automations/{id}/runs/{runId}", h.GetAutomationRun)
+		r.Post("/automations/{id}/runs/{runId}/stop", h.StopAutomationRun)
 
 		r.Get("/memories", h.GetMemories)
 		r.Post("/memories", h.CreateMemory)
@@ -849,9 +851,9 @@ func (h *AssistantHandler) UpdateSession(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary      Clone an Assistant Session
-// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation; that requires events/write.
+// @Description  Copy a session you can read, and its delegated sub-sessions, into a new session you own so it can be continued. Given an alert that already references the session, as its automated triage or one of its manual investigations, the copy is also recorded on that alert as a manual investigation.
 // @Tags         Assistant
-// @Security     bearer[assistant/write_authored, assistant/delete_authored]
+// @Security     bearer[assistant/write_authored, assistant/delete_authored, events/read, events/write]
 // @Param        sessionId   path   string  true   "Session ID to clone"
 // @Param        entityType  query  string  false  "alert_investigation, to record the copy on an alert" example(alert_investigation)
 // @Param        entityId    query  string  false  "The alert's soc_id" example(WKhCuTw4GPvrQA-9ksmn)
@@ -1860,7 +1862,7 @@ func (h *AssistantHandler) CreateAutomation(w http.ResponseWriter, r *http.Reque
 }
 
 // @Summary      Update an Automation
-// @Description  Replace an automation's definition. Changing its params drops the work its previous definition had queued.
+// @Description  Replace an automation's definition. Changing its params drops the work its previous definition had queued. Turning an automation off stops its in-flight run and returns that run's unfinished work items to the queue without counting them as failures.
 // @Tags         Assistant
 // @Security     bearer[config/write]
 // @Param        id       path  string            true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
@@ -2034,6 +2036,101 @@ func (h *AssistantHandler) GetAutomationRun(w http.ResponseWriter, r *http.Reque
 
 	details, err := h.server.AssistantManager.GetAutomationRunDetails(ctx, urlParamId(r), decodePathValue(chi.URLParam(r, "runId")), alertLimit)
 	h.respondAutomation(w, r, details, err)
+}
+
+// @Summary      Run an Automation Now
+// @Description  Start one run of the automation immediately, whether or not it is enabled or due. On a disabled automation the run is a one-off and the automation stays disabled. The caller is recorded as the run's startedBy.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        id  path  string  true  "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Produce      json
+// @Success      200 {object} model.AutomationRunRecord "The run that was started"
+// @Failure      400           "The automation ID is missing or malformed, the automation's kind is unknown, or the license is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found"
+// @Failure      409           "A run of this automation is already in flight, or its agent is not available"
+// @Failure      500           "Internal SOC error; review SOC logs"
+// @Failure      503           "Automations are not running on this grid"
+// @Router       /connect/assistant/automations/{id}/runs [post]
+func (h *AssistantHandler) RunAutomationNow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	automationId := urlParamId(r)
+	if automationId == "" {
+		log.FromContext(ctx).Error("automation id is required to run an automation now")
+		web.Respond(w, r, http.StatusBadRequest, "id is required")
+
+		return
+	}
+
+	run, err := h.server.AssistantManager.RunAutomationNow(ctx, automationId)
+	h.respondAutomation(w, r, run, err)
+}
+
+// @Summary      Stop an Automation's Run
+// @Description  Signal the named in-flight run to stop, and return before it ends. Its unfinished work items return to the queue without counting as failures. With disable, the automation is also turned off, and whatever run it has in flight is stopped even if the named run already ended; if turning it off fails, the run is still stopped and an error is returned. The first caller to stop a run is recorded as its stoppedBy, with the time as its stopTime, and a later call changes neither. A stopped run's endTime is set when its sessions have finished ending, so it is later than its stopTime.
+// @Tags         Assistant
+// @Security     bearer[config/write]
+// @Param        id       path  string                       true   "Automation ID" example(c3d44fb8-3bc2-46e2-a7d2-8a8983556d1a)
+// @Param        runId    path  string                       true   "Run ID" example(3f1a7c0e-9b21-4d8a-bc55-2e77a1f0c934)
+// @Param        request  body  model.AutomationStopRequest  false  "Stop options"
+// @Produce      json
+// @Success      202           "The run was signalled to stop"
+// @Failure      400           "The request body is malformed, an ID is missing or malformed, or the license is invalid"
+// @Failure      401           "Request was not properly authenticated"
+// @Failure      403           "Insufficient permissions for this request"
+// @Failure      404           "Automation not found when disable is set; the run is still stopped"
+// @Failure      409           "That run is not in flight; only without disable"
+// @Failure      500           "The run couldn't be recorded as stopped, or the automation couldn't be turned off; a run that was signalled is still stopping"
+// @Router       /connect/assistant/automations/{id}/runs/{runId}/stop [post]
+func (h *AssistantHandler) StopAutomationRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := h.server.CheckAuthorized(ctx, "write", "config"); err != nil {
+		web.Respond(w, r, http.StatusForbidden, err)
+		return
+	}
+
+	logger := log.FromContext(ctx)
+
+	automationId := urlParamId(r)
+	if automationId == "" {
+		logger.Error("automation id is required to stop an automation run")
+		web.Respond(w, r, http.StatusBadRequest, "id is required")
+
+		return
+	}
+
+	runId := decodePathValue(chi.URLParam(r, "runId"))
+	if runId == "" {
+		logger.Error("runId is required to stop an automation run")
+		web.Respond(w, r, http.StatusBadRequest, "runId is required")
+
+		return
+	}
+
+	request := &model.AutomationStopRequest{}
+	if err := json.NewDecoder(r.Body).Decode(request); err != nil && !errors.Is(err, io.EOF) {
+		logger.WithError(err).Error("unable to decode automation stop request")
+		web.Respond(w, r, http.StatusBadRequest, err)
+
+		return
+	}
+
+	err := h.server.AssistantManager.StopAutomationRun(ctx, automationId, runId, request.Disable)
+	if err != nil {
+		h.respondAutomation(w, r, nil, err)
+
+		return
+	}
+
+	web.Respond(w, r, http.StatusAccepted, nil)
 }
 
 // @Summary      Get Automation Activity
@@ -2246,10 +2343,17 @@ func (h *AssistantHandler) respondAutomation(w http.ResponseWriter, r *http.Requ
 		web.Respond(w, r, http.StatusNotFound, err)
 	case strings.Contains(err.Error(), "ERROR_AUTOMATION_KIND_NOT_FOUND"):
 		web.Respond(w, r, http.StatusBadRequest, err)
-	case strings.Contains(err.Error(), "ERROR_AUTOMATION_PARAMS_INVALID"):
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_PARAMS_INVALID"),
+		strings.Contains(err.Error(), "ERROR_LICENSE_INVALID"):
 		web.Respond(w, r, http.StatusBadRequest, err)
 	case strings.Contains(err.Error(), "ERROR_SYSTEM_AUTOMATION_UNDELETABLE"):
 		web.Respond(w, r, http.StatusForbidden, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_RUN_IN_FLIGHT"),
+		strings.Contains(err.Error(), "ERROR_AUTOMATION_RUN_NOT_IN_FLIGHT"),
+		strings.Contains(err.Error(), "ERROR_AUTOMATION_AGENT_UNAVAILABLE"):
+		web.Respond(w, r, http.StatusConflict, err)
+	case strings.Contains(err.Error(), "ERROR_AUTOMATION_SCHEDULER_UNAVAILABLE"):
+		web.Respond(w, r, http.StatusServiceUnavailable, err)
 	default:
 		log.FromContext(r.Context()).WithError(err).Error("unable to service automation request")
 		web.Respond(w, r, http.StatusInternalServerError, err)

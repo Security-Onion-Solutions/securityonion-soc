@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/security-onion-solutions/securityonion-soc/execpool"
+	"github.com/security-onion-solutions/securityonion-soc/licensing"
 	"github.com/security-onion-solutions/securityonion-soc/model"
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
@@ -27,6 +28,12 @@ var (
 	ErrAutomationSchedulerStopped = errors.New("ERROR_AUTOMATION_SCHEDULER_STOPPED")
 	// The cause recorded on an open run row this process has no run for.
 	ErrAutomationRunAbandoned = errors.New("ERROR_AUTOMATION_RUN_ABANDONED")
+	// Run now while the scheduler isn't running, or is shutting down.
+	ErrAutomationSchedulerUnavailable = errors.New("ERROR_AUTOMATION_SCHEDULER_UNAVAILABLE")
+	// Run now on an automation whose agent doesn't resolve.
+	ErrAutomationAgentUnavailable = errors.New("ERROR_AUTOMATION_AGENT_UNAVAILABLE")
+	// Run now without an active OAI license.
+	ErrAutomationUnlicensed = errors.New("ERROR_LICENSE_INVALID")
 )
 
 // automationScheduler is one started worker. Runs descend from ctx; done closes once the
@@ -36,9 +43,24 @@ type automationScheduler struct {
 	cancel context.CancelCauseFunc
 	wake   chan struct{}
 	done   chan struct{}
+	// Unbuffered, so a request is either taken by the worker or not sent at all.
+	runNow chan *automationRunNowRequest
 
 	// Worker goroutine only.
 	license oaiLicenseGate
+}
+
+// automationRunNowRequest asks the worker to open one run of an automation now. reply is
+// buffered so the worker never blocks on a caller that stopped waiting.
+type automationRunNowRequest struct {
+	automationId string
+	startedBy    string
+	reply        chan automationRunNowReply
+}
+
+type automationRunNowReply struct {
+	run *model.AutomationRunRecord
+	err error
 }
 
 // startAutomationScheduler starts the worker where a run could succeed: agentic, with Postgres.
@@ -72,6 +94,7 @@ func (ac *AssistantCoordinator) startAutomationScheduler() {
 		cancel: cancel,
 		wake:   make(chan struct{}, 1),
 		done:   make(chan struct{}),
+		runNow: make(chan *automationRunNowRequest),
 	}
 
 	ac.automationScheduler = s
@@ -294,11 +317,58 @@ func (ac *AssistantCoordinator) automationWorker(s *automationScheduler) {
 
 				logger.WithField("automationTickInterval", interval).Info("automation tick interval updated")
 			}
+		case req := <-s.runNow:
+			// Other due automations wait for the next tick or wake.
+			ac.serveAutomationRunNow(s, req)
+
+			continue
 		case <-ticker.C:
 		}
 
 		ac.automationTick(s)
 	}
+}
+
+// serveAutomationRunNow opens one run of the requested automation, whether or not it is enabled
+// or due. It runs on the worker because a run's context descends from the scheduler's, and
+// under configWriteMu so the run uses the definition as stored at that moment.
+func (ac *AssistantCoordinator) serveAutomationRunNow(s *automationScheduler, req *automationRunNowRequest) {
+	if s.ctx.Err() != nil {
+		req.reply <- automationRunNowReply{err: ErrAutomationSchedulerUnavailable}
+
+		return
+	}
+
+	if !licensing.IsEnabled(licensing.FEAT_OAI) {
+		req.reply <- automationRunNowReply{err: ErrAutomationUnlicensed}
+
+		return
+	}
+
+	tickCtx, cancel := context.WithTimeout(s.ctx, ac.getAutomationTickInterval())
+	defer cancel()
+
+	ac.configWriteMu.Lock()
+	defer ac.configWriteMu.Unlock()
+
+	automation, err := ac.loadAutomation(tickCtx, req.automationId)
+	if err != nil {
+		req.reply <- automationRunNowReply{err: err}
+
+		return
+	}
+
+	run, err := ac.startAutomationRun(tickCtx, s, automation, req.startedBy)
+	if err == nil {
+		// Logged here so the start is recorded even when the caller has stopped waiting.
+		log.FromContext(s.ctx).WithFields(log.Fields{
+			"automationId":        automation.Id,
+			"automationRunId":     run.Id,
+			"automationStartedBy": req.startedBy,
+		}).Info("automation run started manually")
+	}
+
+	req.reply <- automationRunNowReply{run: run, err: err}
 }
 
 // automationTick re-reads the stored set, drops work queued for automations that left it, and
@@ -371,7 +441,7 @@ func (ac *AssistantCoordinator) startDueAutomationRuns(tickCtx context.Context, 
 		}
 
 		if automationDue(automation, lastStarted, now) {
-			ac.startAutomationRun(tickCtx, s, automation)
+			ac.startAutomationRun(tickCtx, s, automation, "")
 		}
 	}
 
@@ -398,44 +468,48 @@ func (ac *AssistantCoordinator) isAutomationRunning(id string) bool {
 }
 
 // The kind is resolved before the row opens, so an unknown kind costs a log line rather than a failed row every interval.
-// tickCtx bounds the open; the run itself descends from the scheduler.
-func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *automationScheduler, automation *model.Automation) {
+// tickCtx bounds the open; the run itself descends from the scheduler. startedBy is empty for a
+// scheduled run, which ignores the result; Run now returns it.
+func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *automationScheduler, automation *model.Automation, startedBy string) (*model.AutomationRunRecord, error) {
 	logger := log.FromContext(s.ctx).WithField("automationId", automation.Id)
 
 	kind, err := ac.lookupAutomationKind(automation.AutomationKind)
 	if err != nil {
 		logger.WithField("automationKind", automation.AutomationKind).Warn("automation names a kind this build does not provide; skipping")
 
-		return
+		return nil, ErrAutomationKindNotFound
 	}
 
 	if _, _, err := ac.resolveAgent(automation.Agent); err != nil {
-		logger.WithField("agent", automation.Agent).Warn("automation names an agent that is not available; skipping")
+		logger.WithError(err).WithField("automationAgent", automation.Agent).Warn("automation names an agent that is not available; skipping")
 
-		return
+		return nil, ErrAutomationAgentUnavailable
 	}
 
 	if ac.isAutomationRunning(automation.Id) {
 		logger.Debug("automation already running; skipping")
 
-		return
+		return nil, database.ErrAutomationRunInFlight
 	}
 
-	record, err := ac.store.OpenAutomationRun(tickCtx, automation.Id)
-	if errors.Is(err, database.ErrAutomationRunInFlight) {
-		ac.failAbandonedAutomationRun(tickCtx, logger, automation.Id)
+	record, err := ac.store.OpenAutomationRun(tickCtx, automation.Id, startedBy)
+	if errors.Is(err, database.ErrAutomationRunInFlight) && ac.closeAbandonedAutomationRun(tickCtx, logger, automation.Id) > 0 {
+		// The row in the way had no owner and is closed, so the open needn't wait for another tick or press.
+		record, err = ac.store.OpenAutomationRun(tickCtx, automation.Id, startedBy)
+	}
 
-		return
+	if errors.Is(err, database.ErrAutomationRunInFlight) {
+		return nil, database.ErrAutomationRunInFlight
 	}
 
 	if err != nil {
 		logger.WithError(err).Error("unable to open automation run")
 
-		return
+		return nil, err
 	}
 
 	runCtx, cancel := context.WithCancelCause(s.ctx)
-	release := ac.registerAutomationRun(automation.Id, cancel)
+	release := ac.registerAutomationRun(automation.Id, record.Id, cancel)
 
 	run := &AutomationRun{
 		Srv:   ac.srv,
@@ -456,21 +530,28 @@ func (ac *AssistantCoordinator) startAutomationRun(tickCtx context.Context, s *a
 
 		ac.executeAutomationRun(runCtx, kind, run)
 	}()
+
+	return record, nil
 }
 
-// failAbandonedAutomationRun closes the open row nothing owns. Runs open and register on the
+// closeAbandonedAutomationRun closes the open row nothing owns. Runs open and register on the
 // worker goroutine and close their row before releasing, so an in-flight row with no run
 // registered here is one an open lost the result of or a close could not end. A failed write
-// is retried by the next tick, which meets the same row.
-func (ac *AssistantCoordinator) failAbandonedAutomationRun(ctx context.Context, logger *log.Entry, automationId string) {
-	failed, err := ac.store.FailAbandonedAutomationRun(ctx, automationId, ErrAutomationRunAbandoned.Error())
+// is retried by the next tick, which meets the same row. It returns the number of rows closed.
+func (ac *AssistantCoordinator) closeAbandonedAutomationRun(ctx context.Context, logger *log.Entry, automationId string) int {
+	stopped, failed, err := ac.store.CloseAbandonedAutomationRun(ctx, automationId, ErrAutomationRunAbandoned.Error())
 	if err != nil {
-		logger.WithError(err).Warn("unable to fail abandoned automation run; retrying next tick")
+		logger.WithError(err).Warn("unable to close abandoned automation run; retrying next tick")
 
-		return
+		return 0
 	}
 
-	logger.WithField("failedRuns", failed).Warn("automation run in flight with no owner; failed it so the next tick can open one")
+	logger.WithFields(log.Fields{
+		"abandonedRunsStopped": stopped,
+		"abandonedRunsFailed":  failed,
+	}).Warn("automation run in flight with no owner; closed it so a run can open")
+
+	return stopped + failed
 }
 
 func (ac *AssistantCoordinator) executeAutomationRun(ctx context.Context, kind AutomationKind, run *AutomationRun) {
@@ -490,7 +571,7 @@ func (ac *AssistantCoordinator) executeAutomationRun(ctx context.Context, kind A
 		logger.WithError(err).Error("unable to list open automation work items")
 	}
 
-	ac.closeAutomationRun(ctx, logger, run.RunId, err)
+	ac.closeAutomationRun(ctx, logger, run.Task.Id, run.RunId, err)
 }
 
 func runAutomationKind(ctx context.Context, logger *log.Entry, kind AutomationKind, run *AutomationRun) (err error) {
@@ -508,11 +589,32 @@ func runAutomationKind(ctx context.Context, logger *log.Entry, kind AutomationKi
 	return kind.Execute(ctx, run)
 }
 
-// A cancelled run failed whatever the kind returned; the write is detached from that cancellation.
-// A shutdown skips the write: the row stays open and the next start's reconcile fails it.
-func (ac *AssistantCoordinator) closeAutomationRun(ctx context.Context, logger *log.Entry, runId string, err error) {
+// A cancelled run failed whatever the kind returned, unless a user stopped it; the write is
+// detached from that cancellation. A shutdown skips the write: the row stays open and the next
+// start's reconcile closes it. The first cause set wins, so a Stop after a params change or a
+// shutdown changes nothing here.
+func (ac *AssistantCoordinator) closeAutomationRun(ctx context.Context, logger *log.Entry, automationId, runId string, err error) {
 	if shuttingDown(ctx) {
 		logger.Info("automation run left open at shutdown; the next start reconciles it")
+
+		return
+	}
+
+	closeCtx, done := web.DetachContext(ctx, DETACHED_WRITE_TIMEOUT)
+	defer done()
+
+	// Read once: a Stop landing between two reads would close a run it had marked as failed.
+	cancelCause := context.Cause(ctx)
+
+	if errors.Is(cancelCause, ErrAutomationRunStopped) {
+		requeued, err := ac.store.CloseStoppedAutomationRun(closeCtx, automationId, runId, "")
+		if err != nil {
+			logger.WithError(err).Error("unable to close stopped automation run; a second Stop or the next due run closes it")
+
+			return
+		}
+
+		logger.WithField("requeuedWorkItems", requeued).Info("automation run stopped")
 
 		return
 	}
@@ -520,14 +622,11 @@ func (ac *AssistantCoordinator) closeAutomationRun(ctx context.Context, logger *
 	state, cause := model.AutomationRunSucceeded, ""
 
 	switch {
-	case ctx.Err() != nil:
-		state, cause = model.AutomationRunFailed, context.Cause(ctx).Error()
+	case cancelCause != nil:
+		state, cause = model.AutomationRunFailed, cancelCause.Error()
 	case err != nil:
 		state, cause = model.AutomationRunFailed, err.Error()
 	}
-
-	closeCtx, done := web.DetachContext(ctx, DETACHED_WRITE_TIMEOUT)
-	defer done()
 
 	if err := ac.store.CloseAutomationRun(closeCtx, runId, state, cause); err != nil {
 		logger.WithError(err).Error("unable to close automation run; the next tick fails it as abandoned")

@@ -274,7 +274,9 @@ func (r *alertTriageRun) reclaim(ctx context.Context) {
 	logger := log.FromContext(ctx)
 
 	for _, item := range r.run.OpenItems {
-		if shuttingDown(ctx) {
+		// Any cancel, not only shutdown: a Stop must not replay the rest, and charge the stopped
+		// run for their failures. An apply already started keeps its detached write.
+		if ctx.Err() != nil {
 			return
 		}
 
@@ -866,12 +868,13 @@ func decodeAlertTriageCheckpoint(item *model.AutomationWorkItem) (*alertTriagePa
 }
 
 // gone handles a held item the store no longer has: routine after a params change, which sweeps
-// the run's pending and running work, and a defect otherwise.
+// the run's pending and running work, and a defect otherwise. A stopped run is excused too: a
+// params save after the Stop sweeps that run's items the same way.
 func (r *alertTriageRun) gone(ctx context.Context, item *model.AutomationWorkItem) error {
 	logger := log.FromContext(ctx).WithField("workItemId", item.Id)
 
-	if errors.Is(context.Cause(ctx), ErrAutomationParamsChanged) {
-		logger.Info("alert triage item was swept by a params change; nothing recorded")
+	if deliberateAutomationCancel(ctx) {
+		logger.Info("alert triage item was swept after its run was cancelled; nothing recorded")
 
 		return nil
 	}

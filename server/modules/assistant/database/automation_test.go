@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -38,8 +40,7 @@ func assertNoStatements(t *testing.T, mDB *mockdb.MockDB) {
 // erroringRow returns a Row whose Scan fails, for the pg error-mapping tests.
 func erroringRow(err error) *mockdb.MockRow {
 	mRow := &mockdb.MockRow{}
-	mRow.On("Scan", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(err)
+	mRow.On("Scan", anyArgs(9)...).Return(err)
 
 	return mRow
 }
@@ -59,10 +60,10 @@ func TestOpenAutomationRunInFlight(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automation_runs"), testAutomationId).
+	mDB.On("QueryRow", mock.Anything, sqlContains("INSERT INTO automation_runs"), testAutomationId, "").
 		Return(erroringRow(&pgconn.PgError{Code: "23505", ConstraintName: idxRunsOneInFlight}))
 
-	run, err := s.OpenAutomationRun(context.Background(), testAutomationId)
+	run, err := s.OpenAutomationRun(context.Background(), testAutomationId, "")
 
 	assert.Nil(t, run)
 	assert.ErrorIs(t, err, ErrAutomationRunInFlight)
@@ -76,9 +77,9 @@ func TestOpenAutomationRunPassesOtherErrorsThrough(t *testing.T) {
 	s := &Store{db: mDB}
 
 	fkViolation := &pgconn.PgError{Code: "23503"}
-	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId).Return(erroringRow(fkViolation))
+	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId, "").Return(erroringRow(fkViolation))
 
-	_, err := s.OpenAutomationRun(context.Background(), testAutomationId)
+	_, err := s.OpenAutomationRun(context.Background(), testAutomationId, "")
 
 	assert.NotErrorIs(t, err, ErrAutomationRunInFlight)
 	assert.ErrorIs(t, err, fkViolation)
@@ -90,10 +91,10 @@ func TestOpenAutomationRunIgnoresOtherUniqueViolations(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId).
+	mDB.On("QueryRow", mock.Anything, mock.Anything, testAutomationId, "").
 		Return(erroringRow(&pgconn.PgError{Code: "23505", ConstraintName: "some_other_index"}))
 
-	_, err := s.OpenAutomationRun(context.Background(), testAutomationId)
+	_, err := s.OpenAutomationRun(context.Background(), testAutomationId, "")
 
 	assert.NotErrorIs(t, err, ErrAutomationRunInFlight)
 }
@@ -102,7 +103,7 @@ func TestOpenAutomationRunRequiresAnAutomationId(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	_, err := s.OpenAutomationRun(context.Background(), "")
+	_, err := s.OpenAutomationRun(context.Background(), "", "")
 
 	assert.Error(t, err)
 	assertNoStatements(t, mDB)
@@ -530,9 +531,11 @@ func TestReconcileAutomationRunsSweepsEveryOpenRun(t *testing.T) {
 
 	openRuns := mock.MatchedBy(func(sql string) bool {
 		return strings.Contains(sql, "UPDATE automation_runs") &&
-			strings.Contains(sql, "WHERE ended_at IS NULL")
+			strings.Contains(sql, "WHERE ended_at IS NULL") &&
+			strings.Contains(sql, "SET state = 'failed'")
 	})
 
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(emptyRows(), nil).Once()
 	mTx.On("Query", mock.Anything, openRuns).Return(emptyRows(), nil).Once()
 	mTx.On("Query", mock.Anything, sqlContains("UPDATE automation_work_items")).
 		Return(emptyRows(), nil)
@@ -552,17 +555,20 @@ func TestReconcileAutomationRunsCounts(t *testing.T) {
 	mTx.On("Rollback", mock.Anything).Return(nil)
 	mTx.On("Commit", mock.Anything).Return(nil)
 
-	mTx.On("Query", mock.Anything, sqlContains("UPDATE automation_runs")).
-		Return(rowsYielding(2), nil)
-	mTx.On("Query", mock.Anything, sqlContains("UPDATE automation_work_items")).
-		Return(rowsYielding(3), nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(runIdRows("run-s"), nil)
+	mTx.On("Query", mock.Anything, sqlContains("run_id::text = ANY($2::text[])"), "ERROR_AUTOMATION_RUN_STOPPED", []string{"run-s"}).
+		Return(rowsYielding(1), nil)
+	mTx.On("Query", mock.Anything, sqlContains("SET state = 'failed'")).Return(rowsYielding(2), nil)
+	mTx.On("Query", mock.Anything, sqlContains("WHERE state = 'running'")).Return(rowsYielding(3), nil)
 
 	result, err := s.ReconcileAutomationRuns(context.Background())
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.FailedRuns)
-	assert.Equal(t, 3, result.ResetItems)
+	assert.Equal(t, 1, result.StoppedRuns)
+	assert.Equal(t, 4, result.ResetItems, "items from stopped and failed runs both go back to pending")
 	mTx.AssertExpectations(t)
+	assertPlaceholdersBound(t, &mTx.Mock)
 }
 
 // Items left applying already hold their conclusion, so resuming them costs no second
@@ -575,6 +581,7 @@ func TestReconcileAutomationRunsLeavesApplyingItemsAlone(t *testing.T) {
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(emptyRows(), nil)
 	mTx.On("Query", mock.Anything, mock.Anything).Return(emptyRows(), nil)
 
 	_, err := s.ReconcileAutomationRuns(context.Background())
@@ -596,6 +603,7 @@ func TestReconcileAutomationRunsDoesNotRecountAttempts(t *testing.T) {
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(emptyRows(), nil)
 	mTx.On("Query", mock.Anything, mock.Anything).Return(emptyRows(), nil)
 
 	_, err := s.ReconcileAutomationRuns(context.Background())
@@ -617,6 +625,7 @@ func TestReconcileAutomationRunsCountsTheDeadRunAsFailed(t *testing.T) {
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
 	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(emptyRows(), nil)
 	mTx.On("Query", mock.Anything, mock.Anything).Return(emptyRows(), nil)
 
 	_, err := s.ReconcileAutomationRuns(context.Background())
@@ -638,6 +647,7 @@ func TestReconcileAutomationRunsRollsBackOnFailure(t *testing.T) {
 
 	mDB.On("Begin", mock.Anything).Return(mTx, nil)
 	mTx.On("Rollback", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "").Return(emptyRows(), nil)
 	mTx.On("Query", mock.Anything, sqlContains("UPDATE automation_runs")).Return(rowsYielding(1), nil)
 	mTx.On("Query", mock.Anything, sqlContains("UPDATE automation_work_items")).
 		Return((*mockdb.MockRows)(nil), errors.New("connection lost"))
@@ -908,31 +918,37 @@ func TestFailOrphanedAutomationWorkItemsSweepsAllWhenNothingIsLive(t *testing.T)
 	mDB.AssertExpectations(t)
 }
 
-func TestFailAbandonedAutomationRunRequiresAnAutomationId(t *testing.T) {
+func TestCloseAbandonedAutomationRunRequiresAnAutomationId(t *testing.T) {
 	mDB := &mockdb.MockDB{}
 	s := &Store{db: mDB}
 
-	_, err := s.FailAbandonedAutomationRun(context.Background(), "", "abandoned")
+	_, _, err := s.CloseAbandonedAutomationRun(context.Background(), "", "abandoned")
 
 	assert.Error(t, err)
 	assertNoStatements(t, mDB)
 }
 
 // Only an open row of that automation is touched; the cause is what the run history shows.
-func TestFailAbandonedAutomationRunCounts(t *testing.T) {
+func TestCloseAbandonedAutomationRunCounts(t *testing.T) {
 	mDB := &mockdb.MockDB{}
+	mTx := &mockdb.MockTx{}
 	s := &Store{db: mDB}
 
-	mDB.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
-		return strings.Contains(sql, "UPDATE automation_runs") &&
+	mDB.On("Begin", mock.Anything).Return(mTx, nil)
+	mTx.On("Rollback", mock.Anything).Return(nil)
+	mTx.On("Commit", mock.Anything).Return(nil)
+	mTx.On("Query", mock.Anything, stoppingRunsSql(), "", testAutomationId).Return(emptyRows(), nil)
+	mTx.On("Query", mock.Anything, mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "SET state = 'failed'") &&
 			strings.Contains(sql, "WHERE automation_id = $1 AND ended_at IS NULL")
 	}), testAutomationId, "abandoned").Return(rowsYielding(1), nil)
 
-	failed, err := s.FailAbandonedAutomationRun(context.Background(), testAutomationId, "abandoned")
+	stopped, failed, err := s.CloseAbandonedAutomationRun(context.Background(), testAutomationId, "abandoned")
 
 	require.NoError(t, err)
+	assert.Equal(t, 0, stopped)
 	assert.Equal(t, 1, failed)
-	mDB.AssertExpectations(t)
+	mTx.AssertExpectations(t)
 }
 
 func TestAutomationWritesReportOnlyRealChanges(t *testing.T) {
@@ -965,4 +981,299 @@ func TestAutomationWritesReportOnlyRealChanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, item)
 	assert.Equal(t, 2, changes, "nothing to claim")
+}
+
+// The statement every stopped close runs. The fragments pin what makes it correct: the first
+// stopper and stop time survive, ended_at is the close's own time, and only an open row closes.
+var stoppingRunsSqlFragments = []string{
+	"UPDATE automation_runs",
+	"SET state = 'stopped'",
+	"stopped_by = COALESCE(stopped_by, NULLIF($1, ''))",
+	"stopped_at = COALESCE(stopped_at, now())",
+	"ended_at = now()",
+	"WHERE ended_at IS NULL AND",
+}
+
+func stoppingRunsSql() any {
+	return sqlContainsAll(stoppingRunsSqlFragments...)
+}
+
+var sqlPlaceholder = regexp.MustCompile(`\$(\d+)`)
+
+// assertPlaceholdersBound checks every statement m received references each argument it was
+// given, and no more. Postgres refuses to prepare a statement with an unreferenced argument,
+// and a mock accepts it.
+func assertPlaceholdersBound(t assert.TestingT, m *mock.Mock) {
+	if h, ok := t.(interface{ Helper() }); ok {
+		h.Helper()
+	}
+
+	for _, call := range m.Calls {
+		if call.Method != "Query" && call.Method != "QueryRow" && call.Method != "Exec" {
+			continue
+		}
+
+		sql := call.Arguments.String(1)
+		argCount := len(call.Arguments) - 2
+		referenced := map[int]bool{}
+
+		for _, match := range sqlPlaceholder.FindAllStringSubmatch(sql, -1) {
+			n, _ := strconv.Atoi(match[1])
+			referenced[n] = true
+		}
+
+		for n := 1; n <= argCount; n++ {
+			assert.True(t, referenced[n], "argument $%d is never referenced in:%s", n, sql)
+		}
+
+		for n := range referenced {
+			assert.LessOrEqual(t, n, argCount, "placeholder $%d has no argument in:%s", n, sql)
+		}
+	}
+}
+
+func TestAssertPlaceholdersBound(t *testing.T) {
+	bound := &mock.Mock{}
+	bound.Calls = []mock.Call{{Method: "Query", Arguments: mock.Arguments{nil, "SELECT $1, $2", "a", "b"}}}
+	assertPlaceholdersBound(t, bound)
+
+	for name, args := range map[string]mock.Arguments{
+		"unreferenced argument": {nil, "SELECT $2", "a", "b"},
+		"missing argument":      {nil, "SELECT $1, $2", "a"},
+	} {
+		inner := &failureRecorder{}
+		unbound := &mock.Mock{}
+		unbound.Calls = []mock.Call{{Method: "Query", Arguments: args}}
+		assertPlaceholdersBound(inner, unbound)
+		assert.True(t, inner.failed, name)
+	}
+}
+
+type failureRecorder struct {
+	failed bool
+}
+
+func (r *failureRecorder) Errorf(string, ...any) {
+	r.failed = true
+}
+
+// Only running items of the stopped runs, and failed_run_ids untouched, so nothing is charged.
+func requeueStoppedItemsSql() any {
+	return mock.MatchedBy(func(sql string) bool {
+		return strings.Contains(sql, "UPDATE automation_work_items") &&
+			strings.Contains(sql, "SET state = 'pending', run_id = NULL") &&
+			strings.Contains(sql, "WHERE state = 'running' AND run_id::text = ANY($2::text[])") &&
+			!strings.Contains(sql, "failed_run_ids")
+	})
+}
+
+// runIdRows yields one RETURNING id::text row per id.
+func runIdRows(ids ...string) *mockdb.MockRows {
+	mRows := &mockdb.MockRows{}
+
+	for _, id := range ids {
+		mRows.On("Next").Return(true).Once()
+		mRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+			*(args.Get(0).(*string)) = id
+		}).Return(nil).Once()
+	}
+
+	mRows.On("Next").Return(false)
+	mRows.On("Err").Return(nil)
+	mRows.On("Close").Return()
+
+	return mRows
+}
+
+func TestMarkAutomationRunStoppingKeepsTheFirstStopper(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+	changes := 0
+	s.OnAutomationChange(func() { changes++ })
+
+	mark := sqlContainsAll("SET stopped_by = NULLIF($2, ''), stopped_at = now()",
+		"WHERE id = $1 AND ended_at IS NULL AND stopped_by IS NULL")
+
+	mDB.On("Query", mock.Anything, mark, testRunId, "user-1").Return(rowsYielding(1), nil).Once()
+	require.NoError(t, s.MarkAutomationRunStopping(context.Background(), testRunId, "user-1"))
+	assert.Equal(t, 1, changes)
+
+	// A second Stop, or one against a closed row, matches nothing and changes nothing.
+	mDB.On("Query", mock.Anything, mark, testRunId, "user-2").Return(emptyRows(), nil).Once()
+	require.NoError(t, s.MarkAutomationRunStopping(context.Background(), testRunId, "user-2"))
+	assert.Equal(t, 1, changes)
+	mDB.AssertExpectations(t)
+}
+
+func TestCloseAutomationRunClearsTheStopper(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	mDB.On("Query", mock.Anything, sqlContains("stopped_by = NULL, stopped_at = NULL"), "run-1", "failed", "boom").
+		Return(rowsYielding(1), nil)
+
+	require.NoError(t, s.CloseAutomationRun(context.Background(), "run-1", model.AutomationRunFailed, "boom"))
+	mDB.AssertExpectations(t)
+}
+
+func TestAutomationRunStopWritesRefuseBadArguments(t *testing.T) {
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		call func(s *Store) (any, error)
+	}{
+		{name: "mark stopping without a run id", call: func(s *Store) (any, error) { return nil, s.MarkAutomationRunStopping(ctx, "", "user-1") }},
+		{name: "close as stopped without requeueing", call: func(s *Store) (any, error) {
+			return nil, s.CloseAutomationRun(ctx, "run-1", model.AutomationRunStopped, "")
+		}},
+		{name: "close stopped without an automation id", call: func(s *Store) (any, error) { return s.CloseStoppedAutomationRun(ctx, "", testRunId, "") }},
+		{name: "close stopped without a run id", call: func(s *Store) (any, error) {
+			return s.CloseStoppedAutomationRun(ctx, testAutomationId, "", "")
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mDB := &mockdb.MockDB{}
+
+			_, err := tc.call(&Store{db: mDB})
+
+			assert.Error(t, err)
+			assertNoStatements(t, mDB)
+		})
+	}
+}
+
+// Every path that closes a stopped run runs the same close and requeue in one transaction.
+func TestStoppedRunCloses(t *testing.T) {
+	ctx := context.Background()
+	cause := "ERROR_AUTOMATION_RUN_STOPPED"
+	connectionLost := errors.New("connection lost")
+
+	closeStopped := func(automationId, stoppedBy string) func(s *Store) (any, error) {
+		return func(s *Store) (any, error) {
+			return s.CloseStoppedAutomationRun(ctx, automationId, testRunId, stoppedBy)
+		}
+	}
+	closeAbandoned := func(s *Store) (any, error) {
+		stopped, failed, err := s.CloseAbandonedAutomationRun(ctx, testAutomationId, "abandoned")
+		return []int{stopped, failed}, err
+	}
+
+	cases := []struct {
+		name       string
+		call       func(s *Store) (any, error)
+		where      string
+		closeArgs  []any
+		closed     []string
+		requeue    []any // defaults to any arguments when a run closes
+		requeued   int
+		requeueErr error
+		sweeps     [][]any // later statements, the SQL fragment first, each answering no rows
+		want       any
+		wantErr    error
+		check      func(t *testing.T, mTx *mockdb.MockTx)
+	}{
+		{name: "close stopped requeues only its running items", call: closeStopped(testAutomationId, "user-1"),
+			where: "automation_id = $2::uuid AND id = $3::uuid", closeArgs: []any{"user-1", testAutomationId, testRunId}, closed: []string{testRunId},
+			requeue: []any{cause, []string{testRunId}}, requeued: 3, want: 3,
+			check: func(t *testing.T, mTx *mockdb.MockTx) {
+				mTx.AssertNotCalled(t, "Query", mock.Anything, sqlContains("stopped_by IS NOT NULL"), mock.Anything, mock.Anything, mock.Anything)
+			}},
+		{name: "close stopped with no items", call: closeStopped(testAutomationId, ""), closeArgs: anyArgs(3), closed: []string{testRunId}, want: 0},
+		// A closed row, or another automation's, matches nothing; the caller tells that apart from
+		// a close that worked. An unscripted requeue would fail the mock.
+		{name: "close stopped on a row that isn't open", call: closeStopped(otherAutomationId, "user-1"),
+			closeArgs: []any{mock.Anything, otherAutomationId, testRunId}, wantErr: ErrAutomationRunNotOpen},
+		{name: "close stopped rolls back on failure", call: closeStopped(testAutomationId, "user-1"), closeArgs: anyArgs(3), closed: []string{testRunId},
+			requeueErr: connectionLost, wantErr: connectionLost},
+		// A stopping row whose close never landed must not be charged as abandoned: its items go
+		// back uncharged and it ends stopped, keeping its stop time, before the failing sweep runs.
+		{name: "abandoned stopping row closes as stopped", call: closeAbandoned, where: "automation_id = $2::uuid AND stopped_by IS NOT NULL",
+			closeArgs: []any{"", testAutomationId}, closed: []string{testRunId}, requeue: []any{cause, []string{testRunId}}, requeued: 2,
+			sweeps: [][]any{{"SET state = 'failed'", testAutomationId, "abandoned"}}, want: []int{1, 0}},
+		{name: "abandoned stopping row rolls back on failure", call: closeAbandoned, closeArgs: []any{"", testAutomationId}, closed: []string{testRunId},
+			requeueErr: connectionLost, wantErr: connectionLost},
+		// A restart while a run was stopping honors the Stop, ending it stopped; only rows nobody
+		// stopped are failed and charged.
+		{name: "reconcile closes stopping runs as stopped", call: func(s *Store) (any, error) { return s.ReconcileAutomationRuns(ctx) },
+			where: "WHERE ended_at IS NULL AND stopped_by IS NOT NULL", closeArgs: []any{""}, closed: []string{"run-s"},
+			requeue: []any{cause, []string{"run-s"}}, requeued: 1, sweeps: [][]any{{"SET state = 'failed'"}, {"WHERE state = 'running'"}},
+			want: &AutomationRunReconcileResult{StoppedRuns: 1, ResetItems: 1}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mDB := &mockdb.MockDB{}
+			mTx := &mockdb.MockTx{}
+			s := &Store{db: mDB}
+			changes := 0
+			s.OnAutomationChange(func() { changes++ })
+
+			mDB.On("Begin", mock.Anything).Return(mTx, nil)
+			mTx.On("Rollback", mock.Anything).Return(nil)
+			mTx.On("Commit", mock.Anything).Return(nil).Maybe()
+
+			closeSql := sqlContainsAll(append(stoppingRunsSqlFragments, tc.where)...)
+			mTx.On("Query", append([]any{mock.Anything, closeSql}, tc.closeArgs...)...).Return(runIdRows(tc.closed...), nil).Once()
+
+			if len(tc.closed) > 0 {
+				requeue := tc.requeue
+				if requeue == nil {
+					requeue = anyArgs(2)
+				}
+
+				requeueRows := rowsYielding(tc.requeued)
+				if tc.requeueErr != nil {
+					requeueRows = nil
+				}
+
+				mTx.On("Query", append([]any{mock.Anything, requeueStoppedItemsSql()}, requeue...)...).Return(requeueRows, tc.requeueErr).Once()
+			}
+
+			for _, sweep := range tc.sweeps {
+				mTx.On("Query", append([]any{mock.Anything, sqlContains(sweep[0].(string))}, sweep[1:]...)...).Return(emptyRows(), nil).Once()
+			}
+
+			got, err := tc.call(s)
+
+			mTx.AssertExpectations(t)
+			mTx.AssertCalled(t, "Rollback", mock.Anything)
+			assertPlaceholdersBound(t, &mTx.Mock)
+
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Equal(t, 0, changes)
+				mTx.AssertNotCalled(t, "Commit", mock.Anything)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, got)
+				assert.Equal(t, 1, changes)
+				mTx.AssertCalled(t, "Commit", mock.Anything)
+			}
+
+			if tc.check != nil {
+				tc.check(t, mTx)
+			}
+		})
+	}
+}
+
+func TestEnsureAutomationWorkItemSessionRecordsItsRun(t *testing.T) {
+	mDB := &mockdb.MockDB{}
+	s := &Store{db: mDB}
+
+	// The same guard on both arrays is what keeps them in step: the run is appended exactly
+	// when the session is.
+	inStep := sqlContainsAll(
+		"session_ids = CASE WHEN $2 = ANY(session_ids)",
+		"session_run_ids = CASE WHEN $2 = ANY(session_ids)",
+		"THEN session_run_ids",
+		"ELSE array_append(session_run_ids, COALESCE(run_id::text, '')) END")
+
+	mDB.On("Query", mock.Anything, inStep, "item-1", "session-9").Return(rowsYielding(1), nil)
+
+	require.NoError(t, s.EnsureAutomationWorkItemSession(context.Background(), "item-1", "session-9"))
+	mDB.AssertExpectations(t)
 }

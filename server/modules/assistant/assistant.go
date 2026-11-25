@@ -206,7 +206,7 @@ type AssistantCoordinator struct {
 
 	// automationRunMu guards the AutomationRun cancels. An entry exists only while a run is executing.
 	automationRunMu sync.Mutex
-	automationRuns  map[string]context.CancelCauseFunc
+	automationRuns  map[string]*registeredAutomationRun
 
 	// Hot-reloadable; nanoseconds, like the other atomic scalars. The Init value is what a
 	// removed setting falls back to.

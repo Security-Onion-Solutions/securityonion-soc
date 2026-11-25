@@ -523,6 +523,26 @@ $(document).ready(function () {
           }
           return content
         },
+        automationRunInFlight(run) {
+          return !!run && ['queued', 'running'].includes(run.state);
+        },
+        automationRunStopping(run) {
+          return this.automationRunInFlight(run) && !!run.stoppedBy;
+        },
+        // Names the run, so one that ended or was replaced since the page loaded isn't stopped instead.
+        stopAutomationRun(automationId, runId, disable) {
+          return this.papi.post('assistant/automations/' + encodeURIComponent(automationId) + '/runs/' + encodeURIComponent(runId) + '/stop', { disable });
+        },
+        // Removes the runs a page asked to stop that are no longer in flight, returning their names to announce.
+        takeClosedStopRequests(stopRequested, inFlightRunIds) {
+          const closed = [];
+          for (const runId of Object.keys(stopRequested)) {
+            if (inFlightRunIds.includes(runId)) continue;
+            closed.push(stopRequested[runId]);
+            delete stopRequested[runId];
+          }
+          return closed;
+        },
         replaceActionVar(content, field, value, uriEncode) {
           if (value === undefined || value == null) return content;
 
@@ -1353,9 +1373,11 @@ $(document).ready(function () {
             if (origMsg.message) {
               msg = origMsg.message;
             }
+
             if (msg.length > 200) {
               msg = msg.substring(0, 200) + "...";
             }
+
             localized = msg;
           }
 
@@ -1389,8 +1411,10 @@ $(document).ready(function () {
             this.showTip(this.i18n.requestCanceled);
             return;
           }
+
           this.error = true;
           this.errorMessage = this.localizeMessage(msg);
+          
           if (this.debug && msg && msg.stack) {
             console.log(msg.stack);
           }

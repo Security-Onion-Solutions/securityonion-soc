@@ -75,6 +75,8 @@ func (ac *AssistantCoordinator) automationActivity(ctx context.Context, store au
 		queued = ac.execPool.QueuedDedupeKeys()
 	}
 
+	open := openAutomationRuns(runs)
+
 	for _, run := range runs {
 		desc, err := ac.describeAutomation(ctx, run.AutomationId)
 		if err != nil {
@@ -103,6 +105,12 @@ func (ac *AssistantCoordinator) automationActivity(ctx context.Context, store au
 				AutomationWorkItem: *item,
 				Queued:             queued[item.Id],
 				Phases:             []model.AgentSessionPhase{},
+				SessionOutcomes:    make(map[string]string, len(item.SessionIds)),
+			}
+
+			for i, id := range item.SessionIds {
+				_, live := phases[id]
+				itemActivity.SessionOutcomes[id] = automationSessionOutcome(item, i, live, open)
 			}
 
 			if n := len(item.SessionIds); n > 0 {

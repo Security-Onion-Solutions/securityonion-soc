@@ -416,6 +416,21 @@ func (mr *MockAssistantManagerMockRecorder) RunAgentSession(ctx, req any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAgentSession", reflect.TypeOf((*MockAssistantManager)(nil).RunAgentSession), ctx, req)
 }
 
+// RunAutomationNow mocks base method.
+func (m *MockAssistantManager) RunAutomationNow(ctx context.Context, id string) (*model.AutomationRunRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunAutomationNow", ctx, id)
+	ret0, _ := ret[0].(*model.AutomationRunRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunAutomationNow indicates an expected call of RunAutomationNow.
+func (mr *MockAssistantManagerMockRecorder) RunAutomationNow(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunAutomationNow", reflect.TypeOf((*MockAssistantManager)(nil).RunAutomationNow), ctx, id)
+}
+
 // SaveAgent mocks base method.
 func (m *MockAssistantManager) SaveAgent(ctx context.Context, originalName string, agent *model.StoredAgent) error {
 	m.ctrl.T.Helper()
@@ -511,6 +526,20 @@ func (mr *MockAssistantManagerMockRecorder) SendStream(ctx, aiModel, messages an
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, aiModel, messages}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendStream", reflect.TypeOf((*MockAssistantManager)(nil).SendStream), varargs...)
+}
+
+// StopAutomationRun mocks base method.
+func (m *MockAssistantManager) StopAutomationRun(ctx context.Context, id, runId string, disable bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopAutomationRun", ctx, id, runId, disable)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StopAutomationRun indicates an expected call of StopAutomationRun.
+func (mr *MockAssistantManagerMockRecorder) StopAutomationRun(ctx, id, runId, disable any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopAutomationRun", reflect.TypeOf((*MockAssistantManager)(nil).StopAutomationRun), ctx, id, runId, disable)
 }
 
 // ToolInSession mocks base method.

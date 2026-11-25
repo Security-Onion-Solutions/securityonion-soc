@@ -43,6 +43,10 @@
     </v-card>
   </v-dialog>
 
+  <automation-stop-dialog v-model="showStopDialog" :automation-name="stopRunTarget ? stopRunTarget.name : ''"
+    :automation-enabled="stopRunTarget ? stopRunTarget.enabled : null" @stop="stopRun(stopRunTarget, $event.disable)"></automation-stop-dialog>
+  <div class="d-sr-only" role="status" aria-live="polite" aria-atomic="true" data-aid="agentmonitor_automation_announcement">{{ automationAnnouncement }}</div>
+
   <v-row class="ga-3" data-aid="agentmonitor_pool_stats">
     <v-col>
       <div class="so-stat-pill" data-aid="agentmonitor_pool_running" :title="i18n.agentMonitorPoolHelp">
@@ -124,13 +128,29 @@
     <v-row>
       <v-col id="agentmonitor-inflight" class="section-panel" data-aid="agentmonitor_inflight_section">
         <v-toolbar density="compact" variant="flat">
-          <v-toolbar-title role="heading" aria-level="2">{{ i18n.agentMonitorInFlight }}</v-toolbar-title>
+          <v-toolbar-title id="agentmonitor-inflight-heading" tabindex="-1" role="heading" aria-level="2">{{ i18n.agentMonitorInFlight }}</v-toolbar-title>
           <v-spacer></v-spacer>
           <v-btn variant="text" size="small" icon class="mr-1" @click="toggleShowSection('agentmonitor-inflight')" data-aid="agentmonitor_inflight_toggle" :aria-expanded="isExpandedSection('agentmonitor-inflight')" :aria-label="i18n.agentMonitorInFlight">
             <v-icon v-if="!isExpandedSection('agentmonitor-inflight')" data-aid="agentmonitor_inflight_expand">fa-angle-down</v-icon>
             <v-icon v-else data-aid="agentmonitor_inflight_collapse">fa-angle-up</v-icon>
           </v-btn>
         </v-toolbar>
+        <!-- A run has no row in the work-item table, and one still scanning has no items, so runs get their own cards. -->
+        <div v-if="isExpandedSection('agentmonitor-inflight') && runs.length" class="d-flex flex-wrap ga-3 pa-4" role="list" :aria-label="i18n.ariaAgentMonitorRuns" data-aid="agentmonitor_runs">
+          <v-card v-for="run in runs" :key="run.id" variant="tonal" class="d-flex flex-column" role="listitem" :aria-labelledby="'agentmonitor-run-name-' + run.id" :data-aid="'agentmonitor_run_' + run.id">
+            <v-card-item class="px-4 pt-3 pb-2">
+              <v-card-title :id="'agentmonitor-run-name-' + run.id" role="heading" aria-level="3" class="text-body-1 text-wrap">{{ run.automationName }}</v-card-title>
+              <v-card-subtitle class="text-wrap" :data-aid="'agentmonitor_run_subtitle_' + run.id">{{ runCardSubtitle(run) }}</v-card-subtitle>
+            </v-card-item>
+            <v-spacer></v-spacer>
+            <div class="d-flex align-center ga-3 px-4 pb-3">
+              <v-chip size="small" :color="stateColor(runCardState(run))" :variant="stateColor(runCardState(run)) ? 'flat' : 'tonal'" :data-aid="'agentmonitor_run_state_' + run.id">{{ stateLabel(runCardState(run)) }}</v-chip>
+              <v-spacer></v-spacer>
+              <v-btn v-if="$root.isUserAdmin()" variant="text" color="error" size="small" prepend-icon="fa-stop" @click.stop="openStopRun(run, $event)"
+                :aria-disabled="stopPending[run.id] ? 'true' : 'false'" :aria-label="runStopLabel(run)" :title="i18n.automationStop" :data-aid="'agentmonitor_run_stop_' + run.id">{{ i18n.automationStop }}</v-btn>
+            </div>
+          </v-card>
+        </div>
         <v-data-table v-if="isExpandedSection('agentmonitor-inflight')" :sort-by="sortBy" @update:sort-by="val => sortBy = val" must-sort
           :items-per-page-options="itemsPerPageOptions" v-model:items-per-page="itemsPerPage"
           :headers="itemHeaders" :items="items" item-value="id" v-model:expanded="expandedItems" :no-data-text="i18n.agentMonitorInFlightEmpty" data-aid="agentmonitor_inflight_table">
@@ -226,6 +246,7 @@
                 </v-btn>
               </td>
               <td>{{ item.automationName }}</td>
+              <td>{{ runStartedByLabel(item) }}</td>
               <td class="text-right">{{ $root.formatDateTime(item.startTime) }}</td>
               <td class="text-right agentmonitor-elapsed">{{ formatElapsed(runDurationMs(item)) }}</td>
               <td class="text-right">{{ runItemCount(item, 'done') }}</td>
@@ -240,6 +261,9 @@
             <tr class="expanded-row" :data-aid="'agentmonitor_history_run_items_' + run.id">
               <td :colspan="historyHeaders.length" class="px-4 pb-4">
                 <div class="text-body-small text-medium-emphasis py-2" :data-aid="'agentmonitor_history_run_id_' + run.id">{{ i18n.agentMonitorRunId }}: {{ run.id }}</div>
+                <v-alert v-if="run.state === 'stopped'" type="info" variant="tonal" density="compact" icon="fa-circle-info" class="mb-3" :data-aid="'agentmonitor_history_run_stopped_' + run.id">
+                  {{ runStoppedNote(run) }}
+                </v-alert>
                 <v-alert v-if="run.error" type="error" icon="fa-circle-exclamation" variant="tonal" density="compact" class="mb-3" :data-aid="'agentmonitor_history_run_error_' + run.id">
                   {{ i18n.error }}: {{ $root.localizeMessage(run.error) }}
                 </v-alert>

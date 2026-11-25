@@ -54,7 +54,18 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     schedulerRunning: true,
     pool: emptyPool(),
     items: [],
+    // The runs in flight, for the run strip.
+    runs: [],
     automations: [],
+    showStopDialog: false,
+    // { automationId, runId, name, enabled }
+    stopRunTarget: null,
+    stopReturnFocus: null,
+    // runId -> true while its Stop request is pending.
+    stopPending: {},
+    // runId -> automation name, once this page stopped it, so its close is announced.
+    stopRequested: {},
+    automationAnnouncement: '',
 
     historyRuns: [],
     historyTotal: 0,
@@ -79,6 +90,8 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     showOptionsDialog: false,
 
     sessionStarts: {},
+    // sessionId -> outcome, for Run History's attempt rows.
+    sessionOutcomes: {},
     missingSessions: [],
     inFlightRunIds: [],
     // sessionId -> { agent, messages, subSessionIds }
@@ -138,6 +151,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     historyHeaders: [
       { title: '', value: 'expand', sortable: false, width: '48px' },
       { title: this.$root.i18n.agentMonitorAutomation, value: 'automationName', sortable: false },
+      { title: this.$root.i18n.automationStartedBy, value: 'startedByName', sortable: false },
       { title: this.$root.i18n.agentMonitorStarted, value: 'startTime', sortable: false, width: '200px' },
       { title: this.$root.i18n.duration, value: 'duration', sortable: false, width: '110px' },
       { title: this.$root.i18n.stateDone, value: 'done', sortable: false, width: '90px' },
@@ -167,6 +181,16 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
     // Changes pushed while disconnected were missed.
     '$root.connected'(connected) {
       if (connected && this.agentic && !this.paused) this.loadActivity(true);
+    },
+    // A card is removed when its run closes, taking its button with it.
+    showStopDialog(open) {
+      if (open) return;
+      const button = this.stopReturnFocus;
+      this.stopReturnFocus = null;
+      this.$nextTick(() => {
+        const target = button && button.isConnected ? button : document.getElementById('agentmonitor-inflight-heading');
+        if (target) target.focus();
+      });
     },
   },
   mounted() {
@@ -334,7 +358,16 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       this.items = items;
       this.initItemTabs(items);
 
+      this.runs = (activity.runs || []).map(run => Object.assign({}, run, {
+        automationName: run.displayName || run.automationId,
+        items: run.items || [],
+        startedByName: run.startedBy || '',
+        stoppedByName: run.stoppedBy || '',
+      }));
+      this.runs.forEach(run => this.populateRunUsers(run));
+
       const runIds = (activity.runs || []).map(run => run.id);
+      this.$root.takeClosedStopRequests(this.stopRequested, runIds).forEach(name => this.announce('ariaAutomationStopped', name));
       const finished = this.inFlightRunIds.some(id => !runIds.includes(id));
       this.inFlightRunIds = runIds;
       // A search holds still. No recount: that walks the whole history, per open tab, whenever a run ends.
@@ -369,7 +402,12 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         });
         if (request !== this.historyRequest) return;
         const page = response.data || {};
-        this.historyRuns = (page.runs || []).map(run => Object.assign({}, run, { automationName: run.displayName || run.automationId }));
+        this.historyRuns = (page.runs || []).map(run => Object.assign({}, run, {
+          automationName: run.displayName || run.automationId,
+          startedByName: run.startedBy || '',
+          stoppedByName: run.stoppedBy || '',
+        }));
+        this.historyRuns.forEach(run => this.populateRunUsers(run));
         const listed = offset + this.historyRuns.length;
         if (count && typeof page.total === 'number') {
           this.historyTotal = page.total;
@@ -407,6 +445,7 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         const details = response.data || {};
         for (const session of details.sessions || []) {
           if (session.createTime) this.sessionStarts[session.sessionId] = session.createTime;
+          if (session.outcome) this.sessionOutcomes[session.sessionId] = session.outcome;
           if (session.missing && !this.missingSessions.includes(session.sessionId)) this.missingSessions.push(session.sessionId);
         }
         const items = (details.items || [])
@@ -568,16 +607,21 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
       return { name: 'agentmonitor', params: { itemId: itemId, sessionId: sessionId } };
     },
     // One row per recorded session, newest first. Not keyed to the attempts counter:
-    // a claim that died before recording its session leaves no gap in session_ids.
+    // a claim that died before recording its session leaves no gap in session_ids. Each
+    // session's outcome comes from the server, which knows which run made it.
     attemptsFor(item) {
       const sessionIds = item.sessionIds || [];
+      const outcomes = item.sessionOutcomes || this.sessionOutcomes;
       return sessionIds.map((sessionId, index) => {
         const last = index === sessionIds.length - 1;
+        const outcome = outcomes[sessionId];
+        let state = last ? item.state : 'failed';
+        if (outcome === 'failed' || outcome === 'stopped') state = outcome;
         return {
           attempt: index + 1,
           sessionId,
-          live: last && !this.isTerminal(item.state),
-          state: last ? item.state : 'failed',
+          live: outcome ? outcome === 'running' : last && !this.isTerminal(item.state),
+          state,
           startTime: this.sessionStarts[sessionId] || '',
           watchable: !this.missingSessions.includes(sessionId),
         };
@@ -638,10 +682,87 @@ routes.push({ path: '/agentmonitor/:itemId?/:sessionId?', name: 'agentmonitor', 
         done: this.i18n.stateDone,
         failed: this.i18n.stateFailed,
         succeeded: this.i18n.completed,
+        stopping: this.i18n.stateStopping,
+        stopped: this.i18n.stateStopped,
       })[state] || state;
     },
     stateColor(state) {
-      return ({ running: 'primary', applying: 'info', pending: 'warning', queued: 'warning', failed: 'error' })[state] || '';
+      return ({ running: 'primary', applying: 'info', pending: 'warning', queued: 'warning', failed: 'error', stopping: 'warning' })[state] || '';
+    },
+
+    populateRunUsers(run) {
+      this.$root.populateUserDetails(run, 'startedBy', 'startedByName');
+      this.$root.populateUserDetails(run, 'stoppedBy', 'stoppedByName');
+    },
+    runCardState(run) {
+      return this.$root.automationRunStopping(run) ? 'stopping' : run.state;
+    },
+    runStartedByLabel(run) {
+      return run.startedBy ? run.startedByName || run.startedBy : this.i18n.schedule;
+    },
+    runElapsedMs(run) {
+      return run.startTime ? Math.max(0, this.now - new Date(run.startTime).getTime()) : 0;
+    },
+    runCardSubtitle(run) {
+      if (this.$root.automationRunStopping(run)) {
+        const ending = run.items.filter(item => item.state === 'running' && item.runId === run.id).length;
+        if (!ending) return this.i18n.stateStopped;
+        return this.$root.localizeMessage('agentMonitorRunStoppingWaiting', { count: ending });
+      }
+      const card = { startedBy: this.runStartedByLabel(run), elapsed: this.formatElapsed(this.runElapsedMs(run)) };
+      if (!run.items.length) return this.$root.localizeMessage('agentMonitorRunCardScanning', card);
+      return this.$root.localizeMessage('agentMonitorRunCard', Object.assign(card, { count: run.items.length }));
+    },
+    // Null once the automation is deleted, which leaves nothing to turn off.
+    runAutomationEnabled(run) {
+      const automation = this.automations.find(a => a.id === run.automationId);
+      return automation ? !!automation.enabled : null;
+    },
+    runStopLabel(run) {
+      let key = 'ariaAutomationStop';
+      if (this.$root.automationRunStopping(run)) key = this.runAutomationEnabled(run) ? 'ariaAutomationStopAgain' : 'ariaAutomationStopAgainOff';
+      return this.$root.replaceActionVar(this.i18n[key], 'name', run.automationName);
+    },
+    runStoppedNote(run) {
+      const time = this.$root.formatDateTime(run.stopTime);
+      if (!run.stoppedBy) return this.$root.localizeMessage('agentMonitorRunStoppedNoUser', { time });
+      return this.$root.localizeMessage('agentMonitorRunStoppedBy', { user: run.stoppedByName || run.stoppedBy, time });
+    },
+    announce(key, name) {
+      this.automationAnnouncement = this.$root.replaceActionVar(this.i18n[key], 'name', name);
+    },
+    // Reloads the automations first, so a change made in Agent Studio decides whether turning off is offered.
+    async openStopRun(run, event) {
+      if (this.stopPending[run.id]) return;
+      this.stopReturnFocus = event && event.currentTarget ? event.currentTarget : null;
+      this.$root.startLoading();
+      try {
+        await this.loadAutomations();
+      } finally {
+        this.$root.stopLoading();
+      }
+      this.stopRunTarget = { automationId: run.automationId, runId: run.id, name: run.automationName, enabled: this.runAutomationEnabled(run) };
+      this.showStopDialog = true;
+    },
+    async stopRun(target, disable) {
+      if (!target || this.stopPending[target.runId]) return;
+      this.stopPending[target.runId] = true;
+      this.$root.startLoading();
+      try {
+        await this.$root.stopAutomationRun(target.automationId, target.runId, disable);
+        this.stopRequested[target.runId] = target.name;
+        this.announce('ariaAutomationStopping', target.name);
+      } catch (error) {
+        this.$root.showError(error);
+      } finally {
+        // Also after an error: a Stop and turn off whose turn-off failed has still stopped the run.
+        // Applies even while paused, so the card shows Stopping.
+        await this.loadActivity(true);
+        // The card's Stop label depends on whether the automation is still on.
+        if (disable) await this.loadAutomations(true);
+        delete this.stopPending[target.runId];
+        this.$root.stopLoading();
+      }
     },
 
     agentOf(item) {

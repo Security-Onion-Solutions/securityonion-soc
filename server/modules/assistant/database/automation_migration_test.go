@@ -7,6 +7,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/security-onion-solutions/securityonion-soc/model"
@@ -130,4 +131,59 @@ func TestMigrationIndexesRunsByStartTime(t *testing.T) {
 
 	assert.Contains(t, string(sql), "CREATE INDEX IF NOT EXISTS idx_automation_runs_started_at")
 	assert.Contains(t, string(sql), "ON automation_runs (started_at DESC, id)")
+}
+
+func TestRunStopMigration(t *testing.T) {
+	raw, err := migrationFS.ReadFile("migrations/4_automation_run_stop.sql")
+	require.NoError(t, err)
+
+	sql := string(raw)
+
+	runStates := []string{}
+	for _, state := range []model.AutomationRunState{model.AutomationRunQueued, model.AutomationRunRunning,
+		model.AutomationRunSucceeded, model.AutomationRunFailed, model.AutomationRunStopped} {
+		runStates = append(runStates, fmt.Sprintf("'%s'", state))
+	}
+
+	cases := []struct {
+		name     string
+		contains []string
+		absent   []string
+		once     string
+		pattern  string
+	}{
+		// The CHECK is replaced by name; a name that doesn't match migration 2's inline constraint
+		// would leave both in place, and the old one would still refuse stopped.
+		{name: "replaces the state check", contains: append(runStates, "DROP CONSTRAINT IF EXISTS automation_runs_state_check"),
+			once: "ADD CONSTRAINT automation_runs_state_check"},
+		// stopped is terminal, so the in-flight index must be left exactly as migration 2 built it.
+		{name: "leaves the in-flight index alone", absent: []string{"INDEX IF NOT EXISTS " + idxRunsOneInFlight, "DROP INDEX"}},
+		// Rows from 3.4.0 must read as scheduled and not stopped, so every new column is nullable or
+		// defaults to empty.
+		{name: "adds nullable columns", contains: []string{"ADD COLUMN IF NOT EXISTS started_by text;", "ADD COLUMN IF NOT EXISTS stopped_by text;",
+			"ADD COLUMN IF NOT EXISTS stopped_at timestamptz;"}, pattern: `session_run_ids\s+text\[\]\s+NOT NULL DEFAULT '\{\}'`},
+		{name: "indexes session runs", contains: []string{"CREATE INDEX IF NOT EXISTS idx_automation_work_items_session_run_ids", "USING GIN (session_run_ids)"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, want := range tc.contains {
+				assert.Contains(t, sql, want)
+			}
+
+			for _, unwanted := range tc.absent {
+				assert.NotContains(t, sql, unwanted)
+			}
+
+			if tc.once != "" {
+				assert.Equal(t, 1, strings.Count(sql, tc.once))
+			}
+
+			if tc.pattern != "" {
+				assert.Regexp(t, tc.pattern, sql)
+			}
+		})
+	}
+
+	assert.True(t, model.AutomationRunStopped.IsTerminal())
 }

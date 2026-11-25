@@ -23,6 +23,7 @@ import (
 	"github.com/security-onion-solutions/securityonion-soc/server/modules/assistant/database"
 	"github.com/security-onion-solutions/securityonion-soc/web"
 
+	"github.com/apex/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,9 +41,15 @@ type triageAssistantstore struct {
 	// Fails only the successful updates, so a failure can still be recorded.
 	applyErr error
 	updates  []*model.AlertTriageUpdate
+	// Runs before each update, outside the lock.
+	onUpdate func()
 }
 
 func (s *triageAssistantstore) AlertTriageUpdate(_ context.Context, update *model.AlertTriageUpdate) (*model.EventUpdateResults, error) {
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
+
 	s.work.mu.Lock()
 	defer s.work.mu.Unlock()
 
@@ -1350,6 +1357,20 @@ func TestAlertTriageCheckpointFailures(t *testing.T) {
 		assert.Empty(t, f.alerts.recorded())
 	})
 
+	t.Run("swept after a stop", func(t *testing.T) {
+		f, r := newTriageJob(t)
+		logCtx, h := capturedLogger()
+
+		ctx, cancel := context.WithCancelCause(logCtx)
+		f.store.sweep = func() { cancel(ErrAutomationRunStopped) }
+		f.store.applyingErr = database.ErrAutomationWorkItemNotFound
+
+		require.NoError(t, r.workItem(ctx, f.claimed(t)))
+		assert.Empty(t, f.alerts.recorded())
+		require.NotEmpty(t, h.Entries)
+		assert.Equal(t, log.InfoLevel, h.Entries[len(h.Entries)-1].Level)
+	})
+
 	t.Run("vanished on a live run", func(t *testing.T) {
 		f, r := newTriageJob(t)
 		f.store.applyingErr = database.ErrAutomationWorkItemNotFound
@@ -1404,6 +1425,7 @@ func TestAlertTriageInterruptedSessionWritesNothing(t *testing.T) {
 	}{
 		// The session is linked to the item before it starts, and nothing is written after.
 		{"params changed", ErrAutomationParamsChanged, []string{"session:item-1"}},
+		{"stopped", ErrAutomationRunStopped, []string{"session:item-1"}},
 		{"shutdown", ErrAutomationSchedulerStopped, []string{"session:item-1"}},
 	}
 	for _, tt := range tests {
@@ -1457,6 +1479,19 @@ func TestAlertTriageReportAfterParamsChangeIsRecorded(t *testing.T) {
 		assert.Equal(t, []string{"session:item-1"}, f.store.log(), "only the link made before the session started")
 		assert.Empty(t, f.alerts.recorded())
 	})
+}
+
+// A session that finished just before a Stop still has its report recorded.
+func TestAlertTriageReportAfterStopIsRecorded(t *testing.T) {
+	f, r := newTriageJob(t)
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	f.manager.onRun = func(context.Context) { cancel(ErrAutomationRunStopped) }
+	item := f.claimed(t)
+
+	require.NoError(t, r.workItem(ctx, item))
+	assert.Equal(t, []string{"session:item-1", "applying:item-1", "alerts:ok:" + f.sessionId(t), "complete:item-1"}, f.store.log())
+	assert.Equal(t, model.AutomationWorkItemDone, item.State)
 }
 
 func TestAlertTriageReclaimGivesUpExhaustedItems(t *testing.T) {
@@ -1675,6 +1710,30 @@ func TestAlertTriageStuckApplyPastTheCapDoesNotGrow(t *testing.T) {
 	assert.Equal(t, model.AutomationWorkItemApplying, checkpointed.State)
 	assert.Equal(t, []string{"run-a", "run-b", "run-c"}, checkpointed.FailedRunIds)
 	assert.Equal(t, alertTriageDefaultGroupCap+1, f.es.InputSearchCriterias[0].MetricLimit)
+}
+
+// A Stop is not a shutdown, but it must not replay the rest: each further apply that fails would
+// charge the stopped run.
+func TestAlertTriageReclaimStopsAtAStop(t *testing.T) {
+	first := &model.AutomationWorkItem{Id: "item-1", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"A"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-1","assessment":90}`)}
+	second := &model.AutomationWorkItem{Id: "item-2", RunId: "run-0", State: model.AutomationWorkItemApplying, GroupKey: `rule.name:"B"`,
+		Payload: triageTestPayload(t), Result: json.RawMessage(`{"sessionId":"sess-2","assessment":90}`)}
+
+	f := newTriageFixture(t, `{"groupBy":["rule.name"]}`, first, second)
+	f.store.applying = map[string]*model.AutomationWorkItem{first.Id: first, second.Id: second}
+	f.alerts.updateErr = errors.New("elasticsearch is down")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	f.alerts.onUpdate = func() { cancel(ErrAutomationRunStopped) }
+
+	assert.ErrorIs(t, f.kind.Execute(ctx, f.run), ErrAutomationRunStopped)
+
+	// The first item's apply was under way when the Stop landed; the second is never tried.
+	assert.Equal(t, []string{"alerts:error", "failapply:item-1:cancelled", "alerts:error"}, f.store.log())
+	assert.Len(t, f.alerts.recorded(), 2, "only the first item's update and its failure")
+	assert.Empty(t, second.FailedRunIds)
 }
 
 func TestAlertTriageReclaimEndsUnusableCheckpoints(t *testing.T) {
