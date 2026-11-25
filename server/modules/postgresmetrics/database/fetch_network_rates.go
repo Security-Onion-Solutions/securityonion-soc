@@ -14,7 +14,8 @@ import (
 	"github.com/apex/log"
 )
 
-// Telegraf writes node_config every 5 minutes, so the lookback must exceed that interval.
+// Telegraf writes node_config every 5 minutes, so the lookback must exceed that interval. Both
+// the grid interface lookup and the drops chart apply it, since their own windows can be shorter.
 const nodeConfigLookback = "20 minutes"
 
 // nodeInterfacesCTE resolves each host's latest non-empty manint and monint separately, so a
@@ -59,7 +60,7 @@ func (s *Store) FetchNetworkRates(ctx context.Context, startTime time.Time) (*Ne
 	manint := make(map[string]string)
 	monint := make(map[string]string)
 
-	qConf := "WITH " + fmt.Sprintf(nodeInterfacesCTE, "$1") + `
+	qConf := "WITH " + fmt.Sprintf(nodeInterfacesCTE, fmt.Sprintf("($1::timestamptz AT TIME ZONE 'UTC') - INTERVAL '%s'", nodeConfigLookback)) + `
 		SELECT host, manint, monint FROM node_interfaces`
 
 	confRows, err := s.db.Query(ctx, qConf, startTime)

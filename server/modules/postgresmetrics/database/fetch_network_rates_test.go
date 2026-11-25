@@ -61,6 +61,7 @@ func TestStore_FetchNetworkRates(t *testing.T) {
 	ctx := context.Background()
 	startTime := time.Now().Add(-1 * time.Hour)
 	bytesToMb := 8.0 / (1000.0 * 1000.0)
+	timestamptzBound := "($1::timestamptz AT TIME ZONE 'UTC') - INTERVAL '" + nodeConfigLookback + "'"
 
 	t.Run("successful rates query", func(t *testing.T) {
 		var confSql string
@@ -78,10 +79,43 @@ func TestStore_FetchNetworkRates(t *testing.T) {
 		assert.Equal(t, 2000000.0*bytesToMb, rates.TrafficMonInMbs["host1"])
 		assert.Equal(t, 5.0, rates.TrafficMonInDropsPps["host1"])
 
-		assert.Contains(t, confSql, "m.time >= $1 AND m.fields->>'manint'")
-		assert.Contains(t, confSql, "m.time >= $1 AND m.fields->>'monint'")
+		assert.Contains(t, confSql, "m.time >= "+timestamptzBound+" AND m.fields->>'manint'")
+		assert.Contains(t, confSql, "m.time >= "+timestamptzBound+" AND m.fields->>'monint'")
 		assert.Contains(t, confSql, "SELECT host, manint, monint FROM node_interfaces")
 		assert.Equal(t, []any{startTime}, confArgs)
+	})
+
+	t.Run("interface lookup applies fixed lookback when window is shorter than node_config interval", func(t *testing.T) {
+		shortStartTime := time.Now().Add(-120 * time.Second)
+		var confSql string
+		var confArgs []any
+		var ratesArgs []any
+		mockDb := &MockDB{
+			QueryFunc: func(ctx context.Context, sql string, args ...any) (db.Rows, error) {
+				if contains(sql, "telegraf.node_config") {
+					confSql = sql
+					confArgs = args
+					return &MockRows{rows: [][]interface{}{{"sensor1", "eth0", "eth1"}}}, nil
+				}
+				ratesArgs = args
+				return &MockRows{rows: [][]interface{}{
+					{"sensor1", "eth0", 1000000.0, 500000.0, 0.0},
+					{"sensor1", "eth1", 2000000.0, 0.0, 7.0},
+				}}, nil
+			},
+		}
+		s := New(mockDb)
+		rates, err := s.FetchNetworkRates(ctx, shortStartTime)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 7.0, rates.TrafficMonInDropsPps["sensor1"])
+		assert.Equal(t, 2000000.0*bytesToMb, rates.TrafficMonInMbs["sensor1"])
+
+		assert.Contains(t, confSql, timestamptzBound)
+		assert.NotContains(t, confSql, "$1 - INTERVAL")
+		assert.NotContains(t, confSql, "m.time >= $1 AND")
+		assert.Equal(t, []any{shortStartTime}, confArgs)
+		assert.Equal(t, []any{shortStartTime.Add(-2 * time.Minute)}, ratesArgs)
 	})
 
 	t.Run("host without monint uses manint and reports zero monitor values", func(t *testing.T) {
