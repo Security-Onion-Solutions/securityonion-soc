@@ -1373,9 +1373,11 @@ $(document).ready(function () {
             if (origMsg.message) {
               msg = origMsg.message;
             }
+
             if (msg.length > 200) {
               msg = msg.substring(0, 200) + "...";
             }
+            
             localized = msg;
           }
 
